@@ -1,0 +1,570 @@
+.home-container {
+    min-height: 100vh;
+    background-image: url('../../../src/Images /p.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    position: relative;
+    max-width: 0 auto;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  
+  .home-title {
+    text-align: center;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 1rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  
+  .home-subtitle {
+    text-align: center;
+    font-size: 1.5rem;
+    color: white;
+    margin-bottom: 3rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    font-weight: 500;
+  }
+  
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+  
+  .therapy-card {
+    border-radius: 16px;
+    padding: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    min-height: 200px;
+    display: flex;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+  
+  .therapy-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  }
+  
+  .card-content {
+    flex: 1;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: white;
+    position: relative;
+  }
+  
+  .therapy-title {
+    font-size: 2rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+  }
+  
+  .therapy-description {
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+  }
+  
+  .therapy-arrow {
+    color: white;
+    font-size: 1.5rem;
+    margin-left: auto;
+    align-self: flex-start;
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    transition: all 0.3s ease;
+  }
+  
+  .therapy-card:hover .therapy-arrow {
+    border-color: white;
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  .therapy-icon {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+  
+  .therapy-icon-img {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin: 15px;
+    transition: transform 0.3s ease;
+  }
+  
+  .therapy-card:hover .therapy-icon-img {
+    transform: scale(1.05);
+  }
+  
+  /* Statistics Section - Clean White Background */
+  .stats-section {
+    background: white;
+    padding: 6rem 0 4rem;
+    color: #1f2937;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .stats-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100px;
+    background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.02) 50%, transparent 100%);
+    transform: skewY(-2deg);
+    transform-origin: top left;
+  }
+  
+  .stats-section::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 100px;
+    background: linear-gradient(-135deg, transparent 0%, rgba(0, 0, 0, 0.02) 50%, transparent 100%);
+    transform: skewY(-2deg);
+    transform-origin: bottom right;
+  }
+  
+  .stats-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+  
+  .stats-title {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+    color: #1f2937;
+  }
+  
+  .stats-subtitle {
+    font-size: 1.5rem;
+    margin-bottom: 3rem;
+    color: #6b7280;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+    margin-top: 3rem;
+  }
+  
+  .stat-item {
+    text-align: center;
+  }
+  
+  .stat-number {
+    font-size: 4rem;
+    font-weight: 900;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .stat-item:nth-child(1) .stat-number {
+    color: #3B82F6; /* Blue for therapists */
+  }
+  
+  .stat-item:nth-child(2) .stat-number {
+    color: #10B981; /* Green for sessions */
+  }
+  
+  .stat-item:nth-child(3) .stat-number {
+    color: #F59E0B; /* Orange for people helped */
+  }
+  
+  .stat-label {
+    font-size: 1.1rem;
+    font-weight: 500;
+  }
+  
+  .stat-item:nth-child(1) .stat-label {
+    color: #1E40AF; /* Darker blue for therapists label */
+  }
+  
+  .stat-item:nth-child(2) .stat-label {
+    color: #047857; /* Darker green for sessions label */
+  }
+  
+  .stat-item:nth-child(4) .stat-number {
+    color: #8B5CF6; /* Purple for messages */
+  }
+  
+  .stat-item:nth-child(4) .stat-label {
+    color: #6D28D9; /* Darker purple for messages label */
+  }
+  
+  /* Therapists Section */
+  .therapists-section {
+    background: #f8fafc;
+    padding: 4rem 0;
+  }
+  
+  .therapists-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+  
+  .therapists-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    text-align: center;
+    color: #1f2937;
+    margin-bottom: 3rem;
+    line-height: 1.2;
+  }
+  
+  .therapists-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+  }
+  
+  .therapist-feature {
+    background: white;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  .therapist-feature:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
+  
+  .feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+  
+  .therapist-feature h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 1rem;
+  }
+  
+  .therapist-feature p {
+    color: #6b7280;
+    line-height: 1.6;
+  }
+  
+  /* Footer */
+  .site-footer {
+    background: #1f2937;
+    color: white;
+    padding: 3rem 0 1rem;
+  }
+  
+  .footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+  
+  .footer-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+  
+  .footer-section h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #f9fafb;
+  }
+  
+  .footer-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .footer-section ul li {
+    margin-bottom: 0.5rem;
+  }
+  
+  .footer-section ul li a {
+    color: #d1d5db;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+  
+  .footer-section ul li a:hover {
+    color: #3b82f6;
+  }
+  
+  .footer-bottom {
+    border-top: 1px solid #374151;
+    padding-top: 2rem;
+    text-align: center;
+  }
+  
+  .footer-bottom p {
+    margin: 0.5rem 0;
+    color: #9ca3af;
+  }
+  
+  .footer-link-button {
+    background: none;
+    border: none;
+    color: #d1d5db;
+    text-decoration: none;
+    transition: color 0.3s ease;
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+    text-align: left;
+    padding: 0;
+  }
+  
+  .footer-link-button:hover {
+    color: #3b82f6;
+  }
+  
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+  
+  .modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  }
+  
+  .modal-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+  }
+  
+  .modal-header h2 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    color: #6b7280;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+  
+  .modal-close:hover {
+    background: #e5e7eb;
+    color: #1f2937;
+  }
+  
+  .modal-body {
+    padding: 2rem;
+    overflow-y: auto;
+    max-height: calc(80vh - 80px);
+  }
+  
+  .modal-body h3 {
+    color: #1f2937;
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  
+  .modal-body h4 {
+    color: #374151;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .modal-body p {
+    color: #6b7280;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    .hero-section {
+      background-attachment: scroll;
+    }
+    
+    .home-container {
+      padding: 1rem;
+    }
+    
+    .home-title {
+      font-size: 2rem;
+    }
+    
+    .home-subtitle {
+      font-size: 1.25rem;
+    }
+    
+    .cards-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+    
+    .therapy-card {
+      min-height: 160px;
+    }
+    
+    .card-content {
+      padding: 1.5rem;
+    }
+    
+    .therapy-title {
+      font-size: 1.5rem;
+    }
+    
+    .therapy-icon {
+      width: 120px;
+      height: 120px;
+    }
+    
+    .therapy-icon-img {
+      width: 80px;
+      height: 80px;
+      margin: 10px;
+    }
+    
+    .therapy-arrow {
+      top: 1.5rem;
+      right: 1.5rem;
+      width: 20px;
+      height: 20px;
+      font-size: 1.2rem;
+    }
+    
+    /* Mobile styles for new sections */
+    .stats-section {
+      padding: 4rem 0 3rem;
+    }
+    
+    .stats-section::before,
+    .stats-section::after {
+      height: 60px;
+    }
+    
+    .stats-title {
+      font-size: 2rem;
+    }
+    
+    .stats-subtitle {
+      font-size: 1.25rem;
+    }
+    
+    .stats-grid {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    
+    .stat-number {
+      font-size: 2.5rem;
+    }
+    
+    .therapists-title {
+      font-size: 1.8rem;
+    }
+    
+    .therapists-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+    
+    .therapist-feature {
+      padding: 1.5rem;
+    }
+    
+    .footer-content {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+    
+    /* Modal mobile styles */
+    .modal-overlay {
+      padding: 0.5rem;
+    }
+    
+    .modal-content {
+      max-height: 90vh;
+    }
+    
+    .modal-header {
+      padding: 1rem 1.5rem;
+    }
+    
+    .modal-body {
+      padding: 1.5rem;
+      max-height: calc(90vh - 70px);
+    }
+  }
