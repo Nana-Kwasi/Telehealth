@@ -16,10 +16,26 @@ export default function TherapistSelectionModal() {
   const clientId = localStorage.getItem('th.clientId');
 
   useEffect(() => {
+    // Only fetch once when component mounts
+    let isMounted = true;
+    
     (async () => {
+      if (!isMounted) return;
+      
       setLoading(true);
+      
+      // Add timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.log('Timeout reached, forcing loading to false');
+          setLoading(false);
+        }
+      }, 10000); // 10 seconds timeout
+      
       try {
-        console.log('Fetching therapists...');
+        console.log('Fetching therapists... (ONCE)');
+        console.log('Questionnaire data:', questionnaireData);
+        console.log('Client ID:', clientId);
         
         // Fetch all therapists
         const col = collection(db, 'therapists');
@@ -27,6 +43,8 @@ export default function TherapistSelectionModal() {
         
         const res = await getDocs(col);
         const all = res.docs.map((d) => ({ id: d.id, ...d.data() }));
+        
+        if (!isMounted) return;
         
         console.log('All therapists fetched:', all);
         console.log('Number of therapists found:', all.length);
@@ -68,57 +86,57 @@ export default function TherapistSelectionModal() {
           return;
         }
         
-        // Enhanced matching based on questionnaire data
-        const filtered = all.filter((t) => {
-          // Skip admin users
-          if (t.role === 'admin') return false;
-          
-          // Basic type matching - check if therapist type matches questionnaire preferences
-          const typeMatch = !questionnaireData.therapyTypes || 
-            questionnaireData.therapyTypes.some(pref => 
-              (t.type || '').toLowerCase().includes(pref.toLowerCase())
-            );
-          
-          // For now, show all non-admin therapists (we can add more filtering later)
-          return typeMatch;
-        });
+
         
-        console.log('Filtered therapists:', filtered);
+        // Show all therapists (including admin therapists)
+        const filtered = all;
+        
+        console.log('All therapists (including admin):', filtered);
+        
+        // Use all therapists
+        let therapistsToShow = filtered;
+        
+        console.log('Final therapists to show:', therapistsToShow);
         
         // Sort by relevance score
-        const scored = filtered.map(t => ({
+        const scored = therapistsToShow.map(t => ({
           ...t,
           score: calculateRelevanceScore(t, questionnaireData)
         }));
         
         scored.sort((a, b) => b.score - a.score);
         setTherapists(scored);
+        
+        // Ensure loading is set to false
+        setLoading(false);
+        clearTimeout(timeoutId);
       } catch (e) {
         console.error('Error fetching therapists:', e);
         setTherapists([]);
-      } finally {
         setLoading(false);
+        clearTimeout(timeoutId);
       }
     })();
-  }, [questionnaireData]);
+    
+    // Cleanup function to prevent multiple calls
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty dependency array - only run once
 
   const calculateRelevanceScore = (therapist, data) => {
     let score = 50; // Base score for all therapists
     
-    // Type match
-    if (therapist.type && data.therapyTypes) {
-      const typeMatch = data.therapyTypes.some(pref => 
-        therapist.type.toLowerCase().includes(pref.toLowerCase())
-      );
-      if (typeMatch) score += 20;
-    }
-    
-    // Role bonus (therapists get higher scores than other roles)
-    if (therapist.role === 'therapist') score += 15;
-    if (therapist.role === 'user') score += 10;
+    // Role bonus (admin therapists get highest scores, then regular therapists)
+    if (therapist.role === 'admin') score += 25; // Admin therapists get bonus
+    else if (therapist.role === 'therapist') score += 15;
+    else if (therapist.role === 'user') score += 10;
     
     // Username bonus (professional usernames)
-    if (therapist.username && therapist.username.length > 3) score += 5;
+    if (therapist.username && therapist.username.length > 5) score += 5;
+    
+    // Type bonus if available
+    if (therapist.type && therapist.type.length > 10) score += 10;
     
     return score;
   };
@@ -194,26 +212,10 @@ export default function TherapistSelectionModal() {
                     )}
                   </div>
                   
-                                  <div className="therapist-info">
-                  <h3 className="therapist-name">{therapist.name}</h3>
-                  <p className="therapist-type">{therapist.type}</p>
-                  <p className="therapist-role">
-                    <strong>Role:</strong> {therapist.role}
-                  </p>
-                  {therapist.username && (
-                    <p className="therapist-username">
-                      <strong>Username:</strong> {therapist.username}
-                    </p>
-                  )}
-                  {therapist.createdAt && (
-                    <p className="therapist-created">
-                      <strong>Member since:</strong> {new Date(therapist.createdAt).toLocaleDateString()}
-                    </p>
-                  )}
-                  {therapist.score && (
-                    <div className="match-score">Match: {Math.round(therapist.score)}%</div>
-                  )}
-                </div>
+                                                    <div className="therapist-info">
+                    <h3 className="therapist-name">{therapist.name}</h3>
+                    <p className="therapist-type">{therapist.type}</p>
+                  </div>
                   
                   <button 
                     className="select-therapist-btn"
@@ -225,13 +227,7 @@ export default function TherapistSelectionModal() {
               ))}
             </div>
             
-            {/* Debug info for development */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="debug-info">
-                <p><strong>Debug Info:</strong> Found {therapists.length} therapists from 'therapists' collection</p>
-                <p>Collection: therapists | Data Source: {therapists[0]?.id.startsWith('sample') ? 'Sample Data' : 'Firestore Database'}</p>
-              </div>
-            )}
+
           </>
         ) : (
           <div className="no-therapists">

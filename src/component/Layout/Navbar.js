@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import './Navbar.css';
 import { useEffect, useState } from 'react';
@@ -7,6 +7,7 @@ import { auth } from '../Auth/firebaseConfig';
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
@@ -16,6 +17,12 @@ export default function Navbar() {
   }, []);
   
   console.log('Navbar - User state:', user); // Debug log
+  
+  // Hide navbar when user is in dashboard
+  const isInDashboard = location.pathname.startsWith('/dashboard');
+  if (isInDashboard) {
+    return null;
+  }
   
   return (
     <header className="navbar">
@@ -28,11 +35,7 @@ export default function Navbar() {
           <NavLink className="navbar-link" to="/advice">Advice</NavLink>
         </nav>
         <div className="navbar-auth">
-          {!user ? (
-            <>
-              <NavLink className="auth-button login" to="/login">Login</NavLink>
-            </>
-          ) : null}
+          <NavLink className="auth-button login" to="/login">Login</NavLink>
         </div>
         
         {/* Mobile Menu Button */}
@@ -53,12 +56,7 @@ export default function Navbar() {
           <NavLink className="navbar-link" to="/advice">Advice</NavLink>
         </nav>
         <div className="navbar-auth">
-          {!user ? (
-            <>
-              <NavLink className="auth-button login" to="/login">Login</NavLink>
-              <NavLink className="auth-button signup" to="/login">Sign Up</NavLink>
-            </>
-          ) : null}
+          <NavLink className="auth-button login" to="/login">Login</NavLink>
         </div>
       </div>
     </header>

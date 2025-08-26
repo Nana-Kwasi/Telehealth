@@ -26,18 +26,20 @@
   text-align: center;
   padding: 2.5rem 2rem 2rem;
   border-bottom: 1px solid #e5e7eb;
+  background: #3b82f6;
+  border-radius: 20px 20px 0 0;
 }
 
 .modal-header h1 {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #1f2937;
+  color: white;
   margin: 0 0 1rem 0;
 }
 
 .modal-header p {
   font-size: 1.125rem;
-  color: #6b7280;
+  color: white;
   margin: 0;
 }
 
@@ -353,17 +355,4 @@
   }
 }
 
-.debug-info {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 2rem;
-  font-size: 0.875rem;
-  color: #6b7280;
-}
 
-.debug-info p {
-  margin: 0.25rem 0;
-  font-size: 0.875rem;
-}
