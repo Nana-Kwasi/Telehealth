@@ -4,10 +4,15 @@ const twilio = require("twilio");
 
 admin.initializeApp();
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID || "ACba1f95d400d160c1d0b18ba4e003ae98";
-const authToken = process.env.TWILIO_AUTH_TOKEN || "a4a50462c4709da9463f6ad0b28d8620";
-const apiKey = process.env.TWILIO_API_KEY || "SK606d563b2c39e7948fd67306bd61e29e";
-const apiSecret = process.env.TWILIO_API_SECRET || "OaEKGayQTvxRhyiUgyyZNabPUXKIWVOS";
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const apiKey = process.env.TWILIO_API_KEY;
+const apiSecret = process.env.TWILIO_API_SECRET;
+
+// Validate environment variables
+if (!accountSid || !authToken || !apiKey || !apiSecret) {
+  throw new Error('Missing Twilio environment variables. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_API_KEY, and TWILIO_API_SECRET');
+}
 
 const client = twilio(accountSid, authToken);
 const AccessToken = twilio.jwt.AccessToken;
