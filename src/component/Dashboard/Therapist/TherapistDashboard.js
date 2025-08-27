@@ -163,7 +163,7 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/" element={<TherapistHome />} />
           <Route path="/clients" element={<TherapistClients />} />
           <Route path="/staff" element={<TherapistMessages />} />
-          <Route path="/video" element={<TherapistVideoCall />} />
+          <Route path="/video" element={<TherapistVideoCall profile={profile} />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/resources" element={<TherapistResources />} />

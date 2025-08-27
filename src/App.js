@@ -12,6 +12,7 @@ import Login from './component/Auth/Login';
 import SignUp from './component/Auth/SignUp';
 import ClientDashboard from './component/Dashboard/Client/ClientDashboard';
 import TherapistDashboard from './component/Dashboard/Therapist/TherapistDashboard';
+import VideoCallPage from './component/VideoCall/VideoCallPage';
 
 function Placeholder({ title }) { return <div className="container"><h1 className="page-title">{title}</h1><p className="subtitle">Coming soon.</p></div>; }
 
@@ -48,6 +49,9 @@ export default function App() {
           <Route path="/contact" element={<Placeholder title="Contact" />} />
           <Route path="/faqs" element={<Placeholder title="FAQs" />} />
           <Route path="/advice" element={<Placeholder title="Advice" />} />
+          
+          {/* Video Call Route */}
+          <Route path="/video-call/:roomName/:participantName" element={<VideoCallPage />} />
           
                             <Route path="/dashboard/*" element={session.role ? (
                     session.role === 'therapist' ? 
