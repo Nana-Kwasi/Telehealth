@@ -4,10 +4,10 @@ const twilio = require("twilio");
 
 admin.initializeApp();
 
-const accountSid = "ACba1f95d400d160c1d0b18ba4e003ae98";
-const authToken = "a4a50462c4709da9463f6ad0b28d8620";
-const apiKey = "SK606d563b2c39e7948fd67306bd61e29e";
-const apiSecret = "OaEKGayQTvxRhyiUgyyZNabPUXKIWVOS";
+const accountSid = process.env.TWILIO_ACCOUNT_SID || "ACba1f95d400d160c1d0b18ba4e003ae98";
+const authToken = process.env.TWILIO_AUTH_TOKEN || "a4a50462c4709da9463f6ad0b28d8620";
+const apiKey = process.env.TWILIO_API_KEY || "SK606d563b2c39e7948fd67306bd61e29e";
+const apiSecret = process.env.TWILIO_API_SECRET || "OaEKGayQTvxRhyiUgyyZNabPUXKIWVOS";
 
 const client = twilio(accountSid, authToken);
 const AccessToken = twilio.jwt.AccessToken;
