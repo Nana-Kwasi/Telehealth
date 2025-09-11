@@ -140,6 +140,15 @@ export default function MatchTherapist() {
                   <div className="therapist-name">{t.name}</div>
                   <div className="therapist-details">{t.type} • {t.yearsExperience ? `${t.yearsExperience} yrs` : 'Experience N/A'}</div>
                   <div className="therapist-specialties">{(t.specialties || []).join(', ')}</div>
+                  {t.languagesSpoken && t.languagesSpoken.length > 0 && (
+                    <div className="therapist-languages">Languages: {Array.isArray(t.languagesSpoken) ? t.languagesSpoken.join(', ') : t.languagesSpoken}</div>
+                  )}
+                  {t.consultationMode && (
+                    <div className="therapist-mode">Mode: {t.consultationMode}</div>
+                  )}
+                  {t.consultationFee && (
+                    <div className="therapist-fee">Fee: ${t.consultationFee}</div>
+                  )}
                   {t.score && <div className="therapist-score">Match: {Math.round(t.score)}%</div>}
                 </div>
                 <div>

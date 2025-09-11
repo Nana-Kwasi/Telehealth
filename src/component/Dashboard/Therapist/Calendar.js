@@ -2021,10 +2021,10 @@ const TherapistCalendar = () => {
   };
 
   return (
-    <div className="calendar-container">
-      <div className="calendar-header">
+    <div className="therapist-calendar-container">
+      <div className="therapist-calendar-header">
         <h2>Therapist Calendar & Reports</h2>
-        <div className="calendar-navigation">
+        <div className="therapist-calendar-navigation">
           <button onClick={goToPreviousMonth} className="nav-btn">
             <ChevronLeft size={20} />
           </button>
@@ -2064,7 +2064,7 @@ const TherapistCalendar = () => {
       {activeTab === 'calendar' ? (
         <>
           <div className="calendar-main">
-            <div className="calendar-grid">
+            <div className="therapist-calendar-grid">
               {/* Day headers */}
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                 <div key={day} className="day-header">
@@ -2080,7 +2080,7 @@ const TherapistCalendar = () => {
                 return (
                   <div
                     key={index}
-                    className={`calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''} ${!isCurrentMonth(date) ? 'other-month' : ''}`}
+                    className={`therapist-calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''} ${!isCurrentMonth(date) ? 'other-month' : ''}`}
                     onClick={() => setSelectedDate(date)}
                   >
                     <span className="day-number">{date.getDate()}</span>
@@ -4764,10 +4764,10 @@ export default TherapistCalendar;
 //   };
 
 //   return (
-//     <div className="calendar-container">
-//       <div className="calendar-header">
+//     <div className="therapist-calendar-container">
+//       <div className="therapist-calendar-header">
 //         <h2>Therapist Calendar & Reports</h2>
-//         <div className="calendar-navigation">
+//         <div className="therapist-calendar-navigation">
 //           <button onClick={goToPreviousMonth} className="nav-btn">
 //             <ChevronLeft size={20} />
 //           </button>
@@ -4807,7 +4807,7 @@ export default TherapistCalendar;
 //       {activeTab === 'calendar' ? (
 //         <>
 //           <div className="calendar-main">
-//             <div className="calendar-grid">
+//             <div className="therapist-calendar-grid">
 //               {/* Day headers */}
 //               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
 //                 <div key={day} className="day-header">
@@ -4823,7 +4823,7 @@ export default TherapistCalendar;
 //                 return (
 //                   <div
 //                     key={index}
-//                     className={`calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''} ${!isCurrentMonth(date) ? 'other-month' : ''}`}
+//                     className={`therapist-calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''} ${!isCurrentMonth(date) ? 'other-month' : ''}`}
 //                     onClick={() => setSelectedDate(date)}
 //                   >
 //                     <span className="day-number">{date.getDate()}</span>

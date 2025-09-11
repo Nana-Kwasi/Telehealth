@@ -1,11 +1,11 @@
 /* Therapist Calendar - Modern Design with White Background */
-.calendar-container {
+.therapist-calendar-container {
     padding: 20px;
     background: white;
     min-height: 100vh;
   }
   
-  .calendar-header {
+  .therapist-calendar-header {
     background: white;
     padding: 20px;
     border-radius: 12px;
@@ -14,14 +14,14 @@
     border: 1px solid #f1f5f9;
   }
   
-  .calendar-header h2 {
+  .therapist-calendar-header h2 {
     margin: 0 0 20px 0;
     color: #1e293b;
     font-size: 24px;
     font-weight: 600;
   }
   
-  .calendar-navigation {
+  .therapist-calendar-navigation {
     display: flex;
     align-items: center;
     gap: 15px;
@@ -109,7 +109,7 @@
     min-height: 80vh;
   }
   
-  .calendar-grid {
+  .therapist-calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 1px;
@@ -136,7 +136,7 @@
     color: #dc2626;
   }
   
-  .calendar-day {
+  .therapist-calendar-day {
     background: white;
     min-height: 80px;
     padding: 8px;
@@ -149,41 +149,132 @@
     transition: all 0.2s ease;
   }
   
-  .calendar-day:hover {
+  .therapist-calendar-day:hover {
     background: #f8fafc;
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   
-  .calendar-day.today {
-    background: #dbeafe;
-    border-left: 4px solid #3b82f6;
-    color: #1e40af;
+  .therapist-calendar-day.today {
+    background: #fce7f3;
+    border-left: 4px solid #ec4899;
+    color: #be185d;
     font-weight: 600;
   }
   
-  .calendar-day.selected {
+  .therapist-calendar-day.selected {
     background: #3b82f6;
     color: white;
     font-weight: 600;
   }
   
-  .calendar-day.other-month {
+  .therapist-calendar-day.other-month {
     background: #f8fafc;
     color: #94a3b8;
   }
 
   /* Sunday styling - red text */
-  .calendar-day:nth-child(7n+1) .day-number {
+  .therapist-calendar-day:nth-child(7n+1) .day-number {
     color: #dc2626;
   }
 
-  .calendar-day.today:nth-child(7n+1) .day-number {
+  .therapist-calendar-day.today:nth-child(7n+1) .day-number {
+    color: #be185d;
+  }
+
+  .therapist-calendar-day.selected:nth-child(7n+1) .day-number {
     color: white;
   }
 
-  .calendar-day.selected:nth-child(7n+1) .day-number {
-    color: white;
+  /* Appointment Cards Styling */
+  .appointments-container {
+    margin-top: 8px;
+  }
+
+  .appointment-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px;
+    margin: 2px 0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .appointment-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .appointment-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .appointment-title {
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .appointment-time {
+    color: #6b7280;
+    font-size: 11px;
+  }
+
+  .appointment-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+  }
+
+  /* Color variations for appointment cards */
+  .appointment-card:nth-child(1) {
+    background: #dbeafe; /* Light Blue */
+  }
+
+  .appointment-card:nth-child(2) {
+    background: #a7f3d0; /* Cyan / Aqua */
+  }
+
+  .appointment-card:nth-child(3) {
+    background: #fef3c7; /* Yellow / Light Orange */
+  }
+
+  .appointment-card:nth-child(4) {
+    background: #e9d5ff; /* Purple / Lavender */
+  }
+
+  .appointment-card:nth-child(5) {
+    background: #fed7d7; /* Light Red / Coral */
+  }
+
+  .appointment-card:nth-child(6) {
+    background: #dbeafe; /* Light Blue - cycle repeats */
+  }
+
+  .appointment-card:nth-child(7) {
+    background: #a7f3d0; /* Cyan / Aqua */
+  }
+
+  .appointment-card:nth-child(8) {
+    background: #fef3c7; /* Yellow / Light Orange */
+  }
+
+  .appointment-card:nth-child(9) {
+    background: #e9d5ff; /* Purple / Lavender */
+  }
+
+  .appointment-card:nth-child(10) {
+    background: #fed7d7; /* Light Red / Coral */
   }
   
   .day-number {
@@ -1503,11 +1594,11 @@
     padding: 10px;
   }
   
-  .calendar-header {
+  .therapist-calendar-header {
     padding: 15px;
   }
   
-  .calendar-navigation {
+  .therapist-calendar-navigation {
     flex-direction: column;
     gap: 10px;
   }

@@ -1,31 +1,38 @@
-.user-modal {
-  max-width: 800px;
-  max-height: 90vh;
+.user-management-modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 95vw !important;
+  width: 95vw !important;
+  max-height: 98vh;
   overflow-y: auto;
+  min-height: 80vh;
+  position: relative;
+  z-index: 1000;
 }
 
-.modal-header {
+.user-modal-header {
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
-  padding: 1.5rem;
+  padding: 2rem;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
 }
 
-.header-content h2 {
+.user-modal-header-content h2 {
   margin: 0 0 0.5rem 0;
   font-size: 1.5rem;
   font-weight: 600;
 }
 
-.header-content p {
+.user-modal-header-content p {
   margin: 0;
   opacity: 0.9;
   font-size: 1rem;
 }
 
-.close-button {
+.user-modal-close-button {
   background: none;
   border: none;
   color: white;
@@ -35,39 +42,39 @@
   transition: background-color 0.3s ease;
 }
 
-.close-button:hover {
+.user-modal-close-button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.modal-body {
-  padding: 2rem;
+.user-modal-body {
+  padding: 3rem;
 }
 
-.user-profile-section {
+.user-profile-info-section {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-  padding: 1.5rem;
+  gap: 2rem;
+  margin-bottom: 3rem;
+  padding: 2rem;
   background: #f8fafc;
   border-radius: 12px;
 }
 
-.user-avatar-large {
-  width: 80px;
-  height: 80px;
+.user-profile-avatar-large {
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
 }
 
-.user-avatar-large img {
+.user-profile-avatar-large img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.avatar-placeholder-large {
+.user-profile-avatar-placeholder {
   width: 100%;
   height: 100%;
   background: #3b82f6;
@@ -79,102 +86,114 @@
   font-size: 2rem;
 }
 
-.user-basic-info h3 {
+.user-profile-basic-info h3 {
   margin: 0 0 0.5rem 0;
   font-size: 1.5rem;
   font-weight: 600;
   color: #1e293b;
 }
 
-.user-role {
+.user-profile-role {
   margin: 0 0 0.25rem 0;
   color: #3b82f6;
   font-weight: 500;
 }
 
-.user-type {
-  margin: 0;
+.user-profile-type {
+  margin: 0 0 0.25rem 0;
   color: #64748b;
   font-size: 0.875rem;
 }
 
-.user-details-form {
+.user-profile-experience {
+  margin: 0;
+  color: #10b981;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.user-details-form-container {
   display: flex;
   flex-direction: column;
+  gap: 3rem;
+}
+
+.user-form-section h4 {
+  margin: 0 0 2rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  padding-bottom: 1rem;
+  border-bottom: 3px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
 }
 
-.form-section h4 {
-  margin: 0 0 1rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1e293b;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-.form-group.full-width {
+.user-form-group-full-width {
   grid-column: 1 / -1;
 }
 
-.form-group label {
+.user-form-group label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
   color: #374151;
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 
-.form-input,
-.form-textarea {
+.user-form-input,
+.user-form-textarea {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
+  padding: 1rem;
+  border: 2px solid #e2e8f0;
   border-radius: 8px;
-  font-size: 0.875rem;
-  transition: border-color 0.3s ease;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: white;
 }
 
-.form-input:focus,
-.form-textarea:focus {
+.user-form-input:focus,
+.user-form-textarea:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.form-textarea {
+.user-form-textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 120px;
 }
 
-.form-value {
+.user-form-value {
   margin: 0;
-  padding: 0.75rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   color: #374151;
-  font-size: 0.875rem;
-  min-height: 42px;
+  font-size: 1rem;
+  min-height: 56px;
   display: flex;
   align-items: center;
+  line-height: 1.5;
 }
 
-.specialties-list {
+.user-specialties-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.specialty-tag {
+.user-specialty-tag {
   background: #dbeafe;
   color: #1e40af;
   padding: 0.5rem 0.75rem;
@@ -183,20 +202,54 @@
   font-weight: 500;
 }
 
-.modal-footer {
-  padding: 1.5rem 2rem;
+/* Checkbox Group Styles */
+.user-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.user-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+  border: 1px solid #e5e7eb;
+}
+
+.user-checkbox-label:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.user-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+
+.user-modal-footer {
+  padding: 2rem 3rem;
   border-top: 1px solid #e5e7eb;
   background: #f8fafc;
 }
 
-.admin-actions,
-.viewer-actions {
+.user-admin-actions,
+.user-viewer-actions {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
 }
 
-.btn {
+.user-modal-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -209,68 +262,118 @@
   font-size: 0.875rem;
 }
 
-.btn-primary {
+.user-modal-btn-primary {
   background: #3b82f6;
   color: white;
 }
 
-.btn-primary:hover {
+.user-modal-btn-primary:hover {
   background: #2563eb;
 }
 
-.btn-secondary {
+.user-modal-btn-secondary {
   background: #6b7280;
   color: white;
 }
 
-.btn-secondary:hover {
+.user-modal-btn-secondary:hover {
   background: #4b5563;
 }
 
-.btn-warning {
+.user-modal-btn-warning {
   background: #f59e0b;
   color: white;
 }
 
-.btn-warning:hover {
+.user-modal-btn-warning:hover {
   background: #d97706;
 }
 
-.btn-danger {
+.user-modal-btn-danger {
   background: #ef4444;
   color: white;
 }
 
-.btn-danger:hover {
+.user-modal-btn-danger:hover {
   background: #dc2626;
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
-  .user-modal {
-    max-width: 100%;
+@media (max-width: 1400px) {
+  .user-management-modal {
+    max-width: 95vw !important;
+    width: 95vw !important;
     margin: 1rem;
   }
   
-  .modal-body {
-    padding: 1.5rem;
-  }
-  
-  .user-profile-section {
-    flex-direction: column;
-    text-align: center;
-  }
-  
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .admin-actions,
-  .viewer-actions {
-    flex-direction: column;
-  }
-  
-  .btn {
-    justify-content: center;
+  .user-form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 }
+
+@media (max-width: 1200px) {
+  .user-management-modal {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    margin: 1rem;
+  }
+  
+  .user-form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .user-management-modal {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    margin: 1rem;
+  }
+  
+  .user-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .user-management-modal {
+    max-width: 98vw !important;
+    width: 98vw !important;
+    margin: 0.5rem;
+    max-height: 98vh;
+  }
+  
+  .user-modal-body {
+    padding: 2rem;
+  }
+  
+  .user-profile-info-section {
+    flex-direction: column;
+    text-align: center;
+    gap: 1.5rem;
+  }
+  
+  .user-form-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .user-admin-actions,
+  .user-viewer-actions {
+    flex-direction: column;
+  }
+  
+  .user-modal-btn {
+    justify-content: center;
+  }
+  
+  .user-checkbox-group {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .user-checkbox-label {
+    justify-content: flex-start;
+  }
+}
+

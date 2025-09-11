@@ -10,6 +10,10 @@ export const clientRoutes = [
   { path: 'support', label: 'Feedback & Support' },
 ];
 
+
+
+
+
 export const therapistRoutes = [
   { path: 'home', label: 'Home' },
   { path: 'clients', label: 'Clients' },

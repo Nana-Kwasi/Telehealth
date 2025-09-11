@@ -26,6 +26,15 @@ export default function TherapistProfileModal({ therapist, onClose, onSendMessag
               {therapist.username && (
                 <p className="therapist-username">@{therapist.username}</p>
               )}
+              {therapist.yearsExperience && (
+                <p className="therapist-experience">{therapist.yearsExperience} years experience</p>
+              )}
+              {therapist.specialties && therapist.specialties.length > 0 && (
+                <p className="therapist-specialties">Specialties: {Array.isArray(therapist.specialties) ? therapist.specialties.join(', ') : therapist.specialties}</p>
+              )}
+              {therapist.languagesSpoken && therapist.languagesSpoken.length > 0 && (
+                <p className="therapist-languages">Languages: {Array.isArray(therapist.languagesSpoken) ? therapist.languagesSpoken.join(', ') : therapist.languagesSpoken}</p>
+              )}
             </div>
           </div>
 
