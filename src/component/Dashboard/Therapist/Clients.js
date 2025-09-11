@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { auth, db, storage } from '../../Auth/firebaseConfig';
-import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query, doc, getDoc, getDocs, where, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query, doc, getDoc, getDocs, where, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { 
   Search, 
   Mic, 
@@ -19,7 +21,16 @@ import {
   Plus,
   Users,
   Mail,
-  Phone
+  Phone,
+  MoreVertical,
+  Edit,
+  Eye,
+  UserX,
+  UserCheck,
+  Trash2,
+  Download,
+  Upload,
+  Filter
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -77,7 +88,7 @@ const TherapyNoteModal = ({ client, onClose, onSave }) => {
         <form onSubmit={handleSubmit} className="note-form">
           {/* Session Information */}
           <div className="form-section">
-            <h3>Session Information</h3>
+            <h3 style={{color:'white'}}>Session Information</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label>Date of Session</label>
@@ -111,7 +122,7 @@ const TherapyNoteModal = ({ client, onClose, onSave }) => {
 
           {/* Client Presentation */}
           <div className="form-section">
-            <h3>Client Presentation</h3>
+            <h3 style={{color:'white'}}>Client Presentation</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label>Mood / Emotional State</label>
@@ -140,7 +151,7 @@ const TherapyNoteModal = ({ client, onClose, onSave }) => {
 
           {/* Session Details */}
           <div className="form-section">
-            <h3>Session Details</h3>
+            <h3 style={{color:'white'}}>Session Details</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Session Focus / Issues Discussed</label>
@@ -179,7 +190,7 @@ const TherapyNoteModal = ({ client, onClose, onSave }) => {
 
           {/* Progress Tracking */}
           <div className="form-section">
-            <h3>Progress Tracking</h3>
+            <h3 style={{color:'white'}}>Progress Tracking</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Goals Reviewed</label>
@@ -227,7 +238,7 @@ const TherapyNoteModal = ({ client, onClose, onSave }) => {
 
           {/* Plan / Next Steps */}
           <div className="form-section">
-            <h3>Plan / Next Steps</h3>
+            <h3 style={{color:'white'}}>Plan / Next Steps</h3>
             <div className="form-grid">
               <div className="form-group full-width">
                 <label>Homework or Assignments</label>
@@ -272,7 +283,7 @@ const TherapyNoteModal = ({ client, onClose, onSave }) => {
   );
 };
 
-export default function TherapistClients() {
+export default function TherapistClients({ profile }) {
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedClientForNote, setSelectedClientForNote] = useState(null);
@@ -285,15 +296,85 @@ export default function TherapistClients() {
   const [audioChunks, setAudioChunks] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'table'
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'table', or 'other'
   const [expandedClient, setExpandedClient] = useState(null); // Track which client row is expanded
   const [searchTerm, setSearchTerm] = useState('');
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({}); // Track unread messages per client
   const [therapyNotes, setTherapyNotes] = useState([]);
+  const [allClients, setAllClients] = useState([]);
+  const [showClientDetailsModal, setShowClientDetailsModal] = useState(false);
+  const [selectedClientForDetails, setSelectedClientForDetails] = useState(null);
+  const [showTherapistDetailsModal, setShowTherapistDetailsModal] = useState(false);
+  const [selectedTherapist, setSelectedTherapist] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [showMessageMenu, setShowMessageMenu] = useState(null);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [selectedClientForReassign, setSelectedClientForReassign] = useState(null);
+  const [allTherapists, setAllTherapists] = useState([]);
+  const [clientTherapyNotes, setClientTherapyNotes] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [showEditClientModal, setShowEditClientModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const [showBulkExportModal, setShowBulkExportModal] = useState(false);
+  const [selectedClientForAction, setSelectedClientForAction] = useState(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [statusUpdateMessage, setStatusUpdateMessage] = useState('');
+  const [isEditingClient, setIsEditingClient] = useState(false);
+  const [editMessage, setEditMessage] = useState('');
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [editFormData, setEditFormData] = useState({});
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedNewStatus, setSelectedNewStatus] = useState('');
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const currentUser = auth.currentUser;
+  const isAdmin = profile?.role === 'admin';
+
+  // Helper functions for status handling
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'active': return 'active';
+      case 'inactive': return 'inactive';
+      case 'discharged': return 'discharged';
+      case 'on_hold': return 'on-hold';
+      default: return 'active';
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'active': return 'Active';
+      case 'inactive': return 'Inactive';
+      case 'discharged': return 'Discharged';
+      case 'on_hold': return 'On Hold';
+      default: return 'Active';
+    }
+  };
+
+  const getStatusAction = (status) => {
+    switch (status) {
+      case 'active': return 'Deactivate';
+      case 'inactive': return 'Activate';
+      case 'discharged': return 'Reactivate';
+      case 'on_hold': return 'Resume';
+      default: return 'Deactivate';
+    }
+  };
+
+  // Reset active tab if user is not admin and 'other' tab is active
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'other') {
+      setActiveTab('chat');
+    }
+  }, [isAdmin, activeTab]);
 
   useEffect(() => {
     const u = auth.currentUser;
@@ -337,8 +418,12 @@ export default function TherapistClients() {
             // Create a display name from available fields
             let displayName = 'Client';
             
-            // Priority: auth.name > email > gender+age
-            if (authData.name) {
+            // Priority: clientData.displayName > clientData.clientName > authData.name > email > gender+age
+            if (clientData.displayName) {
+              displayName = clientData.displayName;
+            } else if (clientData.clientName) {
+              displayName = clientData.clientName;
+            } else if (authData.name) {
               displayName = authData.name;
             } else if (authData.email) {
               displayName = authData.email.split('@')[0];
@@ -364,7 +449,7 @@ export default function TherapistClients() {
               ...authData, // Merge auth data (including name, email, etc.)
               displayName: displayName,
               clientEmail: authData.email || clientData.email,
-              clientName: authData.name
+              clientName: displayName // Use the resolved display name
             };
             
             clientsData.push(enhancedClientData);
@@ -383,6 +468,163 @@ export default function TherapistClients() {
       clientsUnsub();
     };
   }, []);
+
+  // Function to set all clients to active status by default
+  const setAllClientsActive = async () => {
+    try {
+      const clientsSnapshot = await getDocs(collection(db, 'clients'));
+      const updatePromises = [];
+      
+      for (const clientDoc of clientsSnapshot.docs) {
+        const clientData = clientDoc.data();
+        
+        // Only update if status is not already set to 'active'
+        if (clientData.status !== 'active') {
+          const clientRef = doc(db, 'clients', clientDoc.id);
+          updatePromises.push(
+            updateDoc(clientRef, {
+              status: 'active',
+              lastModified: serverTimestamp(),
+              modifiedBy: currentUser?.uid || 'system'
+            })
+          );
+        }
+      }
+      
+      // Also update auth collection
+      const authSnapshot = await getDocs(collection(db, 'auth'));
+      for (const authDoc of authSnapshot.docs) {
+        const authData = authDoc.data();
+        
+        // Only update if status is not already set to 'active'
+        if (authData.status !== 'active') {
+          const authRef = doc(db, 'auth', authDoc.id);
+          updatePromises.push(
+            updateDoc(authRef, {
+              status: 'active',
+              lastModified: serverTimestamp()
+            })
+          );
+        }
+      }
+      
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        console.log(`Updated ${updatePromises.length} client records to active status`);
+        
+        // Log this admin action
+        await logAdminAction(
+          'BULK_CLIENT_ACTIVATION',
+          {
+            description: 'Set all clients to active status by default',
+            updatedCount: updatePromises.length
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Error setting clients to active:', error);
+    }
+  };
+
+  // Fetch all clients and therapists for Other Clients tab
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        // Fetch all therapists
+        const therapistsSnapshot = await getDocs(collection(db, 'therapists'));
+        const therapistsData = therapistsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Fetched therapists data:', therapistsData);
+        setAllTherapists(therapistsData);
+        
+        // Then fetch all clients with therapist assignments
+        const clientsSnapshot = await getDocs(collection(db, 'clients'));
+        const clientsData = [];
+        
+        for (const clientDoc of clientsSnapshot.docs) {
+          const clientData = clientDoc.data();
+          const clientId = clientDoc.id;
+          
+          // Fetch client profile data from auth collection
+          let authData = {};
+          try {
+            const authQuery = query(collection(db, 'auth'), where('clientId', '==', clientId));
+            const authSnapshot = await getDocs(authQuery);
+            
+            if (!authSnapshot.empty) {
+              authData = authSnapshot.docs[0].data();
+            } else {
+              const authDoc = await getDoc(doc(db, 'auth', clientId));
+              if (authDoc.exists()) {
+                authData = authDoc.data();
+              }
+            }
+          } catch (authError) {
+            console.log('Error fetching auth data for client:', clientId, authError);
+          }
+          
+          // Create display name
+          let displayName = 'Client';
+          if (authData.name) {
+            displayName = authData.name;
+          } else if (authData.email) {
+            displayName = authData.email.split('@')[0];
+          } else if (clientData.email) {
+            displayName = clientData.email.split('@')[0];
+          } else if (clientData.gender && clientData.age) {
+            displayName = `${clientData.gender === 'man' ? 'Male' : clientData.gender === 'woman' ? 'Female' : 'Person'} (${clientData.age})`;
+          }
+          
+          // Get assigned therapist info by checking therapists subcollections
+          let assignedTherapist = null;
+          try {
+            // Check all therapists to see which one has this client
+            for (const therapistDoc of therapistsSnapshot.docs) {
+              const therapistId = therapistDoc.id;
+              const therapistClientsRef = collection(db, 'therapists', therapistId, 'clients');
+              const therapistClientsSnapshot = await getDocs(therapistClientsRef);
+              const hasClient = therapistClientsSnapshot.docs.some(doc => doc.data().clientId === clientId);
+              
+              if (hasClient) {
+                const therapistData = therapistDoc.data();
+                assignedTherapist = {
+                  id: therapistId,
+                  name: therapistData.name || therapistData.email || 'Unknown Therapist',
+                  email: therapistData.email
+                };
+                break;
+              }
+            }
+          } catch (error) {
+            console.log('Error fetching therapist assignment:', error);
+          }
+          
+          const enhancedClientData = {
+            id: clientId,
+            ...clientData,
+            ...authData,
+            displayName: displayName,
+            clientEmail: authData.email || clientData.email,
+            clientName: authData.name,
+            assignedTherapist: assignedTherapist,
+            status: clientData.status || 'active' // Ensure status defaults to active
+          };
+          
+          clientsData.push(enhancedClientData);
+        }
+        
+        setAllClients(clientsData);
+      } catch (error) {
+        console.error('Error fetching all data:', error);
+      }
+    };
+    
+    if (isAdmin) {
+      fetchAllData();
+    }
+  }, [isAdmin]);
 
   // Auto-select first client when clients are loaded
   useEffect(() => {
@@ -408,15 +650,109 @@ export default function TherapistClients() {
       const messagesData = snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        status: 'sent'
+        status: doc.data().status || 'sent'
       }));
       setMessages(messagesData);
+      
+      // Mark messages as read when therapist opens the chat
+      markMessagesAsRead(selectedClient.id);
     });
 
     return () => {
       messagesUnsub();
     };
   }, [selectedClient]);
+
+  // Function to mark messages as read and seen
+  const markMessagesAsRead = async (clientId) => {
+    if (!clientId) return;
+    
+    try {
+      const chatPath = getChatPath({ id: clientId });
+      const messagesCol = collection(db, chatPath);
+      const q = query(
+        messagesCol, 
+        where('to', '==', currentUser.uid),
+        where('read', '==', false)
+      );
+      
+      const unreadMessages = await getDocs(q);
+      const updatePromises = unreadMessages.docs.map(doc => 
+        updateDoc(doc.ref, { 
+          read: true, 
+          status: 'seen',
+          readAt: serverTimestamp()
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      
+      // Update unread counts
+      setUnreadCounts(prev => ({
+        ...prev,
+        [clientId]: 0
+      }));
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+
+  // Function to get unread message counts for all clients
+  const fetchUnreadCounts = async () => {
+    try {
+      const counts = {};
+      
+      for (const client of clients) {
+        const chatPath = getChatPath(client);
+        const messagesCol = collection(db, chatPath);
+        const q = query(
+          messagesCol,
+          where('to', '==', currentUser.uid),
+          where('read', '==', false)
+        );
+        
+        const unreadSnapshot = await getDocs(q);
+        counts[client.id] = unreadSnapshot.size;
+      }
+      
+      setUnreadCounts(counts);
+    } catch (error) {
+      console.error('Error fetching unread counts:', error);
+    }
+  };
+
+  // Fetch unread counts when clients change
+  useEffect(() => {
+    if (clients.length > 0) {
+      fetchUnreadCounts();
+    }
+  }, [clients]);
+
+  // Real-time listener for unread messages
+  useEffect(() => {
+    if (clients.length === 0) return;
+
+    const unsubscribes = clients.map(client => {
+      const chatPath = getChatPath(client);
+      const messagesCol = collection(db, chatPath);
+      const q = query(
+        messagesCol,
+        where('to', '==', currentUser.uid),
+        where('read', '==', false)
+      );
+
+      return onSnapshot(q, (snapshot) => {
+        setUnreadCounts(prev => ({
+          ...prev,
+          [client.id]: snapshot.size
+        }));
+      });
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [clients, currentUser.uid]);
 
   useEffect(() => {
     scrollToBottom();
@@ -468,6 +804,736 @@ export default function TherapistClients() {
     // Fetch therapy notes for this client
     fetchTherapyNotes(completeClient.id);
   };
+
+  // Handler functions for All Clients modals
+  const fetchClientTherapyNotes = async (clientId) => {
+    try {
+      const notesRef = collection(db, 'clients', clientId, 'therapyNotes');
+      const notesSnapshot = await getDocs(notesRef);
+      const notes = notesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setClientTherapyNotes(notes);
+    } catch (error) {
+      console.error('Error fetching client therapy notes:', error);
+      setClientTherapyNotes([]);
+    }
+  };
+
+  // Handler functions for core account functions
+  const handleDropdownToggle = (clientId) => {
+    setDropdownOpen(dropdownOpen === clientId ? null : clientId);
+  };
+
+  const handleEditClient = (client) => {
+    setSelectedClientForAction(client);
+    setEditFormData({
+      name: client.clientName || client.displayName || '',
+      email: client.clientEmail || '',
+      phone: client.phone || '',
+      age: client.age || '',
+      gender: client.gender || 'man',
+      country: client.country || '',
+      therapyType: client.therapyType || 'Individual Therapy',
+      sessionFrequency: client.sessionFrequency || 'Weekly'
+    });
+    setShowEditClientModal(true);
+    setDropdownOpen(null);
+  };
+
+  // Handle saving edited client information
+  const handleSaveClientEdit = async (formData) => {
+    if (!selectedClientForAction) return;
+    
+    setIsEditingClient(true);
+    setEditMessage('Updating client information...');
+    
+    try {
+      setEditMessage('Updating client record in database...');
+      
+      // Update clients collection
+      const clientRef = doc(db, 'clients', selectedClientForAction.id);
+      await updateDoc(clientRef, {
+        ...formData,
+        lastModified: serverTimestamp(),
+        modifiedBy: currentUser?.uid || 'admin'
+      });
+      
+      setEditMessage('Updating authentication record...');
+      
+      // Update auth collection if it exists
+      try {
+        const authQuery = query(collection(db, 'auth'), where('clientId', '==', selectedClientForAction.id));
+        const authSnapshot = await getDocs(authQuery);
+        
+        if (!authSnapshot.empty) {
+          const authDoc = authSnapshot.docs[0];
+          await updateDoc(doc(db, 'auth', authDoc.id), {
+            name: formData.name,
+            email: formData.email,
+            lastModified: serverTimestamp()
+          });
+        }
+      } catch (authError) {
+        console.log('Auth collection update failed (may not exist):', authError);
+      }
+      
+      setEditMessage('Logging admin action...');
+      
+      // Log the admin action
+      await logAdminAction(
+        'CLIENT_INFO_UPDATED',
+        {
+          clientId: selectedClientForAction.id,
+          clientName: formData.name || selectedClientForAction.clientName,
+          updatedFields: Object.keys(formData),
+          description: 'Client information updated by admin'
+        }
+      );
+      
+      setEditMessage('Updating interface...');
+      
+      // Update local state
+      setAllClients(prevClients => 
+        prevClients.map(c => 
+          c.id === selectedClientForAction.id 
+            ? { ...c, ...formData, displayName: formData.name || c.displayName }
+            : c
+        )
+      );
+      
+      setEditMessage('Client information updated successfully!');
+      
+      // Close modal after showing success message
+      setTimeout(() => {
+        setShowEditClientModal(false);
+        setSelectedClientForAction(null);
+        setIsEditingClient(false);
+        setEditMessage('');
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error updating client information:', error);
+      setEditMessage('Failed to update client information. Please try again.');
+      setIsEditingClient(false);
+      
+      // Reset after showing error
+      setTimeout(() => {
+        setEditMessage('');
+      }, 3000);
+    }
+  };
+
+  const handleDeactivateClient = (client) => {
+    setSelectedClientForAction(client);
+    setShowDeactivateModal(true);
+    setDropdownOpen(null);
+  };
+
+  const handleChangeStatus = (client) => {
+    setSelectedClientForAction(client);
+    setSelectedNewStatus(client.status || 'active');
+    setShowStatusModal(true);
+    setDropdownOpen(null);
+  };
+
+  // Handle status change with new status selection
+  const handleConfirmStatusChange = async () => {
+    if (!selectedClientForAction || !selectedNewStatus) return;
+    
+    setIsUpdatingStatus(true);
+    setStatusUpdateMessage(`Updating client status...`);
+    
+    try {
+      const currentStatus = selectedClientForAction.status || 'active';
+      const newStatus = selectedNewStatus;
+      
+      if (currentStatus === newStatus) {
+        setStatusUpdateMessage('Status is already set to this value.');
+        setIsUpdatingStatus(false);
+        setTimeout(() => {
+          setStatusUpdateMessage('');
+          setShowStatusModal(false);
+        }, 1500);
+        return;
+      }
+      
+      setStatusUpdateMessage(`Updating client record in database...`);
+      
+      // Update client status in Firestore
+      const clientRef = doc(db, 'clients', selectedClientForAction.id);
+      await updateDoc(clientRef, {
+        status: newStatus,
+        lastModified: serverTimestamp(),
+        modifiedBy: currentUser?.uid
+      });
+
+      setStatusUpdateMessage(`Updating authentication record...`);
+
+      // Update auth collection if it exists
+      try {
+        const authQuery = query(collection(db, 'auth'), where('clientId', '==', selectedClientForAction.id));
+        const authSnapshot = await getDocs(authQuery);
+        
+        if (!authSnapshot.empty) {
+          const authDoc = authSnapshot.docs[0];
+          await updateDoc(doc(db, 'auth', authDoc.id), {
+            status: newStatus,
+            lastModified: serverTimestamp()
+          });
+        }
+      } catch (authError) {
+        console.log('Auth collection update failed (may not exist):', authError);
+      }
+
+      setStatusUpdateMessage(`Logging admin action...`);
+
+      // Log the admin action
+      await logAdminAction(
+        'CLIENT_STATUS_CHANGED',
+        {
+          clientId: selectedClientForAction.id,
+          clientName: selectedClientForAction.clientName || selectedClientForAction.displayName,
+          clientEmail: selectedClientForAction.clientEmail,
+          previousStatus: currentStatus,
+          newStatus: newStatus,
+          description: `Client status changed from ${getStatusLabel(currentStatus)} to ${getStatusLabel(newStatus)}`
+        }
+      );
+
+      setStatusUpdateMessage(`Updating interface...`);
+
+      // Update local state
+      setAllClients(prevClients => 
+        prevClients.map(c => 
+          c.id === selectedClientForAction.id 
+            ? { ...c, status: newStatus }
+            : c
+        )
+      );
+
+      setStatusUpdateMessage(`Status changed to ${getStatusLabel(newStatus)} successfully!`);
+
+      // Close modal after showing success message
+      setTimeout(() => {
+        setShowStatusModal(false);
+        setSelectedClientForAction(null);
+        setSelectedNewStatus('');
+        setIsUpdatingStatus(false);
+        setStatusUpdateMessage('');
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error changing client status:', error);
+      setStatusUpdateMessage('Failed to change client status. Please try again.');
+      setIsUpdatingStatus(false);
+      
+      // Reset after showing error
+      setTimeout(() => {
+        setStatusUpdateMessage('');
+      }, 3000);
+    }
+  };
+
+  const handleDeleteClient = (client) => {
+    setSelectedClientForAction(client);
+    setShowDeleteModal(true);
+    setDropdownOpen(null);
+  };
+
+  // Handle actual client deletion
+  const handleConfirmDeleteClient = async () => {
+    if (!selectedClientForAction) return;
+    
+    setIsDeletingClient(true);
+    setDeleteMessage('Preparing to delete client...');
+    
+    try {
+      setDeleteMessage('Removing client from database...');
+      
+      // Delete from clients collection
+      const clientRef = doc(db, 'clients', selectedClientForAction.id);
+      await deleteDoc(clientRef);
+      
+      setDeleteMessage('Removing authentication record...');
+      
+      // Delete from auth collection if it exists
+      try {
+        const authQuery = query(collection(db, 'auth'), where('clientId', '==', selectedClientForAction.id));
+        const authSnapshot = await getDocs(authQuery);
+        
+        if (!authSnapshot.empty) {
+          const authDoc = authSnapshot.docs[0];
+          await deleteDoc(doc(db, 'auth', authDoc.id));
+        }
+      } catch (authError) {
+        console.log('Auth collection deletion failed (may not exist):', authError);
+      }
+      
+      setDeleteMessage('Removing from therapist assignments...');
+      
+      // Remove from all therapist subcollections
+      try {
+        for (const therapist of allTherapists) {
+          const therapistClientsRef = collection(db, 'therapists', therapist.id, 'clients');
+          const therapistClientsSnapshot = await getDocs(therapistClientsRef);
+          
+          for (const clientDoc of therapistClientsSnapshot.docs) {
+            if (clientDoc.data().clientId === selectedClientForAction.id) {
+              await deleteDoc(doc(db, 'therapists', therapist.id, 'clients', clientDoc.id));
+              break;
+            }
+          }
+        }
+      } catch (assignmentError) {
+        console.log('Error removing therapist assignments:', assignmentError);
+      }
+      
+      setDeleteMessage('Logging admin action...');
+      
+      // Log the admin action
+      await logAdminAction(
+        'CLIENT_DELETED',
+        {
+          clientId: selectedClientForAction.id,
+          clientName: selectedClientForAction.clientName || selectedClientForAction.displayName,
+          clientEmail: selectedClientForAction.clientEmail,
+          description: 'Client record permanently deleted by admin'
+        }
+      );
+      
+      setDeleteMessage('Updating interface...');
+      
+      // Update local state
+      setAllClients(prevClients => 
+        prevClients.filter(c => c.id !== selectedClientForAction.id)
+      );
+      
+      setDeleteMessage('Client deleted successfully!');
+      
+      // Close modal after showing success message
+      setTimeout(() => {
+        setShowDeleteModal(false);
+        setSelectedClientForAction(null);
+        setIsDeletingClient(false);
+        setDeleteMessage('');
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      setDeleteMessage('Failed to delete client. Please try again.');
+      setIsDeletingClient(false);
+      
+      // Reset after showing error
+      setTimeout(() => {
+        setDeleteMessage('');
+      }, 3000);
+    }
+  };
+
+
+
+  const handleBulkExport = () => {
+    setShowBulkExportModal(true);
+  };
+
+  // Export to CSV
+  const exportToCSV = () => {
+    setIsExporting(true);
+    setExportMessage('Preparing CSV export...');
+    
+    try {
+      const headers = [
+        'Client Name',
+        'Email',
+        'Phone',
+        'Age',
+        'Gender',
+        'Country',
+        'Therapy Type',
+        'Session Frequency',
+        'Assigned Therapist',
+        'Status',
+        'Registration Date'
+      ];
+      
+      const csvData = allClients.map(client => [
+        client.clientName || client.displayName || 'N/A',
+        client.clientEmail || 'N/A',
+        client.phone || 'N/A',
+        client.age || 'N/A',
+        client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : client.gender || 'N/A',
+        client.country || 'N/A',
+        client.therapyType || 'N/A',
+        client.sessionFrequency || 'N/A',
+        client.assignedTherapist?.name || 'Not Assigned',
+        getStatusLabel(client.status || 'active'),
+        client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'
+      ]);
+      
+      setExportMessage('Generating CSV file...');
+      
+      const csvContent = [headers, ...csvData]
+        .map(row => row.map(field => `"${field}"`).join(','))
+        .join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `clients_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setExportMessage('CSV exported successfully!');
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportMessage('');
+        setShowBulkExportModal(false);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      setExportMessage('Failed to export CSV. Please try again.');
+      setIsExporting(false);
+      setTimeout(() => setExportMessage(''), 3000);
+    }
+  };
+
+  // Export to Excel (using CSV format with .xlsx extension)
+  const exportToExcel = () => {
+    setIsExporting(true);
+    setExportMessage('Preparing Excel export...');
+    
+    try {
+      const headers = [
+        'Client Name',
+        'Email',
+        'Phone',
+        'Age',
+        'Gender',
+        'Country',
+        'Therapy Type',
+        'Session Frequency',
+        'Assigned Therapist',
+        'Status',
+        'Registration Date'
+      ];
+      
+      const csvData = allClients.map(client => [
+        client.clientName || client.displayName || 'N/A',
+        client.clientEmail || 'N/A',
+        client.phone || 'N/A',
+        client.age || 'N/A',
+        client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : client.gender || 'N/A',
+        client.country || 'N/A',
+        client.therapyType || 'N/A',
+        client.sessionFrequency || 'N/A',
+        client.assignedTherapist?.name || 'Not Assigned',
+        getStatusLabel(client.status || 'active'),
+        client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'
+      ]);
+      
+      setExportMessage('Generating Excel file...');
+      
+      const csvContent = [headers, ...csvData]
+        .map(row => row.map(field => `"${field}"`).join(','))
+        .join('\n');
+      
+      const blob = new Blob([csvContent], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `clients_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setExportMessage('Excel file exported successfully!');
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportMessage('');
+        setShowBulkExportModal(false);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error exporting Excel:', error);
+      setExportMessage('Failed to export Excel file. Please try again.');
+      setIsExporting(false);
+      setTimeout(() => setExportMessage(''), 3000);
+    }
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    setIsExporting(true);
+    setExportMessage('Preparing PDF export...');
+    
+    try {
+      setExportMessage('Generating PDF document...');
+      
+      const doc = new jsPDF('landscape');
+      
+      // Add title
+      doc.setFontSize(20);
+      doc.text('Clients Export Report', 14, 22);
+      
+      // Add export date
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+      doc.text(`Total Clients: ${allClients.length}`, 14, 35);
+      
+      // Prepare table data
+      const tableData = allClients.map(client => [
+        client.clientName || client.displayName || 'N/A',
+        client.clientEmail || 'N/A',
+        client.phone || 'N/A',
+        client.age || 'N/A',
+        client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : client.gender || 'N/A',
+        client.country || 'N/A',
+        client.therapyType || 'N/A',
+        client.sessionFrequency || 'N/A',
+        client.assignedTherapist?.name || 'Not Assigned',
+        getStatusLabel(client.status || 'active'),
+        client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'
+      ]);
+      
+      // Add table
+      doc.autoTable({
+        head: [['Name', 'Email', 'Phone', 'Age', 'Gender', 'Country', 'Therapy Type', 'Frequency', 'Therapist', 'Status', 'Registered']],
+        body: tableData,
+        startY: 45,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        margin: { top: 45 }
+      });
+      
+      setExportMessage('Downloading PDF...');
+      
+      // Save the PDF
+      doc.save(`clients_export_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+      setExportMessage('PDF exported successfully!');
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportMessage('');
+        setShowBulkExportModal(false);
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      setExportMessage('Failed to export PDF. Please try again.');
+      setIsExporting(false);
+      setTimeout(() => setExportMessage(''), 3000);
+    }
+  };
+
+  const handleCloseModals = () => {
+    setShowEditClientModal(false);
+    setShowDeactivateModal(false);
+    setShowDeleteModal(false);
+    setShowStatusModal(false);
+    setShowBulkExportModal(false);
+    setSelectedClientForAction(null);
+    setSelectedNewStatus('');
+  };
+
+  // Audit logging function
+  const logAdminAction = async (action, details, clientId = null) => {
+    try {
+      const auditLog = {
+        action,
+        details,
+        clientId,
+        adminId: currentUser?.uid,
+        adminName: profile?.name || 'Unknown Admin',
+        adminEmail: profile?.email || 'Unknown Email',
+        timestamp: serverTimestamp(),
+        ipAddress: 'System', // In a real app, you'd capture the actual IP
+        userAgent: navigator.userAgent
+      };
+
+      await addDoc(collection(db, 'auditLogs'), auditLog);
+      console.log('Audit log created:', auditLog);
+    } catch (error) {
+      console.error('Error creating audit log:', error);
+    }
+  };
+
+  // Toggle client status function
+  const handleToggleClientStatus = async (client) => {
+    setIsUpdatingStatus(true);
+    setStatusUpdateMessage(`Updating client status...`);
+    
+    try {
+      const currentStatus = client.status || 'active';
+      let newStatus;
+      
+      // Define status transitions
+      switch (currentStatus) {
+        case 'active':
+          newStatus = 'inactive';
+          break;
+        case 'inactive':
+          newStatus = 'active';
+          break;
+        case 'discharged':
+          newStatus = 'active';
+          break;
+        case 'on_hold':
+          newStatus = 'active';
+          break;
+        default:
+          newStatus = 'inactive';
+      }
+      
+      setStatusUpdateMessage(`Updating client record in database...`);
+      
+      // Update client status in Firestore
+      const clientRef = doc(db, 'clients', client.id);
+      await updateDoc(clientRef, {
+        status: newStatus,
+        lastModified: serverTimestamp(),
+        modifiedBy: currentUser?.uid
+      });
+
+      setStatusUpdateMessage(`Updating authentication record...`);
+
+      // Update auth collection if it exists
+      try {
+        const authQuery = query(collection(db, 'auth'), where('clientId', '==', client.id));
+        const authSnapshot = await getDocs(authQuery);
+        
+        if (!authSnapshot.empty) {
+          const authDoc = authSnapshot.docs[0];
+          await updateDoc(doc(db, 'auth', authDoc.id), {
+            status: newStatus,
+            lastModified: serverTimestamp()
+          });
+        }
+      } catch (authError) {
+        console.log('Auth collection update failed (may not exist):', authError);
+      }
+
+      setStatusUpdateMessage(`Logging admin action...`);
+
+      // Log the admin action
+      await logAdminAction(
+        newStatus === 'active' ? 'CLIENT_ACTIVATED' : 'CLIENT_DEACTIVATED',
+        {
+          clientName: client.clientName || client.displayName,
+          clientEmail: client.clientEmail,
+          previousStatus: client.status || 'active',
+          newStatus: newStatus
+        },
+        client.id
+      );
+
+      setStatusUpdateMessage(`Updating interface...`);
+
+      // Update local state
+      setAllClients(prevClients => 
+        prevClients.map(c => 
+          c.id === client.id 
+            ? { ...c, status: newStatus }
+            : c
+        )
+      );
+
+      setStatusUpdateMessage(`Client ${getStatusLabel(newStatus).toLowerCase()} successfully!`);
+
+      // Close modal after showing success message
+      setTimeout(() => {
+        handleCloseModals();
+        setIsUpdatingStatus(false);
+        setStatusUpdateMessage('');
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error toggling client status:', error);
+      setStatusUpdateMessage('Failed to update client status. Please try again.');
+      setIsUpdatingStatus(false);
+      
+      // Reset after showing error
+      setTimeout(() => {
+        setStatusUpdateMessage('');
+      }, 3000);
+    }
+  };
+
+  const handleViewClientDetails = async (client) => {
+    setSelectedClientForDetails(client);
+    setShowClientDetailsModal(true);
+    // Fetch therapy notes for this client
+    await fetchClientTherapyNotes(client.id);
+  };
+
+  const handleViewTherapistDetails = (therapist) => {
+    console.log('Therapist data being passed to modal:', therapist);
+    setSelectedTherapist(therapist);
+    setShowTherapistDetailsModal(true);
+  };
+
+  const handleReassignClient = (client) => {
+    setSelectedClientForReassign(client);
+    setShowReassignModal(true);
+  };
+
+  const handleReassignSave = async (newTherapistId) => {
+    try {
+      const clientId = selectedClientForReassign.id;
+      
+      // Update client's assignedTherapist in clients collection
+      await updateDoc(doc(db, 'clients', clientId), {
+        assignedTherapist: newTherapistId,
+        assignedAt: new Date().toISOString()
+      });
+      
+      // Update the client in the therapist's clients subcollection
+      if (selectedClientForReassign.assignedTherapist) {
+        // Remove from old therapist's clients
+        const oldTherapistClientsQuery = query(
+          collection(db, 'therapists', selectedClientForReassign.assignedTherapist.id, 'clients'),
+          where('clientId', '==', clientId)
+        );
+        const oldTherapistClientsSnapshot = await getDocs(oldTherapistClientsQuery);
+        for (const docSnapshot of oldTherapistClientsSnapshot.docs) {
+          await deleteDoc(docSnapshot.ref);
+        }
+      }
+      
+      // Add to new therapist's clients
+      await addDoc(collection(db, 'therapists', newTherapistId, 'clients'), {
+        clientId: clientId,
+        assignedAt: new Date().toISOString()
+      });
+      
+      // Update local state
+      setAllClients(prevClients => 
+        prevClients.map(client => 
+          client.id === clientId 
+            ? { 
+                ...client, 
+                assignedTherapist: allTherapists.find(t => t.id === newTherapistId),
+                assignedAt: new Date().toISOString()
+              }
+            : client
+        )
+      );
+      
+      setShowReassignModal(false);
+      setSelectedClientForReassign(null);
+      
+      console.log('Client reassigned successfully');
+    } catch (error) {
+      console.error('Error reassigning client:', error);
+    }
+  };
   
   const fetchTherapyNotes = async (clientId) => {
     try {
@@ -496,12 +1562,23 @@ export default function TherapistClients() {
         to: selectedClient.id,
         toName: selectedClient.displayName || 'Client',
         createdAt: serverTimestamp(),
-        read: false
+        read: false,
+        status: 'sent' // Initial status when message is sent
       };
 
       const chatPath = getChatPath(selectedClient);
       const messagesCol = collection(db, chatPath);
-      await addDoc(messagesCol, messageData);
+      const docRef = await addDoc(messagesCol, messageData);
+      
+      // Update status to delivered after a short delay
+      setTimeout(async () => {
+        try {
+          await updateDoc(docRef, { status: 'delivered' });
+        } catch (error) {
+          console.error('Error updating message status to delivered:', error);
+        }
+      }, 1000);
+      
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
@@ -515,6 +1592,83 @@ export default function TherapistClients() {
       sendMessage(newMessage.trim(), 'text');
     }
   };
+
+  // Edit message function
+  const handleEditMessage = (message) => {
+    setEditingMessage(message);
+    setEditText(message.content);
+  };
+
+  // Save edited message
+  const handleSaveEdit = async () => {
+    if (!editingMessage || !editText.trim()) return;
+
+    try {
+      const chatPath = getChatPath(selectedClient);
+      const messageRef = doc(db, chatPath, editingMessage.id);
+      await updateDoc(messageRef, {
+        content: editText.trim(),
+        edited: true,
+        editedAt: serverTimestamp()
+      });
+      
+      setEditingMessage(null);
+      setEditText('');
+    } catch (error) {
+      console.error('Error editing message:', error);
+      alert('Failed to edit message');
+    }
+  };
+
+  // Cancel edit
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditText('');
+  };
+
+  // Delete message function
+  const handleDeleteMessage = async (messageId) => {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+
+    try {
+      const chatPath = getChatPath(selectedClient);
+      const messageRef = doc(db, chatPath, messageId);
+      await deleteDoc(messageRef);
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message');
+    }
+  };
+
+  // Check if message can be edited/deleted (within 5 minutes)
+  const canEditOrDelete = (message) => {
+    if (!message.createdAt) return false;
+    
+    const messageTime = message.createdAt.toDate ? message.createdAt.toDate() : new Date(message.createdAt);
+    const now = new Date();
+    const diffInMinutes = (now - messageTime) / (1000 * 60);
+    
+    return diffInMinutes <= 5;
+  };
+
+  // Toggle message menu
+  const toggleMessageMenu = (messageId) => {
+    setShowMessageMenu(showMessageMenu === messageId ? null : messageId);
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showMessageMenu && !event.target.closest('.message-menu-container')) {
+        setShowMessageMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMessageMenu]);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -621,6 +1775,22 @@ export default function TherapistClients() {
   const renderMessage = (message) => {
     const isOwnMessage = message.from === currentUser.uid;
     
+    // Render status indicator for sent messages
+    const renderStatusIndicator = (status) => {
+      if (!isOwnMessage) return null;
+      
+      switch (status) {
+        case 'sent':
+          return <span className="status-indicator sent">✓</span>;
+        case 'delivered':
+          return <span className="status-indicator delivered">✓✓</span>;
+        case 'read':
+          return <span className="status-indicator read">✓✓</span>;
+        default:
+          return <span className="status-indicator sent">✓</span>;
+      }
+    };
+    
   return (
       <div key={message.id} className={`message ${isOwnMessage ? 'sent' : 'received'}`}>
         {!isOwnMessage && (
@@ -635,7 +1805,30 @@ export default function TherapistClients() {
         
         <div className="message-content">
           {message.type === 'text' && (
-            <div className="message-text">{message.content}</div>
+            <div className="message-text">
+              {editingMessage?.id === message.id ? (
+                <div className="edit-message-container">
+                  <input
+                    type="text"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="edit-input"
+                    autoFocus
+                  />
+                  <div className="edit-buttons">
+                    <button onClick={handleSaveEdit} className="save-btn">Save</button>
+                    <button onClick={handleCancelEdit} className="cancel-btn">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {message.content}
+                  {message.edited && (
+                    <span className="edited-indicator"> (edited)</span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           
           {message.type === 'image' && (
@@ -689,16 +1882,69 @@ export default function TherapistClients() {
             </div>
           )}
           
-          <div className="message-time">{formatTime(message.createdAt)}</div>
+          <div className="message-time">
+            {formatTime(message.createdAt)}
+            {renderStatusIndicator(message.status)}
+            {isOwnMessage && !editingMessage && canEditOrDelete(message) && (
+              <div className="message-menu-container">
+                <button 
+                  onClick={() => toggleMessageMenu(message.id)}
+                  className="menu-trigger"
+                  title="Message options"
+                >
+                  ⋯
+                </button>
+                {showMessageMenu === message.id && (
+                  <div className="message-menu">
+                    <button 
+                      onClick={() => {
+                        handleEditMessage(message);
+                        setShowMessageMenu(null);
+                      }}
+                      className="menu-item edit-item"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleDeleteMessage(message.id);
+                        setShowMessageMenu(null);
+                      }}
+                      className="menu-item delete-item"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   };
 
-  const filteredClients = clients.filter(client =>
-    (client.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (client.email || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredClients = clients
+    .filter(client =>
+      (client.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (client.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      const aUnread = unreadCounts[a.id] || 0;
+      const bUnread = unreadCounts[b.id] || 0;
+      
+      // If both have unread messages, sort by unread count (highest first)
+      if (aUnread > 0 && bUnread > 0) {
+        return bUnread - aUnread;
+      }
+      
+      // If only one has unread messages, prioritize it
+      if (aUnread > 0 && bUnread === 0) return -1;
+      if (bUnread > 0 && aUnread === 0) return 1;
+      
+      // If neither has unread messages, sort by name
+      return (a.displayName || '').localeCompare(b.displayName || '');
+    });
 
   return (
     <div className="therapist-clients-container">
@@ -716,8 +1962,17 @@ export default function TherapistClients() {
           onClick={() => setActiveTab('table')}
         >
           <Users size={20} />
-          Clients Table
+         My Clients
         </button>
+        {isAdmin && (
+          <button 
+            className={`tab ${activeTab === 'other' ? 'active' : ''}`}
+            onClick={() => setActiveTab('other')}
+          >
+            <Users size={20} />
+            All Clients
+          </button>
+        )}
       </div>
 
       {activeTab === 'chat' ? (
@@ -740,35 +1995,43 @@ export default function TherapistClients() {
         </div>
         
         <div className="clients-list">
-              {filteredClients.map((client) => (
-                <div
-                  key={client.id}
-                  className={`client-item ${selectedClient?.id === client.id ? 'active' : ''}`}
-                  onClick={() => handleClientSelect(client)}
-                >
-                  <div className="client-avatar">
-                    {client.photoURL ? (
-                      <img src={client.photoURL} alt={client.displayName} />
-                    ) : (
-                      <div className="avatar-placeholder">{client.displayName?.charAt(0) || 'C'}</div>
-                    )}
+              {filteredClients.map((client) => {
+                const unreadCount = unreadCounts[client.id] || 0;
+                return (
+                  <div
+                    key={client.id}
+                    className={`client-item ${selectedClient?.id === client.id ? 'active' : ''}`}
+                    onClick={() => handleClientSelect(client)}
+                  >
+                    <div className="client-avatar">
+                      {client.photoURL ? (
+                        <img src={client.photoURL} alt={client.displayName} />
+                      ) : (
+                        <div className="avatar-placeholder">{client.displayName?.charAt(0) || 'C'}</div>
+                      )}
+                      {unreadCount > 0 && (
+                        <div className="unread-badge">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="client-info">
+                      <div className="client-header">
+                        <h4 className="client-name">{client.clientName || client.displayName || 'Client'}</h4>
+                        <div className="client-meta">
+                          <span className="client-time">Now</span>
+                        </div>
+                      </div>
+                      <p className="client-preview">
+                        {client.therapyType || 'Individual Therapy'} • {client.assignedAt ? 'Assigned' : 'New'}
+                        {client.age && ` • Age: ${client.age}`}
+                        {client.gender && ` • ${client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : 'Person'}`}
+                      </p>
+                    </div>
                   </div>
-                  
-            <div className="client-info">
-                    <div className="client-header">
-                      <h4 className="client-name">{client.clientName || client.displayName || 'Client'}</h4>
-                      <div className="client-meta">
-                        <span className="client-time">Now</span>
-            </div>
-          </div>
-                    <p className="client-preview">
-                      {client.therapyType || 'Individual Therapy'} • {client.assignedAt ? 'Assigned' : 'New'}
-                      {client.age && ` • Age: ${client.age}`}
-                      {client.gender && ` • ${client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : 'Person'}`}
-                    </p>
-        </div>
-      </div>
-              ))}
+                );
+              })}
     </div>
           </div>
 
@@ -796,7 +2059,7 @@ export default function TherapistClients() {
                     </div>
                   </div>
                 </div>
-                image.png
+               
                 <div className="chat-messages">
                   {messages.length === 0 ? (
                     <div className="empty-chat">
@@ -895,8 +2158,8 @@ export default function TherapistClients() {
             )}
           </div>
         </div>
-      ) : (
-        /* Clients Table */
+      ) : activeTab === 'table' ? (
+        /* My Clients Table */
         <div className="clients-table-container">
           <div className="table-header">
             <h2>All Assigned Clients</h2>
@@ -917,6 +2180,7 @@ export default function TherapistClients() {
                 <tr>
                   <th>Client</th>
                   <th>Contact</th>
+                  <th>Status</th>
                   <th>Therapy Type</th>
                   <th>Assigned Date</th>
                   <th>Last Session</th>
@@ -962,6 +2226,11 @@ export default function TherapistClients() {
                           )}
                         </div>
                       </td>
+                      <td>
+                        <span className={`status-badge ${getStatusClass(client.status || 'active')}`}>
+                          {getStatusLabel(client.status || 'active')}
+                        </span>
+                      </td>
                       <td>{client.therapyType || 'Individual Therapy'}</td>
                       <td>{client.assignedAt ? new Date(client.assignedAt).toLocaleDateString() : 'N/A'}</td>
                       <td>2 days ago</td>
@@ -997,6 +2266,43 @@ export default function TherapistClients() {
                             <FileText size={16} />
                             Add Therapy Note
                           </button>
+                          <div className="dropdown-container">
+                            <button 
+                              className="dropdown-trigger"
+                              onClick={() => handleDropdownToggle(client.id)}
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                            {dropdownOpen === client.id && (
+                              <div className="dropdown-menu">
+                                {isAdmin && (
+                                  <button 
+                                    className="dropdown-item"
+                                    onClick={() => handleEditClient(client)}
+                                  >
+                                    <Edit size={16} />
+                                    Edit Client Info
+                                  </button>
+                                )}
+                                <button 
+                                  className="dropdown-item"
+                                  onClick={() => handleChangeStatus(client)}
+                                >
+                                  <UserX size={16} />
+                                  Change Status
+                                </button>
+                                {isAdmin && (
+                                  <button 
+                                    className="dropdown-item danger"
+                                    onClick={() => handleDeleteClient(client)}
+                                  >
+                                    <Trash2 size={16} />
+                                    Delete Client
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -1639,7 +2945,183 @@ export default function TherapistClients() {
             </table>
           </div>
         </div>
-      )}
+      ) : activeTab === 'other' ? (
+        /* All Clients Table */
+        <div className="clients-table-container">
+          <div className="table-header">
+            <h2>All Clients</h2>
+            <div className="table-controls">
+              <div className="table-search">
+                <Search size={20} />
+                <input
+                  type="text"
+                  placeholder="Search all clients..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="bulk-actions">
+
+                <button 
+                  className="btn-secondary small"
+                  onClick={handleBulkExport}
+                >
+                  <Download size={16} />
+                  Export CSV
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="table-container">
+            <table className="clients-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Contact</th>
+                  <th>Therapy Type</th>
+                  <th>Assigned Therapist</th>
+                  <th>Status</th>
+                  <th>Registration Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allClients
+                  .filter(client => 
+                    (client.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (client.clientEmail || '').toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .map((client) => (
+                  <React.Fragment key={client.id}>
+                    <tr>
+                      <td className="client-cell">
+                        <div className="client-info-cell">
+                          <div className="client-avatar-small">
+                            {client.photoURL ? (
+                              <img src={client.photoURL} alt={client.displayName} />
+                            ) : (
+                              <div className="avatar-placeholder-small">{client.displayName?.charAt(0) || 'C'}</div>
+                            )}
+                          </div>
+                          <div className="client-details">
+                            <div className="client-name-cell">{client.clientName || client.displayName || 'Client'}</div>
+                            <div className="client-meta">
+                              {client.age && <span className="client-age">Age: {client.age}</span>}
+                              {client.gender && <span className="client-gender">{client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : 'Person'}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="contact-info">
+                          {client.clientEmail && (
+                            <div className="contact-item">
+                              <Mail size={16} />
+                              <span>{client.clientEmail}</span>
+                            </div>
+                          )}
+                          {client.phone && (
+                            <div className="contact-item">
+                              <Phone size={16} />
+                              <span>{client.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td>{client.therapyType || 'Individual Therapy'}</td>
+                      <td>
+                        <div className="therapist-assignment">
+                          {client.assignedTherapist ? (
+                            <div className="therapist-info">
+                                                              <button 
+                                  className="therapist-name-btn"
+                                  onClick={() => handleViewTherapistDetails(allTherapists.find(t => t.id === client.assignedTherapist.id))}
+                                >
+                                  {client.assignedTherapist.name}
+                                </button>
+                              <button 
+                                className="reassign-btn"
+                                onClick={() => handleReassignClient(client)}
+                              >
+                                Reassign
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="no-therapist">
+                              <span>Not Assigned</span>
+                              <button 
+                                className="reassign-btn"
+                                onClick={() => handleReassignClient(client)}
+                              >
+                                Assign
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${getStatusClass(client.status || 'active')}`}>
+                          {getStatusLabel(client.status || 'active')}
+                        </span>
+                      </td>
+                      <td>{client.createdAt ? new Date(client.createdAt).toLocaleDateString() : 'N/A'}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button 
+                            className="btn-secondary small"
+                            onClick={() => handleViewClientDetails(client)}
+                          >
+                            <Eye size={16} />
+                            View All
+                          </button>
+                          <div className="dropdown-container">
+                            <button 
+                              className="dropdown-trigger"
+                              onClick={() => handleDropdownToggle(client.id)}
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                            {dropdownOpen === client.id && (
+                              <div className="dropdown-menu">
+                                {isAdmin && (
+                                  <button 
+                                    className="dropdown-item"
+                                    onClick={() => handleEditClient(client)}
+                                  >
+                                    <Edit size={16} />
+                                    Edit Client Info
+                                  </button>
+                                )}
+                                <button 
+                                  className="dropdown-item"
+                                  onClick={() => handleChangeStatus(client)}
+                                >
+                                  <UserX size={16} />
+                                  Change Status
+                                </button>
+                                {isAdmin && (
+                                  <button 
+                                    className="dropdown-item danger"
+                                    onClick={() => handleDeleteClient(client)}
+                                  >
+                                    <Trash2 size={16} />
+                                    Delete Client
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
       
       {/* Therapy Note Modal */}
       {showNoteModal && selectedClientForNote && (
@@ -1671,6 +3153,1006 @@ export default function TherapistClients() {
             }
           }}
         />
+      )}
+
+      {/* Client Details Modal */}
+      {showClientDetailsModal && selectedClientForDetails && (
+        <div className="modal-overlay" onClick={() => setShowClientDetailsModal(false)}>
+          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Complete Client Information</h3>
+              <button className="modal-close" onClick={() => setShowClientDetailsModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="data-grid">
+                <div className="data-section">
+                  <h5>Personal Information</h5>
+                  <div className="data-item">
+                    <strong>Name:</strong> 
+                    <span style={{ color: '#3b82f6', fontWeight: '600' }}>{selectedClientForDetails.clientName || selectedClientForDetails.displayName || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Email:</strong> 
+                    <span style={{ color: '#059669', fontWeight: '500' }}>{selectedClientForDetails.clientEmail || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Age:</strong> 
+                    <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.age || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Gender:</strong> 
+                    <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
+                      {selectedClientForDetails.gender ? (selectedClientForDetails.gender === 'man' ? 'Male' : selectedClientForDetails.gender === 'woman' ? 'Female' : 'Person') : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Country:</strong> 
+                    <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.country || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Employment:</strong> 
+                    <span style={{ background: '#ecfdf5', color: '#047857', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.employment || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Relationship Status:</strong> 
+                    <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.relationshipStatus || 'N/A'}</span>
+                  </div>
+                </div>
+                
+                <div className="data-section">
+                  <h5>Therapy Information</h5>
+                  <div className="data-item">
+                    <strong>Therapy Type:</strong> 
+                    <span style={{ background: '#ecfdf5', color: '#047857', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.therapyType || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Session Frequency:</strong> 
+                    <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.sessionFrequency || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Session Structure:</strong> 
+                    <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.sessionStructure || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Therapist Style:</strong> 
+                    <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.therapistStyle || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Assigned Therapist:</strong> 
+                    <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>{selectedClientForDetails.assignedTherapist?.name || 'Not Assigned'}</span>
+                  </div>
+                </div>
+                
+                <div className="data-section">
+                  <h5>Health & Wellness</h5>
+                  <div className="data-item">
+                    <strong>Physical Health:</strong> 
+                    <span style={{ 
+                      background: selectedClientForDetails.physicalHealth === 'Good' ? '#ecfdf5' : selectedClientForDetails.physicalHealth === 'Fair' ? '#fef3c7' : '#fee2e2',
+                      color: selectedClientForDetails.physicalHealth === 'Good' ? '#047857' : selectedClientForDetails.physicalHealth === 'Fair' ? '#92400e' : '#dc2626',
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.physicalHealth || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Mental Health:</strong> 
+                    <span style={{ 
+                      background: '#fef3c7', 
+                      color: '#92400e', 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>
+                      {selectedClientForDetails.depression || selectedClientForDetails.anxiety ? `${selectedClientForDetails.depression || 'N/A'} / ${selectedClientForDetails.anxiety || 'N/A'}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Sleep Quality:</strong> 
+                    <span style={{ 
+                      background: selectedClientForDetails.sleep === 'Good' ? '#ecfdf5' : selectedClientForDetails.sleep === 'Fair' ? '#fef3c7' : '#fee2e2',
+                      color: selectedClientForDetails.sleep === 'Good' ? '#047857' : selectedClientForDetails.sleep === 'Fair' ? '#92400e' : '#dc2626',
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.sleep || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Exercise:</strong> 
+                    <span style={{ 
+                      background: '#dbeafe', 
+                      color: '#1e40af', 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.exercise || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Eating Habits:</strong> 
+                    <span style={{ 
+                      background: selectedClientForDetails.eatingHabits === 'Good' ? '#ecfdf5' : selectedClientForDetails.eatingHabits === 'Fair' ? '#fef3c7' : '#fee2e2',
+                      color: selectedClientForDetails.eatingHabits === 'Good' ? '#047857' : selectedClientForDetails.eatingHabits === 'Fair' ? '#92400e' : '#dc2626',
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.eatingHabits || 'N/A'}</span>
+                  </div>
+                </div>
+                
+                {/* Therapy Progress Section */}
+                {clientTherapyNotes.length > 0 && (
+                  <div className="data-section full-width">
+                    <div className="section-header-with-progress">
+                      <h5>Therapy Progress & Notes</h5>
+                      <div className="overall-progress">
+                        <div className="progress-circle-container small">
+                          <div className="progress-circle mini">
+                            <svg viewBox="0 0 28 28" className="progress-ring">
+                              <path
+                                d="M14 2.0845
+                                  a 11.9155 11.9155 0 0 1 0 23.831
+                                  a 11.9155 11.9155 0 0 1 0 -23.831"
+                                fill="none"
+                                stroke="#e2e8f0"
+                                strokeWidth="2"
+                              />
+                              <path
+                                d="M14 2.0845
+                                  a 11.9155 11.9155 0 0 1 0 23.831
+                                  a 11.9155 11.9155 0 0 1 0 -23.831"
+                                fill="none"
+                                stroke="#3b82f6"
+                                strokeWidth="2"
+                                strokeDasharray={`${(() => {
+                                  if (clientTherapyNotes.length === 0) return 0;
+                                  const completedFields = clientTherapyNotes.reduce((sum, note) => {
+                                    const fields = ['mood', 'sessionFocus', 'interventionsUsed', 'progressAssessment', 'moodRating'];
+                                    return sum + fields.filter(field => note[field]).length;
+                                  }, 0);
+                                  return Math.round((completedFields / (clientTherapyNotes.length * 5)) * 100);
+                                })()} 100`}
+                                strokeDashoffset="18"
+                              />
+                            </svg>
+                            <span className="progress-circle-text mini">
+                              {(() => {
+                                if (clientTherapyNotes.length === 0) return '0%';
+                                const completedFields = clientTherapyNotes.reduce((sum, note) => {
+                                  const fields = ['mood', 'sessionFocus', 'interventionsUsed', 'progressAssessment', 'moodRating'];
+                                  return sum + fields.filter(field => note[field]).length;
+                                }, 0);
+                                return `${Math.round((completedFields / (clientTherapyNotes.length * 5)) * 100)}%`;
+                              })()}%
+                            </span>
+                          </div>
+                        </div>
+                        <span className="overall-progress-label">Overall Completion</span>
+                      </div>
+                    </div>
+                    
+                    {/* Progress Summary Cards */}
+                    <div className="progress-summary">
+                      <div className="progress-card">
+                        <div className="progress-icon">📊</div>
+                        <div className="progress-info">
+                          <h4>Total Sessions</h4>
+                          <span className="progress-number">{clientTherapyNotes.length}</span>
+                        </div>
+                      </div>
+                      <div className="progress-card">
+                        <div className="progress-icon">📈</div>
+                        <div className="progress-info">
+                          <h4>Avg. Mood Rating</h4>
+                          <span className="progress-number">
+                            {clientTherapyNotes.length > 0 
+                              ? (clientTherapyNotes.reduce((sum, note) => sum + (note.moodRating || 5), 0) / clientTherapyNotes.length).toFixed(1)
+                              : 'N/A'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                      <div className="progress-card">
+                        <div className="progress-icon">🎯</div>
+                        <div className="progress-info">
+                          <h4>Last Session</h4>
+                          <span className="progress-date">
+                            {clientTherapyNotes.length > 0 
+                              ? new Date(clientTherapyNotes[clientTherapyNotes.length - 1].sessionDate).toLocaleDateString()
+                              : 'N/A'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                      <div className="progress-card">
+                        <div className="progress-icon">📊</div>
+                        <div className="progress-info">
+                          <h4>Progress Trend</h4>
+                          <span className="progress-number">
+                            {(() => {
+                              if (clientTherapyNotes.length < 2) return 'N/A';
+                              const recentNotes = clientTherapyNotes.slice(-3);
+                              const improvements = recentNotes.filter((note, i) => 
+                                i > 0 && note.moodRating > recentNotes[i-1].moodRating
+                              ).length;
+                              return `${Math.round((improvements / (recentNotes.length - 1)) * 100)}%`;
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Professional Recharts */}
+                    <div className="charts-container">
+                      {/* Mood Trends Over Time - Line Chart */}
+                      <div className="chart-section">
+                        <h4>Mood Trends Over Time</h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <LineChart data={(() => {
+                            if (clientTherapyNotes.length === 0) {
+                              return [
+                                { week: 'Week 1', moodScore: 5, anxietyLevel: 6, depressionLevel: 5 },
+                                { week: 'Week 2', moodScore: 6, anxietyLevel: 5, depressionLevel: 4 },
+                                { week: 'Week 3', moodScore: 7, anxietyLevel: 4, depressionLevel: 3 }
+                              ];
+                            }
+                            const sortedNotes = clientTherapyNotes.sort((a, b) => new Date(a.sessionDate) - new Date(b.sessionDate));
+                            return sortedNotes.map((note, index) => ({
+                              week: `Week ${index + 1}`,
+                              moodScore: note.moodRating || 5,
+                              anxietyLevel: note.mood === 'Anxious' ? 8 : note.mood === 'Stressed' ? 6 : 4,
+                              depressionLevel: note.mood === 'Sad' || note.mood === 'Depressed' ? 7 : 3,
+                              date: new Date(note.sessionDate).toLocaleDateString()
+                            }));
+                          })()}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="week" stroke="#64748b" />
+                            <YAxis domain={[0, 10]} stroke="#64748b" />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'white', 
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px'
+                              }}
+                            />
+                            <Legend />
+                            <Line 
+                              type="monotone" 
+                              dataKey="moodScore" 
+                              stroke="#10b981" 
+                              strokeWidth={3}
+                              dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="anxietyLevel" 
+                              stroke="#ef4444" 
+                              strokeWidth={3}
+                              dot={{ fill: '#ef4444', strokeWidth: 2, r: 6 }}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="depressionLevel" 
+                              stroke="#8b5cf6" 
+                              strokeWidth={3}
+                              dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 6 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      
+                      {/* Sessions by Therapy Type - Bar Chart */}
+                      <div className="chart-section">
+                        <h4>Sessions by Therapy Type</h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={(() => {
+                            if (clientTherapyNotes.length === 0) {
+                              return [
+                                { therapyType: 'CBT', sessions: 3 },
+                                { therapyType: 'Mindfulness', sessions: 2 },
+                                { therapyType: 'Supportive Listening', sessions: 1 }
+                              ];
+                            }
+                            const interventionCounts = {};
+                            clientTherapyNotes.forEach(note => {
+                              if (note.interventionsUsed) {
+                                interventionCounts[note.interventionsUsed] = (interventionCounts[note.interventionsUsed] || 0) + 1;
+                              }
+                            });
+                            
+                            return Object.entries(interventionCounts).map(([intervention, count]) => ({
+                              therapyType: intervention,
+                              sessions: count
+                            }));
+                          })()}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="therapyType" stroke="#64748b" />
+                            <YAxis stroke="#64748b" />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'white', 
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px'
+                              }}
+                            />
+                            <Legend />
+                            <Bar dataKey="sessions" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      
+                      {/* Goal Achievement Status - Donut Chart */}
+                      <div className="chart-section">
+                        <h4>Goal Achievement Status</h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={(() => {
+                                if (clientTherapyNotes.length === 0) {
+                                  return [
+                                    { name: 'Completed', value: 2, color: '#10b981' },
+                                    { name: 'In Progress', value: 3, color: '#f59e0b' },
+                                    { name: 'Not Started', value: 1, color: '#ef4444' },
+                                    { name: 'Paused', value: 1, color: '#6b7280' }
+                                  ];
+                                }
+                                const totalGoals = clientTherapyNotes.length * 3; // Assume 3 goals per session
+                                const completedGoals = clientTherapyNotes.filter(note => 
+                                  note.progressAssessment && note.progressAssessment.includes('Improved')
+                                ).length;
+                                const inProgressGoals = Math.floor(totalGoals * 0.4);
+                                const notStartedGoals = Math.floor(totalGoals * 0.2);
+                                const pausedGoals = Math.floor(totalGoals * 0.1);
+                                
+                                return [
+                                  { name: 'Completed', value: completedGoals, color: '#10b981' },
+                                  { name: 'In Progress', value: inProgressGoals, color: '#f59e0b' },
+                                  { name: 'Not Started', value: notStartedGoals, color: '#ef4444' },
+                                  { name: 'Paused', value: pausedGoals, color: '#6b7280' }
+                                ];
+                              })()}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={40}
+                              outerRadius={80}
+                              paddingAngle={2}
+                            >
+                              {(() => {
+                                if (clientTherapyNotes.length === 0) {
+                                  return [
+                                    <Cell key="completed" fill="#10b981" />,
+                                    <Cell key="in-progress" fill="#f59e0b" />,
+                                    <Cell key="not-started" fill="#ef4444" />,
+                                    <Cell key="paused" fill="#6b7280" />
+                                  ];
+                                }
+                                const totalGoals = clientTherapyNotes.length * 3;
+                                const completedGoals = clientTherapyNotes.filter(note => 
+                                  note.progressAssessment && note.progressAssessment.includes('Improved')
+                                ).length;
+                                const inProgressGoals = Math.floor(totalGoals * 0.4);
+                                const notStartedGoals = Math.floor(totalGoals * 0.2);
+                                const pausedGoals = Math.floor(totalGoals * 0.1);
+                                
+                                return [
+                                  <Cell key="completed" fill="#10b981" />,
+                                  <Cell key="in-progress" fill="#f59e0b" />,
+                                  <Cell key="not-started" fill="#ef4444" />,
+                                  <Cell key="paused" fill="#6b7280" />
+                                ];
+                              })()}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'white', 
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px'
+                              }}
+                            />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Therapist Details Modal */}
+      {showTherapistDetailsModal && selectedTherapist && (
+        <div className="modal-overlay" onClick={() => setShowTherapistDetailsModal(false)}>
+          <div className="modal-content therapist-profile-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Therapist Profile</h3>
+              <button className="modal-close" onClick={() => setShowTherapistDetailsModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="therapist-profile-container">
+                {/* Profile Header */}
+                <div className="therapist-profile-header">
+                  <div className="therapist-avatar-large">
+                    {selectedTherapist.photoURL ? (
+                      <img src={selectedTherapist.photoURL} alt={selectedTherapist.name} />
+                    ) : (
+                      <div className="therapist-avatar-placeholder-large">
+                        {(selectedTherapist.name || selectedTherapist.email)?.charAt(0) || 'T'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="therapist-basic-info">
+                    <h2>{selectedTherapist.name || 'Unknown Therapist'}</h2>
+                    <p className="therapist-email">{selectedTherapist.email}</p>
+                    <div className="therapist-credentials">
+                      <span className="therapist-type">{selectedTherapist?.type || selectedTherapist?.role || 'Therapist'}</span>
+                      {selectedTherapist?.licenseNumber && (
+                        <span className="license-number">License: {selectedTherapist.licenseNumber}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Experience & Stats */}
+                <div className="therapist-stats">
+                  <div className="stat-item">
+                    <div className="stat-number">{selectedTherapist?.yearsExperience || selectedTherapist?.experience || 0}</div>
+                    <div className="stat-label">Years Experience</div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-number">{selectedTherapist?.specialties?.length || selectedTherapist?.specialization ? 1 : 0}</div>
+                    <div className="stat-label">Specialties</div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-number">{selectedTherapist?.role || selectedTherapist?.type || 'Therapist'}</div>
+                    <div className="stat-label">Role</div>
+                  </div>
+                </div>
+
+                {/* Bio Section */}
+                {selectedTherapist?.bio && (
+                  <div className="therapist-bio-section">
+                    <h4>About</h4>
+                    <p className="therapist-bio">{selectedTherapist.bio}</p>
+                  </div>
+                )}
+
+                {/* Specialties */}
+                {(selectedTherapist?.specialties && selectedTherapist.specialties.length > 0) || selectedTherapist?.specialization ? (
+                  <div className="therapist-specialties-section">
+                    <h4>Specialties</h4>
+                    <div className="specialties-grid">
+                      {selectedTherapist?.specialties && selectedTherapist.specialties.length > 0 ? (
+                        selectedTherapist.specialties.map((specialty, index) => (
+                          <span key={index} className="specialty-tag">{specialty}</span>
+                        ))
+                      ) : selectedTherapist?.specialization ? (
+                        <span className="specialty-tag">{selectedTherapist.specialization}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Additional Information */}
+                <div className="therapist-additional-info">
+                  <div className="info-section">
+                    <h4>Professional Information</h4>
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <strong>Username:</strong> {selectedTherapist?.username || 'N/A'}
+                      </div>
+                      <div className="info-item">
+                        <strong>Member Since:</strong> {selectedTherapist?.createdAt ? new Date(selectedTherapist.createdAt).toLocaleDateString() : 'N/A'}
+                      </div>
+                      <div className="info-item">
+                        <strong>User ID:</strong> {selectedTherapist?.uid || selectedTherapist?.id || 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reassign Modal */}
+      {showReassignModal && selectedClientForReassign && (
+        <div className="modal-overlay" onClick={() => setShowReassignModal(false)}>
+          <div className="modal-content reassign-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Reassign Client</h3>
+              <button className="modal-close" onClick={() => setShowReassignModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="reassign-client-info">
+                <div className="client-summary">
+                  <div className="client-avatar-large">
+                    {selectedClientForReassign.photoURL ? (
+                      <img src={selectedClientForReassign.photoURL} alt={selectedClientForReassign.displayName} />
+                    ) : (
+                      <div className="avatar-placeholder-large">{selectedClientForReassign.displayName?.charAt(0) || 'C'}</div>
+                    )}
+                  </div>
+                  <div className="client-details">
+                    <h4>{selectedClientForReassign.clientName || selectedClientForReassign.displayName}</h4>
+                    <p>{selectedClientForReassign.clientEmail}</p>
+                    <div className="current-assignment">
+                      <span className="label">Current Therapist:</span>
+                      <span className="current-therapist">
+                        {selectedClientForReassign.assignedTherapist?.name || 'Not Assigned'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="therapist-selection-section">
+                <h4>Select New Therapist</h4>
+                <div className="therapist-grid">
+                  {allTherapists.map(therapist => (
+                    <div 
+                      key={therapist.id} 
+                      className="therapist-card"
+                      onClick={() => handleReassignSave(therapist.id)}
+                    >
+                      <div className="therapist-avatar">
+                        {therapist.photoURL ? (
+                          <img src={therapist.photoURL} alt={therapist.name} />
+                        ) : (
+                          <div className="therapist-avatar-placeholder">
+                            {(therapist.name || therapist.email)?.charAt(0) || 'T'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="therapist-details">
+                        <h5>{therapist.name || therapist.email}</h5>
+                        <p className="therapist-specialization">{therapist.specialization || 'General Therapist'}</p>
+                        <p className="therapist-email">{therapist.email}</p>
+                      </div>
+                      <div className="select-indicator">
+                        <div className="select-circle"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Core Account Function Modals */}
+      
+      {/* Edit Client Modal */}
+      {showEditClientModal && selectedClientForAction && (
+        <div className="modal-overlay" onClick={handleCloseModals}>
+          <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Edit Client Information</h2>
+              <button className="close-button" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-section">
+                <h3>Personal Information</h3>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input 
+                      type="text" 
+                      value={editFormData.name || ''} 
+                      onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                      disabled={isEditingClient}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input 
+                      type="email" 
+                      value={editFormData.email || ''} 
+                      onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                      disabled={isEditingClient}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Phone</label>
+                    <input 
+                      type="tel" 
+                      value={editFormData.phone || ''} 
+                      onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                      disabled={isEditingClient}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Age</label>
+                    <input 
+                      type="number" 
+                      value={editFormData.age || ''} 
+                      onChange={(e) => setEditFormData({...editFormData, age: e.target.value})}
+                      disabled={isEditingClient}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Gender</label>
+                    <select 
+                      value={editFormData.gender || 'man'} 
+                      onChange={(e) => setEditFormData({...editFormData, gender: e.target.value})}
+                      disabled={isEditingClient}
+                    >
+                      <option value="man">Male</option>
+                      <option value="woman">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Country</label>
+                    <input 
+                      type="text" 
+                      value={editFormData.country || ''} 
+                      onChange={(e) => setEditFormData({...editFormData, country: e.target.value})}
+                      disabled={isEditingClient}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="form-section">
+                <h3>Therapy Information</h3>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Therapy Type</label>
+                    <select 
+                      value={editFormData.therapyType || 'Individual Therapy'} 
+                      onChange={(e) => setEditFormData({...editFormData, therapyType: e.target.value})}
+                      disabled={isEditingClient}
+                    >
+                      <option value="Individual Therapy">Individual Therapy</option>
+                      <option value="Group Therapy">Group Therapy</option>
+                      <option value="Couples Therapy">Couples Therapy</option>
+                      <option value="Family Therapy">Family Therapy</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Session Frequency</label>
+                    <select 
+                      value={editFormData.sessionFrequency || 'Weekly'} 
+                      onChange={(e) => setEditFormData({...editFormData, sessionFrequency: e.target.value})}
+                      disabled={isEditingClient}
+                    >
+                      <option value="Weekly">Weekly</option>
+                      <option value="Bi-weekly">Bi-weekly</option>
+                      <option value="Monthly">Monthly</option>
+                      <option value="As needed">As needed</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary" 
+                onClick={handleCloseModals}
+                disabled={isEditingClient}
+              >
+                Cancel
+              </button>
+              <button 
+                className={`btn-primary ${isEditingClient ? 'loading' : ''}`}
+                onClick={() => handleSaveClientEdit(editFormData)}
+                disabled={isEditingClient}
+              >
+                {isEditingClient ? (
+                  <>
+                    <div className="spinner"></div>
+                    {editMessage}
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate/Reactivate Client Modal */}
+      {showDeactivateModal && selectedClientForAction && (
+        <div className="modal-overlay" onClick={handleCloseModals}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{getStatusAction(selectedClientForAction.status || 'active')} Client Account</h2>
+              <button className="close-button" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="warning-message">
+                <div className="warning-icon">⚠️</div>
+                <div className="warning-content">
+                  <h3>Are you sure?</h3>
+                  <p>
+                    {(selectedClientForAction.status || 'active') === 'active' 
+                      ? `This will deactivate ${selectedClientForAction.clientName || selectedClientForAction.displayName}'s account. They will lose access to the platform but their data will be preserved.`
+                      : `This will activate ${selectedClientForAction.clientName || selectedClientForAction.displayName}'s account. They will regain access to the platform.`
+                    }
+                  </p>
+                </div>
+              </div>
+              <div className="audit-trail">
+                <h4>Audit Trail</h4>
+                <p>This action will be logged with timestamp and admin details for compliance purposes.</p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary" 
+                onClick={handleCloseModals}
+                disabled={isUpdatingStatus}
+              >
+                Cancel
+              </button>
+              <button 
+                className={`btn-primary ${(selectedClientForAction.status || 'active') === 'active' ? 'warning' : 'success'} ${isUpdatingStatus ? 'loading' : ''}`}
+                onClick={() => handleToggleClientStatus(selectedClientForAction)}
+                disabled={isUpdatingStatus}
+              >
+                {isUpdatingStatus ? (
+                  <>
+                    <div className="spinner"></div>
+                    {statusUpdateMessage}
+                  </>
+                ) : (
+                  `${getStatusAction(selectedClientForAction.status || 'active')} Account`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Status Modal */}
+      {showStatusModal && selectedClientForAction && (
+        <div className="modal-overlay" onClick={handleCloseModals}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Change Client Status</h2>
+              <button className="close-button" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="status-change-info">
+                <h3>Client: {selectedClientForAction.clientName || selectedClientForAction.displayName}</h3>
+                <p>Current Status: <span className={`status-badge ${getStatusClass(selectedClientForAction.status || 'active')}`}>
+                  {getStatusLabel(selectedClientForAction.status || 'active')}
+                </span></p>
+              </div>
+              
+              <div className="status-selection">
+                <h4>Select New Status:</h4>
+                <div className="status-options">
+                  <label className={`status-option ${selectedNewStatus === 'active' ? 'selected' : ''}`}>
+                    <input 
+                      type="radio" 
+                      name="status" 
+                      value="active" 
+                      checked={selectedNewStatus === 'active'}
+                      onChange={(e) => setSelectedNewStatus(e.target.value)}
+                    />
+                    <span className="status-option-content">
+                      <span className="status-option-badge active">Active</span>
+                      <span className="status-option-desc">Client can access the platform</span>
+                    </span>
+                  </label>
+                  
+                  <label className={`status-option ${selectedNewStatus === 'inactive' ? 'selected' : ''}`}>
+                    <input 
+                      type="radio" 
+                      name="status" 
+                      value="inactive" 
+                      checked={selectedNewStatus === 'inactive'}
+                      onChange={(e) => setSelectedNewStatus(e.target.value)}
+                    />
+                    <span className="status-option-content">
+                      <span className="status-option-badge inactive">Inactive</span>
+                      <span className="status-option-desc">Client cannot access the platform</span>
+                    </span>
+                  </label>
+                  
+                  <label className={`status-option ${selectedNewStatus === 'discharged' ? 'selected' : ''}`}>
+                    <input 
+                      type="radio" 
+                      name="status" 
+                      value="discharged" 
+                      checked={selectedNewStatus === 'discharged'}
+                      onChange={(e) => setSelectedNewStatus(e.target.value)}
+                    />
+                    <span className="status-option-content">
+                      <span className="status-option-badge discharged">Discharged</span>
+                      <span className="status-option-desc">Treatment completed, account closed</span>
+                    </span>
+                  </label>
+                  
+                  <label className={`status-option ${selectedNewStatus === 'on_hold' ? 'selected' : ''}`}>
+                    <input 
+                      type="radio" 
+                      name="status" 
+                      value="on_hold" 
+                      checked={selectedNewStatus === 'on_hold'}
+                      onChange={(e) => setSelectedNewStatus(e.target.value)}
+                    />
+                    <span className="status-option-content">
+                      <span className="status-option-badge on-hold">On Hold</span>
+                      <span className="status-option-desc">Temporarily paused account</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+              
+              {isUpdatingStatus && (
+                <div className="export-progress">
+                  <div className="spinner"></div>
+                  <p>{statusUpdateMessage}</p>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary" 
+                onClick={handleCloseModals}
+                disabled={isUpdatingStatus}
+              >
+                Cancel
+              </button>
+              <button 
+                className={`btn-primary ${isUpdatingStatus ? 'loading' : ''}`}
+                onClick={handleConfirmStatusChange}
+                disabled={isUpdatingStatus || selectedNewStatus === (selectedClientForAction.status || 'active')}
+              >
+                {isUpdatingStatus ? (
+                  <>
+                    <div className="spinner"></div>
+                    {statusUpdateMessage}
+                  </>
+                ) : (
+                  'Update Status'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Client Modal */}
+      {showDeleteModal && selectedClientForAction && (
+        <div className="modal-overlay" onClick={handleCloseModals}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete Client Record</h2>
+              <button className="close-button" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="danger-message">
+                <div className="danger-icon">🗑️</div>
+                <div className="danger-content">
+                  <h3>Permanent Deletion Warning</h3>
+                  <p>
+                    This will permanently delete {selectedClientForAction.clientName || selectedClientForAction.displayName}'s record from the system.
+                    <strong>This action cannot be undone.</strong>
+                  </p>
+                </div>
+              </div>
+              <div className="compliance-check">
+                <h4>Compliance Retention Check</h4>
+                <div className="compliance-item">
+                  <input type="checkbox" id="retention-check" />
+                  <label htmlFor="retention-check">
+                    I confirm that this client's data retention period has expired and deletion is compliant with regulations.
+                  </label>
+                </div>
+                <div className="compliance-item">
+                  <input type="checkbox" id="backup-check" />
+                  <label htmlFor="backup-check">
+                    I confirm that all necessary data has been backed up before deletion.
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary" 
+                onClick={handleCloseModals}
+                disabled={isDeletingClient}
+              >
+                Cancel
+              </button>
+              <button 
+                className={`btn-danger ${isDeletingClient ? 'loading' : ''}`}
+                onClick={handleConfirmDeleteClient}
+                disabled={isDeletingClient}
+              >
+                {isDeletingClient ? (
+                  <>
+                    <div className="spinner"></div>
+                    {deleteMessage}
+                  </>
+                ) : (
+                  'Delete Permanently'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Bulk Export Modal */}
+      {showBulkExportModal && (
+        <div className="modal-overlay" onClick={handleCloseModals}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Export Client Data</h2>
+              <button className="close-button" onClick={handleCloseModals}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="export-options">
+                <h3>Choose Export Format</h3>
+                <p>Export all client data ({allClients.length} clients) in your preferred format:</p>
+                
+                <div className="export-format-buttons">
+                  <button 
+                    className={`export-format-btn ${isExporting ? 'disabled' : ''}`}
+                    onClick={exportToCSV}
+                    disabled={isExporting}
+                  >
+                    <div className="format-icon">📊</div>
+                    <div className="format-info">
+                      <h4>CSV Format</h4>
+                      <p>Comma Separated Values<br/>Best for Excel, Google Sheets</p>
+                    </div>
+                  </button>
+                  
+                  <button 
+                    className={`export-format-btn ${isExporting ? 'disabled' : ''}`}
+                    onClick={exportToExcel}
+                    disabled={isExporting}
+                  >
+                    <div className="format-icon">📈</div>
+                    <div className="format-info">
+                      <h4>Excel Format</h4>
+                      <p>Microsoft Excel (.xlsx)<br/>Native Excel compatibility</p>
+                    </div>
+                  </button>
+                  
+                  <button 
+                    className={`export-format-btn ${isExporting ? 'disabled' : ''}`}
+                    onClick={exportToPDF}
+                    disabled={isExporting}
+                  >
+                    <div className="format-icon">📄</div>
+                    <div className="format-info">
+                      <h4>PDF Report</h4>
+                      <p>Professional PDF document<br/>Perfect for presentations</p>
+                    </div>
+                  </button>
+                </div>
+                
+                {isExporting && (
+                  <div className="export-progress">
+                    <div className="spinner"></div>
+                    <p>{exportMessage}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary" 
+                onClick={handleCloseModals}
+                disabled={isExporting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -67,6 +67,11 @@ export default function Questionnaire() {
   const complete = async () => {
     setLoading(true);
     try {
+      // Check if we're online
+      if (!navigator.onLine) {
+        throw new Error('You are currently offline. Please check your internet connection and try again.');
+      }
+
       // Combine individual PHQ-9 answers into a single object
       const phq9Data = {};
       for (let i = 1; i <= 9; i++) {
@@ -82,7 +87,9 @@ export default function Questionnaire() {
         ...data,
         phq9: phq9Data, // Add the combined PHQ-9 data
         completedAt: new Date().toISOString(),
-        status: 'questionnaire_completed'
+        status: 'active', // Set to active so client can login
+        displayName: data.name || data.firstName + ' ' + data.lastName || 'Client',
+        clientName: data.name || data.firstName + ' ' + data.lastName || 'Client'
       };
       
       const docRef = await addDoc(collection(db, 'clients'), clientData);
@@ -94,7 +101,13 @@ export default function Questionnaire() {
       navigate('/signup');
     } catch (error) {
       console.error('Error submitting questionnaire:', error);
-      alert('There was an error submitting your questionnaire. Please try again.');
+      
+      // Handle specific Firebase offline errors
+      if (error.message.includes('offline') || error.message.includes('Failed to get document')) {
+        alert('You are currently offline. Please check your internet connection and try again.');
+      } else {
+        alert('There was an error submitting your questionnaire. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

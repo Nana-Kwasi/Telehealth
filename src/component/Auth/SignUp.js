@@ -18,6 +18,11 @@ export default function SignUp() {
     setLoading(true);
     
     try {
+      // Check if we're online
+      if (!navigator.onLine) {
+        throw new Error('You are currently offline. Please check your internet connection and try again.');
+      }
+
       // Create Firebase Auth user
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const uid = cred.user.uid;
@@ -32,15 +37,38 @@ export default function SignUp() {
         email: form.email, 
         role: 'client',
         clientId: clientId, // Link to the client document
+        status: 'active', // Set status to active
         createdAt: new Date().toISOString() 
       };
       
       await setDoc(doc(db, 'auth', uid), userProfile);
       
+      // Update the client document with the auth UID and proper name
+      if (clientId) {
+        await setDoc(doc(db, 'clients', clientId), {
+          authUid: uid,
+          displayName: form.name,
+          clientName: form.name,
+          status: 'active',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+      
       // Navigate to payment
       navigate('/payment');
     } catch (e) {
-      setError(e.message || 'Sign up failed');
+      console.error('Sign up error:', e);
+      
+      // Handle specific Firebase offline errors
+      if (e.message.includes('offline') || e.message.includes('Failed to get document')) {
+        setError('You are currently offline. Please check your internet connection and try again.');
+      } else if (e.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please try logging in instead.');
+      } else if (e.code === 'auth/weak-password') {
+        setError('Password should be at least 6 characters long.');
+      } else {
+        setError(e.message || 'Sign up failed');
+      }
     } finally {
       setLoading(false);
     }

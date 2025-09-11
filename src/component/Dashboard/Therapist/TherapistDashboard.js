@@ -9,7 +9,9 @@ import {
   BookOpen, 
   Settings, 
   LogOut,
-  UserPlus
+  UserPlus,
+  Clock,
+  FileText
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
@@ -22,9 +24,11 @@ import TherapistClients from './Clients';
 import TherapistMessages from './Messages';
 import TherapistVideoCall from './VideoCall';
 import TherapistCalendar from './Calendar';
+import TherapistSchedule from './Schedule';
 import TherapistNotes from './Notes';
 import TherapistResources from './Resources';
 import TherapistSettings from './Settings';
+import TherapistLogs from './Logs';
 import OnboardTherapist from '../Admin/OnboardTherapist';
 
 export default function TherapistDashboard({ profile }) {
@@ -46,12 +50,15 @@ export default function TherapistDashboard({ profile }) {
 
   // Add admin-only navigation items
   if (isAdmin) {
-    navigationItems.push({
-      path: '/dashboard/admin',
-      icon: UserPlus,
-      label: 'Onboard Therapist',
-      component: OnboardTherapist
-    });
+    navigationItems.push(
+      { path: '/dashboard/logs', icon: FileText, label: 'Logs', component: TherapistLogs },
+      {
+        path: '/dashboard/admin',
+        icon: UserPlus,
+        label: 'Onboard Therapist',
+        component: OnboardTherapist
+      }
+    );
   }
 
   const handleLogout = async () => {
@@ -122,7 +129,7 @@ export default function TherapistDashboard({ profile }) {
               onChange={handleProfileImageUpload}
             />
             <div className="user-details">
-              <p className="user-name">{profile?.name || 'Therapist'}</p>
+              <p className="user-name">Dr.{profile?.name || 'Therapist'}</p>
               <p className="user-role">
                 {isAdmin ? 'Admin Therapist' : 'Therapist'}
               </p>
@@ -161,13 +168,14 @@ export default function TherapistDashboard({ profile }) {
       <main className="therapist-main">
         <Routes>
           <Route path="/" element={<TherapistHome />} />
-          <Route path="/clients" element={<TherapistClients />} />
+          <Route path="/clients" element={<TherapistClients profile={profile} />} />
           <Route path="/staff" element={<TherapistMessages />} />
           <Route path="/video" element={<TherapistVideoCall profile={profile} />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/resources" element={<TherapistResources />} />
           <Route path="/settings" element={<TherapistSettings />} />
+          {isAdmin && <Route path="/logs" element={<TherapistLogs />} />}
           {isAdmin && <Route path="/admin" element={<OnboardTherapist />} />}
         </Routes>
       </main>

@@ -4,7 +4,7 @@ import Home from './component/Home/Home';
 import Questionnaire from './component/Questionnaire/Questionnaire';
 import Payment from './component/Payment/Payment';
 import Navbar from './component/Layout/Navbar';
-import { resolveRole } from './component/Auth/authService';
+import { resolveRole, logUserLogout } from './component/Auth/authService';
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './component/Auth/firebaseConfig';
@@ -23,12 +23,31 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
         console.log('No user authenticated');
+        // Log logout if there was a previous session
+        const previousSession = sessionStorage.getItem('previousSession');
+        if (previousSession) {
+          try {
+            const sessionData = JSON.parse(previousSession);
+            await logUserLogout(sessionData.userId, sessionData.role, sessionData.profile);
+          } catch (error) {
+            console.error('Error logging logout:', error);
+          }
+          sessionStorage.removeItem('previousSession');
+        }
         return setSession({ loading: false, role: null, profile: null });
       }
       
       console.log('User authenticated:', u.uid);
       const { role, profile } = await resolveRole(u.uid);
       console.log('Resolved role:', role, 'Profile:', profile);
+      
+      // Store current session for logout logging
+      sessionStorage.setItem('previousSession', JSON.stringify({
+        userId: u.uid,
+        role,
+        profile
+      }));
+      
       setSession({ loading: false, role, profile });
     });
     return unsub;

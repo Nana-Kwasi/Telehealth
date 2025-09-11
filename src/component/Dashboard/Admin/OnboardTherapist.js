@@ -137,7 +137,7 @@ export default function OnboardTherapist() {
         <div className="form-sections">
           {/* Basic Information */}
           <div className="form-section">
-            <h3>Basic Information</h3>
+            <h3 style={{ color: 'white' }}>Basic Information</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="name">Full Name *</label>
@@ -221,7 +221,7 @@ export default function OnboardTherapist() {
 
           {/* Professional Details */}
           <div className="form-section">
-            <h3>Professional Details</h3>
+            <h3 style={{ color: 'white' }}>Professional Details</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="specialties">Specialties</label>
@@ -264,7 +264,7 @@ export default function OnboardTherapist() {
 
           {/* Profile Image */}
           <div className="form-section">
-            <h3>Profile Image</h3>
+            <h3 style={{ color: 'white' }}>Profile Image</h3>
             <div className="image-upload-container">
               {imagePreview ? (
                 <div className="image-preview">
@@ -297,7 +297,7 @@ export default function OnboardTherapist() {
 
           {/* Bio */}
           <div className="form-section">
-            <h3>Professional Bio</h3>
+            <h3 style={{ color: 'white' }}>Professional Bio</h3>
             <div className="form-group">
               <label htmlFor="bio">Bio</label>
               <textarea

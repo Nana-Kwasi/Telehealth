@@ -1,0 +1,463 @@
+/* New Calendar Design - Full Screen Layout */
+.new-calendar-container {
+  padding: 0;
+  background: white;
+  min-height: 100vh;
+  width: 100vw;
+  margin: 0;
+  position: relative;
+}
+
+.new-calendar-header {
+  background: white;
+  padding: 20px 30px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.new-calendar-navigation {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.new-nav-btn {
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.new-nav-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.new-calendar-date {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.new-calendar-today {
+  color: #6b7280;
+  font-size: 16px;
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+.new-view-toggle {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.new-view-btn {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.new-view-btn.active {
+  background: white;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Therapist Columns Layout */
+.new-calendar-main {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 100px);
+  overflow: hidden;
+}
+
+.new-therapist-header {
+  display: flex;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 100px;
+  z-index: 90;
+}
+
+.new-time-column {
+  width: 80px;
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.new-time-slot {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.new-therapist-columns {
+  display: flex;
+  flex: 1;
+}
+
+.new-therapist-column {
+  flex: 1;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.new-therapist-info {
+  padding: 20px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.new-therapist-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.new-therapist-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+.new-therapist-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #e5e7eb;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* Time Grid */
+.new-time-grid {
+  display: flex;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.new-time-column-grid {
+  width: 80px;
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.new-time-slot-grid {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+}
+
+.new-current-time-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #10b981;
+  z-index: 10;
+}
+
+.new-current-time-label {
+  position: absolute;
+  left: 4px;
+  top: -8px;
+  background: #10b981;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.new-therapist-grids {
+  display: flex;
+  flex: 1;
+}
+
+.new-therapist-grid {
+  flex: 1;
+  border-right: 1px solid #e5e7eb;
+  position: relative;
+}
+
+.new-appointment-slot {
+  height: 60px;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+  padding: 4px;
+}
+
+/* Appointment Cards */
+.new-appointment-card {
+  background: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 2px;
+  border-left: 4px solid;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.new-appointment-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.new-appointment-card.vaccination {
+  border-left-color: #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+}
+
+.new-appointment-card.consultation {
+  border-left-color: #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+}
+
+.new-appointment-card.routine {
+  border-left-color: #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+}
+
+.new-appointment-card.xray {
+  border-left-color: #8b5cf6;
+  background: linear-gradient(135deg, #f3e8ff 0%, #faf5ff 100%);
+}
+
+.new-appointment-card.microchipping {
+  border-left-color: #8b5cf6;
+  background: linear-gradient(135deg, #f3e8ff 0%, #faf5ff 100%);
+}
+
+.new-appointment-card.wellness {
+  border-left-color: #8b5cf6;
+  background: linear-gradient(135deg, #f3e8ff 0%, #faf5ff 100%);
+}
+
+.new-appointment-card.mass-removal {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+}
+
+.new-appointment-card.examination {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+}
+
+.new-appointment-card.dental {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+}
+
+.new-appointment-card.nail-clipping {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+}
+
+.new-appointment-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+  line-height: 1.2;
+}
+
+.new-appointment-time {
+  font-size: 10px;
+  color: #6b7280;
+  margin: 0 0 4px 0;
+  font-weight: 500;
+}
+
+.new-appointment-client {
+  font-size: 11px;
+  color: #374151;
+  margin: 0 0 4px 0;
+  font-weight: 500;
+}
+
+.new-appointment-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.new-appointment-icon.cat {
+  background: #10b981;
+  color: white;
+}
+
+.new-appointment-icon.dog {
+  background: #8b5cf6;
+  color: white;
+}
+
+.new-appointment-icon.dog-orange {
+  background: #f59e0b;
+  color: white;
+}
+
+.new-appointment-more {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.new-appointment-more:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Floating Action Button */
+.new-fab {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 56px;
+  height: 56px;
+  background: #10b981;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.new-fab:hover {
+  background: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .new-calendar-header {
+    padding: 15px 20px;
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .new-calendar-navigation {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .new-therapist-columns {
+    overflow-x: auto;
+  }
+  
+  .new-therapist-column {
+    min-width: 150px;
+  }
+  
+  .new-fab {
+    bottom: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .new-calendar-header {
+    padding: 10px 15px;
+  }
+  
+  .new-calendar-date {
+    font-size: 20px;
+  }
+  
+  .new-therapist-column {
+    min-width: 120px;
+  }
+  
+  .new-appointment-card {
+    padding: 6px 8px;
+  }
+  
+  .new-appointment-title {
+    font-size: 11px;
+  }
+  
+  .new-appointment-time,
+  .new-appointment-client {
+    font-size: 9px;
+  }
+}

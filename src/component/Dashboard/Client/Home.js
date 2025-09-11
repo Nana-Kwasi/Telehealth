@@ -145,27 +145,7 @@ export default function ClientHome() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="quick-actions">
-        <h2 className="section-title">Quick Actions</h2>
-        <div className="cards-grid">
-          {dashboardCards.map((card) => (
-            <div key={card.title} className="dashboard-card">
-              <div className={`card-icon ${card.color}`}>
-                <card.icon size={24} />
-              </div>
-              <div className="card-content">
-                <h3 className="card-title">{card.title}</h3>
-                <p className="card-description">{card.description}</p>
-                <div className="card-stats">
-                  <span className="card-value">{card.value}</span>
-                  <span className="card-trend">{card.trend}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+  
 
       {/* Progress & Activities */}
       <div className="progress-section">
