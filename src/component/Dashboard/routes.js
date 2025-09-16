@@ -1,13 +1,13 @@
 // Route config placeholders for RBAC
 export const clientRoutes = [
   { path: 'home', label: 'Home' },
-  { path: 'messages', label: 'Messaging' },
-  { path: 'video', label: 'Video/Audio Session' },
-  { path: 'schedule', label: 'Scheduling' },
+  { path: 'messages', label: 'Therapist' },
+  { path: 'video', label: 'Schedule' },
+  { path: 'schedule', label: 'Calendar' },
   { path: 'resources', label: 'Resources' },
   { path: 'billing', label: 'Billing' },
   { path: 'settings', label: 'Settings' },
-  { path: 'support', label: 'Feedback & Support' },
+  { path: 'support', label: 'Support' },
 ];
 
 

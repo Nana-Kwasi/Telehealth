@@ -1,139 +1,1438 @@
-.dashboard-page {
+/* Client Video Call CSS */
+.client-video-call {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.page-title {
-  font-size: 2rem;
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
+.video-call-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e5e7eb;
 }
 
-.subtitle {
-  color: #666;
-  margin-bottom: 2rem;
+.video-call-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.video-call-header p {
+  color: #6b7280;
+  margin: 0;
   font-size: 1.1rem;
 }
 
-.video-container {
+/* Message Display */
+.message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+.message.success {
+  background: #d1fae5;
+  border: 1px solid #10b981;
+  color: #065f46;
+}
+
+.message.error {
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #991b1b;
+}
+
+/* Therapist Card */
+.therapist-card {
   background: white;
-  border-radius: 16px;
-  padding: 3rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.video-placeholder {
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.video-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-}
-
-.video-placeholder h3 {
-  font-size: 1.8rem;
-  color: #333;
-  margin-bottom: 1rem;
-  font-weight: 600;
-}
-
-.video-placeholder p {
-  color: #666;
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
   margin-bottom: 2rem;
-  font-size: 1.1rem;
-  line-height: 1.6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+}
+
+.therapist-info {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.therapist-avatar {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.therapist-details h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.therapist-title {
+  color: #6b7280;
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0 0 0.25rem 0;
+}
+
+.therapist-specialties {
+  color: #374151;
+  font-size: 0.875rem;
+  margin: 0 0 0.25rem 0;
+}
+
+.therapist-experience {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.therapist-actions {
+  display: flex;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+/* No Therapist Warning */
+.no-therapist-warning {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 0.75rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #92400e;
+}
+
+.no-therapist-warning h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.no-therapist-warning p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Sessions Section */
+.sessions-section {
+  margin-bottom: 2rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+/* Sessions List */
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.session-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.session-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.session-info {
+  flex: 1;
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.session-header h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.session-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-time {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.session-notes {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.session-notes p {
+  margin: 0;
 }
 
 .session-actions {
   display: flex;
+  align-items: center;
   gap: 1rem;
+  flex-shrink: 0;
+}
+
+.pending-text {
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* No Sessions */
+.no-sessions {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  border: 2px dashed #d1d5db;
+}
+
+.no-sessions svg {
+  color: #9ca3af;
+  margin-bottom: 1rem;
+}
+
+.no-sessions h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.no-sessions p {
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
   justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 0;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Form Styles */
+.modal form {
+  padding: 2rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Button Styles */
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Simplified Therapist Modal Button Styles */
+.therapist-actions .btn-primary {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.therapist-actions .btn-primary:hover:not(:disabled) {
+  background: #bae6fd;
+  border-color: #7dd3fc;
+  color: #0c4a6e;
+  transform: translateY(-1px);
+}
+
+.therapist-actions .btn-secondary {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  min-width: 160px;
+  justify-content: center;
+  box-shadow: 0 2px 4px 0 rgba(59, 130, 246, 0.2);
+}
+
+.therapist-actions .btn-secondary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px 0 rgba(59, 130, 246, 0.3);
+}
+
+.therapist-actions .btn-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px 0 rgba(59, 130, 246, 0.2);
+}
+
+/* Loading States */
+.video-call-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Therapist Details Modal */
+.therapist-details-modal {
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.therapist-details-content {
+  padding: 2rem;
+}
+
+.therapist-photo-section {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.therapist-photo {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 1rem;
+  border: 4px solid #3b82f6;
+}
+
+.therapist-photo-placeholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem auto;
+  color: #6b7280;
+  border: 4px solid #3b82f6;
+}
+
+.therapist-photo-section h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.therapist-role {
+  color: #6b7280;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.therapist-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
   margin-bottom: 2rem;
 }
 
-.btn {
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  color: #374151;
+}
+
+.info-item svg {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.therapist-bio {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+}
+
+.therapist-bio h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 1rem 0;
+}
+
+.therapist-bio p {
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.therapist-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+}
+
+/* Warning Card */
+.warning-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+  color: #92400e;
+}
+
+.warning-card h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.warning-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Report Modal */
+.report-modal {
+  max-width: 500px;
+}
+
+/* Button Styles */
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Simplified Therapist Modal Danger Button */
+.therapist-actions .btn-danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.therapist-actions .btn-danger:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #fca5a5;
+  color: #b91c1c;
+  transform: translateY(-1px);
+}
+
+/* Simple icon styling for therapist modal buttons */
+.therapist-actions .btn-primary svg,
+.therapist-actions .btn-secondary svg,
+.therapist-actions .btn-danger svg {
+  transition: transform 0.2s ease;
+}
+
+.therapist-actions .btn-primary:hover svg,
+.therapist-actions .btn-secondary:hover svg,
+.therapist-actions .btn-danger:hover svg {
+  transform: scale(1.05);
+}
+
+/* Standard icon animation for Request New Therapist button */
+.therapist-actions .btn-secondary svg {
+  transition: transform 0.2s ease;
+}
+
+.therapist-actions .btn-secondary:hover svg {
+  transform: scale(1.05);
+}
+
+/* Button focus states for accessibility */
+.therapist-actions .btn-primary:focus,
+.therapist-actions .btn-secondary:focus,
+.therapist-actions .btn-danger:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.therapist-actions .btn-danger:focus {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+/* Clickable therapist name */
+.therapist-name-clickable {
+  transition: color 0.2s ease;
+}
+
+.therapist-name-clickable:hover {
+  color: #1d4ed8 !important;
+  text-decoration: underline;
+}
+
+/* Session edit button */
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Star Rating Styles */
+.rating-section {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.star-rating {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.star {
+  background: none;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
+  padding: 0.25rem;
+  transition: all 0.2s ease;
+  color: #d1d5db;
 }
 
-.btn.primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+.star:hover,
+.star.filled {
+  color: #fbbf24;
+  transform: scale(1.1);
 }
 
-.btn.primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+.star.filled {
+  color: #f59e0b;
 }
 
-.btn.secondary {
-  background: #f8f9fa;
-  color: #333;
-  border: 2px solid #e1e5e9;
-}
-
-.btn.secondary:hover {
-  background: #e9ecef;
-  border-color: #667eea;
-}
-
-.call-features {
-  text-align: left;
-  max-width: 500px;
-  margin: 0 auto;
-}
-
-.call-features h4 {
-  color: #333;
-  margin-bottom: 1rem;
-  font-size: 1.2rem;
+.rating-text {
+  font-size: 1.125rem;
   font-weight: 600;
+  color: #374151;
+  margin: 0.5rem 0 0 0;
 }
 
-.call-features ul {
-  list-style: none;
-  padding: 0;
+/* Checkbox Label */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  color: #374151;
 }
 
-.call-features li {
-  padding: 0.5rem 0;
-  color: #666;
-  font-size: 1rem;
-  border-bottom: 1px solid #f0f0f0;
+.checkbox-label input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: #3b82f6;
+  cursor: pointer;
 }
 
-.call-features li:last-child {
-  border-bottom: none;
+/* Review and Rating Modals */
+.review-rating-modal {
+  max-width: 600px;
+}
+
+.rating-section label {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1rem;
+  display: block;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .dashboard-page {
+  .client-video-call {
     padding: 1rem;
   }
   
-  .video-container {
-    padding: 2rem 1rem;
+  .video-call-header h1 {
+    font-size: 2rem;
+  }
+  
+  .therapist-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  
+  .therapist-info {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+  
+  .therapist-actions {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .therapist-actions .btn-primary,
+  .therapist-actions .btn-secondary,
+  .therapist-actions .btn-danger {
+    flex: 1;
+    min-width: 120px;
+    max-width: 180px;
+  }
+  
+  .session-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .session-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .modal {
+    margin: 1rem;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .therapist-details-modal {
+    margin: 1rem;
+    max-height: 95vh;
+  }
+  
+  .therapist-details-content {
+    padding: 1.5rem;
+  }
+  
+  .therapist-info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .therapist-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+  }
+  
+  .therapist-actions .btn-primary,
+  .therapist-actions .btn-secondary,
+  .therapist-actions .btn-danger {
+    width: 100%;
+    justify-content: center;
+    min-width: auto;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
   }
   
   .session-actions {
     flex-direction: column;
-    align-items: center;
+    width: 100%;
+    gap: 0.5rem;
   }
   
-  .btn {
+  .session-actions .btn-primary,
+  .session-actions .btn-secondary {
     width: 100%;
-    max-width: 300px;
+    justify-content: center;
+  }
+  
+  .star-rating {
+    gap: 0.25rem;
+  }
+  
+  .star {
+    padding: 0.125rem;
+  }
+  
+  .star svg {
+    width: 24px;
+    height: 24px;
   }
 }
 
+@media (max-width: 480px) {
+  .client-video-call {
+    padding: 0.5rem;
+  }
+  
+  .video-call-header h1 {
+    font-size: 1.75rem;
+  }
+  
+  .therapist-card {
+    padding: 1.5rem;
+  }
+  
+  .session-card {
+    padding: 1rem;
+  }
+  
+  .modal form {
+    padding: 1.5rem;
+  }
+  
+  .modal-header {
+    padding: 1rem 1.5rem;
+  }
+}
+
+/* Sessions Table Styles */
+.sessions-table-container {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+}
+
+.sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.sessions-table th {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #64748b;
+  font-weight: 600;
+  text-align: left;
+  padding: 1rem 1.5rem;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sessions-table td {
+  padding: 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+}
+
+.sessions-table-row:hover {
+  background: #f8fafc;
+}
+
+/* Session Info */
+.sessions-session-info {
+  min-width: 200px;
+}
+
+.sessions-session-title {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}
+
+.sessions-session-type {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Date & Time */
+.sessions-datetime {
+  min-width: 120px;
+}
+
+.sessions-date {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}
+
+.sessions-time {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Duration */
+.sessions-duration {
+  min-width: 100px;
+}
+
+.sessions-duration-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+/* Status */
+.sessions-status {
+  min-width: 140px;
+}
+
+.sessions-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sessions-status-pending {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.sessions-status-scheduled {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.sessions-status-cancelled {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+.sessions-confirmation {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* Notes */
+.sessions-notes {
+  max-width: 200px;
+}
+
+.sessions-notes-content {
+  font-size: 0.875rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.sessions-no-notes {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Actions */
+.sessions-actions {
+  min-width: 120px;
+  text-align: right;
+}
+
+.sessions-join-button,
+.sessions-edit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.sessions-join-button {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.sessions-join-button:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+.sessions-edit-button {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.sessions-edit-button:hover {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+/* Date Input Container */
+.date-input-container {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.view-calendar-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.view-calendar-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  transform: translateY(-1px);
+}
+
+.view-calendar-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Therapist Calendar Modal - VideoCall */
+.videocall-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.videocall-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 800px;
+  width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.videocall-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.videocall-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.videocall-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.videocall-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.videocall-therapist-calendar-content {
+  padding: 1.5rem;
+}
+
+.videocall-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+}
+
+.videocall-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #8b5cf6;
+  border-radius: 50%;
+  animation: videocall-spin 1s linear infinite;
+}
+
+@keyframes videocall-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.videocall-therapist-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.videocall-calendar-legend {
+  display: flex;
+  gap: 2rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.videocall-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.videocall-legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid #e5e7eb;
+}
+
+.videocall-legend-color.videocall-available {
+  background: #d1fae5;
+  border-color: #10b981;
+}
+
+.videocall-legend-color.videocall-busy {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.videocall-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.videocall-calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 0.5rem;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+  background: #f9fafb;
+  transition: all 0.2s ease;
+  min-height: 80px;
+  position: relative;
+}
+
+.videocall-calendar-day.videocall-available {
+  background: #d1fae5;
+  border-color: #10b981;
+}
+
+.videocall-calendar-day.videocall-busy {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.videocall-calendar-day.videocall-past {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  opacity: 0.6;
+}
+
+.videocall-day-number {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.videocall-day-name {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.videocall-busy-indicator {
+  position: absolute;
+  bottom: 0.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ef4444;
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.videocall-calendar-note {
+  text-align: center;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.videocall-calendar-note p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Modal Message Styling */
+.modal-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.modal-message.success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.modal-message.error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .date-input-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .view-calendar-btn {
+    justify-content: center;
+  }
+  
+  .videocall-modal {
+    width: 95vw;
+    margin: 1rem;
+  }
+  
+  .videocall-calendar-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  
+  .videocall-calendar-day {
+    min-height: 60px;
+    padding: 0.5rem 0.25rem;
+  }
+  
+  .videocall-day-number {
+    font-size: 1rem;
+  }
+  
+  .videocall-day-name {
+    font-size: 0.625rem;
+  }
+  
+  .videocall-busy-indicator {
+    font-size: 0.5rem;
+    padding: 0.125rem 0.25rem;
+  }
+}

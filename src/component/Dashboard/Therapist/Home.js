@@ -524,76 +524,103 @@ const calculateTherapyProgress = (therapyNotes) => {
     return { overallProgress: 0, moodScore: 0, progressScore: 0, ratingScore: 0 };
   }
 
-  // Mood/Emotional State scoring (0-100) - Negative states decrease progress
-  const moodScores = {
-    'Depressed': 15,    // Very low progress
-    'Sad': 25,          // Low progress
-    'Anxious': 35,      // Below average progress
-    'Stressed': 45,     // Below average progress
-    'Angry': 40,        // Below average progress
-    'Neutral': 60,      // Average progress
-    'Calm': 80,         // Good progress
-    'Hopeful': 85,      // Very good progress
-    'Optimistic': 90,   // Excellent progress
-    'Excited': 95       // Outstanding progress
+  // Base progress: 5% per completed session (max 50% from sessions alone)
+  const baseProgress = Math.min(50, therapyNotes.length * 5);
+
+  // Mood/Emotional State scoring (0-1 multiplier) - Affects quality multiplier
+  const moodMultipliers = {
+    'Depressed': 0.2,    // Very low multiplier
+    'Sad': 0.3,          // Low multiplier
+    'Anxious': 0.4,      // Below average multiplier
+    'Stressed': 0.5,     // Below average multiplier
+    'Angry': 0.4,        // Below average multiplier
+    'Neutral': 0.7,      // Average multiplier
+    'Calm': 0.9,         // Good multiplier
+    'Hopeful': 0.95,     // Very good multiplier
+    'Optimistic': 1.0,   // Excellent multiplier
+    'Excited': 1.0       // Outstanding multiplier
   };
 
-  // Progress Assessment scoring (0-100) - Negative assessments decrease progress
-  const progressScores = {
-    'Worsened': 10,              // Very low progress
-    'Slight Decline': 25,        // Low progress
-    'No Change': 40,             // Below average progress
-    'Slight Improvement': 60,    // Average progress
-    'Improved': 80,              // Good progress
-    'Significantly Improved': 95 // Excellent progress
+  // Progress Assessment scoring (0-1 multiplier) - Affects quality multiplier
+  const progressMultipliers = {
+    'Worsened': 0.1,              // Very low multiplier
+    'Slight Decline': 0.3,        // Low multiplier
+    'No Change': 0.5,             // Below average multiplier
+    'Slight Improvement': 0.8,    // Average multiplier
+    'Improved': 1.0,              // Good multiplier
+    'Significantly Improved': 1.2 // Excellent multiplier (can exceed 1.0)
   };
 
-  // Calculate average scores
-  let totalMoodScore = 0;
-  let totalProgressScore = 0;
+  // Calculate average multipliers
+  let totalMoodMultiplier = 0;
+  let totalProgressMultiplier = 0;
   let totalRatingScore = 0;
   let validNotes = 0;
 
   therapyNotes.forEach(note => {
-    // Mood/Emotional State score
-    if (note.mood && moodScores[note.mood] !== undefined) {
-      totalMoodScore += moodScores[note.mood];
+    // Mood/Emotional State multiplier
+    if (note.mood && moodMultipliers[note.mood] !== undefined) {
+      totalMoodMultiplier += moodMultipliers[note.mood];
       validNotes++;
     }
 
-    // Progress Assessment score
-    if (note.progressAssessment && progressScores[note.progressAssessment] !== undefined) {
-      totalProgressScore += progressScores[note.progressAssessment];
+    // Progress Assessment multiplier
+    if (note.progressAssessment && progressMultipliers[note.progressAssessment] !== undefined) {
+      totalProgressMultiplier += progressMultipliers[note.progressAssessment];
     }
 
-    // Mood/Progress Rating score (1-10 scale, convert to 0-100)
+    // Mood/Progress Rating score (1-10 scale, convert to 0-1 multiplier)
     if (note.moodRating && note.moodRating >= 1 && note.moodRating <= 10) {
-      totalRatingScore += (note.moodRating / 10) * 100;
+      totalRatingScore += (note.moodRating / 10);
     }
   });
 
   // Calculate averages
-  const avgMoodScore = validNotes > 0 ? totalMoodScore / validNotes : 0;
-  const avgProgressScore = validNotes > 0 ? totalProgressScore / validNotes : 0;
-  const avgRatingScore = validNotes > 0 ? totalRatingScore / validNotes : 0;
+  const avgMoodMultiplier = validNotes > 0 ? totalMoodMultiplier / validNotes : 0.5;
+  const avgProgressMultiplier = validNotes > 0 ? totalProgressMultiplier / validNotes : 0.5;
+  const avgRatingMultiplier = validNotes > 0 ? totalRatingScore / validNotes : 0.5;
 
-  // Weighted combination: 30% mood state, 50% progress assessment, 20% mood rating
-  const overallProgress = Math.round(
-    (avgMoodScore * 0.3) + 
-    (avgProgressScore * 0.5) + 
-    (avgRatingScore * 0.2)
-  );
+  // Quality multiplier: 40% mood, 40% progress assessment, 20% mood rating
+  const qualityMultiplier = Math.max(0.1, Math.min(1.5, 
+    (avgMoodMultiplier * 0.4) + 
+    (avgProgressMultiplier * 0.4) + 
+    (avgRatingMultiplier * 0.2)
+  ));
+
+  // Time-based bonus: Additional 1% per month of therapy (max 20%)
+  const monthsInTherapy = therapyNotes.length / 4; // Assuming 1 session per week
+  const timeBonus = Math.min(20, monthsInTherapy * 1);
+
+  // Consistency bonus: Reward sustained positive trends
+  let consistencyBonus = 0;
+  if (therapyNotes.length >= 3) {
+    const recentNotes = therapyNotes.slice(-3); // Last 3 sessions
+    const positiveCount = recentNotes.filter(note => 
+      (note.mood && ['Calm', 'Hopeful', 'Optimistic', 'Excited'].includes(note.mood)) ||
+      (note.progressAssessment && ['Improved', 'Significantly Improved'].includes(note.progressAssessment)) ||
+      (note.moodRating && note.moodRating >= 7)
+    ).length;
+    consistencyBonus = (positiveCount / 3) * 10; // Up to 10% bonus
+  }
+
+  // Final calculation: Base progress + time bonus + consistency bonus, all multiplied by quality
+  const rawProgress = baseProgress + timeBonus + consistencyBonus;
+  const finalProgress = Math.round(rawProgress * qualityMultiplier);
 
   // Ensure progress is between 0 and 100
-  const finalProgress = Math.max(0, Math.min(100, overallProgress));
+  const cappedProgress = Math.max(0, Math.min(100, finalProgress));
 
   return {
-    overallProgress: finalProgress,
-    moodScore: Math.round(avgMoodScore),
-    progressScore: Math.round(avgProgressScore),
-    ratingScore: Math.round(avgRatingScore),
+    overallProgress: cappedProgress,
+    moodScore: Math.round(avgMoodMultiplier * 100),
+    progressScore: Math.round(avgProgressMultiplier * 100),
+    ratingScore: Math.round(avgRatingMultiplier * 100),
     totalNotes: therapyNotes.length,
-    validNotes: validNotes
+    validNotes: validNotes,
+    baseProgress: baseProgress,
+    timeBonus: timeBonus,
+    consistencyBonus: consistencyBonus,
+    qualityMultiplier: qualityMultiplier
   };
 };
 

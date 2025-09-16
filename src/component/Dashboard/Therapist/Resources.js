@@ -29,7 +29,10 @@ import {
   Target,
   Heart,
   Brain,
-  Zap
+  Zap,
+  MessageCircle,
+  Save,
+  Send
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { auth, db } from '../../Auth/firebaseConfig';
@@ -49,10 +52,12 @@ import {
 import './Resources.css';
 
 export default function TherapistResources() {
-  const [activeTab, setActiveTab] = useState('homework');
+  const [activeTab, setActiveTab] = useState('resources');
   const [resources, setResources] = useState([]);
+  const [worksheets, setWorksheets] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
@@ -65,7 +70,15 @@ export default function TherapistResources() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState('');
   const [therapistNames, setTherapistNames] = useState({});
+  const [clientNames, setClientNames] = useState({});
   const [showWorksheetModal, setShowWorksheetModal] = useState(false);
+  const [showWorksheetViewModal, setShowWorksheetViewModal] = useState(false);
+  const [showWorksheetEditModal, setShowWorksheetEditModal] = useState(false);
+  const [showResourceViewModal, setShowResourceViewModal] = useState(false);
+  const [selectedWorksheet, setSelectedWorksheet] = useState(null);
+  const [selectedResourceForView, setSelectedResourceForView] = useState(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [selectedClientForFeedback, setSelectedClientForFeedback] = useState(null);
   const [worksheetForm, setWorksheetForm] = useState({
     title: '',
     description: '',
@@ -77,6 +90,24 @@ export default function TherapistResources() {
     fields: [],
     allowMultipleResponses: true,
     assignedTo: []
+  });
+
+  const [editWorksheetForm, setEditWorksheetForm] = useState({
+    title: '',
+    description: '',
+    goal: '',
+    instructions: '',
+    category: 'CBT',
+    type: 'patient-facing',
+    status: 'active',
+    fields: [],
+    allowMultipleResponses: true,
+    assignedTo: []
+  });
+
+  const [feedbackForm, setFeedbackForm] = useState({
+    feedback: '',
+    rating: 5
   });
   const [resourceForm, setResourceForm] = useState({
     title: '',
@@ -293,7 +324,30 @@ export default function TherapistResources() {
     'archived': 'Archived'
   };
 
-  // Fetch all resources (visible to all therapists)
+  // Check if user is admin
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const checkAdminStatus = async () => {
+      try {
+        const therapistDoc = await getDocs(query(
+          collection(db, 'therapists'),
+          where('__name__', '==', currentUser.uid)
+        ));
+        
+        if (!therapistDoc.empty) {
+          const therapistData = therapistDoc.docs[0].data();
+          setIsAdmin(therapistData.role === 'admin' || therapistData.isAdmin === true);
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+      }
+    };
+
+    checkAdminStatus();
+  }, [currentUser]);
+
+  // Fetch all resources
   useEffect(() => {
     if (!currentUser) return;
 
@@ -304,15 +358,76 @@ export default function TherapistResources() {
 
     const unsubscribe = onSnapshot(resourcesQuery, async (snap) => {
       const resourcesData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setResources(resourcesData);
+      
+      // Filter resources based on admin status
+      const filteredResources = isAdmin 
+        ? resourcesData 
+        : resourcesData.filter(resource => resource.therapistId === currentUser.uid);
+      
+      setResources(filteredResources);
       
       // Fetch therapist names for all unique therapist IDs
-      const uniqueTherapistIds = [...new Set(resourcesData.map(resource => resource.therapistId))];
+      const uniqueTherapistIds = [...new Set(filteredResources.map(resource => resource.therapistId))];
       await fetchTherapistNames(uniqueTherapistIds);
     });
 
     return unsubscribe;
-  }, [currentUser]);
+  }, [currentUser, isAdmin]);
+
+  // Fetch worksheets function
+  const fetchWorksheets = async () => {
+    if (!currentUser) return;
+
+    try {
+      const worksheetsQuery = query(
+        collection(db, 'worksheets'),
+        orderBy('dateCreated', 'desc')
+      );
+
+      const snap = await getDocs(worksheetsQuery);
+      const worksheetsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filter worksheets based on admin status
+      const filteredWorksheets = isAdmin 
+        ? worksheetsData 
+        : worksheetsData.filter(worksheet => worksheet.createdBy === currentUser.uid);
+      
+      setWorksheets(filteredWorksheets);
+      
+      // Fetch therapist names for all unique therapist IDs
+      const uniqueTherapistIds = [...new Set(filteredWorksheets.map(worksheet => worksheet.createdBy))];
+      await fetchTherapistNames(uniqueTherapistIds);
+    } catch (error) {
+      console.error('Error fetching worksheets:', error);
+    }
+  };
+
+  // Fetch all worksheets
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const worksheetsQuery = query(
+      collection(db, 'worksheets'),
+      orderBy('dateCreated', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(worksheetsQuery, async (snap) => {
+      const worksheetsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filter worksheets based on admin status
+      const filteredWorksheets = isAdmin 
+        ? worksheetsData 
+        : worksheetsData.filter(worksheet => worksheet.createdBy === currentUser.uid);
+      
+      setWorksheets(filteredWorksheets);
+      
+      // Fetch therapist names for all unique therapist IDs
+      const uniqueTherapistIds = [...new Set(filteredWorksheets.map(worksheet => worksheet.createdBy))];
+      await fetchTherapistNames(uniqueTherapistIds);
+    });
+
+    return unsubscribe;
+  }, [currentUser, isAdmin]);
 
   // Fetch therapist names by IDs
   const fetchTherapistNames = async (therapistIds) => {
@@ -347,6 +462,42 @@ export default function TherapistResources() {
       setTherapistNames(prev => ({ ...prev, ...namesMap }));
     } catch (error) {
       console.error('Error fetching therapist names:', error);
+    }
+  };
+
+  // Fetch client names for display
+  const fetchClientNames = async (clientIds) => {
+    try {
+      const clientPromises = clientIds.map(async (clientId) => {
+        if (clientNames[clientId]) return; // Already cached
+        
+        const clientQuery = query(
+          collection(db, 'clients'),
+          where('__name__', '==', clientId)
+        );
+        const clientSnap = await getDocs(clientQuery);
+        
+        if (!clientSnap.empty) {
+          const clientData = clientSnap.docs[0].data();
+          return {
+            id: clientId,
+            name: clientData.displayName || clientData.name || clientData.email || 'Unknown Client'
+          };
+        }
+        return { id: clientId, name: 'Unknown Client' };
+      });
+      
+      const clientData = await Promise.all(clientPromises);
+      const namesMap = {};
+      clientData.forEach(client => {
+        if (client) {
+          namesMap[client.id] = client.name;
+        }
+      });
+      
+      setClientNames(prev => ({ ...prev, ...namesMap }));
+    } catch (error) {
+      console.error('Error fetching client names:', error);
     }
   };
 
@@ -529,6 +680,17 @@ export default function TherapistResources() {
     }
   };
 
+  const handleDeleteWorksheet = async (worksheetId) => {
+    if (window.confirm('Are you sure you want to delete this worksheet?')) {
+      try {
+        await deleteDoc(doc(db, 'worksheets', worksheetId));
+      } catch (error) {
+        console.error('Error deleting worksheet:', error);
+        alert('Error deleting worksheet. Please try again.');
+      }
+    }
+  };
+
   const resetForm = () => {
     setResourceForm({
       title: '',
@@ -657,6 +819,18 @@ export default function TherapistResources() {
   };
 
   const handleSaveClientSelection = () => {
+    console.log('Saving client selection:', { selectedClients, showWorksheetModal });
+    
+    // Check if we're in worksheet creation mode
+    if (showWorksheetModal) {
+      // For worksheets, update the assignedTo field
+      console.log('Updating worksheet assignedTo with:', selectedClients);
+      setWorksheetForm(prev => ({
+        ...prev,
+        assignedTo: selectedClients
+      }));
+    } else {
+      // For resources, update the appropriate field based on target audience type
     if (resourceForm.targetAudienceType === 'therapists') {
       setResourceForm(prev => ({
         ...prev,
@@ -667,6 +841,7 @@ export default function TherapistResources() {
       ...prev,
       selectedClients: selectedClients
     }));
+      }
     }
     setShowClientSelection(false);
   };
@@ -860,6 +1035,14 @@ export default function TherapistResources() {
     return matchesSearch && matchesFilter;
   });
 
+  const filteredWorksheets = worksheets.filter(worksheet => {
+    const matchesSearch = worksheet.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         worksheet.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         worksheet.goal?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = filterCategory === 'all' || worksheet.category === filterCategory;
+    return matchesSearch && matchesFilter;
+  });
+
   const getCategoryIcon = (category) => {
     const CategoryIcon = categories[category]?.icon || BookOpen;
     return <CategoryIcon size={20} />;
@@ -870,12 +1053,34 @@ export default function TherapistResources() {
     return <TypeIcon size={16} />;
   };
 
+  const getWorksheetCategoryIcon = (category) => {
+    const categoryIcons = {
+      'CBT': Brain,
+      'DBT': Heart,
+      'journaling': FileText,
+      'moodTracking': Heart,
+      'mindfulness': Brain,
+      'anxiety': AlertTriangle,
+      'depression': Heart,
+      'trauma': Shield,
+      'relationships': Users,
+      'selfCare': Heart,
+      'other': FileText
+    };
+    const CategoryIcon = categoryIcons[category] || FileText;
+    return <CategoryIcon size={20} />;
+  };
+
   // Check if current user can edit/delete resource
   const canEditResource = (resource) => {
     if (!currentUser) return false;
-    // Check if user is admin or the creator of the resource
-    // You'll need to add admin role checking logic here
-    return resource.therapistId === currentUser.uid;
+    return resource.therapistId === currentUser.uid || isAdmin;
+  };
+
+  // Check if current user can edit/delete worksheet
+  const canEditWorksheet = (worksheet) => {
+    if (!currentUser) return false;
+    return worksheet.createdBy === currentUser.uid || isAdmin;
   };
 
   // Handle view resource
@@ -901,6 +1106,177 @@ export default function TherapistResources() {
     }
   };
 
+  // Handle view worksheet
+  const handleViewWorksheet = async (worksheet) => {
+    setSelectedWorksheet(worksheet);
+    setShowWorksheetViewModal(true);
+    
+    // Fetch client names for responses if any exist
+    if (worksheet.clientResponses) {
+      const clientIds = Object.keys(worksheet.clientResponses);
+      if (clientIds.length > 0) {
+        await fetchClientNames(clientIds);
+      }
+    }
+  };
+
+  // Get client responses for a worksheet
+  const getClientResponses = (worksheet) => {
+    return worksheet.clientResponses || {};
+  };
+
+  // Check if worksheet has any client responses
+  const hasClientResponses = (worksheet) => {
+    const responses = getClientResponses(worksheet);
+    return Object.keys(responses).length > 0;
+  };
+
+  // Handle edit worksheet
+  const handleEditWorksheet = (worksheet) => {
+    setSelectedWorksheet(worksheet);
+    setEditWorksheetForm({
+      title: worksheet.title,
+      description: worksheet.description,
+      goal: worksheet.goal,
+      instructions: worksheet.instructions,
+      category: worksheet.category,
+      type: worksheet.type,
+      status: worksheet.status,
+      fields: [...worksheet.fields],
+      allowMultipleResponses: worksheet.allowMultipleResponses,
+      assignedTo: [...worksheet.assignedTo]
+    });
+    setShowWorksheetEditModal(true);
+  };
+
+  // Handle update worksheet
+  const handleUpdateWorksheet = async () => {
+    try {
+      if (!selectedWorksheet) return;
+
+      const worksheetRef = doc(db, 'worksheets', selectedWorksheet.id);
+      
+      // Check if new fields were added
+      const originalFieldCount = selectedWorksheet.fields.length;
+      const newFieldCount = editWorksheetForm.fields.length;
+      const hasNewFields = newFieldCount > originalFieldCount;
+      
+      // Prepare update data
+      const updateData = {
+        title: editWorksheetForm.title,
+        description: editWorksheetForm.description,
+        goal: editWorksheetForm.goal,
+        instructions: editWorksheetForm.instructions,
+        category: editWorksheetForm.category,
+        type: editWorksheetForm.type,
+        status: editWorksheetForm.status,
+        fields: editWorksheetForm.fields,
+        allowMultipleResponses: editWorksheetForm.allowMultipleResponses,
+        assignedTo: editWorksheetForm.assignedTo,
+        lastUpdated: serverTimestamp()
+      };
+
+      // If new fields were added, reset client completion status
+      if (hasNewFields) {
+        updateData.hasNewFields = true;
+        updateData.newFieldsAddedAt = serverTimestamp();
+        
+        // Reset all client completion statuses
+        const resetClientResponses = {};
+        if (selectedWorksheet.clientResponses) {
+          Object.keys(selectedWorksheet.clientResponses).forEach(clientId => {
+            resetClientResponses[clientId] = {
+              ...selectedWorksheet.clientResponses[clientId],
+              status: 'pending',
+              needsToCompleteNewFields: true
+            };
+          });
+          updateData.clientResponses = resetClientResponses;
+        }
+      }
+
+      await updateDoc(worksheetRef, updateData);
+      
+      alert('Worksheet updated successfully!');
+      setShowWorksheetEditModal(false);
+      setSelectedWorksheet(null);
+      setEditWorksheetForm({
+        title: '',
+        description: '',
+        goal: '',
+        instructions: '',
+        category: 'CBT',
+        type: 'patient-facing',
+        status: 'active',
+        fields: [],
+        allowMultipleResponses: true,
+        assignedTo: []
+      });
+      
+      // Refresh worksheets
+      fetchWorksheets();
+      
+    } catch (error) {
+      console.error('Error updating worksheet:', error);
+      alert('Error updating worksheet. Please try again.');
+    }
+  };
+
+  // Handle give feedback
+  const handleGiveFeedback = (clientId) => {
+    setSelectedClientForFeedback(clientId);
+    setFeedbackForm({
+      feedback: '',
+      rating: 5
+    });
+    setShowFeedbackModal(true);
+  };
+
+  // Submit feedback
+  const handleSubmitFeedback = async () => {
+    try {
+      if (!selectedWorksheet || !selectedClientForFeedback) return;
+
+      const worksheetRef = doc(db, 'worksheets', selectedWorksheet.id);
+      
+      // Update the client's response with feedback
+      await updateDoc(worksheetRef, {
+        [`clientResponses.${selectedClientForFeedback}.feedback`]: {
+          feedback: feedbackForm.feedback,
+          rating: feedbackForm.rating,
+          givenBy: currentUser.uid,
+          givenAt: serverTimestamp()
+        }
+      });
+      
+      alert('Feedback submitted successfully!');
+      setShowFeedbackModal(false);
+      setSelectedClientForFeedback(null);
+      setFeedbackForm({
+        feedback: '',
+        rating: 5
+      });
+      
+      // Refresh worksheets to show updated feedback
+      fetchWorksheets();
+      
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Error submitting feedback. Please try again.');
+    }
+  };
+
+  // Handle view resource
+  const handleViewResourceModal = (resource) => {
+    setSelectedResourceForView(resource);
+    setShowResourceViewModal(true);
+  };
+
+  // Handle download worksheet as PDF
+  const handleDownloadWorksheet = (worksheet) => {
+    generateWorksheetPDF(worksheet);
+  };
+
   // Check if all required fields are filled
   const isWorksheetFormValid = () => {
     return worksheetForm.title.trim() !== '' &&
@@ -923,6 +1299,9 @@ export default function TherapistResources() {
         dateCreated: serverTimestamp(),
         lastUpdated: serverTimestamp()
       };
+
+      console.log('Creating worksheet with data:', worksheetData);
+      console.log('Assigned to clients:', worksheetData.assignedTo);
 
       await addDoc(collection(db, 'worksheets'), worksheetData);
       setShowWorksheetModal(false);
@@ -954,7 +1333,7 @@ export default function TherapistResources() {
   const addWorksheetField = () => {
     setWorksheetForm(prev => ({
       ...prev,
-      fields: [...prev.fields, { name: '', type: 'text', required: true }]
+      fields: [...prev.fields, { name: '', type: 'text', required: true, options: [] }]
     }));
   };
 
@@ -972,6 +1351,109 @@ export default function TherapistResources() {
       ...prev,
       fields: prev.fields.map((f, i) => 
         i === index ? { ...f, [field]: value } : f
+      )
+    }));
+  };
+
+  // Add option to field
+  const addFieldOption = (fieldIndex) => {
+    setWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === fieldIndex 
+          ? { ...f, options: [...(f.options || []), ''] }
+          : f
+      )
+    }));
+  };
+
+  // Remove option from field
+  const removeFieldOption = (fieldIndex, optionIndex) => {
+    setWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === fieldIndex 
+          ? { ...f, options: f.options.filter((_, idx) => idx !== optionIndex) }
+          : f
+      )
+    }));
+  };
+
+  // Update field option
+  const updateFieldOption = (fieldIndex, optionIndex, value) => {
+    setWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === fieldIndex 
+          ? { 
+              ...f, 
+              options: f.options.map((opt, idx) => 
+                idx === optionIndex ? value : opt
+              )
+            }
+          : f
+      )
+    }));
+  };
+
+  // Edit form field functions
+  const addEditWorksheetField = () => {
+    setEditWorksheetForm(prev => ({
+      ...prev,
+      fields: [...prev.fields, { name: '', type: 'text', required: true, options: [] }]
+    }));
+  };
+
+  const removeEditWorksheetField = (index) => {
+    setEditWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateEditWorksheetField = (index, field, value) => {
+    setEditWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === index ? { ...f, [field]: value } : f
+      )
+    }));
+  };
+
+  const addEditFieldOption = (fieldIndex) => {
+    setEditWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === fieldIndex 
+          ? { ...f, options: [...(f.options || []), ''] }
+          : f
+      )
+    }));
+  };
+
+  const removeEditFieldOption = (fieldIndex, optionIndex) => {
+    setEditWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === fieldIndex 
+          ? { ...f, options: f.options.filter((_, idx) => idx !== optionIndex) }
+          : f
+      )
+    }));
+  };
+
+  const updateEditFieldOption = (fieldIndex, optionIndex, value) => {
+    setEditWorksheetForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((f, i) => 
+        i === fieldIndex 
+          ? { 
+              ...f, 
+              options: f.options.map((opt, idx) => 
+                idx === optionIndex ? value : opt
+              )
+            }
+          : f
       )
     }));
   };
@@ -1002,6 +1484,30 @@ export default function TherapistResources() {
     const margin = 20;
     const contentWidth = pageWidth - (margin * 2);
     let yPosition = margin;
+    let currentPage = 1;
+
+    // Helper function to add watermark
+    const addWatermark = () => {
+      try {
+        pdf.setGState(new pdf.GState({opacity: 0.1}));
+        pdf.setFontSize(60);
+        pdf.setTextColor(200, 200, 200);
+        pdf.text('NessaHub', pageWidth / 2, pageHeight / 2, { angle: 45, align: 'center' });
+        pdf.setGState(new pdf.GState({opacity: 1}));
+      } catch (error) {
+        console.log('Watermark not supported in this PDF version, continuing without watermark');
+      }
+    };
+
+    // Helper function to add page numbers
+    const addPageNumbers = () => {
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text(`Page ${currentPage}`, pageWidth - 30, pageHeight - 15);
+    };
+
+    // Add watermark to first page
+    addWatermark();
 
     // Set font
     pdf.setFont('helvetica');
@@ -1053,8 +1559,11 @@ export default function TherapistResources() {
       
       contentLines.forEach((line, index) => {
         if (yPosition > pageHeight - 30) {
+          addPageNumbers();
           pdf.addPage();
+          currentPage++;
           yPosition = margin;
+          addWatermark();
         }
         pdf.text(line, margin, yPosition);
         yPosition += 6;
@@ -1067,8 +1576,11 @@ export default function TherapistResources() {
     categoryFields.forEach(field => {
       if (resource[field] && field !== 'title' && field !== 'description' && field !== 'content' && field !== 'type' && field !== 'category' && field !== 'tags' && field !== 'difficulty' && field !== 'duration' && field !== 'targetAudience' && field !== 'isPublic') {
         if (yPosition > pageHeight - 30) {
+          addPageNumbers();
           pdf.addPage();
+          currentPage++;
           yPosition = margin;
+          addWatermark();
         }
         
         pdf.setFontSize(12);
@@ -1082,8 +1594,11 @@ export default function TherapistResources() {
         const fieldLines = pdf.splitTextToSize(resource[field].toString(), contentWidth);
         fieldLines.forEach(line => {
           if (yPosition > pageHeight - 30) {
+            addPageNumbers();
             pdf.addPage();
+            currentPage++;
             yPosition = margin;
+            addWatermark();
           }
           pdf.text(line, margin, yPosition);
           yPosition += 5;
@@ -1095,8 +1610,11 @@ export default function TherapistResources() {
     // Tags
     if (resource.tags && resource.tags.length > 0) {
       if (yPosition > pageHeight - 30) {
+        addPageNumbers();
         pdf.addPage();
+        currentPage++;
         yPosition = margin;
+        addWatermark();
       }
       
       pdf.setFontSize(12);
@@ -1117,8 +1635,175 @@ export default function TherapistResources() {
     pdf.text(`Created by: ${therapistNames[resource.therapistId] || resource.therapistName || 'Unknown'}`, margin, footerY);
     pdf.text(`Created: ${resource.createdAt?.toDate?.()?.toLocaleString() || 'Unknown'}`, pageWidth - margin - 60, footerY);
 
+    // Add page numbers to final page
+    addPageNumbers();
+
     // Download the PDF
     pdf.save(`${resource.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
+  };
+
+  // Generate PDF for worksheet with book-like styling
+  const generateWorksheetPDF = (worksheet) => {
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 25;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPosition = margin;
+    let currentPage = 1;
+    const totalPages = Math.ceil(worksheet.fields.length / 3) + 2; // Cover + instructions + fields
+
+    // Helper function to add watermark
+    const addWatermark = () => {
+      try {
+        pdf.setGState(new pdf.GState({opacity: 0.1}));
+        pdf.setFontSize(60);
+        pdf.setTextColor(200, 200, 200);
+        pdf.text('NessaHub', pageWidth / 2, pageHeight / 2, { angle: 45, align: 'center' });
+        pdf.setGState(new pdf.GState({opacity: 1}));
+      } catch (error) {
+        console.log('Watermark not supported in this PDF version, continuing without watermark');
+      }
+    };
+
+    // Helper function to add page numbers
+    const addPageNumbers = () => {
+      pdf.setFontSize(10);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text(`Page ${currentPage} of ${totalPages}`, pageWidth - 30, pageHeight - 15);
+    };
+
+    // Helper function to check if we need a new page
+    const checkNewPage = (requiredSpace = 20) => {
+      if (yPosition + requiredSpace > pageHeight - 30) {
+        addPageNumbers();
+        pdf.addPage();
+        currentPage++;
+        yPosition = margin;
+        addWatermark();
+        return true;
+      }
+      return false;
+    };
+
+    // Add watermark to all pages
+    addWatermark();
+
+    // Cover Page
+    pdf.setFontSize(28);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(worksheet.title, pageWidth / 2, yPosition + 40, { align: 'center' });
+    yPosition += 60;
+
+    // Category and Type
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Category: ${worksheetCategories[worksheet.category] || worksheet.category}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 20;
+    pdf.text(`Type: ${worksheetTypes[worksheet.type] || worksheet.type}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 40;
+
+    // Description
+    pdf.setFontSize(14);
+    pdf.setTextColor(0, 0, 0);
+    const descriptionLines = pdf.splitTextToSize(worksheet.description, contentWidth);
+    descriptionLines.forEach(line => {
+      pdf.text(line, pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 8;
+    });
+    yPosition += 30;
+
+    // Goal
+    if (worksheet.goal) {
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Goal:', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 10;
+      pdf.setFont('helvetica', 'normal');
+      const goalLines = pdf.splitTextToSize(worksheet.goal, contentWidth);
+      goalLines.forEach(line => {
+        pdf.text(line, pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 6;
+      });
+      yPosition += 20;
+    }
+
+    // Instructions
+    if (worksheet.instructions) {
+      checkNewPage(40);
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Instructions:', margin, yPosition);
+      yPosition += 15;
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      const instructionLines = pdf.splitTextToSize(worksheet.instructions, contentWidth);
+      instructionLines.forEach(line => {
+        checkNewPage(8);
+        pdf.text(line, margin, yPosition);
+        yPosition += 6;
+      });
+      yPosition += 20;
+    }
+
+    // Worksheet Fields
+    if (worksheet.fields && worksheet.fields.length > 0) {
+      checkNewPage(30);
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Worksheet Fields', margin, yPosition);
+      yPosition += 20;
+
+      worksheet.fields.forEach((field, index) => {
+        checkNewPage(25);
+        
+        // Field header
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(`${index + 1}. ${field.name}`, margin, yPosition);
+        if (field.required) {
+          pdf.setFontSize(10);
+          pdf.setTextColor(220, 38, 38);
+          pdf.text('(Required)', margin + 80, yPosition);
+          pdf.setTextColor(0, 0, 0);
+        }
+        yPosition += 8;
+
+        // Field type
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`Type: ${field.type}`, margin, yPosition);
+        yPosition += 6;
+
+        // Input area
+        pdf.setDrawColor(200, 200, 200);
+        pdf.rect(margin, yPosition, contentWidth, 15);
+        yPosition += 20;
+
+        // Add some space between fields
+        yPosition += 5;
+      });
+    }
+
+    // Footer information
+    checkNewPage(30);
+    pdf.setFontSize(10);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text(`Created by: ${therapistNames[worksheet.createdBy] || 'Unknown'}`, margin, yPosition);
+    pdf.text(`Created: ${worksheet.dateCreated?.toDate?.()?.toLocaleString() || 'Unknown'}`, pageWidth - margin - 60, yPosition);
+    yPosition += 10;
+    pdf.text(`Status: ${worksheet.status}`, margin, yPosition);
+    pdf.text(`Multiple Responses: ${worksheet.allowMultipleResponses ? 'Yes' : 'No'}`, pageWidth - margin - 80, yPosition);
+
+    // Add page numbers to final page
+    addPageNumbers();
+
+    // Download the PDF
+    pdf.save(`${worksheet.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_worksheet.pdf`);
   };
 
   return (
@@ -1147,6 +1832,26 @@ export default function TherapistResources() {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="tab-navigation">
+        <div className="tab-buttons">
+          <button
+            className={`tab-button ${activeTab === 'resources' ? 'active' : ''}`}
+            onClick={() => setActiveTab('resources')}
+          >
+            <BookOpen size={20} />
+            Resources ({filteredResources.length})
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'worksheets' ? 'active' : ''}`}
+            onClick={() => setActiveTab('worksheets')}
+          >
+            <FileText size={20} />
+            Worksheets ({filteredWorksheets.length})
+          </button>
+        </div>
+      </div>
+
       {/* Category Navigation - Hidden */}
       {/* <div className="category-nav">
         <div className="nav-tabs">
@@ -1168,12 +1873,16 @@ export default function TherapistResources() {
 
       {/* Search and Filters */}
       <div className="resources-controls">
+        <div className="controls-container">
         <div className="search-section">
           <div className="search-input">
             <Search size={20} />
             <input
               type="text"
-              placeholder="Search resources by title, description, or tags..."
+                placeholder={activeTab === 'worksheets' 
+                  ? "Search worksheets by title, description, or goal..." 
+                  : "Search resources by title, description, or tags..."
+                }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -1186,16 +1895,25 @@ export default function TherapistResources() {
             onChange={(e) => setFilterCategory(e.target.value)}
           >
             <option value="all">All Categories</option>
-            {Object.entries(categories).map(([key, category]) => (
+              {activeTab === 'worksheets' ? (
+                Object.entries(worksheetCategories).map(([key, category]) => (
+                  <option key={key} value={key}>{category}</option>
+                ))
+              ) : (
+                Object.entries(categories).map(([key, category]) => (
               <option key={key} value={key}>{category.name}</option>
-            ))}
+                ))
+              )}
           </select>
+          </div>
         </div>
       </div>
 
-      {/* Resources Grid */}
+      {/* Content Grid */}
       <div className="resources-grid">
-        {filteredResources.map((resource) => (
+        {activeTab === 'resources' ? (
+          // Resources Tab
+          filteredResources.map((resource) => (
           <div key={resource.id} className="resource-card">
             <div className="resource-header">
               <div className="resource-icon">
@@ -1241,12 +1959,17 @@ export default function TherapistResources() {
                 <span className="creator-label">Created by:</span>
                 <span className="creator-name">{therapistNames[resource.therapistId] || resource.therapistName || 'Unknown'}</span>
               </div>
+                
+                <div className="resource-date">
+                  <Clock size={14} />
+                  <span>Created: {resource.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}</span>
+              </div>
             </div>
 
             <div className="resource-actions">
               <button 
                 className="btn-icon"
-                onClick={() => handleViewResource(resource)}
+                  onClick={() => handleViewResourceModal(resource)}
                 title="View Resource"
               >
                 <Eye size={16} />
@@ -1276,7 +1999,95 @@ export default function TherapistResources() {
               </button>
             </div>
           </div>
-        ))}
+          ))
+        ) : (
+          // Worksheets Tab
+          filteredWorksheets.map((worksheet) => (
+            <div key={worksheet.id} className="resource-card worksheet-card">
+              <div className="resource-header">
+                <div className="resource-icon">
+                  {getWorksheetCategoryIcon(worksheet.category)}
+                </div>
+                <div className="resource-type">
+                  <FileText size={16} />
+                  <span>Worksheet</span>
+                </div>
+              </div>
+              
+              <div className="resource-content">
+                <h3 className="resource-title">{worksheet.title}</h3>
+                <p className="resource-description">{worksheet.description}</p>
+                
+                <div className="resource-meta">
+                  <div className="meta-item">
+                    <Target size={14} />
+                    <span>{worksheetCategories[worksheet.category] || worksheet.category}</span>
+                  </div>
+                  <div className="meta-item">
+                    <Users size={14} />
+                    <span>{worksheet.assignedTo?.length || 0} assigned</span>
+                  </div>
+                  <div className="meta-item">
+                    <Clock size={14} />
+                    <span>{worksheet.status}</span>
+                  </div>
+                </div>
+
+                {worksheet.goal && (
+                  <div className="worksheet-goal">
+                    <strong>Goal:</strong> {worksheet.goal}
+                  </div>
+                )}
+                
+                <div className="resource-creator">
+                  <span className="creator-label">Created by:</span>
+                  <span className="creator-name">{therapistNames[worksheet.createdBy] || 'Unknown'}</span>
+                </div>
+                
+                <div className="resource-date">
+                  <Clock size={14} />
+                  <span>Created: {worksheet.dateCreated?.toDate?.()?.toLocaleDateString() || 'Unknown'}</span>
+                </div>
+              </div>
+
+              <div className="resource-actions">
+                <button 
+                  className="btn-icon"
+                  onClick={() => handleViewWorksheet(worksheet)}
+                  title="View Worksheet"
+                >
+                  <Eye size={16} />
+                </button>
+                <button 
+                  className="btn-icon"
+                  onClick={() => {
+                    // Edit worksheet - you can implement this
+                    console.log('Edit worksheet:', worksheet);
+                  }}
+                  title="Edit Worksheet"
+                  disabled={!canEditWorksheet(worksheet)}
+                >
+                  <Edit size={16} />
+                </button>
+                <button 
+                  className="btn-icon"
+                  onClick={() => handleDownloadWorksheet(worksheet)}
+                  title="Download Worksheet as PDF"
+                >
+                  <Download size={16} />
+                </button>
+                <button 
+                  className="btn-icon danger"
+                  onClick={() => handleDeleteWorksheet(worksheet.id)}
+                  title="Delete Worksheet"
+                  disabled={!canEditWorksheet(worksheet)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Create/Edit Resource Modal */}
@@ -1573,13 +2384,65 @@ export default function TherapistResources() {
           <div className="modal-content large client-selection-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>
-                {resourceForm.targetAudienceType === 'therapists' ? 'Select Therapists' : 'Select Clients'}
+                {showWorksheetModal 
+                  ? 'Select Clients for Worksheet' 
+                  : resourceForm.targetAudienceType === 'therapists' 
+                    ? 'Select Therapists' 
+                    : 'Select Clients'
+                }
               </h2>
               <button className="close-button" onClick={() => setShowClientSelection(false)}>×</button>
             </div>
             <div className="modal-body">
               <div className="client-selection">
-                {resourceForm.targetAudienceType === 'therapists' ? (
+                {showWorksheetModal ? (
+                  // Worksheet client selection - only show clients
+                  <>
+                    {/* Assigned Clients Section */}
+                    <div className="client-section">
+                      <h3>Your Assigned Clients</h3>
+                      <div className="client-list">
+                        {assignedClients.map(client => (
+                          <div key={client.id} className="client-item">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selectedClients.includes(client.id)}
+                                onChange={() => handleClientSelection(client.id)}
+                              />
+                              <div className="client-info">
+                                <span className="client-name">{client?.displayName || client?.clientName || client?.name || client?.email || 'Unknown'}</span>
+                                <span className="client-email">{client.email}</span>
+                              </div>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Other Clients Section */}
+                    <div className="client-section">
+                      <h3>Other Clients</h3>
+                      <div className="client-list">
+                        {allClients.filter(client => !assignedClients.find(ac => ac.id === client.id)).map(client => (
+                          <div key={client.id} className="client-item">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selectedClients.includes(client.id)}
+                                onChange={() => handleClientSelection(client.id)}
+                              />
+                              <div className="client-info">
+                                <span className="client-name">{client?.displayName || client?.clientName || client?.name || client?.email || 'Unknown'}</span>
+                                <span className="client-email">{client.email}</span>
+                              </div>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : resourceForm.targetAudienceType === 'therapists' ? (
                   // Therapist Selection
                   <div className="client-section">
                     <h3>Available Therapists</h3>
@@ -1656,7 +2519,17 @@ export default function TherapistResources() {
                 Cancel
               </button>
               <button className="btn-primary" onClick={handleSaveClientSelection}>
-                Save Selection ({resourceForm.targetAudienceType === 'therapists' ? selectedTherapists.length : selectedClients.length} {resourceForm.targetAudienceType === 'therapists' ? 'therapists' : 'clients'})
+                Save Selection ({showWorksheetModal 
+                  ? selectedClients.length 
+                  : resourceForm.targetAudienceType === 'therapists' 
+                    ? selectedTherapists.length 
+                    : selectedClients.length
+                } {showWorksheetModal 
+                  ? 'clients' 
+                  : resourceForm.targetAudienceType === 'therapists' 
+                    ? 'therapists' 
+                    : 'clients'
+                })
               </button>
             </div>
           </div>
@@ -1784,6 +2657,8 @@ export default function TherapistResources() {
                           <option value="select">Dropdown</option>
                           <option value="checkbox">Checkbox</option>
                           <option value="radio">Radio Buttons</option>
+                          <option value="rating">Rating (1-10)</option>
+                          <option value="multiple-choice">Multiple Choice</option>
                         </select>
                       </div>
                       <div className="form-group">
@@ -1806,6 +2681,54 @@ export default function TherapistResources() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Field Options for select, radio, multiple-choice */}
+                    {(field.type === 'select' || field.type === 'radio' || field.type === 'multiple-choice') && (
+                      <div className="field-options">
+                        <label>Options:</label>
+                        {field.options && field.options.map((option, optIndex) => (
+                          <div key={optIndex} className="option-input">
+                            <input
+                              type="text"
+                              value={option}
+                              onChange={(e) => updateFieldOption(index, optIndex, e.target.value)}
+                              placeholder={`Option ${optIndex + 1}`}
+                            />
+                            <button
+                              type="button"
+                              className="btn-danger small"
+                              onClick={() => removeFieldOption(index, optIndex)}
+                              disabled={field.options.length <= 1}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="btn-secondary small"
+                          onClick={() => addFieldOption(index)}
+                        >
+                          + Add Option
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Rating field specific options */}
+                    {field.type === 'rating' && (
+                      <div className="rating-options">
+                        <label>Rating Scale:</label>
+                        <div className="rating-scale-preview">
+                          <span>1</span>
+                          <div className="rating-dots">
+                            {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                              <div key={num} className="rating-dot">{num}</div>
+                            ))}
+                          </div>
+                          <span>10</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -1837,14 +2760,41 @@ export default function TherapistResources() {
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={() => setShowClientSelection(true)}
+                    onClick={() => {
+                      // Pre-select clients that are already assigned to the worksheet
+                      console.log('Opening client selection for worksheet. Current assignedTo:', worksheetForm.assignedTo);
+                      setSelectedClients(worksheetForm.assignedTo);
+                      setShowClientSelection(true);
+                    }}
                   >
                     <Users size={16} />
                     Select Clients
                   </button>
                   {worksheetForm.assignedTo.length > 0 && (
                     <div className="selected-clients">
-                      <p>Assigned to {worksheetForm.assignedTo.length} client(s)</p>
+                      <h4>Assigned to {worksheetForm.assignedTo.length} client(s):</h4>
+                      <div className="client-tags">
+                        {worksheetForm.assignedTo.map(clientId => {
+                          const client = [...assignedClients, ...allClients].find(c => c.id === clientId);
+                          return (
+                            <span key={clientId} className="client-tag">
+                              {client?.displayName || client?.clientName || client?.name || client?.email || 'Unknown Client'}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWorksheetForm(prev => ({
+                                    ...prev,
+                                    assignedTo: prev.assignedTo.filter(id => id !== clientId)
+                                  }));
+                                }}
+                                className="remove-client"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1863,6 +2813,679 @@ export default function TherapistResources() {
                 disabled={!isWorksheetFormValid()}
               >
                 Create Worksheet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resource View Modal */}
+      {showResourceViewModal && selectedResourceForView && (
+        <div className="modal-overlay" onClick={() => setShowResourceViewModal(false)}>
+          <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedResourceForView.title}</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowResourceViewModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="resource-view">
+                {/* Resource Header */}
+                <div className="resource-header-view">
+                  <div className="resource-meta">
+                    <div className="meta-item">
+                      <div className="resource-icon">
+                        {getCategoryIcon(selectedResourceForView.category)}
+                      </div>
+                      <span>{categories[selectedResourceForView.category]?.name || selectedResourceForView.category}</span>
+                    </div>
+                    <div className="meta-item">
+                      <div className="resource-type">
+                        {getTypeIcon(selectedResourceForView.type)}
+                      </div>
+                      <span>{resourceTypes[selectedResourceForView.type]?.name || selectedResourceForView.type}</span>
+                    </div>
+                    <div className="meta-item">
+                      <Clock size={16} />
+                      <span>{selectedResourceForView.duration || 'N/A'}</span>
+                    </div>
+                    <div className="meta-item">
+                      <Tag size={16} />
+                      <span>{difficultyLevels[selectedResourceForView.difficulty] || 'Beginner'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="resource-section">
+                  <h3>Description</h3>
+                  <p>{selectedResourceForView.description}</p>
+                </div>
+
+                {/* Content */}
+                {selectedResourceForView.content && (
+                  <div className="resource-section">
+                    <h3>Content</h3>
+                    <div className="content-box">
+                      <p style={{ whiteSpace: 'pre-wrap' }}>{selectedResourceForView.content}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* File/Link Information */}
+                {selectedResourceForView.fileUrl && (
+                  <div className="resource-section">
+                    <h3>File Information</h3>
+                    <div className="file-info">
+                      <p><strong>File Name:</strong> {selectedResourceForView.fileName || 'Unknown'}</p>
+                      <p><strong>File Size:</strong> {selectedResourceForView.fileSize ? `${(selectedResourceForView.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Unknown'}</p>
+                      <button 
+                        className="btn-secondary"
+                        onClick={() => window.open(selectedResourceForView.fileUrl, '_blank')}
+                      >
+                        <Download size={16} />
+                        Download File
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedResourceForView.linkUrl && (
+                  <div className="resource-section">
+                    <h3>Link Information</h3>
+                    <div className="link-info">
+                      <p><strong>URL:</strong> <a href={selectedResourceForView.linkUrl} target="_blank" rel="noopener noreferrer">{selectedResourceForView.linkUrl}</a></p>
+                      <button 
+                        className="btn-secondary"
+                        onClick={() => window.open(selectedResourceForView.linkUrl, '_blank')}
+                      >
+                        <Link size={16} />
+                        Open Link
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {selectedResourceForView.tags && selectedResourceForView.tags.length > 0 && (
+                  <div className="resource-section">
+                    <h3>Tags</h3>
+                    <div className="tags-list">
+                      {selectedResourceForView.tags.map((tag, index) => (
+                        <span key={index} className="tag">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Category-specific fields */}
+                {(() => {
+                  const categoryFields = categories[selectedResourceForView.category]?.fields || [];
+                  const relevantFields = categoryFields.filter(field => 
+                    selectedResourceForView[field] && 
+                    !['title', 'description', 'type', 'difficulty', 'duration', 'targetAudience', 'content', 'tags', 'isPublic'].includes(field)
+                  );
+                  
+                  if (relevantFields.length > 0) {
+                    return (
+                      <div className="resource-section">
+                        <h3>{categories[selectedResourceForView.category]?.name} Specific Information</h3>
+                        <div className="category-fields">
+                          {relevantFields.map(field => (
+                            <div key={field} className="field-item">
+                              <strong>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong>
+                              <p>{selectedResourceForView[field]}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Settings */}
+                <div className="resource-section">
+                  <h3>Settings</h3>
+                  <div className="settings-grid">
+                    <div className="setting-item">
+                      <strong>Target Audience:</strong>
+                      <span>{targetAudiences[selectedResourceForView.targetAudience] || selectedResourceForView.targetAudience}</span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Public Resource:</strong>
+                      <span className={selectedResourceForView.isPublic ? 'setting-enabled' : 'setting-disabled'}>
+                        {selectedResourceForView.isPublic ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Created by:</strong>
+                      <span>{therapistNames[selectedResourceForView.therapistId] || selectedResourceForView.therapistName || 'Unknown'}</span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Created:</strong>
+                      <span>{selectedResourceForView.createdAt?.toDate?.()?.toLocaleString() || 'Unknown'}</span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Last Updated:</strong>
+                      <span>{selectedResourceForView.updatedAt?.toDate?.()?.toLocaleString() || 'Unknown'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowResourceViewModal(false)}
+              >
+                Close
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={() => handleDownloadResource(selectedResourceForView)}
+              >
+                <Download size={16} />
+                Download as PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Worksheet View Modal */}
+      {showWorksheetViewModal && selectedWorksheet && (
+        <div className="modal-overlay" onClick={() => setShowWorksheetViewModal(false)}>
+          <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedWorksheet.title}</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowWorksheetViewModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="worksheet-view">
+                {/* Worksheet Header */}
+                <div className="worksheet-header">
+                  <div className="worksheet-meta">
+                    <div className="meta-item">
+                      <Target size={16} />
+                      <span>{worksheetCategories[selectedWorksheet.category] || selectedWorksheet.category}</span>
+                    </div>
+                    <div className="meta-item">
+                      <Users size={16} />
+                      <span>{selectedWorksheet.assignedTo?.length || 0} assigned clients</span>
+                    </div>
+                    <div className="meta-item">
+                      <Clock size={16} />
+                      <span>{selectedWorksheet.status}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="worksheet-section">
+                  <h3>Description</h3>
+                  <p>{selectedWorksheet.description}</p>
+                </div>
+
+                {/* Goal */}
+                {selectedWorksheet.goal && (
+                  <div className="worksheet-section">
+                    <h3>Goal</h3>
+                    <div className="goal-box">
+                      <p>{selectedWorksheet.goal}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Instructions */}
+                {selectedWorksheet.instructions && (
+                  <div className="worksheet-section">
+                    <h3>Instructions</h3>
+                    <div className="instructions-box">
+                      <p>{selectedWorksheet.instructions}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Client Responses Section */}
+                {hasClientResponses(selectedWorksheet) && (
+                  <div className="worksheet-section">
+                    <h3>Client Responses</h3>
+                    <div className="client-responses-list">
+                      {Object.entries(getClientResponses(selectedWorksheet)).map(([clientId, clientResponse]) => (
+                        <div key={clientId} className="client-response-item">
+                          <div className="client-response-header">
+                            <h4>Client: {clientNames[clientId] || `Client ${clientId.slice(0, 8)}...`}</h4>
+                            <span className={`status-badge ${clientResponse.status === 'completed' ? 'completed' : 'pending'}`}>
+                              {clientResponse.status}
+                            </span>
+                          </div>
+                          <div className="client-response-fields">
+                            {selectedWorksheet.fields && selectedWorksheet.fields.map((field, index) => (
+                              <div key={index} className="client-field-response">
+                                <div className="client-field-header">
+                                  <strong>{field.name}</strong>
+                                  <span className="field-type-badge">{field.type}</span>
+                                </div>
+                                <div className="client-field-answer">
+                                  {clientResponse.responses && clientResponse.responses[index] !== undefined ? (
+                                    <span className="answer-text">
+                                      {Array.isArray(clientResponse.responses[index]) 
+                                        ? clientResponse.responses[index].join(', ')
+                                        : clientResponse.responses[index].toString()
+                                      }
+                                    </span>
+                                  ) : (
+                                    <span className="no-answer">No answer provided</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="client-response-meta">
+                            <span className="submission-date">
+                              Submitted: {clientResponse.submittedAt?.toDate?.()?.toLocaleString() || 'Unknown'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Worksheet Fields */}
+                {selectedWorksheet.fields && selectedWorksheet.fields.length > 0 && (
+                  <div className="worksheet-section">
+                    <h3>Worksheet Fields</h3>
+                    <div className="fields-list">
+                      {selectedWorksheet.fields.map((field, index) => (
+                        <div key={index} className="field-item">
+                          <div className="field-header">
+                            <span className="field-number">{index + 1}.</span>
+                            <span className="field-name">{field.name}</span>
+                            {field.required && (
+                              <span className="required-badge">Required</span>
+                            )}
+                          </div>
+                          <div className="field-details">
+                            <span className="field-type">Type: {field.type}</span>
+                          </div>
+                          <div className="field-input-preview">
+                            {field.type === 'rating' ? (
+                              <div className="rating-preview">
+                                <span>1</span>
+                                <div className="rating-dots">
+                                  {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                                    <div key={num} className="rating-dot">{num}</div>
+                                  ))}
+                                </div>
+                                <span>10</span>
+                              </div>
+                            ) : field.type === 'multiple-choice' ? (
+                              <div className="multiple-choice-preview">
+                                {field.options && field.options.slice(0, 3).map((option, optIndex) => (
+                                  <div key={optIndex} className="choice-option">☐ {option}</div>
+                                ))}
+                                {field.options && field.options.length > 3 && (
+                                  <div className="choice-option">... and {field.options.length - 3} more</div>
+                                )}
+                              </div>
+                            ) : field.type === 'select' ? (
+                              <div className="select-preview">
+                                <select disabled>
+                                  <option>Select an option...</option>
+                                  {field.options && field.options.map((option, optIndex) => (
+                                    <option key={optIndex}>{option}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : field.type === 'radio' ? (
+                              <div className="radio-preview">
+                                {field.options && field.options.slice(0, 2).map((option, optIndex) => (
+                                  <div key={optIndex} className="radio-option">○ {option}</div>
+                                ))}
+                                {field.options && field.options.length > 2 && (
+                                  <div className="radio-option">... and {field.options.length - 2} more</div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="input-placeholder">
+                                {field.type === 'textarea' ? 'Long text input area...' : 
+                                 field.type === 'checkbox' ? '☐ Checkbox option' :
+                                 field.type === 'date' ? 'Date picker...' :
+                                 field.type === 'number' ? 'Number input...' :
+                                 'Text input...'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Settings */}
+                <div className="worksheet-section">
+                  <h3>Settings</h3>
+                  <div className="settings-grid">
+                    <div className="setting-item">
+                      <strong>Multiple Responses:</strong>
+                      <span className={selectedWorksheet.allowMultipleResponses ? 'setting-enabled' : 'setting-disabled'}>
+                        {selectedWorksheet.allowMultipleResponses ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Created by:</strong>
+                      <span>{therapistNames[selectedWorksheet.createdBy] || 'Unknown'}</span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Created:</strong>
+                      <span>{selectedWorksheet.dateCreated?.toDate?.()?.toLocaleString() || 'Unknown'}</span>
+                    </div>
+                    <div className="setting-item">
+                      <strong>Last Updated:</strong>
+                      <span>{selectedWorksheet.lastUpdated?.toDate?.()?.toLocaleString() || 'Unknown'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowWorksheetViewModal(false)}
+              >
+                Close
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={() => handleEditWorksheet(selectedWorksheet)}
+              >
+                <Edit size={16} />
+                Edit Worksheet
+              </button>
+              <button 
+                className="btn-secondary"
+                onClick={() => handleDownloadWorksheet(selectedWorksheet)}
+              >
+                <Download size={16} />
+                Download as PDF
+              </button>
+              {hasClientResponses(selectedWorksheet) && (
+                <button 
+                  className="btn-success"
+                  onClick={() => {
+                    const clientIds = Object.keys(getClientResponses(selectedWorksheet));
+                    if (clientIds.length > 0) {
+                      handleGiveFeedback(clientIds[0]); // Give feedback to first client for now
+                    }
+                  }}
+                >
+                  <MessageCircle size={16} />
+                  Give Feedback
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Worksheet Modal */}
+      {showWorksheetEditModal && selectedWorksheet && (
+        <div className="modal-overlay" onClick={() => setShowWorksheetEditModal(false)}>
+          <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Edit Worksheet: {selectedWorksheet.title}</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowWorksheetEditModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Title *</label>
+                <input
+                  type="text"
+                  value={editWorksheetForm.title}
+                  onChange={(e) => setEditWorksheetForm(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Enter worksheet title"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Description *</label>
+                <textarea
+                  value={editWorksheetForm.description}
+                  onChange={(e) => setEditWorksheetForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Describe the purpose of this worksheet"
+                  rows="3"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Goal</label>
+                <textarea
+                  value={editWorksheetForm.goal}
+                  onChange={(e) => setEditWorksheetForm(prev => ({ ...prev, goal: e.target.value }))}
+                  placeholder="What should clients achieve with this worksheet?"
+                  rows="2"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Instructions</label>
+                <textarea
+                  value={editWorksheetForm.instructions}
+                  onChange={(e) => setEditWorksheetForm(prev => ({ ...prev, instructions: e.target.value }))}
+                  placeholder="Instructions for clients on how to complete this worksheet"
+                  rows="3"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Category</label>
+                <select
+                  value={editWorksheetForm.category}
+                  onChange={(e) => setEditWorksheetForm(prev => ({ ...prev, category: e.target.value }))}
+                >
+                  <option value="CBT">CBT</option>
+                  <option value="DBT">DBT</option>
+                  <option value="Mindfulness">Mindfulness</option>
+                  <option value="Trauma">Trauma</option>
+                  <option value="Anxiety">Anxiety</option>
+                  <option value="Depression">Depression</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Fields/Questions</label>
+                <div className="fields-list">
+                  {editWorksheetForm.fields.map((field, index) => (
+                    <div key={index} className="field-item">
+                      <div className="field-header">
+                        <input
+                          type="text"
+                          value={field.name}
+                          onChange={(e) => updateEditWorksheetField(index, 'name', e.target.value)}
+                          placeholder="Field/question name"
+                        />
+                        <select
+                          value={field.type}
+                          onChange={(e) => updateEditWorksheetField(index, 'type', e.target.value)}
+                        >
+                          <option value="text">Text</option>
+                          <option value="textarea">Long Text</option>
+                          <option value="number">Number</option>
+                          <option value="date">Date</option>
+                          <option value="select">Dropdown</option>
+                          <option value="radio">Radio Buttons</option>
+                          <option value="checkbox">Checkboxes</option>
+                          <option value="rating">Rating Scale</option>
+                          <option value="multiple-choice">Multiple Choice</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => removeEditWorksheetField(index)}
+                          className="btn-danger btn-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      
+                      <div className="field-details">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={field.required}
+                            onChange={(e) => updateEditWorksheetField(index, 'required', e.target.checked)}
+                          />
+                          Required
+                        </label>
+                      </div>
+
+                      {/* Field Options */}
+                      {(field.type === 'select' || field.type === 'radio' || field.type === 'multiple-choice') && (
+                        <div className="field-options">
+                          <label>Options:</label>
+                          {field.options?.map((option, optionIndex) => (
+                            <div key={optionIndex} className="option-input">
+                              <input
+                                type="text"
+                                value={option}
+                                onChange={(e) => updateEditFieldOption(index, optionIndex, e.target.value)}
+                                placeholder={`Option ${optionIndex + 1}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeEditFieldOption(index, optionIndex)}
+                                className="btn-danger btn-sm"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => addEditFieldOption(index)}
+                            className="btn-secondary btn-sm"
+                          >
+                            Add Option
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Rating Preview */}
+                      {field.type === 'rating' && (
+                        <div className="rating-preview">
+                          <span>Rating Scale (1-10):</span>
+                          <div className="rating-scale-preview">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                              <span key={num} className="rating-dot">{num}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  
+                  <button
+                    type="button"
+                    onClick={addEditWorksheetField}
+                    className="btn-secondary"
+                  >
+                    <Plus size={16} />
+                    Add Field
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowWorksheetEditModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={handleUpdateWorksheet}
+              >
+                <Save size={16} />
+                Update Worksheet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && selectedClientForFeedback && (
+        <div className="modal-overlay" onClick={() => setShowFeedbackModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Give Feedback to {clientNames[selectedClientForFeedback] || `Client ${selectedClientForFeedback.slice(0, 8)}...`}</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowFeedbackModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Rating (1-10)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={feedbackForm.rating}
+                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, rating: parseInt(e.target.value) }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Feedback</label>
+                <textarea
+                  value={feedbackForm.feedback}
+                  onChange={(e) => setFeedbackForm(prev => ({ ...prev, feedback: e.target.value }))}
+                  placeholder="Provide feedback on the client's responses..."
+                  rows="5"
+                />
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowFeedbackModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={handleSubmitFeedback}
+              >
+                <Send size={16} />
+                Submit Feedback
               </button>
             </div>
           </div>

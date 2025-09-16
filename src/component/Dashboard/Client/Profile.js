@@ -1,36 +1,490 @@
 import React, { useEffect, useState } from 'react';
 import { auth, db } from '../../Auth/firebaseConfig';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import './Profile.css';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc
+} from 'firebase/firestore';
+import { 
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
+} from 'firebase/auth';
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar, 
+  Shield, 
+  Save, 
+  Eye, 
+  EyeOff,
+  Camera,
+  Edit,
+  CheckCircle,
+  AlertCircle
+} from 'lucide-react';
 
 export default function ClientProfile() {
   const [profile, setProfile] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
+  const [passwordError, setPasswordError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const currentUser = auth.currentUser;
 
   useEffect(() => {
-    (async () => {
-      const u = auth.currentUser;
-      if (!u) return;
-      const snap = await getDoc(doc(db, 'clients', u.uid));
-      if (snap.exists()) setProfile({ id: snap.id, ...snap.data() });
-    })();
-  }, []);
+    const fetchProfile = async () => {
+      try {
+        if (!currentUser) return;
+        
+        setIsLoading(true);
+        
+        // Get client ID
+        const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+        
+        const profileDoc = await getDoc(doc(db, 'clients', clientId));
+        if (profileDoc.exists()) {
+          const profileData = profileDoc.data();
+          setProfile({ 
+            id: profileDoc.id, 
+            ...profileData,
+            // Ensure we have auth user data as fallback
+            email: profileData.email || currentUser.email,
+            name: profileData.name || profileData.displayName || currentUser.displayName || '',
+            phone: profileData.phone || '',
+            address: profileData.address || '',
+            dateOfBirth: profileData.dateOfBirth || '',
+            emergencyContact: profileData.emergencyContact || '',
+            preferences: profileData.preferences || {}
+          });
+        } else {
+          // Create initial profile if doesn't exist
+          const initialProfile = {
+            id: clientId,
+            email: currentUser.email,
+            name: currentUser.displayName || '',
+            phone: '',
+            address: '',
+            dateOfBirth: '',
+            emergencyContact: '',
+            preferences: {
+              communication: 'email',
+              notifications: true,
+              reminders: true,
+              privacy: 'standard'
+            },
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          await setDoc(doc(db, 'clients', clientId), initialProfile);
+          setProfile(initialProfile);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const save = async () => {
-    if (!profile) return;
+    fetchProfile();
+  }, [currentUser]);
+
+  const handleSave = async () => {
+    if (!profile || !currentUser) return;
+    
+    try {
     setSaving(true);
-    await setDoc(doc(db, 'clients', profile.id), { name: profile.name, preferences: profile.preferences || {} }, { merge: true });
+      setPasswordError('');
+      setSuccessMessage('');
+      
+      const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+      
+      // Update profile data
+      const updateData = {
+        name: profile.name,
+        phone: profile.phone,
+        address: profile.address,
+        dateOfBirth: profile.dateOfBirth,
+        emergencyContact: profile.emergencyContact,
+        preferences: profile.preferences,
+        updatedAt: new Date()
+      };
+      
+      await updateDoc(doc(db, 'clients', clientId), updateData);
+      
+      setSuccessMessage('Profile updated successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setPasswordError('Failed to save profile: ' + error.message);
+    } finally {
     setSaving(false);
+    }
   };
 
-  if (!profile) return <div className="q-card">Loading…</div>;
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    
+    try {
+      setPasswordError('');
+      setSuccessMessage('');
+      
+      // Validate passwords
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        setPasswordError('New passwords do not match');
+        return;
+      }
+      
+      if (passwordForm.newPassword.length < 6) {
+        setPasswordError('New password must be at least 6 characters');
+        return;
+      }
+      
+      // Reauthenticate user
+      const credential = EmailAuthProvider.credential(
+        currentUser.email,
+        passwordForm.currentPassword
+      );
+      
+      await reauthenticateWithCredential(currentUser, credential);
+      
+      // Update password
+      await updatePassword(currentUser, passwordForm.newPassword);
+      
+      setSuccessMessage('Password updated successfully!');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordForm(false);
+      
+      setTimeout(() => setSuccessMessage(''), 3000);
+      
+    } catch (error) {
+      console.error('Error changing password:', error);
+      if (error.code === 'auth/wrong-password') {
+        setPasswordError('Current password is incorrect');
+      } else if (error.code === 'auth/weak-password') {
+        setPasswordError('New password is too weak');
+      } else {
+        setPasswordError('Failed to change password: ' + error.message);
+      }
+    }
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
+  const handleInputChange = (field, value) => {
+    setProfile(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handlePreferenceChange = (field, value) => {
+    setProfile(prev => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        [field]: value
+      }
+    }));
+  };
+
+  if (isLoading) {
+    return (
+      <div className="profile-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading your profile...</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="profile-error">
+        <AlertCircle size={48} />
+        <p>Failed to load profile. Please try again.</p>
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className="client-profile">
+      <div className="profile-header">
       <h1 className="page-title">Profile & Settings</h1>
-      <div className="q-card">
-        <div className="field"><div className="label">Full name</div><input className="input" value={profile.name || ''} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></div>
-        <div className="field"><div className="label">Preferred communication</div><input className="input" value={profile.preferences?.communication || ''} onChange={(e) => setProfile({ ...profile, preferences: { ...(profile.preferences || {}), communication: e.target.value } })} /></div>
-        <div className="q-actions"><button className="btn primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button></div>
+        <div className="profile-actions">
+          <button 
+            className="btn-primary"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            <Save size={20} />
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div className="success-message">
+          <CheckCircle size={20} />
+          <span>{successMessage}</span>
+        </div>
+      )}
+      
+      {passwordError && (
+        <div className="error-message">
+          <AlertCircle size={20} />
+          <span>{passwordError}</span>
+        </div>
+      )}
+
+      <div className="profile-content">
+        {/* Personal Information */}
+        <div className="profile-section">
+          <h2 className="section-title">
+            <User size={24} />
+            Personal Information
+          </h2>
+          <div className="profile-form">
+            <div className="form-row">
+              <div className="form-group">
+                <label>Full Name *</label>
+                <input
+                  type="text"
+                  value={profile.name || ''}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="Enter your full name"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={profile.email || ''}
+                  disabled
+                  className="disabled-input"
+                />
+                <small>Email cannot be changed. Contact support if needed.</small>
+              </div>
+            </div>
+            
+            <div className="form-row">
+              <div className="form-group">
+                <label>Phone Number</label>
+                <input
+                  type="tel"
+                  value={profile.phone || ''}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  placeholder="Enter your phone number"
+                />
+              </div>
+              <div className="form-group">
+                <label>Date of Birth</label>
+                <input
+                  type="date"
+                  value={profile.dateOfBirth || ''}
+                  onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="form-group">
+              <label>Address</label>
+              <textarea
+                value={profile.address || ''}
+                onChange={(e) => handleInputChange('address', e.target.value)}
+                placeholder="Enter your address"
+                rows={3}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Emergency Contact</label>
+              <input
+                type="text"
+                value={profile.emergencyContact || ''}
+                onChange={(e) => handleInputChange('emergencyContact', e.target.value)}
+                placeholder="Name and phone number of emergency contact"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Preferences */}
+        <div className="profile-section">
+          <h2 className="section-title">
+            <Shield size={24} />
+            Preferences & Settings
+          </h2>
+          <div className="preferences-form">
+            <div className="form-group">
+              <label>Preferred Communication Method</label>
+              <select
+                value={profile.preferences?.communication || 'email'}
+                onChange={(e) => handlePreferenceChange('communication', e.target.value)}
+              >
+                <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="sms">SMS</option>
+                <option value="app">In-App Notifications</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Privacy Level</label>
+              <select
+                value={profile.preferences?.privacy || 'standard'}
+                onChange={(e) => handlePreferenceChange('privacy', e.target.value)}
+              >
+                <option value="standard">Standard</option>
+                <option value="enhanced">Enhanced</option>
+                <option value="maximum">Maximum</option>
+              </select>
+            </div>
+            
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={profile.preferences?.notifications || false}
+                  onChange={(e) => handlePreferenceChange('notifications', e.target.checked)}
+                />
+                <span>Receive email notifications</span>
+              </label>
+              
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={profile.preferences?.reminders || false}
+                  onChange={(e) => handlePreferenceChange('reminders', e.target.checked)}
+                />
+                <span>Receive session reminders</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Security */}
+        <div className="profile-section">
+          <h2 className="section-title">
+            <Shield size={24} />
+            Security
+          </h2>
+          <div className="security-actions">
+            <button 
+              className="btn-secondary"
+              onClick={() => setShowPasswordForm(!showPasswordForm)}
+            >
+              <Edit size={20} />
+              Change Password
+            </button>
+          </div>
+          
+          {showPasswordForm && (
+            <form onSubmit={handlePasswordChange} className="password-form">
+              <div className="form-group">
+                <label>Current Password</label>
+                <div className="password-input">
+                  <input
+                    type={showPasswords.current ? 'text' : 'password'}
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                    placeholder="Enter current password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('current')}
+                    className="password-toggle"
+                  >
+                    {showPasswords.current ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+              
+              <div className="form-group">
+                <label>New Password</label>
+                <div className="password-input">
+                  <input
+                    type={showPasswords.new ? 'text' : 'password'}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                    placeholder="Enter new password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('new')}
+                    className="password-toggle"
+                  >
+                    {showPasswords.new ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+              
+              <div className="form-group">
+                <label>Confirm New Password</label>
+                <div className="password-input">
+                  <input
+                    type={showPasswords.confirm ? 'text' : 'password'}
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                    placeholder="Confirm new password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('confirm')}
+                    className="password-toggle"
+                  >
+                    {showPasswords.confirm ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+              
+              <div className="form-actions">
+                <button type="submit" className="btn-primary">
+                  Update Password
+                </button>
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowPasswordForm(false);
+                    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                    setPasswordError('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

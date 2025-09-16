@@ -11,7 +11,8 @@ import {
   LogOut,
   UserPlus,
   Clock,
-  FileText
+  FileText,
+  Flag
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
@@ -27,6 +28,7 @@ import TherapistCalendar from './Calendar';
 import TherapistSchedule from './Schedule';
 import TherapistNotes from './Notes';
 import TherapistResources from './Resources';
+import TherapistReports from './Reports';
 import TherapistSettings from './Settings';
 import TherapistLogs from './Logs';
 import OnboardTherapist from '../Admin/OnboardTherapist';
@@ -45,6 +47,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: TherapistResources },
+    { path: '/dashboard/reports', icon: Flag, label: 'Reports', component: TherapistReports },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: TherapistSettings }
   ];
 
@@ -174,6 +177,7 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/resources" element={<TherapistResources />} />
+          <Route path="/reports" element={<TherapistReports />} />
           <Route path="/settings" element={<TherapistSettings />} />
           {isAdmin && <Route path="/logs" element={<TherapistLogs />} />}
           {isAdmin && <Route path="/admin" element={<OnboardTherapist />} />}

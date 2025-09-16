@@ -296,12 +296,13 @@ export default function TherapistClients({ profile }) {
   const [audioChunks, setAudioChunks] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'table', or 'other'
+  const [activeTab, setActiveTab] = useState('table'); // 'chat', 'table', or 'other'
   const [expandedClient, setExpandedClient] = useState(null); // Track which client row is expanded
   const [searchTerm, setSearchTerm] = useState('');
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState({}); // Track unread messages per client
   const [therapyNotes, setTherapyNotes] = useState([]);
+  const [loadingTherapyNotes, setLoadingTherapyNotes] = useState(false);
   const [allClients, setAllClients] = useState([]);
   const [showClientDetailsModal, setShowClientDetailsModal] = useState(false);
   const [selectedClientForDetails, setSelectedClientForDetails] = useState(null);
@@ -337,6 +338,16 @@ export default function TherapistClients({ profile }) {
   const emojiPickerRef = useRef(null);
   const currentUser = auth.currentUser;
   const isAdmin = profile?.role === 'admin';
+  
+  // Add loading state to ensure profile is loaded
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+
+  // Set profile as loaded when it's available
+  useEffect(() => {
+    if (profile) {
+      setIsProfileLoaded(true);
+    }
+  }, [profile]);
 
   // Helper functions for status handling
   const getStatusClass = (status) => {
@@ -370,11 +381,12 @@ export default function TherapistClients({ profile }) {
   };
 
   // Reset active tab if user is not admin and 'other' tab is active
+  // Only run this when profile is loaded and isAdmin is properly determined
   useEffect(() => {
-    if (!isAdmin && activeTab === 'other') {
-      setActiveTab('chat');
+    if (isProfileLoaded && !isAdmin && activeTab === 'other') {
+      setActiveTab('table'); // Reset to 'table' (My Clients) instead of 'chat'
     }
-  }, [isAdmin, activeTab]);
+  }, [isProfileLoaded, isAdmin, activeTab]);
 
   useEffect(() => {
     const u = auth.currentUser;
@@ -627,13 +639,14 @@ export default function TherapistClients({ profile }) {
   }, [isAdmin]);
 
   // Auto-select first client when clients are loaded
-  useEffect(() => {
-    if (clients.length > 0 && !selectedClient) {
-      const firstClient = clients[0];
-      console.log('Auto-selecting first client:', firstClient);
-      handleClientSelect(firstClient);
-    }
-  }, [clients, selectedClient]);
+  // Removed auto-selection of first client to prevent automatic tab switching
+  // useEffect(() => {
+  //   if (clients.length > 0 && !selectedClient) {
+  //     const firstClient = clients[0];
+  //     console.log('Auto-selecting first client:', firstClient);
+  //     handleClientSelect(firstClient);
+  //   }
+  // }, [clients, selectedClient]);
 
   useEffect(() => {
     if (!selectedClient) return;
@@ -1537,16 +1550,23 @@ export default function TherapistClients({ profile }) {
   
   const fetchTherapyNotes = async (clientId) => {
     try {
+      setLoadingTherapyNotes(true);
+      console.log('Fetching therapy notes for client:', clientId);
+      
       const notesRef = collection(db, 'clients', clientId, 'therapyNotes');
       const notesSnapshot = await getDocs(notesRef);
       const notes = notesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log('Fetched therapy notes:', notes.length, 'notes');
       setTherapyNotes(notes);
     } catch (error) {
       console.error('Error fetching therapy notes:', error);
       setTherapyNotes([]);
+    } finally {
+      setLoadingTherapyNotes(false);
     }
   };
 
@@ -1946,17 +1966,23 @@ export default function TherapistClients({ profile }) {
       return (a.displayName || '').localeCompare(b.displayName || '');
     });
 
+  // Show loading screen until profile is loaded
+  if (!isProfileLoaded) {
+    return (
+      <div className="therapist-clients-container">
+        <div className="loading-screen">
+          <div className="loading-spinner"></div>
+          <p>Loading client dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="therapist-clients-container">
       {/* Tab Navigation */}
       <div className="clients-tabs">
-        <button 
-          className={`tab ${activeTab === 'chat' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chat')}
-        >
-          <MessageSquare size={20} />
-          Client Chat
-        </button>
+      
         <button 
           className={`tab ${activeTab === 'table' ? 'active' : ''}`}
           onClick={() => setActiveTab('table')}
@@ -1972,7 +1998,15 @@ export default function TherapistClients({ profile }) {
             <Users size={20} />
             All Clients
           </button>
+          
         )}
+          <button 
+          className={`tab ${activeTab === 'chat' ? 'active' : ''}`}
+          onClick={() => setActiveTab('chat')}
+        >
+          <MessageSquare size={20} />
+          Client Chat
+        </button>
       </div>
 
       {activeTab === 'chat' ? (
@@ -2252,7 +2286,15 @@ export default function TherapistClients({ profile }) {
                           </button>
                           <button 
                             className="btn-secondary small"
-                            onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
+                            onClick={async () => {
+                              if (expandedClient === client.id) {
+                                setExpandedClient(null);
+                              } else {
+                                setExpandedClient(client.id);
+                                // Fetch therapy notes when expanding client details
+                                await fetchTherapyNotes(client.id);
+                              }
+                            }}
                           >
                             {String(expandedClient) === String(client.id) ? 'Hide' : 'View All'}
                           </button>
@@ -2890,7 +2932,12 @@ export default function TherapistClients({ profile }) {
                                 {/* Therapy Notes List */}
                                 <div className="therapy-notes-list">
                                   <h4>Session Notes</h4>
-                                  {therapyNotes.length === 0 ? (
+                                  {loadingTherapyNotes ? (
+                                    <div className="loading-notes">
+                                      <div className="loading-spinner"></div>
+                                      <p>Loading therapy notes...</p>
+                                    </div>
+                                  ) : therapyNotes.length === 0 ? (
                                     <div className="no-notes">
                                       <div className="no-notes-icon">📝</div>
                                       <p>No therapy notes yet. Click "Add Therapy Note" to create the first session note.</p>

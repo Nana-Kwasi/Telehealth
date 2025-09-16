@@ -5,7 +5,6 @@ import {
   MessageSquare, 
   Video, 
   Calendar, 
-  User, 
   BookOpen, 
   CreditCard, 
   Settings, 
@@ -22,7 +21,7 @@ import ClientHome from './Home';
 import ClientMessages from './Messages';
 import ClientVideoCall from './VideoCall';
 import ClientSchedule from './Schedule';
-import ClientProfile from './Profile';
+// import ClientProfile from './Profile';
 import ClientResources from './Resources';
 import ClientBilling from './Billing';
 import ClientSettings from './Settings';
@@ -38,10 +37,10 @@ export default function ClientDashboard({ profile }) {
 
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: 'Home', component: ClientHome },
-    { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages', component: ClientMessages },
-    { path: '/dashboard/video', icon: Video, label: 'Video Call', component: ClientVideoCall },
-    { path: '/dashboard/schedule', icon: Calendar, label: 'Schedule', component: ClientSchedule },
-    { path: '/dashboard/profile', icon: User, label: 'Profile', component: ClientProfile },
+    { path: '/dashboard/messages', icon: MessageSquare, label: 'Therapist', component: ClientMessages },
+    { path: '/dashboard/video', icon: Video, label: 'Schedule', component: ClientVideoCall },
+    { path: '/dashboard/schedule', icon: Calendar, label: 'Calendar', component: ClientSchedule },
+    // { path: '/dashboard/profile', icon: User, label: 'Profile', component: ClientProfile },
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: ClientResources },
     { path: '/dashboard/billing', icon: CreditCard, label: 'Billing', component: ClientBilling },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: ClientSettings },
@@ -154,7 +153,7 @@ export default function ClientDashboard({ profile }) {
           <Route path="/messages" element={<ClientMessages />} />
           <Route path="/video" element={<ClientVideoCall profile={profile} />} />
           <Route path="/schedule" element={<ClientSchedule />} />
-          <Route path="/profile" element={<ClientProfile />} />
+          {/* <Route path="/profile" element={<ClientProfile />} /> */}
           <Route path="/resources" element={<ClientResources />} />
           <Route path="/billing" element={<ClientBilling />} />
           <Route path="/settings" element={<ClientSettings />} />

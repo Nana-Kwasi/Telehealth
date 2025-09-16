@@ -52,6 +52,9 @@ export default function TherapistNotes() {
   const [audioChunks, setAudioChunks] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('soap');
+  const [showClientSelection, setShowClientSelection] = useState(false);
+  const [selectedClients, setSelectedClients] = useState([]);
+  const [allClients, setAllClients] = useState([]);
   const [noteForm, setNoteForm] = useState({
     clientId: '',
     sessionDate: new Date().toISOString().split('T')[0],
@@ -93,22 +96,45 @@ export default function TherapistNotes() {
   useEffect(() => {
     if (!currentUser) return;
 
-    // Fetch clinical notes
+    // Fetch clinical notes (simplified query to avoid index requirements)
     const notesQuery = query(
       collection(db, 'clinicalNotes'),
-      where('therapistId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc')
+      where('therapistId', '==', currentUser.uid)
     );
 
     const notesUnsub = onSnapshot(notesQuery, (snap) => {
-      setNotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const notesData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateB - dateA;
+        });
+      setNotes(prevNotes => [...notesData, ...prevNotes.filter(note => note.noteType === 'therapyBook')]);
+    }, (error) => {
+      console.error('Error fetching clinical notes:', error);
+      // Fallback: try to fetch without ordering
+      try {
+        const fallbackQuery = query(collection(db, 'clinicalNotes'));
+        onSnapshot(fallbackQuery, (snap) => {
+          const notesData = snap.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(note => note.therapistId === currentUser.uid)
+            .sort((a, b) => {
+              const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+              const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+              return dateB - dateA;
+            });
+          setNotes(prevNotes => [...notesData, ...prevNotes.filter(note => note.noteType === 'therapyBook')]);
+        });
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+      }
     });
 
-    // Fetch therapy books
+    // Fetch therapy books (simplified query to avoid index requirements)
     const booksQuery = query(
       collection(db, 'therapyBooks'),
-      where('therapistId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc')
+      where('therapistId', '==', currentUser.uid)
     );
 
     const booksUnsub = onSnapshot(booksQuery, (snap) => {
@@ -116,8 +142,36 @@ export default function TherapistNotes() {
         id: doc.id,
         ...doc.data(),
         noteType: 'therapyBook'
-      }));
+      }))
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateB - dateA;
+        });
       setNotes(prevNotes => [...prevNotes.filter(note => note.noteType !== 'therapyBook'), ...booksData]);
+    }, (error) => {
+      console.error('Error fetching therapy books:', error);
+      // Fallback: try to fetch without ordering
+      try {
+        const fallbackQuery = query(collection(db, 'therapyBooks'));
+        onSnapshot(fallbackQuery, (snap) => {
+          const booksData = snap.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+              noteType: 'therapyBook'
+            }))
+            .filter(book => book.therapistId === currentUser.uid)
+            .sort((a, b) => {
+              const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+              const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+              return dateB - dateA;
+            });
+          setNotes(prevNotes => [...prevNotes.filter(note => note.noteType !== 'therapyBook'), ...booksData]);
+        });
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+      }
     });
 
     // Fetch clients
@@ -138,10 +192,18 @@ export default function TherapistNotes() {
       setClients(clientData.filter(Boolean));
     });
 
+    // Fetch all clients for admin users (for client selection)
+    const allClientsQuery = query(collection(db, 'clients'));
+    const allClientsUnsub = onSnapshot(allClientsQuery, (snap) => {
+      const allClientsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAllClients(allClientsData);
+    });
+
     return () => {
       notesUnsub();
       booksUnsub();
       clientsUnsub();
+      allClientsUnsub();
     };
   }, [currentUser]);
 
@@ -180,52 +242,83 @@ export default function TherapistNotes() {
 
   const handleCreateNote = async () => {
     try {
+      // Get the template for the selected note type
+      const template = templates[noteForm.noteType];
+      
+      // Create base note data with only relevant fields
       const noteData = {
-        ...noteForm,
         therapistId: currentUser.uid,
         therapistName: currentUser.displayName || 'Therapist',
+        noteType: noteForm.noteType,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         version: 1
       };
+
+      // Add template-specific fields
+      if (template && template.fields) {
+        template.fields.forEach(field => {
+          if (noteForm[field] !== undefined) {
+            noteData[field] = noteForm[field];
+          }
+        });
+      }
+
+      // Add common fields based on note type
+      if (noteForm.noteType !== 'therapyBook') {
+        noteData.clientId = noteForm.clientId;
+        noteData.sessionDate = noteForm.sessionDate;
+        noteData.signature = noteForm.signature;
+        noteData.visibleToClient = noteForm.visibleToClient;
+      } else {
+        // Therapy book specific fields
+        noteData.bookTitle = noteForm.bookTitle;
+        noteData.author = noteForm.author;
+        noteData.description = noteForm.description;
+        noteData.coverImage = noteForm.coverImage;
+        noteData.targetAudience = noteForm.targetAudience;
+        noteData.difficultyLevel = noteForm.difficultyLevel;
+        noteData.estimatedReadingTime = noteForm.estimatedReadingTime;
+        noteData.tableOfContents = noteForm.tableOfContents;
+        noteData.chapters = noteForm.chapters;
+        noteData.keyTopics = noteForm.keyTopics;
+        noteData.exercises = noteForm.exercises;
+        noteData.resources = noteForm.resources;
+        noteData.bibliography = noteForm.bibliography;
+        
+        // Add selected clients if target audience is specific
+        if (noteForm.targetAudience === 'specific') {
+          noteData.assignedClients = selectedClients.map(client => client.id);
+        }
+      }
 
       // Determine collection based on note type
       let collectionName = 'clinicalNotes';
       
       if (noteForm.noteType === 'therapyBook') {
         collectionName = 'therapyBooks';
-        // For therapy books, we don't need clientId in the main document
-        delete noteData.clientId;
-        delete noteData.sessionDate;
-        delete noteData.signature;
-        delete noteData.isDraft;
-        delete noteData.visibleToClient;
       } else {
         // For regular notes, ensure client visibility is handled
         if (noteForm.visibleToClient && noteForm.clientId) {
-          // Also save a copy to clientNotes collection for client access
+          // Also save a copy to notes collection for client access
           const clientNoteData = {
             therapistId: currentUser.uid,
             therapistName: currentUser.displayName || 'Therapist',
             clientId: noteForm.clientId,
             clientName: clients.find(c => c.id === noteForm.clientId)?.name || 'Client',
             noteType: noteForm.noteType,
-            content: {
-              subjective: noteForm.subjective,
-              objective: noteForm.objective,
-              assessment: noteForm.assessment,
-              plan: noteForm.plan,
-              interventions: noteForm.interventions,
-              clientResponse: noteForm.clientResponse,
-              moodRating: noteForm.moodRating,
-              riskAssessment: noteForm.riskAssessment,
-              nextSteps: noteForm.nextSteps
-            },
+            title: noteForm.noteType.charAt(0).toUpperCase() + noteForm.noteType.slice(1) + ' Note',
+            noteContent: Object.keys(template?.fields || {}).reduce((content, field) => {
+              if (noteForm[field]) {
+                content += `${field.charAt(0).toUpperCase() + field.slice(1)}: ${noteForm[field]}\n\n`;
+              }
+              return content;
+            }, ''),
             sessionDate: noteForm.sessionDate,
             createdAt: serverTimestamp()
           };
           
-          await addDoc(collection(db, 'clientNotes'), clientNoteData);
+          await addDoc(collection(db, 'notes'), clientNoteData);
         }
       }
 
@@ -301,6 +394,7 @@ export default function TherapistNotes() {
       shareWithAllClients: false,
       selectedClients: []
     });
+    setSelectedClients([]);
   };
 
   const openEditModal = (note) => {
@@ -543,28 +637,6 @@ export default function TherapistNotes() {
               <div className="note-form">
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Client</label>
-                    <select
-                      value={noteForm.clientId}
-                      onChange={(e) => setNoteForm(prev => ({ ...prev, clientId: e.target.value }))}
-                    >
-                      <option value="">Select Client</option>
-                      {clients.map(client => (
-                        <option key={client.id} value={client.id}>
-                          {client.name || client.email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Session Date</label>
-                    <input
-                      type="date"
-                      value={noteForm.sessionDate}
-                      onChange={(e) => setNoteForm(prev => ({ ...prev, sessionDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="form-group">
                     <label>Note Type</label>
                     <select
                       value={noteForm.noteType}
@@ -575,26 +647,34 @@ export default function TherapistNotes() {
                       ))}
                     </select>
                   </div>
+                  {noteForm.noteType !== 'therapyBook' && (
+                    <>
+                      <div className="form-group">
+                        <label>Client</label>
+                        <select
+                          value={noteForm.clientId}
+                          onChange={(e) => setNoteForm(prev => ({ ...prev, clientId: e.target.value }))}
+                        >
+                          <option value="">Select Client</option>
+                          {clients.map(client => (
+                            <option key={client.id} value={client.id}>
+                              {client.name || client.email}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Session Date</label>
+                        <input
+                          type="date"
+                          value={noteForm.sessionDate}
+                          onChange={(e) => setNoteForm(prev => ({ ...prev, sessionDate: e.target.value }))}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* Voice Recording */}
-                <div className="voice-recording-section">
-                  <h4>Voice-to-Text Recording</h4>
-                  <div className="recording-controls">
-                    <button
-                      className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
-                      onClick={isRecording ? stopRecording : startRecording}
-                    >
-                      {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
-                      {isRecording ? 'Stop Recording' : 'Start Recording'}
-                    </button>
-                    {recordingText && (
-                      <div className="recording-text">
-                        <p>{recordingText}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
 
                             {/* Dynamic Form Fields Based on Template - Only for regular notes */}
             {noteForm.noteType !== 'therapyBook' && templates[noteForm.noteType]?.fields.map(field => (
@@ -709,6 +789,7 @@ export default function TherapistNotes() {
                           <option value="individuals">Individuals</option>
                           <option value="teen">Teen</option>
                           <option value="couples">Couples</option>
+                          <option value="specific">Specific Clients</option>
                         </select>
                       </div>
                       <div className="form-group">
@@ -732,6 +813,40 @@ export default function TherapistNotes() {
                         />
                       </div>
                     </div>
+
+                    {/* Client Selection for Specific Clients */}
+                    {noteForm.targetAudience === 'specific' && (
+                      <div className="form-group">
+                        <label>Selected Clients</label>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setShowClientSelection(true)}
+                        >
+                          <Users size={16} />
+                          Choose Clients ({selectedClients.length} selected)
+                        </button>
+                        {selectedClients.length > 0 && (
+                          <div className="selected-clients">
+                            <h4>Selected Clients:</h4>
+                            <div className="client-list">
+                              {selectedClients.map(client => (
+                                <div key={client.id} className="client-item">
+                                  <span>{client.name || client.email}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedClients(prev => prev.filter(c => c.id !== client.id))}
+                                    className="remove-client-btn"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="form-group">
                       <label>Table of Contents</label>
@@ -793,30 +908,9 @@ export default function TherapistNotes() {
                       />
                     </div>
 
-                    <div className="form-group checkbox-group">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={noteForm.shareWithAllClients}
-                          onChange={(e) => setNoteForm(prev => ({ ...prev, shareWithAllClients: e.target.checked }))}
-                        />
-                        Share with all clients in the system
-                      </label>
-                    </div>
                   </>
                 )}
 
-                {/* Draft Status */}
-                <div className="form-group checkbox-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={noteForm.isDraft}
-                      onChange={(e) => setNoteForm(prev => ({ ...prev, isDraft: e.target.checked }))}
-                    />
-                    Save as Draft
-                  </label>
-                </div>
               </div>
             </div>
 
@@ -840,6 +934,134 @@ export default function TherapistNotes() {
                 {showCreateModal 
                   ? `Create ${templates[noteForm.noteType]?.name || 'Note'}` 
                   : `Update ${templates[noteForm.noteType]?.name || 'Note'}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client Selection Modal */}
+      {showClientSelection && (
+        <div className="modal-overlay" onClick={() => setShowClientSelection(false)}>
+          <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Select Clients</h2>
+              <button 
+                className="close-button"
+                onClick={() => setShowClientSelection(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="client-selection">
+                <div className="search-section">
+                  <Search size={20} />
+                  <input
+                    type="text"
+                    placeholder="Search clients..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                {/* Assigned Clients Section */}
+                <div className="client-group">
+                  <h3>My Assigned Clients</h3>
+                  <div className="clients-list">
+                    {clients
+                      .filter(client => 
+                        client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        client.email?.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .map(client => (
+                        <div key={client.id} className="client-item assigned">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={selectedClients.some(c => c.id === client.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedClients(prev => [...prev, client]);
+                                } else {
+                                  setSelectedClients(prev => prev.filter(c => c.id !== client.id));
+                                }
+                              }}
+                            />
+                            <div className="client-info">
+                              <span className="client-name">{client.name || client.email}</span>
+                              {client.email && <span className="client-email">{client.email}</span>}
+                              <span className="client-badge">Assigned</span>
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    {clients.filter(client => 
+                      client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      client.email?.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).length === 0 && (
+                      <div className="no-clients">No assigned clients found</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Other Clients Section */}
+                <div className="client-group">
+                  <h3>Other Clients</h3>
+                  <div className="clients-list">
+                    {allClients
+                      .filter(client => 
+                        !clients.some(assignedClient => assignedClient.id === client.id) &&
+                        (client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         client.email?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      )
+                      .map(client => (
+                        <div key={client.id} className="client-item other">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={selectedClients.some(c => c.id === client.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedClients(prev => [...prev, client]);
+                                } else {
+                                  setSelectedClients(prev => prev.filter(c => c.id !== client.id));
+                                }
+                              }}
+                            />
+                            <div className="client-info">
+                              <span className="client-name">{client.name || client.email}</span>
+                              {client.email && <span className="client-email">{client.email}</span>}
+                              <span className="client-badge other">Not Assigned</span>
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    {allClients.filter(client => 
+                      !clients.some(assignedClient => assignedClient.id === client.id) &&
+                      (client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                       client.email?.toLowerCase().includes(searchQuery.toLowerCase()))
+                    ).length === 0 && (
+                      <div className="no-clients">No other clients found</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowClientSelection(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={() => setShowClientSelection(false)}
+              >
+                Save Selection ({selectedClients.length} selected)
               </button>
             </div>
           </div>
