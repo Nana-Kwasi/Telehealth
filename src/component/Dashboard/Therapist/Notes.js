@@ -43,6 +43,7 @@ export default function TherapistNotes() {
   const [clients, setClients] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedNote, setSelectedNote] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -92,6 +93,59 @@ export default function TherapistNotes() {
   const currentUser = auth.currentUser;
   const fileInputRef = useRef(null);
 
+  // Function to update existing notes with missing clientName
+  const updateExistingNotesWithClientName = async (notes) => {
+    const notesToUpdate = notes.filter(note => {
+      if (note.noteType === 'therapyBook') {
+        // For therapy books, update if they don't have clientName
+        // If targetAudience is 'specific', they should have assignedClients
+        // If targetAudience is 'all', they won't have assignedClients but still need a clientName
+        return !note.clientName;
+      } else {
+        // For regular notes, check if they have clientId but no clientName
+        return note.clientId && !note.clientName;
+      }
+    });
+    
+    for (const note of notesToUpdate) {
+      try {
+        let clientName = 'Unknown Client';
+        
+        if (note.noteType === 'therapyBook') {
+          // For therapy books, get the name of the first assigned client
+          if (note.assignedClients && note.assignedClients.length > 0) {
+            const clientDoc = await getDocs(query(collection(db, 'clients'), where('__name__', '==', note.assignedClients[0])));
+            if (!clientDoc.empty) {
+              clientName = clientDoc.docs[0].data().name || clientDoc.docs[0].data().email || 'Unknown Client';
+            }
+          } else {
+            // For therapy books with targetAudience 'all', don't set a client name
+            clientName = '';
+          }
+        } else {
+          // For regular notes, get the client name
+          const clientDoc = await getDocs(query(collection(db, 'clients'), where('__name__', '==', note.clientId)));
+          if (!clientDoc.empty) {
+            clientName = clientDoc.docs[0].data().name || clientDoc.docs[0].data().email || 'Unknown Client';
+          }
+        }
+        
+        // Update the note with clientName
+        const noteRef = doc(db, note.noteType === 'therapyBook' ? 'therapyBooks' : 'clinicalNotes', note.id);
+        await updateDoc(noteRef, { clientName });
+        
+        // Update the local state
+        setNotes(prevNotes => 
+          prevNotes.map(n => 
+            n.id === note.id ? { ...n, clientName } : n
+          )
+        );
+      } catch (error) {
+        console.error('Error updating note with client name:', error);
+      }
+    }
+  };
+
   // Fetch notes and clients
   useEffect(() => {
     if (!currentUser) return;
@@ -110,6 +164,8 @@ export default function TherapistNotes() {
           return dateB - dateA;
         });
       setNotes(prevNotes => [...notesData, ...prevNotes.filter(note => note.noteType === 'therapyBook')]);
+      // Update existing notes with missing clientName
+      updateExistingNotesWithClientName(notesData);
     }, (error) => {
       console.error('Error fetching clinical notes:', error);
       // Fallback: try to fetch without ordering
@@ -125,6 +181,8 @@ export default function TherapistNotes() {
               return dateB - dateA;
             });
           setNotes(prevNotes => [...notesData, ...prevNotes.filter(note => note.noteType === 'therapyBook')]);
+          // Update existing notes with missing clientName
+          updateExistingNotesWithClientName(notesData);
         });
       } catch (fallbackError) {
         console.error('Fallback query also failed:', fallbackError);
@@ -149,6 +207,8 @@ export default function TherapistNotes() {
           return dateB - dateA;
         });
       setNotes(prevNotes => [...prevNotes.filter(note => note.noteType !== 'therapyBook'), ...booksData]);
+      // Update existing therapy books with missing clientName
+      updateExistingNotesWithClientName(booksData);
     }, (error) => {
       console.error('Error fetching therapy books:', error);
       // Fallback: try to fetch without ordering
@@ -168,6 +228,8 @@ export default function TherapistNotes() {
               return dateB - dateA;
             });
           setNotes(prevNotes => [...prevNotes.filter(note => note.noteType !== 'therapyBook'), ...booksData]);
+          // Update existing therapy books with missing clientName
+          updateExistingNotesWithClientName(booksData);
         });
       } catch (fallbackError) {
         console.error('Fallback query also failed:', fallbackError);
@@ -245,6 +307,35 @@ export default function TherapistNotes() {
       // Get the template for the selected note type
       const template = templates[noteForm.noteType];
       
+      // Get client name directly from database
+      let clientName = 'Unknown Client';
+      if (noteForm.noteType === 'therapyBook') {
+        // For therapy books, get the name based on target audience
+        if (noteForm.targetAudience === 'specific' && selectedClients.length > 0) {
+          try {
+            const clientDoc = await getDocs(query(collection(db, 'clients'), where('__name__', '==', selectedClients[0].id)));
+            if (!clientDoc.empty) {
+              clientName = clientDoc.docs[0].data().name || clientDoc.docs[0].data().email || 'Unknown Client';
+            }
+          } catch (error) {
+            console.error('Error fetching client name for therapy book:', error);
+          }
+        } else {
+          // For therapy books with targetAudience 'all', don't set a client name
+          clientName = '';
+        }
+      } else if (noteForm.clientId) {
+        // For regular notes, get the client name
+        try {
+          const clientDoc = await getDocs(query(collection(db, 'clients'), where('__name__', '==', noteForm.clientId)));
+          if (!clientDoc.empty) {
+            clientName = clientDoc.docs[0].data().name || clientDoc.docs[0].data().email || 'Unknown Client';
+          }
+        } catch (error) {
+          console.error('Error fetching client name:', error);
+        }
+      }
+      
       // Create base note data with only relevant fields
       const noteData = {
         therapistId: currentUser.uid,
@@ -267,9 +358,16 @@ export default function TherapistNotes() {
       // Add common fields based on note type
       if (noteForm.noteType !== 'therapyBook') {
         noteData.clientId = noteForm.clientId;
+        noteData.clientName = clientName;
         noteData.sessionDate = noteForm.sessionDate;
         noteData.signature = noteForm.signature;
         noteData.visibleToClient = noteForm.visibleToClient;
+        
+        // Add multiple clients if selected
+        if (noteForm.selectedClients && noteForm.selectedClients.length > 1) {
+          noteData.assignedClients = noteForm.selectedClients.map(client => client.id);
+          noteData.clientNames = noteForm.selectedClients.map(client => client.name || client.email);
+        }
       } else {
         // Therapy book specific fields
         noteData.bookTitle = noteForm.bookTitle;
@@ -285,6 +383,7 @@ export default function TherapistNotes() {
         noteData.exercises = noteForm.exercises;
         noteData.resources = noteForm.resources;
         noteData.bibliography = noteForm.bibliography;
+        noteData.clientName = clientName;
         
         // Add selected clients if target audience is specific
         if (noteForm.targetAudience === 'specific') {
@@ -305,7 +404,7 @@ export default function TherapistNotes() {
             therapistId: currentUser.uid,
             therapistName: currentUser.displayName || 'Therapist',
             clientId: noteForm.clientId,
-            clientName: clients.find(c => c.id === noteForm.clientId)?.name || 'Client',
+            clientName: clientName,
             noteType: noteForm.noteType,
             title: noteForm.noteType.charAt(0).toUpperCase() + noteForm.noteType.slice(1) + ' Note',
             noteContent: Object.keys(template?.fields || {}).reduce((content, field) => {
@@ -333,8 +432,22 @@ export default function TherapistNotes() {
 
   const handleUpdateNote = async () => {
     try {
+      // Get client name directly from database
+      let clientName = 'Unknown Client';
+      if (noteForm.clientId) {
+        try {
+          const clientDoc = await getDocs(query(collection(db, 'clients'), where('__name__', '==', noteForm.clientId)));
+          if (!clientDoc.empty) {
+            clientName = clientDoc.docs[0].data().name || clientDoc.docs[0].data().email || 'Unknown Client';
+          }
+        } catch (error) {
+          console.error('Error fetching client name:', error);
+        }
+      }
+      
       const noteData = {
         ...noteForm,
+        clientName: clientName,
         updatedAt: serverTimestamp(),
         version: (selectedNote?.version || 1) + 1
       };
@@ -399,22 +512,67 @@ export default function TherapistNotes() {
 
   const openEditModal = (note) => {
     setSelectedNote(note);
-    setNoteForm({
-      clientId: note.clientId || '',
-      sessionDate: note.sessionDate || '',
-      noteType: note.noteType || 'soap',
-      subjective: note.subjective || '',
-      objective: note.objective || '',
-      assessment: note.assessment || '',
-      plan: note.plan || '',
-      interventions: note.interventions || '',
-      clientResponse: note.clientResponse || '',
-      moodRating: note.moodRating || '',
-      riskAssessment: note.riskAssessment || '',
-      nextSteps: note.nextSteps || '',
-      signature: note.signature || '',
-      isDraft: note.isDraft || false
-    });
+    
+    // Handle therapy books
+    if (note.noteType === 'therapyBook') {
+      setNoteForm({
+        noteType: note.noteType || 'therapyBook',
+        bookTitle: note.bookTitle || '',
+        author: note.author || '',
+        description: note.description || '',
+        coverImage: note.coverImage || '',
+        targetAudience: note.targetAudience || 'all',
+        difficultyLevel: note.difficultyLevel || 'beginner',
+        estimatedReadingTime: note.estimatedReadingTime || '',
+        tableOfContents: note.tableOfContents || '',
+        chapters: note.chapters || '',
+        keyTopics: note.keyTopics || '',
+        exercises: note.exercises || '',
+        resources: note.resources || '',
+        bibliography: note.bibliography || '',
+        isDraft: note.isDraft || false
+      });
+      
+      // Set selected clients if target audience is specific
+      if (note.targetAudience === 'specific' && note.assignedClients) {
+        const selectedClientsData = note.assignedClients.map(clientId => 
+          allClients.find(c => c.id === clientId)
+        ).filter(Boolean);
+        setSelectedClients(selectedClientsData);
+      } else {
+        setSelectedClients([]);
+      }
+    } else {
+      // Handle regular notes
+      setNoteForm({
+        clientId: note.clientId || '',
+        sessionDate: note.sessionDate || '',
+        noteType: note.noteType || 'soap',
+        subjective: note.subjective || '',
+        objective: note.objective || '',
+        assessment: note.assessment || '',
+        plan: note.plan || '',
+        interventions: note.interventions || '',
+        clientResponse: note.clientResponse || '',
+        moodRating: note.moodRating || '',
+        riskAssessment: note.riskAssessment || '',
+        nextSteps: note.nextSteps || '',
+        signature: note.signature || '',
+        isDraft: note.isDraft || false,
+        visibleToClient: note.visibleToClient || false
+      });
+      
+      // Set selected clients if multiple clients are assigned
+      if (note.assignedClients && note.assignedClients.length > 1) {
+        const selectedClientsData = note.assignedClients.map(clientId => 
+          allClients.find(c => c.id === clientId)
+        ).filter(Boolean);
+        setSelectedClients(selectedClientsData);
+      } else {
+        setSelectedClients([]);
+      }
+    }
+    
     setShowEditModal(true);
   };
 
@@ -512,12 +670,22 @@ export default function TherapistNotes() {
             <div className="note-header">
               <div className="note-info">
                 <h3 className="note-title">
-                  {note.clientName || 'Unknown Client'} - {templates[note.noteType]?.name || 'Note'}
+                  {note.noteType === 'therapyBook' && note.targetAudience === 'all' 
+                    ? templates[note.noteType]?.name || 'Therapy Book'
+                    : note.clientNames && note.clientNames.length > 1
+                      ? `${note.clientNames.join(', ')} - ${templates[note.noteType]?.name || 'Note'}`
+                      : `${note.clientName || 'Unknown Client'} - ${templates[note.noteType]?.name || 'Note'}`
+                  }
                 </h3>
                 <div className="note-meta">
                   <span className="note-date">
                     <Calendar size={14} />
-                    {new Date(note.sessionDate).toLocaleDateString()}
+                    {note.sessionDate 
+                      ? new Date(note.sessionDate).toLocaleDateString()
+                      : note.createdAt?.toDate 
+                        ? note.createdAt.toDate().toLocaleDateString()
+                        : new Date(note.createdAt).toLocaleDateString()
+                    }
                   </span>
                   <span className="note-status">
                     {note.isDraft ? (
@@ -541,7 +709,7 @@ export default function TherapistNotes() {
                   className="btn-icon"
                   onClick={() => {
                     setSelectedNote(note);
-                    // Open view modal
+                    setShowViewModal(true);
                   }}
                   title="View Note"
                 >
@@ -567,11 +735,6 @@ export default function TherapistNotes() {
                               {note.author && (
                                 <div className="preview-section">
                                   <strong>Author:</strong> {note.author}
-                                </div>
-                              )}
-                              {note.description && (
-                                <div className="preview-section">
-                                  <strong>Description:</strong> {note.description.substring(0, 150)}...
                                 </div>
                               )}
                               {note.targetAudience && (
@@ -650,18 +813,35 @@ export default function TherapistNotes() {
                   {noteForm.noteType !== 'therapyBook' && (
                     <>
                       <div className="form-group">
-                        <label>Client</label>
-                        <select
-                          value={noteForm.clientId}
-                          onChange={(e) => setNoteForm(prev => ({ ...prev, clientId: e.target.value }))}
-                        >
-                          <option value="">Select Client</option>
+                        <label>Clients</label>
+                        <div className="checkbox-list">
                           {clients.map(client => (
-                            <option key={client.id} value={client.id}>
-                              {client.name || client.email}
-                            </option>
+                            <label key={client.id} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                checked={noteForm.selectedClients?.some(c => c.id === client.id) || false}
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  const currentSelected = noteForm.selectedClients || [];
+                                  
+                                  let newSelected;
+                                  if (isChecked) {
+                                    newSelected = [...currentSelected, client];
+                                  } else {
+                                    newSelected = currentSelected.filter(c => c.id !== client.id);
+                                  }
+                                  
+                                  setNoteForm(prev => ({ 
+                                    ...prev, 
+                                    clientId: newSelected[0]?.id || '', // Keep first client as primary
+                                    selectedClients: newSelected 
+                                  }));
+                                }}
+                              />
+                              <span className="checkbox-label">{client.name || client.email}</span>
+                            </label>
                           ))}
-                        </select>
+                        </div>
                       </div>
                       <div className="form-group">
                         <label>Session Date</label>
@@ -1067,8 +1247,166 @@ export default function TherapistNotes() {
           </div>
         </div>
       )}
+
+      {/* View Note Modal */}
+      {showViewModal && selectedNote && (
+        <div className="modal-overlay" onClick={() => {
+          setShowViewModal(false);
+          setSelectedNote(null);
+        }}>
+          <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>
+                {selectedNote.noteType === 'therapyBook' && selectedNote.targetAudience === 'all' 
+                  ? templates[selectedNote.noteType]?.name || 'Therapy Book'
+                  : selectedNote.clientNames && selectedNote.clientNames.length > 1
+                    ? `${selectedNote.clientNames.join(', ')} - ${templates[selectedNote.noteType]?.name || 'Note'}`
+                    : `${selectedNote.clientName || 'Unknown Client'} - ${templates[selectedNote.noteType]?.name || 'Note'}`
+                }
+              </h2>
+              <button
+                className="close-button"
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedNote(null);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="note-view">
+                <div className="note-meta-info">
+                  <div className="meta-item">
+                    <strong>Date:</strong> {selectedNote.sessionDate 
+                      ? new Date(selectedNote.sessionDate).toLocaleDateString()
+                      : selectedNote.createdAt?.toDate 
+                        ? selectedNote.createdAt.toDate().toLocaleDateString()
+                        : new Date(selectedNote.createdAt).toLocaleDateString()
+                    }
+                  </div>
+                  <div className="meta-item">
+                    <strong>Status:</strong> {selectedNote.isDraft ? 'Draft' : 'Completed'}
+                  </div>
+                  <div className="meta-item">
+                    <strong>Therapist:</strong> {selectedNote.therapistName}
+                  </div>
+                </div>
+
+                {selectedNote.noteType === 'therapyBook' ? (
+                  <div className="therapy-book-content">
+                    {selectedNote.bookTitle && (
+                      <div className="content-section">
+                        <h3>Book Title</h3>
+                        <p>{selectedNote.bookTitle}</p>
+                      </div>
+                    )}
+                    {selectedNote.author && (
+                      <div className="content-section">
+                        <h3>Author</h3>
+                        <p>{selectedNote.author}</p>
+                      </div>
+                    )}
+                    {selectedNote.description && (
+                      <div className="content-section">
+                        <h3>Description</h3>
+                        <p>{selectedNote.description}</p>
+                      </div>
+                    )}
+                    {selectedNote.targetAudience && (
+                      <div className="content-section">
+                        <h3>Target Audience</h3>
+                        <p>{selectedNote.targetAudience}</p>
+                      </div>
+                    )}
+                    {selectedNote.chapters && (
+                      <div className="content-section">
+                        <h3>Chapters</h3>
+                        <div className="content-text">{selectedNote.chapters}</div>
+                      </div>
+                    )}
+                    {selectedNote.keyTopics && (
+                      <div className="content-section">
+                        <h3>Key Topics</h3>
+                        <div className="content-text">{selectedNote.keyTopics}</div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="clinical-note-content">
+                    {selectedNote.subjective && (
+                      <div className="content-section">
+                        <h3>Subjective</h3>
+                        <div className="content-text">{selectedNote.subjective}</div>
+                      </div>
+                    )}
+                    {selectedNote.objective && (
+                      <div className="content-section">
+                        <h3>Objective</h3>
+                        <div className="content-text">{selectedNote.objective}</div>
+                      </div>
+                    )}
+                    {selectedNote.assessment && (
+                      <div className="content-section">
+                        <h3>Assessment</h3>
+                        <div className="content-text">{selectedNote.assessment}</div>
+                      </div>
+                    )}
+                    {selectedNote.plan && (
+                      <div className="content-section">
+                        <h3>Plan</h3>
+                        <div className="content-text">{selectedNote.plan}</div>
+                      </div>
+                    )}
+                    {selectedNote.interventions && (
+                      <div className="content-section">
+                        <h3>Interventions</h3>
+                        <div className="content-text">{selectedNote.interventions}</div>
+                      </div>
+                    )}
+                    {selectedNote.clientResponse && (
+                      <div className="content-section">
+                        <h3>Client Response</h3>
+                        <div className="content-text">{selectedNote.clientResponse}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedNote.signature && (
+                  <div className="signature-section">
+                    <strong>Digital Signature:</strong> {selectedNote.signature}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedNote(null);
+                }}
+              >
+                Close
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={() => {
+                  setShowViewModal(false);
+                  openEditModal(selectedNote);
+                }}
+              >
+                <Edit size={16} />
+                Edit Note
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
 

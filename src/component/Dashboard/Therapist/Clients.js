@@ -3270,63 +3270,7 @@ export default function TherapistClients({ profile }) {
                   </div>
                 </div>
                 
-                <div className="data-section">
-                  <h5>Health & Wellness</h5>
-                  <div className="data-item">
-                    <strong>Physical Health:</strong> 
-                    <span style={{ 
-                      background: selectedClientForDetails.physicalHealth === 'Good' ? '#ecfdf5' : selectedClientForDetails.physicalHealth === 'Fair' ? '#fef3c7' : '#fee2e2',
-                      color: selectedClientForDetails.physicalHealth === 'Good' ? '#047857' : selectedClientForDetails.physicalHealth === 'Fair' ? '#92400e' : '#dc2626',
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px', 
-                      fontSize: '0.75rem' 
-                    }}>{selectedClientForDetails.physicalHealth || 'N/A'}</span>
-                  </div>
-                  <div className="data-item">
-                    <strong>Mental Health:</strong> 
-                    <span style={{ 
-                      background: '#fef3c7', 
-                      color: '#92400e', 
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px', 
-                      fontSize: '0.75rem' 
-                    }}>
-                      {selectedClientForDetails.depression || selectedClientForDetails.anxiety ? `${selectedClientForDetails.depression || 'N/A'} / ${selectedClientForDetails.anxiety || 'N/A'}` : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="data-item">
-                    <strong>Sleep Quality:</strong> 
-                    <span style={{ 
-                      background: selectedClientForDetails.sleep === 'Good' ? '#ecfdf5' : selectedClientForDetails.sleep === 'Fair' ? '#fef3c7' : '#fee2e2',
-                      color: selectedClientForDetails.sleep === 'Good' ? '#047857' : selectedClientForDetails.sleep === 'Fair' ? '#92400e' : '#dc2626',
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px', 
-                      fontSize: '0.75rem' 
-                    }}>{selectedClientForDetails.sleep || 'N/A'}</span>
-                  </div>
-                  <div className="data-item">
-                    <strong>Exercise:</strong> 
-                    <span style={{ 
-                      background: '#dbeafe', 
-                      color: '#1e40af', 
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px', 
-                      fontSize: '0.75rem' 
-                    }}>{selectedClientForDetails.exercise || 'N/A'}</span>
-                  </div>
-                  <div className="data-item">
-                    <strong>Eating Habits:</strong> 
-                    <span style={{ 
-                      background: selectedClientForDetails.eatingHabits === 'Good' ? '#ecfdf5' : selectedClientForDetails.eatingHabits === 'Fair' ? '#fef3c7' : '#fee2e2',
-                      color: selectedClientForDetails.eatingHabits === 'Good' ? '#047857' : selectedClientForDetails.eatingHabits === 'Fair' ? '#92400e' : '#dc2626',
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px', 
-                      fontSize: '0.75rem' 
-                    }}>{selectedClientForDetails.eatingHabits || 'N/A'}</span>
-                  </div>
-                </div>
-                
-                {/* Therapy Progress Section */}
+                {/* Therapy Progress Section - MOVED TO MIDDLE */}
                 {clientTherapyNotes.length > 0 && (
                   <div className="data-section full-width">
                     <div className="section-header-with-progress">
@@ -3602,6 +3546,122 @@ export default function TherapistClients({ profile }) {
                     </div>
                   </div>
                 )}
+
+                {/* Health & Wellness Section - MOVED AFTER THERAPY PROGRESS */}
+                <div className="data-section">
+                  <h5>Health & Wellness</h5>
+                  <div className="data-item">
+                    <strong>Physical Health:</strong> 
+                    <span style={{ 
+                      background: selectedClientForDetails.physicalHealth === 'Good' ? '#ecfdf5' : selectedClientForDetails.physicalHealth === 'Fair' ? '#fef3c7' : '#fee2e2',
+                      color: selectedClientForDetails.physicalHealth === 'Good' ? '#047857' : selectedClientForDetails.physicalHealth === 'Fair' ? '#92400e' : '#dc2626',
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.physicalHealth || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Mental Health:</strong> 
+                    <span style={{ 
+                      background: '#fef3c7', 
+                      color: '#92400e', 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>
+                      {selectedClientForDetails.depression || selectedClientForDetails.anxiety ? `${selectedClientForDetails.depression || 'N/A'} / ${selectedClientForDetails.anxiety || 'N/A'}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Sleep Quality:</strong> 
+                    <span style={{ 
+                      background: selectedClientForDetails.sleep === 'Good' ? '#ecfdf5' : selectedClientForDetails.sleep === 'Fair' ? '#fef3c7' : '#fee2e2',
+                      color: selectedClientForDetails.sleep === 'Good' ? '#047857' : selectedClientForDetails.sleep === 'Fair' ? '#92400e' : '#dc2626',
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.sleep || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Exercise:</strong> 
+                    <span style={{ 
+                      background: '#dbeafe', 
+                      color: '#1e40af', 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.exercise || 'N/A'}</span>
+                  </div>
+                  <div className="data-item">
+                    <strong>Eating Habits:</strong> 
+                    <span style={{ 
+                      background: selectedClientForDetails.eatingHabits === 'Good' ? '#ecfdf5' : selectedClientForDetails.eatingHabits === 'Fair' ? '#fef3c7' : '#fee2e2',
+                      color: selectedClientForDetails.eatingHabits === 'Good' ? '#047857' : selectedClientForDetails.eatingHabits === 'Fair' ? '#92400e' : '#dc2626',
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem' 
+                    }}>{selectedClientForDetails.eatingHabits || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Session Notes Section - ADDED TO MODAL */}
+                <div className="data-section full-width">
+                  <h5>Session Notes</h5>
+                  {loadingTherapyNotes ? (
+                    <div className="loading-notes">
+                      <div className="loading-spinner"></div>
+                      <p>Loading therapy notes...</p>
+                    </div>
+                  ) : clientTherapyNotes.length === 0 ? (
+                    <div className="no-notes">
+                      <div className="no-notes-icon">📝</div>
+                      <p>No therapy notes yet. Click "Add Therapy Note" to create the first session note.</p>
+                    </div>
+                  ) : (
+                    <div className="session-notes-grid">
+                      {clientTherapyNotes.map((note, index) => (
+                        <div key={note.id || index} className="session-note-card">
+                          <div className="session-note-header">
+                            <h6>SESSION {clientTherapyNotes.length - index}</h6>
+                            <span className="session-date">
+                              {new Date(note.sessionDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="session-note-content">
+                            <div className="session-mood">
+                              <strong>Mood:</strong> 
+                              <span className={`mood-badge ${note.mood?.toLowerCase() || 'unknown'}`}>
+                                {note.mood || 'N/A'} ({note.moodRating || 'N/A'}/10)
+                              </span>
+                            </div>
+                            <div className="session-focus">
+                              <strong>Focus:</strong> 
+                              <p>{note.sessionFocus || 'N/A'}</p>
+                            </div>
+                            <div className="session-intervention">
+                              <strong>Intervention:</strong> 
+                              <span className="intervention-tag">{note.interventionsUsed || 'N/A'}</span>
+                            </div>
+                            <div className="session-progress">
+                              <strong>Progress:</strong> 
+                              <span className={`progress-badge ${note.progressAssessment?.toLowerCase()?.replace(' ', '-') || 'unknown'}`}>
+                                {note.progressAssessment || 'N/A'}
+                              </span>
+                            </div>
+                            <div className="session-observations">
+                              <strong>Observations:</strong> 
+                              <p>{note.observations || 'N/A'}</p>
+                            </div>
+                            <div className="session-homework">
+                              <strong>Homework:</strong> 
+                              <p>{note.homework || 'N/A'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

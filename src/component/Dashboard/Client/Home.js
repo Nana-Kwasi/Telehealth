@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell } from 'lucide-react';
+import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search } from 'lucide-react';
 import './Home.css';
 import { auth, db } from '../../Auth/firebaseConfig';
 import { 
@@ -11,11 +11,39 @@ import {
   limit, 
   onSnapshot,
   doc,
-  getDoc
+  getDoc,
+  addDoc
 } from 'firebase/firestore';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  Filler,
+} from 'chart.js';
+import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 
-export default function ClientHome() {
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  Filler
+);
+
+export default function ClientHome({ profile }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [clientData, setClientData] = useState({});
   const [therapistData, setTherapistData] = useState(null);
@@ -33,7 +61,272 @@ export default function ClientHome() {
   const [currentGoal, setCurrentGoal] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
+  // Mood tracking state
+  const [moodData, setMoodData] = useState({
+    mood: '',
+    moodValue: 5,
+    journalEntry: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [moodHistory, setMoodHistory] = useState([]);
+  const [isSubmittingMood, setIsSubmittingMood] = useState(false);
+  const [showMoodModal, setShowMoodModal] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [moodAnswers, setMoodAnswers] = useState({});
+  const [moodChartData, setMoodChartData] = useState([]);
+  
+  // Calendar state
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // Notification system state
+  const [showNotificationPopup, setShowNotificationPopup] = useState(false);
+  const [currentNotification, setCurrentNotification] = useState(null);
+  const [notificationQueue, setNotificationQueue] = useState([]);
+  const [lastSeenTimestamps, setLastSeenTimestamps] = useState({
+    worksheets: null,
+    notes: null,
+    resources: null
+  });
+  const [newContentCounts, setNewContentCounts] = useState({
+    worksheets: 0,
+    notes: 0,
+    resources: 0
+  });
+  
   const currentUser = auth.currentUser;
+
+  // Calendar functions
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const getLastDaysOfPrevMonth = (date) => {
+    const firstDay = getFirstDayOfMonth(date);
+    const lastMonth = new Date(date.getFullYear(), date.getMonth() - 1, 0);
+    const days = [];
+    for (let i = firstDay - 1; i >= 0; i--) {
+      days.push(lastMonth.getDate() - i);
+    }
+    return days;
+  };
+
+  const getFirstDaysOfNextMonth = (date) => {
+    const daysInMonth = getDaysInMonth(date);
+    const firstDay = getFirstDayOfMonth(date);
+    const totalCells = Math.ceil((daysInMonth + firstDay) / 7) * 7;
+    const remainingDays = totalCells - (daysInMonth + firstDay);
+    const days = [];
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push(i);
+    }
+    return days;
+  };
+
+  const navigateMonth = (direction) => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + direction);
+      return newDate;
+    });
+  };
+
+  const isToday = (date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() && 
+           date.getMonth() === today.getMonth() && 
+           date.getFullYear() === today.getFullYear();
+  };
+
+  const isSelected = (date) => {
+    return selectedDate.getDate() === date.getDate() && 
+           selectedDate.getMonth() === date.getMonth() && 
+           selectedDate.getFullYear() === date.getFullYear();
+  };
+
+  // Chart.js data preparation functions
+  const prepareProgressChartData = (progressData) => {
+    return {
+      labels: progressData.map(item => item.week),
+      datasets: [
+        {
+          label: 'Progress %',
+          data: progressData.map(item => item.progress),
+          borderColor: '#3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: '#3B82F6',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+        }
+      ]
+    };
+  };
+
+  const prepareActivityChartData = (activityData) => {
+    return {
+      labels: activityData.map(item => item.day),
+      datasets: [
+        {
+          label: 'Messages',
+          data: activityData.map(item => item.messages),
+          backgroundColor: '#10B981',
+          borderColor: '#10B981',
+          borderWidth: 1,
+        },
+        {
+          label: 'Sessions',
+          data: activityData.map(item => item.sessions),
+          backgroundColor: '#3B82F6',
+          borderColor: '#3B82F6',
+          borderWidth: 1,
+        },
+        {
+          label: 'Exercises',
+          data: activityData.map(item => item.exercises),
+          backgroundColor: '#F59E0B',
+          borderColor: '#F59E0B',
+          borderWidth: 1,
+        }
+      ]
+    };
+  };
+
+  const prepareMoodPieChartData = (therapyNotes) => {
+    const moodCounts = {};
+    therapyNotes.forEach(note => {
+      const mood = note.mood || 'Unknown';
+      moodCounts[mood] = (moodCounts[mood] || 0) + 1;
+    });
+
+    const colors = {
+      'Happy': '#10B981',
+      'Calm': '#3B82F6',
+      'Anxious': '#F59E0B',
+      'Sad': '#8B5CF6',
+      'Angry': '#EF4444',
+      'Unknown': '#6B7280'
+    };
+
+    return {
+      labels: Object.keys(moodCounts),
+      datasets: [
+        {
+          data: Object.values(moodCounts),
+          backgroundColor: Object.keys(moodCounts).map(mood => colors[mood] || '#6B7280'),
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        }
+      ]
+    };
+  };
+
+  const prepareProgressDoughnutData = (progressScore) => {
+    return {
+      labels: ['Completed', 'Remaining'],
+      datasets: [
+        {
+          data: [progressScore, 100 - progressScore],
+          backgroundColor: ['#10B981', '#E5E7EB'],
+          borderColor: ['#10B981', '#E5E7EB'],
+          borderWidth: 0,
+          cutout: '70%',
+        }
+      ]
+    };
+  };
+
+  // Chart.js options
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 12,
+            weight: '500'
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
+        borderColor: '#e5e7eb',
+        borderWidth: 1,
+        cornerRadius: 8,
+        displayColors: true,
+        padding: 12,
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          font: {
+            size: 11,
+            weight: '500'
+          },
+          color: '#6B7280'
+        }
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          font: {
+            size: 11,
+            weight: '500'
+          },
+          color: '#6B7280'
+        }
+      }
+    }
+  };
+
+  const pieChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 12,
+            weight: '500'
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
+        borderColor: '#e5e7eb',
+        borderWidth: 1,
+        cornerRadius: 8,
+        displayColors: true,
+        padding: 12,
+      }
+    }
+  };
 
   // Update time every second
   useEffect(() => {
@@ -229,7 +522,24 @@ export default function ClientHome() {
     };
 
     fetchClientData();
+    fetchMoodHistory();
+    
+    // Load last seen timestamps
+    loadLastSeenTimestamps();
+    
+    // Check if should show mood modal
+    if (shouldShowMoodModal()) {
+      setShowMoodModal(true);
+    }
   }, [currentUser]);
+
+  // Check for new content when component mounts and user is loaded
+  useEffect(() => {
+    if (currentUser && !isLoading) {
+      const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+      checkForNewContent(clientId);
+    }
+  }, [currentUser, isLoading]);
 
   // Calculate progress score from client data (PHQ-9 scores, etc.)
   const calculateProgressScoreFromClientData = (clientData) => {
@@ -811,6 +1121,500 @@ export default function ClientHome() {
 
   const progressMetrics = generateProgressMetrics();
 
+  // Mood tracking functions
+  const moodEmojis = [
+    { emoji: '😢', label: 'Very Sad', value: 1 },
+    { emoji: '😔', label: 'Sad', value: 2 },
+    { emoji: '😐', label: 'Neutral', value: 3 },
+    { emoji: '😌', label: 'Calm', value: 4 },
+    { emoji: '😊', label: 'Good', value: 5 },
+    { emoji: '😄', label: 'Happy', value: 6 },
+    { emoji: '🤗', label: 'Very Happy', value: 7 },
+    { emoji: '😰', label: 'Anxious', value: 8 },
+    { emoji: '😴', label: 'Tired', value: 9 },
+    { emoji: '😤', label: 'Frustrated', value: 10 }
+  ];
+
+  const moodQuestions = [
+    {
+      id: 'mood',
+      question: 'How are you feeling today?',
+      type: 'emoji',
+      options: moodEmojis
+    },
+    {
+      id: 'moodScale',
+      question: 'Rate your overall mood on a scale of 1-10',
+      type: 'slider',
+      min: 1,
+      max: 10
+    },
+    {
+      id: 'journal',
+      question: 'What\'s on your mind today?',
+      type: 'textarea',
+      placeholder: 'Share your thoughts, feelings, or anything that happened today...'
+    },
+    {
+      id: 'gratitude',
+      question: 'What went well today?',
+      type: 'textarea',
+      placeholder: 'Write about something positive that happened today...'
+    },
+    {
+      id: 'challenges',
+      question: 'Any challenges you faced?',
+      type: 'textarea',
+      placeholder: 'Describe any difficulties or challenges you encountered...'
+    }
+  ];
+
+  const handleMoodSelect = (mood) => {
+    setMoodData(prev => ({
+      ...prev,
+      mood: mood.emoji,
+      moodValue: mood.value
+    }));
+  };
+
+  const handleJournalChange = (e) => {
+    setMoodData(prev => ({
+      ...prev,
+      journalEntry: e.target.value
+    }));
+  };
+
+  const handleMoodSubmit = async () => {
+    if (!moodData.mood || !moodData.journalEntry.trim()) {
+      alert('Please select a mood and write a journal entry.');
+      return;
+    }
+
+    setIsSubmittingMood(true);
+    try {
+      const moodEntry = {
+        clientId: currentUser.uid,
+        clientName: profile?.name || 'Client',
+        assignedTherapistId: clientData.assignedTherapist || '',
+        assignedTherapistName: therapistData?.name || 'Therapist',
+        mood: moodData.mood,
+        moodValue: moodData.moodValue,
+        journalEntry: moodData.journalEntry,
+        date: moodData.date,
+        timestamp: new Date(),
+        createdAt: new Date()
+      };
+
+      await addDoc(collection(db, 'Client daily mood tracking'), moodEntry);
+      
+      // Update local state
+      setMoodHistory(prev => [moodEntry, ...prev]);
+      
+      // Reset form
+      setMoodData({
+        mood: '',
+        moodValue: 5,
+        journalEntry: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+      
+      alert('Mood check-in submitted successfully!');
+    } catch (error) {
+      console.error('Error submitting mood check-in:', error);
+      alert('Error submitting mood check-in. Please try again.');
+    } finally {
+      setIsSubmittingMood(false);
+    }
+  };
+
+  const fetchMoodHistory = async () => {
+    try {
+      const q = query(
+        collection(db, 'Client daily mood tracking'),
+        where('clientId', '==', currentUser.uid),
+        limit(30)
+      );
+      const querySnapshot = await getDocs(q);
+      const history = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Sort by timestamp locally to avoid index requirement
+      const sortedHistory = history.sort((a, b) => {
+        const timestampA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+        const timestampB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+        return timestampB - timestampA;
+      });
+      
+      setMoodHistory(sortedHistory);
+      
+      // Process mood data for chart
+      processMoodDataForChart(sortedHistory);
+    } catch (error) {
+      console.error('Error fetching mood history:', error);
+    }
+  };
+
+  const processMoodDataForChart = (moodData) => {
+    if (!moodData || moodData.length === 0) {
+      setMoodChartData([]);
+      return;
+    }
+
+    // Group mood values into categories
+    const moodCategories = {
+      'Very Low': { min: 1, max: 2, color: '#FF6B6B', count: 0 },
+      'Low': { min: 3, max: 4, color: '#FFA726', count: 0 },
+      'Moderate': { min: 5, max: 6, color: '#66BB6A', count: 0 },
+      'High': { min: 7, max: 8, color: '#42A5F5', count: 0 },
+      'Very High': { min: 9, max: 10, color: '#AB47BC', count: 0 }
+    };
+
+    // Count mood values in each category
+    moodData.forEach(entry => {
+      const moodValue = entry.moodValue || 5;
+      Object.keys(moodCategories).forEach(category => {
+        const range = moodCategories[category];
+        if (moodValue >= range.min && moodValue <= range.max) {
+          range.count++;
+        }
+      });
+    });
+
+    // Calculate percentages and create chart data
+    const totalEntries = moodData.length;
+    const chartData = Object.keys(moodCategories).map(category => {
+      const range = moodCategories[category];
+      const percentage = totalEntries > 0 ? Math.round((range.count / totalEntries) * 100) : 0;
+      return {
+        category,
+        count: range.count,
+        percentage,
+        color: range.color
+      };
+    }).filter(item => item.count > 0); // Only include categories with data
+
+    setMoodChartData(chartData);
+  };
+
+  // Check if 48 hours have passed since last mood check
+  const shouldShowMoodModal = () => {
+    const lastCheck = localStorage.getItem('lastMoodCheck');
+    if (!lastCheck) return true;
+    
+    const lastCheckDate = new Date(lastCheck);
+    const now = new Date();
+    const hoursDiff = (now - lastCheckDate) / (1000 * 60 * 60);
+    
+    return hoursDiff >= 48;
+  };
+
+  // Modal functions
+  const handleAnswerChange = (questionId, value) => {
+    setMoodAnswers(prev => ({
+      ...prev,
+      [questionId]: value
+    }));
+  };
+
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < moodQuestions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      handleSubmitMoodCheck();
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  const handleSubmitMoodCheck = async () => {
+    setIsSubmittingMood(true);
+    try {
+      const moodEntry = {
+        clientId: currentUser.uid,
+        clientName: profile?.name || 'Client',
+        assignedTherapistId: clientData.assignedTherapist || '',
+        assignedTherapistName: therapistData?.name || 'Therapist',
+        mood: moodAnswers.mood || '',
+        moodValue: moodAnswers.moodScale || 5,
+        journalEntry: moodAnswers.journal || '',
+        gratitude: moodAnswers.gratitude || '',
+        challenges: moodAnswers.challenges || '',
+        date: new Date().toISOString().split('T')[0],
+        timestamp: new Date(),
+        createdAt: new Date()
+      };
+
+      await addDoc(collection(db, 'Client daily mood tracking'), moodEntry);
+      
+      // Update local state
+      setMoodHistory(prev => [moodEntry, ...prev]);
+      
+      // Update chart data
+      processMoodDataForChart([moodEntry, ...moodHistory]);
+      
+      // Save last check time
+      localStorage.setItem('lastMoodCheck', new Date().toISOString());
+      
+      // Close modal and reset
+      setShowMoodModal(false);
+      setCurrentQuestionIndex(0);
+      setMoodAnswers({});
+      
+      alert('Mood check-in submitted successfully!');
+    } catch (error) {
+      console.error('Error submitting mood check-in:', error);
+      alert('Error submitting mood check-in. Please try again.');
+    } finally {
+      setIsSubmittingMood(false);
+    }
+  };
+
+  const handleSkipMoodCheck = () => {
+    setShowMoodModal(false);
+    setCurrentQuestionIndex(0);
+    setMoodAnswers({});
+    // Save last check time even if skipped
+    localStorage.setItem('lastMoodCheck', new Date().toISOString());
+  };
+
+  // Notification system functions
+  const loadLastSeenTimestamps = () => {
+    const saved = localStorage.getItem('th.lastSeenTimestamps');
+    if (saved) {
+      try {
+        setLastSeenTimestamps(JSON.parse(saved));
+      } catch (error) {
+        console.error('Error loading last seen timestamps:', error);
+      }
+    }
+  };
+
+  const saveLastSeenTimestamps = (timestamps) => {
+    localStorage.setItem('th.lastSeenTimestamps', JSON.stringify(timestamps));
+    setLastSeenTimestamps(timestamps);
+  };
+
+  const checkForNewContent = async (clientId) => {
+    try {
+      const newContent = {
+        worksheets: [],
+        notes: [],
+        resources: []
+      };
+
+      // Check for new worksheets
+      const worksheetsQuery = query(
+        collection(db, 'worksheets'),
+        where('assignedTo', 'array-contains', clientId),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
+      const worksheetsSnapshot = await getDocs(worksheetsQuery);
+      const worksheets = worksheetsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const lastSeenWorksheets = lastSeenTimestamps.worksheets;
+      if (lastSeenWorksheets) {
+        newContent.worksheets = worksheets.filter(worksheet => {
+          const createdAt = worksheet.createdAt?.toDate?.() || new Date(worksheet.createdAt);
+          return createdAt > new Date(lastSeenWorksheets);
+        });
+      } else {
+        // First time - only show recent worksheets (last 7 days)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        newContent.worksheets = worksheets.filter(worksheet => {
+          const createdAt = worksheet.createdAt?.toDate?.() || new Date(worksheet.createdAt);
+          return createdAt > sevenDaysAgo;
+        });
+      }
+
+      // Check for new notes
+      const notesQuery = query(
+        collection(db, 'notes'),
+        where('clientId', '==', clientId),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
+      const notesSnapshot = await getDocs(notesQuery);
+      const notes = notesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const lastSeenNotes = lastSeenTimestamps.notes;
+      if (lastSeenNotes) {
+        newContent.notes = notes.filter(note => {
+          const createdAt = note.createdAt?.toDate?.() || new Date(note.createdAt);
+          return createdAt > new Date(lastSeenNotes);
+        });
+      } else {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        newContent.notes = notes.filter(note => {
+          const createdAt = note.createdAt?.toDate?.() || new Date(note.createdAt);
+          return createdAt > sevenDaysAgo;
+        });
+      }
+
+      // Check for new resources
+      const clientDoc = await getDoc(doc(db, 'clients', clientId));
+      const clientData = clientDoc.exists() ? clientDoc.data() : {};
+      const therapyType = clientData.therapyType || 'individual';
+
+      const resourcesQuery = query(
+        collection(db, 'therapistResources'),
+        where('targetAudience', 'in', ['all', therapyType]),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
+      const resourcesSnapshot = await getDocs(resourcesQuery);
+      const resources = resourcesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const lastSeenResources = lastSeenTimestamps.resources;
+      if (lastSeenResources) {
+        newContent.resources = resources.filter(resource => {
+          const createdAt = resource.createdAt?.toDate?.() || new Date(resource.createdAt);
+          return createdAt > new Date(lastSeenResources);
+        });
+      } else {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        newContent.resources = resources.filter(resource => {
+          const createdAt = resource.createdAt?.toDate?.() || new Date(resource.createdAt);
+          return createdAt > sevenDaysAgo;
+        });
+      }
+
+      // Update counts
+      setNewContentCounts({
+        worksheets: newContent.worksheets.length,
+        notes: newContent.notes.length,
+        resources: newContent.resources.length
+      });
+
+      // Create notification queue
+      const notifications = [];
+      
+      newContent.worksheets.forEach(worksheet => {
+        notifications.push({
+          id: `worksheet-${worksheet.id}`,
+          type: 'worksheet',
+          title: worksheet.title,
+          description: worksheet.description || 'A new worksheet has been assigned to you.',
+          date: worksheet.createdAt?.toDate?.() || new Date(worksheet.createdAt),
+          itemId: worksheet.id,
+          icon: '📋'
+        });
+      });
+
+      newContent.notes.forEach(note => {
+        notifications.push({
+          id: `note-${note.id}`,
+          type: 'note',
+          title: note.title || note.noteType || 'New Note',
+          description: 'Your therapist has added a new note for you.',
+          date: note.createdAt?.toDate?.() || new Date(note.createdAt),
+          itemId: note.id,
+          icon: '📝'
+        });
+      });
+
+      newContent.resources.forEach(resource => {
+        notifications.push({
+          id: `resource-${resource.id}`,
+          type: 'resource',
+          title: resource.title,
+          description: resource.description || 'A new resource has been shared with you.',
+          date: resource.createdAt?.toDate?.() || new Date(resource.createdAt),
+          itemId: resource.id,
+          icon: '📚'
+        });
+      });
+
+      // Sort by date (newest first)
+      notifications.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      if (notifications.length > 0) {
+        setNotificationQueue(notifications);
+        showNextNotification();
+      }
+
+    } catch (error) {
+      console.error('Error checking for new content:', error);
+    }
+  };
+
+  const showNextNotification = () => {
+    if (notificationQueue.length > 0) {
+      const nextNotification = notificationQueue[0];
+      setCurrentNotification(nextNotification);
+      setShowNotificationPopup(true);
+      
+      // Auto-hide after 10 seconds if not interacted with
+      setTimeout(() => {
+        if (showNotificationPopup) {
+          handleRemindLater();
+        }
+      }, 10000);
+    }
+  };
+
+  const handleViewNow = () => {
+    if (currentNotification) {
+      // Update last seen timestamp for this content type
+      const newTimestamps = { ...lastSeenTimestamps };
+      newTimestamps[currentNotification.type + 's'] = new Date().toISOString();
+      saveLastSeenTimestamps(newTimestamps);
+
+      // Remove from queue
+      const updatedQueue = notificationQueue.filter(n => n.id !== currentNotification.id);
+      setNotificationQueue(updatedQueue);
+
+      // Close popup
+      setShowNotificationPopup(false);
+      setCurrentNotification(null);
+
+      // Show next notification if any
+      if (updatedQueue.length > 0) {
+        setTimeout(() => showNextNotification(), 500);
+      }
+
+      // TODO: Navigate to the specific item
+      console.log(`Navigate to ${currentNotification.type}:`, currentNotification.itemId);
+    }
+  };
+
+  const handleRemindLater = () => {
+    if (currentNotification) {
+      // Remove from queue
+      const updatedQueue = notificationQueue.filter(n => n.id !== currentNotification.id);
+      setNotificationQueue(updatedQueue);
+
+      // Close popup
+      setShowNotificationPopup(false);
+      setCurrentNotification(null);
+
+      // Show next notification if any
+      if (updatedQueue.length > 0) {
+        setTimeout(() => showNextNotification(), 500);
+      }
+    }
+  };
+
+  const handleDismissNotification = () => {
+    setShowNotificationPopup(false);
+    setCurrentNotification(null);
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-home">
@@ -824,123 +1628,224 @@ export default function ClientHome() {
 
   return (
     <div className="dashboard-home">
-      {/* Header with Live Time and Notifications */}
+      {/* Header with Client Info, Search, and Notifications */}
       <div className="dashboard-header">
         <div className="header-content">
-          <div className="welcome-section">
-            <h1 className="welcome-title">Welcome back!</h1>
-            <p className="welcome-subtitle">
-              Ready to continue your therapy journey with {therapistName}?
-            </p>
+          <div className="client-info-section">
+            <div className="client-profile">
+              <div className="client-avatar">
+                {profile?.photoURL ? (
+                  <img src={profile.photoURL} alt="Client" className="avatar-image" />
+                ) : (
+                  <div className="avatar-placeholder">
+                    {profile?.name ? profile.name.charAt(0).toUpperCase() : 'U'}
           </div>
-          <div className="time-section">
-            <div className="current-time">{formatTime(currentTime)}</div>
-            <div className="current-date">{formatDate(currentTime)}</div>
+                )}
+              </div>
+              <div className="client-greeting">
+                <h1 className="welcome-title">
+                  Hi {profile?.name || 'User'}, Welcome to your Dashboard
+                </h1>
+              </div>
+            </div>
+            
+            <div className="search-section">
+              <div className="search-bar">
+                <Search size={20} className="search-icon" />
+                <input 
+                  type="text" 
+                  placeholder={`Hi ${profile?.name || 'User'}, what are you looking for?`}
+                  className="search-input"
+                />
+              </div>
+            </div>
+            
+            <div className="notification-section">
             <div className="notification-icon" onClick={() => {/* Handle notification click */}}>
               <Bell size={24} />
-              {unreadCount > 0 && (
+              {(unreadCount > 0 || Object.values(newContentCounts).some(count => count > 0)) && (
                 <span className="notification-badge">
-                  {unreadCount}
+                  {unreadCount + Object.values(newContentCounts).reduce((sum, count) => sum + count, 0)}
                 </span>
               )}
             </div>
           </div>
+          </div>
+          
+          <div className="therapist-info-section">
+            <div className="therapist-card">
+              <div className="therapist-avatar">
+                {therapistData?.photoURL ? (
+                  <img src={therapistData.photoURL} alt={therapistData.name} className="therapist-image" />
+                ) : (
+                  <div className="therapist-avatar-placeholder">
+                    {therapistData?.name ? therapistData.name.charAt(0).toUpperCase() : 'T'}
+                  </div>
+                )}
+              </div>
+              <div className="therapist-details">
+                <h3 className="therapist-name">{therapistName}</h3>
+                <p className="therapist-role">Your Therapist</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
 
       {/* Quick Stats */}
       <div className="stats-section">
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon bg-blue-100">
-              <Calendar className="text-blue-600" size={24} />
+        <div className="payment-cards-grid">
+          <div className="payment-card payment-card-green">
+            <div className="card-header">
+              <div className="card-logo">
+                <div className="logo-squares">
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
             </div>
-            <div className="stat-content">
-              <h3 className="stat-value">{sessionsCompleted}</h3>
-              <p className="stat-label">Sessions Completed</p>
+            </div>
+              <div className="contactless-icon">
+                <div className="wifi-symbol"></div>
+          </div>
+            </div>
+            <div className="card-content">
+              <div className="card-name">Sessions Completed</div>
+              <div className="card-balance">
+                <div className="balance-label">Total Sessions</div>
+                <div className="balance-amount">{sessionsCompleted}</div>
+            </div>
+              <div className="card-details">
+                <div className="exp-cvv">
+                 
+                  <div className="cvv">
+                   
+          </div>
+            </div>
             </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-icon bg-green-100">
-              <TrendingUp className="text-green-600" size={24} />
             </div>
-            <div className="stat-content">
-              <h3 className="stat-value">{progressScore}%</h3>
-              <p className="stat-label">Progress Score</p>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon bg-purple-100">
-              <Target className="text-purple-600" size={24} />
-            </div>
-            <div className="stat-content">
-              <h3 className="stat-value">{goalsAchieved}</h3>
-              <p className="stat-label">Goals Achieved</p>
+          
+          <div className="payment-card payment-card-blue">
+            <div className="card-header">
+              <div className="card-logo">
+                <div className="logo-squares">
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
             </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-icon bg-orange-100">
-              <Activity className="text-orange-600" size={24} />
+              <div className="contactless-icon">
+                <div className="wifi-symbol"></div>
+        </div>
+      </div>
+            <div className="card-content">
+              <div className="card-name">Progress Score</div>
+              <div className="card-balance">
+                <div className="balance-label">Current Score</div>
+                <div className="balance-amount">{progressScore}%</div>
+              </div>
+              <div className="card-details">
+                <div className="exp-cvv">
+                
+                 
+                </div>
+              </div>
             </div>
-            <div className="stat-content">
-              <h3 className="stat-value">{daysActive}</h3>
-              <p className="stat-label">Days Active</p>
+          </div>
+
+          <div className="payment-card payment-card-white">
+            <div className="card-header">
+              <div className="card-logo">
+                <div className="logo-squares">
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+            </div>
+          </div>
+        </div>
+            <div className="card-content">
+              <div className="card-name">Goals Achieved</div>
+              <div className="card-balance">
+                <div className="balance-label">Total Goals</div>
+                <div className="balance-amount">{goalsAchieved}</div>
+          </div>
+        </div>
+      </div>
+
+          <div className="payment-card payment-card-gray">
+            <div className="card-header">
+              <div className="card-logo">
+                <div className="logo-squares">
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                </div>
+              </div>
+              <div className="contactless-icon">
+                <div className="wifi-symbol"></div>
+              </div>
+            </div>
+            <div className="card-content">
+              <div className="card-name">Days Active</div>
+              <div className="card-balance">
+                <div className="balance-label">Active Days</div>
+                <div className="balance-amount">{daysActive}</div>
+              </div>
+              <div className="card-details">
+                <div className="exp-cvv">
+               
+                 
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="payment-card payment-card-purple">
+            <div className="card-header">
+              <div className="card-logo">
+                <div className="logo-squares">
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                  <div className="logo-square"></div>
+                </div>
+              </div>
+              <div className="contactless-icon">
+                <div className="wifi-symbol"></div>
+              </div>
+            </div>
+            <div className="card-content">
+              <div className="card-name">Next Session</div>
+              <div className="card-balance">
+                <div className="balance-label">Scheduled</div>
+                <div className="balance-amount">21/09/2025</div>
+              </div>
+              <div className="card-details">
+                <div className="exp-cvv">
+                  <div className="exp">
+                    <div className="exp-label">TIME</div>
+                    <div className="exp-value">15:41</div>
+                  </div>
+                  <div className="cvv">
+                    <div className="cvv-label">TYPE</div>
+                    <div className="cvv-value">Individual</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Charts Section */}
-      <div className="charts-section">
-        <div className="charts-grid">
-          {/* Therapy Progress Graph */}
-          <div className="chart-card">
-            <h3 className="chart-title">Therapy Progress</h3>
-            <div className="chart-container">
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={progressData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" />
-                  <YAxis domain={[0, 100]} />
-                  <Tooltip formatter={(value) => [`${value}%`, 'Progress']} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="progress" 
-                    stroke="#3B82F6" 
-                    strokeWidth={2}
-                    dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Client Activities Graph */}
-          <div className="chart-card">
-            <h3 className="chart-title">Your Activities</h3>
-            <div className="chart-container">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={activityData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="messages" fill="#10B981" name="Messages" />
-                  <Bar dataKey="sessions" fill="#3B82F6" name="Sessions" />
-                  <Bar dataKey="exercises" fill="#F59E0B" name="Exercises" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </div>
-
-  
-
-      {/* Progress & Activities */}
-      <div className="progress-section">
-        <div className="progress-grid">
-          {/* Progress Tracking */}
+      {/* Progress and Activities Cards */}
+      <div className="progress-activities-section">
+        <div className="progress-activities-row">
+          {/* Your Progress Card */}
           <div className="progress-card">
             <h3 className="card-title">Your Progress</h3>
             <div className="progress-items">
@@ -961,7 +1866,7 @@ export default function ClientHome() {
             </div>
           </div>
 
-          {/* Recent Activities */}
+          {/* Recent Activities Card */}
           <div className="activities-card">
             <h3 className="card-title">Recent Activities</h3>
             <div className="activities-list">
@@ -979,33 +1884,346 @@ export default function ClientHome() {
         </div>
       </div>
 
-      {/* Therapy Progress Summary */}
-      <div className="therapy-progress">
-        <h2 className="section-title">Your Therapy Progress</h2>
-        <div className="progress-summary">
-          <div className="progress-item">
-            <span className="progress-label">Therapy Type:</span>
-            <span className="progress-value">{clientData.therapyType || 'Individual'}</span>
+      {/* Calendar and Progress Charts Row */}
+      <div className="calendar-progress-section">
+        <div className="calendar-widget">
+          <div className="calendar-header">
+            <h2 className="calendar-title">
+              {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </h2>
+            <div className="calendar-nav">
+              <button 
+                className="nav-btn" 
+                onClick={() => navigateMonth(-1)}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button 
+                className="nav-btn" 
+                onClick={() => navigateMonth(1)}
+              >
+                <ChevronRight size={20} />
+              </button>
           </div>
-          <div className="progress-item">
-            <span className="progress-label">Sessions Completed:</span>
-            <span className="progress-value">{sessionsCompleted}</span>
           </div>
-          <div className="progress-item">
-            <span className="progress-label">Current Goal:</span>
-            <span className="progress-value">{currentGoal}</span>
+          
+          <div className="weather-widget">
+            <div className="weather-info">
+              <div className="weather-time">{formatTime(currentTime)}</div>
           </div>
-          <div className="progress-item">
-            <span className="progress-label">Next Session:</span>
-            <span className="progress-value">
-              {nextSession ? 
-                `${new Date(nextSession.scheduledTime?.toDate ? nextSession.scheduledTime.toDate() : nextSession.scheduledTime).toLocaleDateString()} at ${new Date(nextSession.scheduledTime?.toDate ? nextSession.scheduledTime.toDate() : nextSession.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 
-                'No upcoming sessions'
-              }
+          </div>
+
+          <div className="calendar-grid">
+            <div className="calendar-weekdays">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="weekday">{day}</div>
+              ))}
+            </div>
+            
+            <div className="calendar-days">
+              {getLastDaysOfPrevMonth(currentDate).map((day, index) => (
+                <div key={`prev-${day}`} className="calendar-day prev-month">
+                  {day}
+                </div>
+              ))}
+              
+              {Array.from({ length: getDaysInMonth(currentDate) }, (_, i) => i + 1).map(day => {
+                const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                return (
+                  <button
+                    key={day}
+                    className={`calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''}`}
+                    onClick={() => setSelectedDate(date)}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+              
+              {getFirstDaysOfNextMonth(currentDate).map((day, index) => (
+                <div key={`next-${day}`} className="calendar-day next-month">
+                  {day}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Charts Row */}
+        <div className="calendar-charts-row">
+          {/* Overall Progress Chart */}
+          <div className="chart-card">
+            <h3 className="chart-title">Overall Progress</h3>
+            <div className="chart-container">
+              <Doughnut 
+                data={prepareProgressDoughnutData(progressScore)} 
+                options={{
+                  ...pieChartOptions,
+                  plugins: {
+                    ...pieChartOptions.plugins,
+                    legend: {
+                      display: false
+                    }
+                  }
+                }}
+              />
+              <div className="progress-center-text">
+                <span className="progress-percentage">{progressScore}%</span>
+                <span className="progress-label">Complete</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Mood Progress Chart */}
+          <div className="chart-card">
+            <h3 className="chart-title">Daily Mood Progress</h3>
+            <div className="chart-container">
+              <Doughnut
+                data={{
+                  labels: moodChartData.map(item => item.category),
+                  datasets: [{
+                    data: moodChartData.map(item => item.percentage),
+                    backgroundColor: moodChartData.map(item => item.color),
+                    borderWidth: 0,
+                    cutout: '70%'
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      display: false
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context) {
+                          const item = moodChartData[context.dataIndex];
+                          return `${item.category}: ${item.percentage}% (${item.count} entries)`;
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
+              <div className="progress-center-text">
+                <span className="progress-percentage">
+                  {Math.round(moodChartData.reduce((sum, item) => sum + (item.percentage * (item.category === 'Very Low' ? 1.5 : item.category === 'Low' ? 3.5 : item.category === 'Moderate' ? 5.5 : item.category === 'High' ? 7.5 : 9.5)), 0) / moodChartData.reduce((sum, item) => sum + item.percentage, 0)) || 0}%
             </span>
+                <span className="progress-label">Avg.</span>
           </div>
         </div>
       </div>
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      <div className="charts-section">
+        <div className="charts-grid">
+          {/* Therapy Progress Line Chart */}
+          <div className="chart-card">
+            <h3 className="chart-title">Therapy Progress</h3>
+            <div className="chart-container">
+              <Line 
+                data={prepareProgressChartData(progressData)} 
+                options={{
+                  ...chartOptions,
+                  scales: {
+                    ...chartOptions.scales,
+                    y: {
+                      ...chartOptions.scales.y,
+                      max: 100,
+                      ticks: {
+                        ...chartOptions.scales.y.ticks,
+                        callback: function(value) {
+                          return value + '%';
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
+          </div>
+          </div>
+
+          {/* Activities Bar Chart */}
+          <div className="chart-card">
+            <h3 className="chart-title">Your Activities</h3>
+            <div className="chart-container">
+              <Bar 
+                data={prepareActivityChartData(activityData)} 
+                options={chartOptions}
+              />
+          </div>
+          </div>
+
+          {/* Mood Distribution Pie Chart */}
+          <div className="chart-card">
+            <h3 className="chart-title">Mood Distribution</h3>
+            <div className="chart-container">
+              <Pie 
+                data={prepareMoodPieChartData(therapyNotes)} 
+                options={pieChartOptions}
+              />
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Mood Check-in Modal */}
+      {showMoodModal && (
+        <div className="mood-modal-overlay">
+          <div className="mood-modal">
+            <div className="mood-modal-header">
+              <h2 className="mood-modal-title">Daily Check-in</h2>
+              <p className="mood-modal-subtitle">Let's take a moment to reflect on your day</p>
+            </div>
+            
+            <div className="mood-modal-content">
+              <div className="question-progress">
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ width: `${((currentQuestionIndex + 1) / moodQuestions.length) * 100}%` }}
+                  ></div>
+                </div>
+                <span className="progress-text">
+                  {currentQuestionIndex + 1} of {moodQuestions.length}
+            </span>
+          </div>
+              
+              <div className="question-container">
+                <h3 className="question-title">
+                  {moodQuestions[currentQuestionIndex].question}
+                </h3>
+                
+                {moodQuestions[currentQuestionIndex].type === 'emoji' && (
+                  <div className="mood-emoji-grid">
+                    {moodQuestions[currentQuestionIndex].options.map((mood, index) => (
+                      <button
+                        key={index}
+                        className={`mood-emoji-btn ${moodAnswers.mood === mood.emoji ? 'selected' : ''}`}
+                        onClick={() => handleAnswerChange('mood', mood.emoji)}
+                        title={mood.label}
+                      >
+                        <span className="mood-emoji">{mood.emoji}</span>
+                      </button>
+                    ))}
+        </div>
+                )}
+                
+                {moodQuestions[currentQuestionIndex].type === 'slider' && (
+                  <div className="mood-slider-container">
+                    <div className="slider-value">
+                      {moodAnswers.moodScale || 5}/10
+      </div>
+                    <input
+                      type="range"
+                      min={moodQuestions[currentQuestionIndex].min}
+                      max={moodQuestions[currentQuestionIndex].max}
+                      value={moodAnswers.moodScale || 5}
+                      onChange={(e) => handleAnswerChange('moodScale', parseInt(e.target.value))}
+                      className="mood-slider"
+                    />
+                  </div>
+                )}
+                
+                {moodQuestions[currentQuestionIndex].type === 'textarea' && (
+                  <textarea
+                    value={moodAnswers[moodQuestions[currentQuestionIndex].id] || ''}
+                    onChange={(e) => handleAnswerChange(moodQuestions[currentQuestionIndex].id, e.target.value)}
+                    placeholder={moodQuestions[currentQuestionIndex].placeholder}
+                    className="mood-textarea"
+                    rows="4"
+                  />
+                )}
+              </div>
+            </div>
+            
+            <div className="mood-modal-footer">
+              <button
+                onClick={handleSkipMoodCheck}
+                className="mood-skip-btn"
+              >
+                Skip for now
+              </button>
+              
+              <div className="mood-nav-buttons">
+                {currentQuestionIndex > 0 && (
+                  <button
+                    onClick={handlePreviousQuestion}
+                    className="mood-prev-btn"
+                  >
+                    Previous
+                  </button>
+                )}
+                
+                <button
+                  onClick={handleNextQuestion}
+                  disabled={isSubmittingMood}
+                  className="mood-next-btn"
+                >
+                  {isSubmittingMood ? 'Submitting...' : 
+                   currentQuestionIndex === moodQuestions.length - 1 ? 'Submit' : 'Next'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Content Notification Popup */}
+      {showNotificationPopup && currentNotification && (
+        <div className="notification-popup-overlay">
+          <div className="notification-popup">
+            <div className="notification-popup-header">
+              <div className="notification-icon-large">
+                {currentNotification.icon}
+              </div>
+              <div className="notification-close" onClick={handleDismissNotification}>
+                ×
+              </div>
+            </div>
+            
+            <div className="notification-popup-content">
+              <h3 className="notification-title">
+                New {currentNotification.type.charAt(0).toUpperCase() + currentNotification.type.slice(1)} Available
+              </h3>
+              <h4 className="notification-item-title">
+                {currentNotification.title}
+              </h4>
+              <p className="notification-description">
+                {currentNotification.description}
+              </p>
+              <div className="notification-date">
+                {new Date(currentNotification.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
+            </div>
+            
+            <div className="notification-popup-footer">
+              <button
+                onClick={handleRemindLater}
+                className="notification-btn remind-btn"
+              >
+                Remind Me Later
+              </button>
+              <button
+                onClick={handleViewNow}
+                className="notification-btn view-btn"
+              >
+                View Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -149,7 +149,7 @@ export default function ClientDashboard({ profile }) {
       {/* Main Content */}
       <main className="client-main">
         <Routes>
-          <Route path="/" element={<ClientHome />} />
+          <Route path="/" element={<ClientHome profile={profile} />} />
           <Route path="/messages" element={<ClientMessages />} />
           <Route path="/video" element={<ClientVideoCall profile={profile} />} />
           <Route path="/schedule" element={<ClientSchedule />} />
