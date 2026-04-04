@@ -512,6 +512,7 @@
 
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, MessageSquare, TrendingUp, Activity, Clock, Target, Award, AlertTriangle, Bell, Cloud, MapPin, Plus, UserPlus, Phone, FileText, CheckCircle, XCircle, BarChart3, LineChart, TrendingDown, Heart, Video, StickyNote, User, DollarSign } from 'lucide-react';
 import { auth, db } from '../../Auth/firebaseConfig';
 import { collection, query, where, getDocs, orderBy, limit, onSnapshot } from 'firebase/firestore';
@@ -625,6 +626,7 @@ const calculateTherapyProgress = (therapyNotes) => {
 };
 
 export default function TherapistHome() {
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [weather, setWeather] = useState({ temp: 72, condition: 'Sunny', location: 'New York, NY' });
   const [crisisAlerts, setCrisisAlerts] = useState([]);
@@ -658,7 +660,11 @@ export default function TherapistHome() {
   });
   
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  
+
+  // Calendar state
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+
   const [kpis, setKpis] = useState({
     weeklySessions: 0,
     pendingNotes: 0,
@@ -1739,6 +1745,33 @@ export default function TherapistHome() {
     { name: 'Alex Thompson', progress: 45, lastSession: '3 days ago', nextSession: 'Today' }
   ];
 
+  // Calendar helpers
+  const apptsByDate = React.useMemo(() => {
+    const map = {};
+    (scheduledCalls || []).forEach(call => {
+      let d;
+      try {
+        d = call.scheduledTime?.toDate ? call.scheduledTime.toDate() : new Date(call.scheduledTime);
+        if (isNaN(d.getTime())) return;
+      } catch { return; }
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!map[key]) map[key] = [];
+      map[key].push({ client: call.clientName || 'Client', status: call.status || 'scheduled' });
+    });
+    return map;
+  }, [scheduledCalls]);
+
+  const calCells = () => {
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < firstDay; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    return cells;
+  };
+
+  const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 
   return (
     <div className="dashboard-home">
@@ -1753,10 +1786,7 @@ export default function TherapistHome() {
             </div>
           </div>
           <div className="notification-icon" onClick={() => {
-            setShowNotificationModal(true);
-            // Mark all notifications as read when opening modal
-            setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
-            setUnreadCount(0);
+            navigate('/dashboard/notifications');
           }}>
             <Bell size={24} />
             {unreadCount > 0 && (
@@ -1786,65 +1816,101 @@ export default function TherapistHome() {
         </div>
       </div>
 
-      <div className="charts-grid">
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Monthly Sessions Trend</h3>
-            <BarChart3 className="w-5 h-5 text-blue-600" />
-          </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData.monthlySessions || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" label={{ value: 'Month', position: 'insideBottom', offset: -5 }} />
-                <YAxis label={{ value: 'Number of Sessions', angle: -90, position: 'insideLeft' }} />
-                <Tooltip labelFormatter={(label) => `Month: ${label}`} formatter={(value) => [value, 'Sessions']} />
-                <Bar dataKey="sessions" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Sessions" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* ── 3-column row: Activities | Calendar | Schedules ── */}
+      <div className="schedule-section">
+        <div className="schedule-grid-three">
 
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Message Types Distribution</h3>
-            <MessageSquare className="w-5 h-5 text-orange-600" />
+          {/* Recent Activities */}
+          <div className="activities-card">
+            <h3 className="card-title">Recent Activities</h3>
+            <div className="activities-list">
+              {recentActivities.length === 0 ? (
+                <div className="no-activities"><p>No recent activities</p></div>
+              ) : (
+                recentActivities.map((activity, index) => (
+                  <div key={index} className="activity-item">
+                    <div className="activity-icon">{activity.icon}</div>
+                    <div className="activity-content">
+                      <p className="activity-text">{activity.text}</p>
+                      <span className="activity-time">{activity.time}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData.messageTypes || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" label={{ value: 'Message Type', position: 'insideBottom', offset: -5 }} />
-                <YAxis label={{ value: 'Number of Messages', angle: -90, position: 'insideLeft' }} />
-                <Tooltip labelFormatter={(label) => `Message Type: ${label}`} formatter={(value) => [value, 'Messages']} />
-                <Bar dataKey="count" fill="#F59E0B" radius={[4, 4, 0, 0]} name="Messages" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Therapy Types Distribution</h3>
-            <Heart className="w-5 h-5 text-pink-600" />
+          {/* Live Calendar */}
+          <div className="schedule-card cal-card">
+            <div className="cal-header">
+              <button className="cal-nav-btn" onClick={() => {
+                if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+                else setCalMonth(m => m - 1);
+              }}>‹</button>
+              <span className="cal-month-label">{CAL_MONTHS[calMonth]} {calYear}</span>
+              <button className="cal-nav-btn" onClick={() => {
+                if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+                else setCalMonth(m => m + 1);
+              }}>›</button>
+            </div>
+            <div className="cal-grid">
+              {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                <div key={d} className="cal-day-label">{d}</div>
+              ))}
+              {calCells().map((day, i) => {
+                if (!day) return <div key={`e-${i}`} className="cal-cell empty" />;
+                const key = `${calYear}-${calMonth}-${day}`;
+                const appts = apptsByDate[key] || [];
+                const isToday = day === new Date().getDate() && calMonth === new Date().getMonth() && calYear === new Date().getFullYear();
+                return (
+                  <div key={key} className={`cal-cell${isToday ? ' today' : ''}${appts.length ? ' has-appt' : ''}`}>
+                    <span className="cal-day-num">{day}</span>
+                    {appts.length > 0 && (
+                      <span className="cal-appt-dot" title={appts.map(a => a.client).join(', ')}>
+                        {appts.length > 1 ? appts.length : ''}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="cal-legend">
+              <span className="cal-legend-dot" />
+              <span className="cal-legend-text">Appointment</span>
+            </div>
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData.therapyTypes || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" label={{ value: 'Therapy Type', position: 'insideBottom', offset: -5 }} />
-                <YAxis label={{ value: 'Number of Clients', angle: -90, position: 'insideLeft' }} />
-                <Tooltip labelFormatter={(label) => `Therapy Type: ${label}`} formatter={(value) => [value, 'Clients']} />
-                <Bar dataKey="count" fill="#EF4444" radius={[4, 4, 0, 0]} name="Clients" />
-              </BarChart>
-            </ResponsiveContainer>
+
+          {/* Recent Schedules */}
+          <div className="schedule-card">
+            <h3 className="card-title">Recent Schedules</h3>
+            <div className="appointments-list">
+              {todayAppointments.length === 0 ? (
+                <div className="no-appointments"><p>No appointments in the last 2 weeks</p></div>
+              ) : (
+                todayAppointments.map((appointment, index) => (
+                  <div key={index} className={`appointment-item ${appointment.status}`}>
+                    <div className="appointment-time">
+                      <div className="time">{appointment.time}</div>
+                      <div className="date">{appointment.date}</div>
+                    </div>
+                    <div className="appointment-content">
+                      <h4 className="appointment-client">{appointment.client}</h4>
+                      <p className="appointment-type">{appointment.type}</p>
+                    </div>
+                    <div className={`appointment-status ${appointment.status}`}>
+                      {appointment.status === 'completed' ? '✓' : appointment.status === 'upcoming' ? '⏰' : '📅'}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+
         </div>
       </div>
 
-
-  {/* Therapist Client Progress Overview */}
-  <div className="progress-section">
+      {/* ── Client Progress Overview — before charts ── */}
+      <div className="progress-section">
         <h2 className="section-title">Client Progress Overview</h2>
         <div className="progress-grid">
           {(chartData.clientProgress || []).map((client, index) => (
@@ -1854,10 +1920,7 @@ export default function TherapistHome() {
                 <span className="progress-percentage">{client.progress}%</span>
               </div>
               <div className="progress-bar">
-                <div 
-                  className="progress-fill bg-green-500"
-                  style={{ width: `${client.progress}%` }}
-                ></div>
+                <div className="progress-fill bg-green-500" style={{ width: `${client.progress}%` }} />
               </div>
               <div className="client-sessions">
                 <span className="last-session">Sessions: {client.sessions}</span>
@@ -1868,63 +1931,60 @@ export default function TherapistHome() {
         </div>
       </div>
 
-
-
-    
-      {/* Today's Schedule & Recent Activities */}
-      <div className="schedule-section">
-        <div className="schedule-grid">
-          {/* Upcoming Appointments (2 weeks) */}
-          <div className="schedule-card">
-            <h3 className="card-title">Recent Schedules</h3>
-            <div className="appointments-list">
-              {todayAppointments.length === 0 ? (
-                <div className="no-appointments">
-                  <p>No appointments in the last 2 weeks</p>
-                </div>
-              ) : (
-                todayAppointments.map((appointment, index) => (
-                <div key={index} className={`appointment-item ${appointment.status}`}>
-                    <div className="appointment-time">
-                      <div className="time">{appointment.time}</div>
-                      <div className="date">{appointment.date}</div>
-                    </div>
-                  <div className="appointment-content">
-                    <h4 className="appointment-client">{appointment.client}</h4>
-                    <p className="appointment-type">{appointment.type}</p>
-                  </div>
-                  <div className={`appointment-status ${appointment.status}`}>
-                      {appointment.status === 'completed' ? '✓' : 
-                       appointment.status === 'upcoming' ? '⏰' : '📅'}
-                  </div>
-                </div>
-                ))
-              )}
-            </div>
+      {/* ── Charts (unique th-home- prefixed classes, no global conflict) ── */}
+      <div className="th-home-charts-grid">
+        <div className="th-home-chart-card">
+          <div className="th-home-chart-header">
+            <h3 className="th-home-chart-title">Monthly Sessions Trend</h3>
+            <BarChart3 size={18} color="#3B82F6" />
           </div>
-
-          {/* Recent Activities */}
-          <div className="activities-card">
-            <h3 className="card-title">Recent Activities</h3>
-            <div className="activities-list">
-              {recentActivities.length === 0 ? (
-                <div className="no-activities">
-                  <p>No recent activities</p>
-                </div>
-              ) : (
-                recentActivities.map((activity, index) => (
-                <div key={index} className="activity-item">
-                  <div className="activity-icon">{activity.icon}</div>
-                  <div className="activity-content">
-                    <p className="activity-text">{activity.text}</p>
-                    <span className="activity-time">{activity.time}</span>
-                  </div>
-                </div>
-                ))
-              )}
-            </div>
+          <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.monthlySessions || []} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={30} />
+                <Tooltip formatter={(value) => [value, 'Sessions']} />
+                <Bar dataKey="sessions" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
+        </div>
 
+        <div className="th-home-chart-card">
+          <div className="th-home-chart-header">
+            <h3 className="th-home-chart-title">Message Types Distribution</h3>
+            <MessageSquare size={18} color="#f59e0b" />
+          </div>
+          <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.messageTypes || []} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="type" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={30} />
+                <Tooltip formatter={(value) => [value, 'Messages']} />
+                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="th-home-chart-card">
+          <div className="th-home-chart-header">
+            <h3 className="th-home-chart-title">Therapy Types Distribution</h3>
+            <Heart size={18} color="#ef4444" />
+          </div>
+          <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.therapyTypes || []} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="type" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} width={30} />
+                <Tooltip formatter={(value) => [value, 'Clients']} />
+                <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
@@ -2100,27 +2160,27 @@ export default function TherapistHome() {
   ) : (
     <>
       {/* Second Row - 3 Charts */}
-      <div className="charts-grid">
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Gender Distribution</h3>
-            <Users className="w-5 h-5 text-blue-600" />
+      <div className="th-home-charts-grid">
+        <div className="th-home-chart-card">
+          <div className="th-home-chart-header">
+            <h3 className="th-home-chart-title">Gender Distribution</h3>
+            <Users size={18} color="#4f46e5" />
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
+          <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={chartData.genderDistribution || []}
+                  isAnimationActive={false}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
                   label={({ name, percentage }) => `${name}: ${percentage}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
+                  outerRadius={70}
                   dataKey="value"
                 >
                   {chartData.genderDistribution?.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={['#3B82F6', '#10B981', '#F59E0B', '#EF4444'][index % 4]} />
+                    <Cell key={`cell-${index}`} fill={['#4f46e5', '#10B981', '#F59E0B', '#EF4444'][index % 4]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value, name, props) => [`${value} (${props.payload.percentage}%)`, 'Count']} />
@@ -2130,26 +2190,26 @@ export default function TherapistHome() {
           </div>
         </div>
 
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Age Distribution</h3>
-            <Calendar className="w-5 h-5 text-green-600" />
+        <div className="th-home-chart-card">
+          <div className="th-home-chart-header">
+            <h3 className="th-home-chart-title">Age Distribution</h3>
+            <Calendar size={18} color="#10b981" />
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
+          <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={chartData.ageDistribution || []}
+                  isAnimationActive={false}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
                   label={({ name, percentage }) => `${name}: ${percentage}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
+                  outerRadius={70}
                   dataKey="value"
                 >
                   {chartData.ageDistribution?.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={['#F59E0B', '#3B82F6', '#EF4444', '#10B981'][index % 4]} />
+                    <Cell key={`cell-${index}`} fill={['#F59E0B', '#4f46e5', '#EF4444', '#10B981'][index % 4]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value, name, props) => [`${value} (${props.payload.percentage}%)`, 'Count']} />
@@ -2159,35 +2219,19 @@ export default function TherapistHome() {
           </div>
         </div>
 
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Client Progress Overview</h3>
-            <TrendingUp className="w-5 h-5 text-green-600" />
+        <div className="th-home-chart-card">
+          <div className="th-home-chart-header">
+            <h3 className="th-home-chart-title">Client Progress Chart</h3>
+            <TrendingUp size={18} color="#10b981" />
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData.clientProgress || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" label={{ value: 'Client Name', position: 'insideBottom', offset: -5 }} />
-                <YAxis label={{ value: 'Progress % / Sessions', angle: -90, position: 'insideLeft' }} />
-                <Tooltip 
-                  labelFormatter={(label, payload) => {
-                    if (payload && payload[0] && payload[0].payload) {
-                      const client = payload[0].payload;
-                      return `Client: ${label} (${client.status})`;
-                    }
-                    return `Client: ${label}`;
-                  }} 
-                  formatter={(value, name) => {
-                    if (name === 'progress') {
-                      return [value, 'Progress %'];
-                    } else if (name === 'sessions') {
-                      return [value, 'Sessions'];
-                    }
-                    return [value, name];
-                  }} 
-                />
-                <Bar dataKey="progress" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Progress %" />
+          <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.clientProgress || []} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} width={30} />
+                <Tooltip formatter={(value, name) => [value, name === 'progress' ? 'Progress %' : 'Sessions']} />
+                <Bar dataKey="progress" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Progress %" />
                 <Bar dataKey="sessions" fill="#10B981" radius={[4, 4, 0, 0]} name="Sessions" />
               </BarChart>
             </ResponsiveContainer>

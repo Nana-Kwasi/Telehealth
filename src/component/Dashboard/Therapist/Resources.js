@@ -32,7 +32,8 @@ import {
   Zap,
   MessageCircle,
   Save,
-  Send
+  Send,
+  CheckCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { auth, db } from '../../Auth/firebaseConfig';
@@ -2031,6 +2032,22 @@ export default function TherapistResources() {
                     <Clock size={14} />
                     <span>{worksheet.status}</span>
                   </div>
+                  {(() => {
+                    // Count completed submissions
+                    const completedCount = worksheet.assignedTo?.filter(clientId => {
+                      const clientResponse = worksheet.clientResponses?.[clientId];
+                      return clientResponse?.status === 'completed';
+                    }).length || 0;
+                    if (completedCount > 0) {
+                      return (
+                        <div className="meta-item" style={{ color: '#10b981', fontWeight: '600' }}>
+                          <CheckCircle size={14} />
+                          <span>{completedCount} completed</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {worksheet.goal && (
@@ -2060,10 +2077,7 @@ export default function TherapistResources() {
                 </button>
                 <button 
                   className="btn-icon"
-                  onClick={() => {
-                    // Edit worksheet - you can implement this
-                    console.log('Edit worksheet:', worksheet);
-                  }}
+                  onClick={() => handleEditWorksheet(worksheet)}
                   title="Edit Worksheet"
                   disabled={!canEditWorksheet(worksheet)}
                 >

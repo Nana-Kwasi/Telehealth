@@ -346,13 +346,38 @@ export default function ClientHome({ profile }) {
         setIsLoading(true);
         console.log('🔍 Home: Starting data fetch for user:', currentUser.uid);
         
-        // Get client ID from localStorage or auth
-        const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+        // Get client ID from multiple sources
+        let clientId = localStorage.getItem('th.clientId');
+        
+        // If not in localStorage, check auth collection
+        if (!clientId) {
+          const authDoc = await getDoc(doc(db, 'auth', currentUser.uid));
+          if (authDoc.exists() && authDoc.data().clientId) {
+            clientId = authDoc.data().clientId;
+            localStorage.setItem('th.clientId', clientId);
+          }
+        }
+        
+        // Fallback to uid if still no clientId
+        if (!clientId) {
+          clientId = currentUser.uid;
+        }
+        
         console.log('📋 Home: Client ID:', clientId);
         
         // Fetch client profile data
         console.log('📖 Home: Fetching client document from clients collection...');
-        const clientDoc = await getDoc(doc(db, 'clients', clientId));
+        let clientDoc = await getDoc(doc(db, 'clients', clientId));
+        
+        // If not found with clientId, try with uid
+        if (!clientDoc.exists() && clientId !== currentUser.uid) {
+          console.log('📖 Home: Trying with auth UID...');
+          clientDoc = await getDoc(doc(db, 'clients', currentUser.uid));
+          if (clientDoc.exists()) {
+            clientId = currentUser.uid;
+            localStorage.setItem('th.clientId', clientId);
+          }
+        }
         
         if (clientDoc.exists()) {
           const clientProfile = clientDoc.data();
@@ -398,28 +423,63 @@ export default function ClientHome({ profile }) {
           }
         } else {
           console.log('❌ Home: Client document not found for ID:', clientId);
+          // Create a minimal client data object from auth data
+          const authDoc = await getDoc(doc(db, 'auth', currentUser.uid));
+          if (authDoc.exists()) {
+            const authData = authDoc.data();
+            setClientData({
+              clientName: authData.name || profile?.name || 'Client',
+              displayName: authData.name || profile?.name || 'Client',
+              email: authData.email || profile?.email,
+              status: authData.status || 'active'
+            });
+            console.log('✅ Home: Using auth data as fallback');
+          }
         }
 
         // Fetch therapy notes for this client from the subcollection
-        const therapyNotesQuery = query(
-          collection(db, 'clients', clientId, 'therapyNotes'),
-          orderBy('sessionDate', 'desc')
-        );
-        const therapyNotesSnapshot = await getDocs(therapyNotesQuery);
-        const notes = therapyNotesSnapshot.docs.map(doc => ({
+        let therapyNotesSnapshot;
+        try {
+          const therapyNotesQuery = query(
+            collection(db, 'clients', clientId, 'therapyNotes'),
+            orderBy('sessionDate', 'desc')
+          );
+          therapyNotesSnapshot = await getDocs(therapyNotesQuery);
+        } catch (error) {
+          console.warn('Error fetching therapy notes from subcollection, trying main collection:', error);
+          // Fallback to main therapyNotes collection
+          try {
+            const therapyNotesQuery = query(
+              collection(db, 'therapyNotes'),
+              where('clientId', '==', clientId),
+              orderBy('sessionDate', 'desc')
+            );
+            therapyNotesSnapshot = await getDocs(therapyNotesQuery);
+          } catch (err) {
+            console.error('Error fetching therapy notes:', err);
+            therapyNotesSnapshot = { docs: [] };
+          }
+        }
+        const notes = (therapyNotesSnapshot && therapyNotesSnapshot.docs ? therapyNotesSnapshot.docs : []).map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         setTherapyNotes(notes);
 
-        // Calculate sessions completed from scheduleCalls
-        const completedSessionsQuery = query(
-          collection(db, 'scheduleCalls'),
-          where('clientId', '==', clientId),
-          where('status', '==', 'completed')
-        );
-        const completedSessionsSnapshot = await getDocs(completedSessionsQuery);
-        setSessionsCompleted(completedSessionsSnapshot.docs.length);
+        // Calculate sessions completed from scheduledCalls
+        let completedSessionsSnapshot;
+        try {
+          const completedSessionsQuery = query(
+            collection(db, 'scheduledCalls'),
+            where('clientId', '==', clientId),
+            where('status', '==', 'completed')
+          );
+          completedSessionsSnapshot = await getDocs(completedSessionsQuery);
+        } catch (error) {
+          console.warn('Error fetching completed sessions:', error);
+          completedSessionsSnapshot = { docs: [] };
+        }
+        setSessionsCompleted(completedSessionsSnapshot ? completedSessionsSnapshot.docs.length : 0);
 
         // Calculate progress score from therapy notes
         const progressScore = calculateProgressScore(notes);
@@ -486,12 +546,19 @@ export default function ClientHome({ profile }) {
         setRecentActivities(activities);
 
         // Fetch next session
-        const nextSessionQuery = query(
-          collection(db, 'scheduleCalls'),
-          where('clientId', '==', clientId)
-        );
-        const nextSessionSnapshot = await getDocs(nextSessionQuery);
-        if (!nextSessionSnapshot.empty) {
+        let nextSessionSnapshot;
+        try {
+          const nextSessionQuery = query(
+            collection(db, 'scheduledCalls'),
+            where('clientId', '==', clientId),
+            where('status', '==', 'scheduled')
+          );
+          nextSessionSnapshot = await getDocs(nextSessionQuery);
+        } catch (error) {
+          console.warn('Error fetching next session:', error);
+          nextSessionSnapshot = { docs: [], empty: true };
+        }
+        if (nextSessionSnapshot && !nextSessionSnapshot.empty) {
           // Filter for future sessions and sort by scheduledTime in JavaScript
           const now = new Date();
           const sessions = nextSessionSnapshot.docs.map(doc => ({
@@ -535,11 +602,12 @@ export default function ClientHome({ profile }) {
 
   // Check for new content when component mounts and user is loaded
   useEffect(() => {
-    if (currentUser && !isLoading) {
+    if (currentUser && !isLoading && clientData) {
+      // Use the clientId from clientData or fallback
       const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
       checkForNewContent(clientId);
     }
-  }, [currentUser, isLoading]);
+  }, [currentUser, isLoading, clientData]);
 
   // Calculate progress score from client data (PHQ-9 scores, etc.)
   const calculateProgressScoreFromClientData = (clientData) => {
@@ -697,7 +765,7 @@ export default function ClientHome({ profile }) {
 
       // Get video call activity
       const callsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('clientId', '==', clientId)
       );
       const callsSnapshot = await getDocs(callsQuery);
@@ -1406,13 +1474,30 @@ export default function ClientHome({ profile }) {
       };
 
       // Check for new worksheets
-      const worksheetsQuery = query(
-        collection(db, 'worksheets'),
-        where('assignedTo', 'array-contains', clientId),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      const worksheetsSnapshot = await getDocs(worksheetsQuery);
+      let worksheetsSnapshot;
+      try {
+        const worksheetsQuery = query(
+          collection(db, 'worksheets'),
+          where('assignedTo', 'array-contains', clientId),
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        );
+        worksheetsSnapshot = await getDocs(worksheetsQuery);
+      } catch (error) {
+        // If index error, try without orderBy
+        console.warn('Worksheets query index error, trying without orderBy:', error);
+        try {
+          const worksheetsQuery = query(
+            collection(db, 'worksheets'),
+            where('assignedTo', 'array-contains', clientId),
+            limit(10)
+          );
+          worksheetsSnapshot = await getDocs(worksheetsQuery);
+        } catch (err) {
+          console.error('Error fetching worksheets:', err);
+          worksheetsSnapshot = { docs: [] };
+        }
+      }
       const worksheets = worksheetsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -1435,13 +1520,30 @@ export default function ClientHome({ profile }) {
       }
 
       // Check for new notes
-      const notesQuery = query(
-        collection(db, 'notes'),
-        where('clientId', '==', clientId),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      const notesSnapshot = await getDocs(notesQuery);
+      let notesSnapshot;
+      try {
+        const notesQuery = query(
+          collection(db, 'notes'),
+          where('clientId', '==', clientId),
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        );
+        notesSnapshot = await getDocs(notesQuery);
+      } catch (error) {
+        // If index error, try without orderBy
+        console.warn('Notes query index error, trying without orderBy:', error);
+        try {
+          const notesQuery = query(
+            collection(db, 'notes'),
+            where('clientId', '==', clientId),
+            limit(10)
+          );
+          notesSnapshot = await getDocs(notesQuery);
+        } catch (err) {
+          console.error('Error fetching notes:', err);
+          notesSnapshot = { docs: [] };
+        }
+      }
       const notes = notesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -1467,13 +1569,31 @@ export default function ClientHome({ profile }) {
       const clientData = clientDoc.exists() ? clientDoc.data() : {};
       const therapyType = clientData.therapyType || 'individual';
 
-      const resourcesQuery = query(
-        collection(db, 'therapistResources'),
-        where('targetAudience', 'in', ['all', therapyType]),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      const resourcesSnapshot = await getDocs(resourcesQuery);
+      // Check for new resources
+      let resourcesSnapshot;
+      try {
+        const resourcesQuery = query(
+          collection(db, 'therapistResources'),
+          where('targetAudience', 'in', ['all', therapyType]),
+          orderBy('createdAt', 'desc'),
+          limit(10)
+        );
+        resourcesSnapshot = await getDocs(resourcesQuery);
+      } catch (error) {
+        // If index error, try without orderBy
+        console.warn('Resources query index error, trying without orderBy:', error);
+        try {
+          const resourcesQuery = query(
+            collection(db, 'therapistResources'),
+            where('targetAudience', 'in', ['all', therapyType]),
+            limit(10)
+          );
+          resourcesSnapshot = await getDocs(resourcesQuery);
+        } catch (err) {
+          console.error('Error fetching resources:', err);
+          resourcesSnapshot = { docs: [] };
+        }
+      }
       const resources = resourcesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()

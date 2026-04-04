@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../Auth/firebaseConfig';
 import { 
   collection, 
@@ -26,6 +27,7 @@ import {
 import './Reports.css';
 
 export default function TherapistReports() {
+  const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -146,8 +148,7 @@ export default function TherapistReports() {
   };
 
   const handleViewReport = (report) => {
-    setSelectedReport(report);
-    setShowReportModal(true);
+    navigate(`/dashboard/reports/${report.id}`);
   };
 
   const toggleReportExpansion = (reportId) => {
@@ -475,3 +476,17 @@ export default function TherapistReports() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -31,9 +31,81 @@ service cloud.firestore {
     
     // Allow users to read/write video call logs
     match /videoCalls/{callId} {
-      allow read, write: if request.auth != null && 
-        (resource.data.therapistId == request.auth.uid || 
+      allow read, write: if request.auth != null &&
+        (resource.data.therapistId == request.auth.uid ||
          resource.data.clientId == request.auth.uid);
+    }
+
+    // ── Medical Doctor Collections ──
+
+    // Allow doctors to read/write their own profile
+    match /doctors/{doctorId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == doctorId;
+
+      // Allow doctors to manage their assigned patients
+      match /patients/{patientId} {
+        allow read, write: if request.auth != null && request.auth.uid == doctorId;
+      }
+    }
+
+    // Doctor availability — doctors write their own, clients can read any
+    match /doctorAvailability/{slotId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.doctorId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
+    }
+
+    // Doctor appointments — accessible by the doctor or the client involved
+    match /doctorAppointments/{appointmentId} {
+      allow read, write: if request.auth != null &&
+        (resource.data.doctorId == request.auth.uid ||
+         resource.data.clientId == request.auth.uid);
+      allow create: if request.auth != null;
+    }
+
+    // Doctor reviews — clients can create, anyone authenticated can read
+    match /doctorReviews/{reviewId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && resource.data.clientId == request.auth.uid;
+    }
+
+    // Doctor-patient chat messages
+    match /doctor_chats/{chatId}/messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Doctor consultation notes — doctor manages their own notes
+    match /doctorNotes/{noteId} {
+      allow read, write: if request.auth != null &&
+        resource.data.doctorId == request.auth.uid;
+      allow create: if request.auth != null;
+    }
+
+    // Doctor prescriptions — doctor writes, patient reads
+    match /prescriptions/{prescriptionId} {
+      allow read: if request.auth != null &&
+        (resource.data.doctorId == request.auth.uid ||
+         resource.data.clientId == request.auth.uid);
+      allow create, update: if request.auth != null && request.resource.data.doctorId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
+    }
+
+    // Notifications — users can read/update their own, system can create
+    match /notifications/{notifId} {
+      allow read, update: if request.auth != null && resource.data.targetId == request.auth.uid;
+      allow create: if request.auth != null;
+    }
+
+    // Call notifications — for video call signaling
+    match /callNotifications/{callId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Doctor reviews — allow doctor to reply (update) to their own reviews
+    match /doctorReviews/{reviewId} {
+      allow update: if request.auth != null && resource.data.doctorId == request.auth.uid;
     }
   }
 }

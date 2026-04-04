@@ -1,0 +1,180 @@
+/* ══════════════════════════════════════════════════════════════
+   ViewNote.css — Premium Note Detail View
+   Design System: Indigo #4f46e5
+══════════════════════════════════════════════════════════════ */
+
+.view-note-page {
+  padding: 2rem;
+  background: #f4f6fb;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Header ── */
+.page-header { margin-bottom: 1.75rem; }
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.1rem;
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  transition: all 0.18s;
+  margin-bottom: 1rem;
+  font-family: inherit;
+}
+
+.back-button:hover {
+  background: #f8fafc;
+  border-color: #c7d2fe;
+  color: #4f46e5;
+}
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1.25rem;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+  box-shadow: 0 4px 14px rgba(79,70,229,0.25);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #4338ca, #4f46e5);
+  box-shadow: 0 6px 20px rgba(79,70,229,0.35);
+  transform: translateY(-1px);
+}
+
+/* ── Note card ── */
+.note-content {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
+  border-top: 4px solid #4f46e5;
+}
+
+/* ── Meta row ── */
+.note-meta {
+  display: flex;
+  gap: 1.5rem;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.meta-item strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+/* ── Status badge ── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-badge.draft     { background: #fef9c3; color: #b45309; }
+.status-badge.completed { background: #dcfce7; color: #15803d; }
+
+/* ── Content sections ── */
+.content-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.content-section:last-of-type { border-bottom: none; }
+
+.content-section h3 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 0.75rem;
+}
+
+.content-section p,
+.content-text {
+  color: #334155;
+  line-height: 1.7;
+  font-size: 0.9rem;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.therapy-book-content,
+.clinical-note-content { margin-top: 0.5rem; }
+
+/* ── Signature ── */
+.signature-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+.signature-section strong {
+  color: #475569;
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* ── States ── */
+.loading-state,
+.error-state {
+  text-align: center;
+  padding: 3rem;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 500;
+}

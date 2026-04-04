@@ -170,7 +170,7 @@ export default function ClientSchedule() {
     const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
     
     const appointmentsQuery = query(
-      collection(db, 'scheduleCalls'),
+      collection(db, 'scheduledCalls'),
       where('clientId', '==', clientId)
     );
 
@@ -252,7 +252,7 @@ export default function ClientSchedule() {
         createdBy: 'client'
       };
 
-      await addDoc(collection(db, 'scheduleCalls'), appointmentData);
+      await addDoc(collection(db, 'scheduledCalls'), appointmentData);
       
       setMessage({ type: 'success', text: 'Session request submitted successfully! Your therapist will review and confirm the appointment.' });
       setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
@@ -274,7 +274,7 @@ export default function ClientSchedule() {
       
       // Get all scheduled calls for this therapist
       const therapistCallsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('therapistId', '==', therapistId)
       );
 
@@ -317,7 +317,7 @@ export default function ClientSchedule() {
       
       // Get all scheduled calls for this therapist
       const therapistCallsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('therapistId', '==', therapistId)
       );
 

@@ -17,38 +17,96 @@ export default function Login() {
     try {
       await signInWithEmailOrUsername(id, password);
       navigate('/dashboard');
-    } catch (e) {
-      setError(e.message || 'Login failed');
+    } catch (err) {
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <h1 className="login-title">Login</h1>
-        <p className="login-subtitle">Welcome back! Please sign in to your account.</p>
-        <form onSubmit={submit}>
-          <div className="form-group">
-            <div className="form-label">Email or Username</div>
-            <input className="form-input" value={id} onChange={(e) => setId(e.target.value)} required />
+    <div className="login-page">
+
+      {/* ── Brand panel (visible ≥ 900px) ── */}
+      <div className="login-brand-panel">
+        <div className="login-brand-content">
+          <div className="login-brand-logo">
+            <div className="login-brand-logo-mark">N</div>
+            <span className="login-brand-logo-name">NessaHub</span>
           </div>
-          <div className="form-group">
-            <div className="form-label">Password</div>
-            <input className="form-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <h2 className="login-brand-headline">
+            Your health,<br />on your terms.
+          </h2>
+          <p className="login-brand-sub">
+            Connect with licensed therapists and medical doctors online.
+            Private, secure, and available whenever you need it.
+          </p>
+          <div className="login-brand-pills">
+            <span className="login-brand-pill therapy">
+              <span className="login-brand-pill-dot" />
+              Mental Health Therapy
+            </span>
+            <span className="login-brand-pill medical">
+              <span className="login-brand-pill-dot" />
+              Medical Consultations
+            </span>
           </div>
-          {error ? <div className="error-message">{error}</div> : null}
-          <button className="login-button" type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-        <div className="login-links">
-          <Link to="/" className="login-link">New user? Start with questionnaire</Link>
+        </div>
+      </div>
+
+      {/* ── Form panel ── */}
+      <div className="login-form-panel">
+        <div className="login-container">
+          <div className="login-card">
+
+            <div className="login-card-logo">
+              <div className="login-card-logo-mark">N</div>
+              <span className="login-card-logo-name">NessaHub</span>
+            </div>
+
+            <h1 className="login-title">Welcome back</h1>
+            <p className="login-subtitle">Sign in to your account to continue.</p>
+
+            <form onSubmit={submit}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-id">Email or Username</label>
+                <input
+                  id="login-id"
+                  className="form-input"
+                  placeholder="you@example.com"
+                  value={id}
+                  onChange={e => setId(e.target.value)}
+                  autoComplete="username"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-password">Password</label>
+                <input
+                  id="login-password"
+                  className="form-input"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+
+              {error && <div className="error-message">{error}</div>}
+
+              <button className="login-button" type="submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            <div className="login-links">
+              <Link to="/" className="login-link">New user? Start the questionnaire</Link>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
-

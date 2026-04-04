@@ -161,7 +161,7 @@ const ClientVideoCall = ({ profile }) => {
           // Fetch scheduled calls for this client
           console.log('📅 Fetching scheduled calls...');
           const callsQuery = query(
-            collection(db, 'scheduleCalls'),
+            collection(db, 'scheduledCalls'),
             where('clientId', '==', clientId)
           );
           const callsSnapshot = await getDocs(callsQuery);
@@ -258,9 +258,9 @@ const ClientVideoCall = ({ profile }) => {
       };
 
       console.log('Preparing to submit call data:', callData);
-      console.log('Adding document to scheduleCalls collection...');
+      console.log('Adding document to scheduledCalls collection...');
       
-      const docRef = await addDoc(collection(db, 'scheduleCalls'), callData);
+      const docRef = await addDoc(collection(db, 'scheduledCalls'), callData);
       console.log('✅ Call scheduled successfully with ID:', docRef.id);
       
       setMessage({ type: 'success', text: 'Session request submitted successfully! Your therapist will review and confirm.' });
@@ -269,7 +269,7 @@ const ClientVideoCall = ({ profile }) => {
       
       // Refresh scheduled calls
       const callsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('clientId', '==', clientProfile.id)
       );
       const callsSnapshot = await getDocs(callsQuery);
@@ -385,7 +385,7 @@ const ClientVideoCall = ({ profile }) => {
       
       // Get all scheduled calls for this therapist
       const therapistCallsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('therapistId', '==', therapistId)
       );
 
@@ -428,7 +428,7 @@ const ClientVideoCall = ({ profile }) => {
       
       // Get all scheduled calls for this therapist
       const therapistCallsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('therapistId', '==', therapistId)
       );
 
@@ -461,7 +461,9 @@ const ClientVideoCall = ({ profile }) => {
 
   // Handle therapist name click
   const handleTherapistClick = () => {
-    setShowTherapistModal(true);
+    if (therapistData?.id) {
+      navigate(`/dashboard/therapist/${therapistData.id}`);
+    }
   };
 
   // Handle request new therapist
@@ -585,7 +587,7 @@ const ClientVideoCall = ({ profile }) => {
         return;
       }
 
-      await updateDoc(doc(db, 'scheduleCalls', selectedSession.id), {
+      await updateDoc(doc(db, 'scheduledCalls', selectedSession.id), {
         scheduledTime: dateTime,
         duration: parseInt(editScheduleForm.duration),
         notes: editScheduleForm.notes,
@@ -598,7 +600,7 @@ const ClientVideoCall = ({ profile }) => {
       
       // Refresh scheduled calls
       const callsQuery = query(
-        collection(db, 'scheduleCalls'),
+        collection(db, 'scheduledCalls'),
         where('clientId', '==', clientProfile.id)
       );
       const callsSnapshot = await getDocs(callsQuery);

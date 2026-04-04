@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { auth, db } from '../../Auth/firebaseConfig';
 import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query } from 'firebase/firestore';
 import { 
-  Search, 
   MoreVertical, 
   Mic, 
   Send, 
@@ -316,7 +315,6 @@ export default function TherapistMessages() {
         </div>
 
         <div className="search-container">
-          <Search size={20} className="search-icon" />
           <input
             type="text"
             placeholder="Search staff members..."

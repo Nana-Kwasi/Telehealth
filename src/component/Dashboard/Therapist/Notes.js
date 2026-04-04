@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -39,6 +40,7 @@ import {
 import './Notes.css';
 
 export default function TherapistNotes() {
+  const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -592,15 +594,15 @@ export default function TherapistNotes() {
           <p className="subtitle">Create, manage, and track clinical notes with templates and voice-to-text</p>
         </div>
         <div className="header-actions">
-          <button 
-            className="btn-secondary"
+          <button
+            className="notes-hdr-btn notes-hdr-btn--secondary"
             onClick={() => setShowTemplates(!showTemplates)}
           >
             <Settings size={16} />
             Templates
           </button>
-          <button 
-            className="btn-primary"
+          <button
+            className="notes-hdr-btn notes-hdr-btn--primary"
             onClick={() => setShowCreateModal(true)}
           >
             <Plus size={16} />
@@ -708,8 +710,7 @@ export default function TherapistNotes() {
                 <button 
                   className="btn-icon"
                   onClick={() => {
-                    setSelectedNote(note);
-                    setShowViewModal(true);
+                    navigate(`/dashboard/notes/${note.id}`);
                   }}
                   title="View Note"
                 >

@@ -42,7 +42,30 @@ async function logUserLoginData(userId, userRole, profile, success, errorMessage
       };
 
       // Get role-specific data
-      if (userRole === 'therapist' || userRole === 'admin') {
+      if (userRole === 'doctor') {
+        try {
+          console.log(`🔍 Fetching assigned patients for doctor: ${userId}`);
+
+          // Get assigned patients
+          const patientsQuery = query(collection(db, 'doctors', userId, 'patients'));
+          const patientsSnapshot = await getDocs(patientsQuery);
+
+          console.log(`📊 Found ${patientsSnapshot.docs.length} patients assigned to doctor ${userId}`);
+
+          assignments = patientsSnapshot.docs.map(d => {
+            const patientData = { patientId: d.data().patientId, ...d.data() };
+            return patientData;
+          });
+
+          // Get doctor profile
+          const doctorDoc = await getDoc(doc(db, 'doctors', userId));
+          if (doctorDoc.exists()) {
+            relatedData.doctorProfile = doctorDoc.data();
+          }
+        } catch (error) {
+          console.error('❌ Error fetching doctor data:', error);
+        }
+      } else if (userRole === 'therapist' || userRole === 'admin') {
         try {
           console.log(`🔍 Fetching assigned clients for therapist: ${userId}`);
           
@@ -105,7 +128,7 @@ async function logUserLoginData(userId, userRole, profile, success, errorMessage
       try {
         console.log(`📞 Fetching recent calls for ${userRole}: ${userId}`);
         const recentCallsQuery = query(
-          collection(db, 'scheduleCalls'),
+          collection(db, 'scheduledCalls'),
           where(userRole === 'client' ? 'clientId' : 'therapistId', '==', userId)
         );
         const recentCallsSnapshot = await getDocs(recentCallsQuery);
@@ -214,8 +237,15 @@ async function logUserLoginData(userId, userRole, profile, success, errorMessage
     await addDoc(collection(db, 'userLoginLogs'), comprehensiveLoginLog);
     console.log('✅ Comprehensive user login data logged for:', userId);
     
-    // Summary log for therapist client assignments
-    if (userRole === 'therapist' || userRole === 'admin') {
+    // Summary log for provider login
+    if (userRole === 'doctor') {
+      console.log(`🎯 DOCTOR LOGIN SUMMARY:`);
+      console.log(`   🩺 Doctor ID: ${userId}`);
+      console.log(`   👥 Total Patients: ${assignments.length}`);
+      console.log(`   📋 Patient List:`, assignments.map(p => ({
+        patientId: p.patientId
+      })));
+    } else if (userRole === 'therapist' || userRole === 'admin') {
       console.log(`🎯 THERAPIST LOGIN SUMMARY:`);
       console.log(`   👨‍⚕️ Therapist ID: ${userId}`);
       console.log(`   👥 Total Clients Assigned: ${assignments.length}`);
@@ -361,49 +391,67 @@ export async function signInWithEmailOrUsername(identifier, password) {
 
 export async function resolveRole(uid) {
   console.log('Resolving role for UID:', uid);
-  
-  // Check therapists collection first
+
+  // Check doctors collection first
+  const doctorRef = doc(db, 'doctors', uid);
+  const doctorSnap = await getDoc(doctorRef);
+
+  if (doctorSnap.exists()) {
+    const doctorData = doctorSnap.data();
+    console.log('Found doctor data:', doctorData);
+
+    return {
+      role: 'doctor',
+      profile: {
+        id: doctorSnap.id,
+        ...doctorData,
+        role: 'doctor'
+      }
+    };
+  }
+
+  // Check therapists collection
   const therapistRef = doc(db, 'therapists', uid);
   const therapistSnap = await getDoc(therapistRef);
-  
+
   if (therapistSnap.exists()) {
     const therapistData = therapistSnap.data();
     console.log('Found therapist data:', therapistData);
-    
+
     // Check if this is an admin user
     if (therapistData.role === 'admin') {
-      return { 
+      return {
         role: 'therapist', // Admin users get therapist dashboard
-        profile: { 
-          id: therapistSnap.id, 
+        profile: {
+          id: therapistSnap.id,
           ...therapistData,
           role: 'admin'
-        } 
+        }
       };
     }
-    
+
     // Regular therapist
-    return { 
-      role: 'therapist', 
-      profile: { 
-        id: therapistSnap.id, 
+    return {
+      role: 'therapist',
+      profile: {
+        id: therapistSnap.id,
         ...therapistData,
         role: therapistData.role || 'therapist'
-      } 
+      }
     };
   }
-  
+
   // Check auth collection for clients
   const authRef = doc(db, 'auth', uid);
   const authSnap = await getDoc(authRef);
-  
+
   if (authSnap.exists()) {
     const authData = authSnap.data();
     console.log('Found auth data:', authData);
-    
+
     // Check client status in both auth and clients collections
     let clientStatus = authData.status || 'active';
-    
+
     // Also check clients collection for status
     if (authData.clientId) {
       try {
@@ -417,11 +465,11 @@ export async function resolveRole(uid) {
         console.log('Error checking clients collection:', error);
       }
     }
-    
+
     // Check if client is not active
     if (clientStatus !== 'active') {
       let errorMessage = 'Your account is not active. Please contact your therapist or administrator for assistance.';
-      
+
       switch (clientStatus) {
         case 'inactive':
           errorMessage = 'Your account has been deactivated. Please contact your therapist or administrator for assistance.';
@@ -435,45 +483,54 @@ export async function resolveRole(uid) {
         default:
           errorMessage = 'Your account is not active. Please contact your therapist or administrator for assistance.';
       }
-      
+
       throw new Error(errorMessage);
     }
-    
-    return { 
-      role: 'client', 
-      profile: { 
-        id: authSnap.id, 
+
+    return {
+      role: 'client',
+      profile: {
+        id: authSnap.id,
         ...authData,
         status: clientStatus,
         role: 'client'
-      } 
+      }
     };
   }
-  
+
   console.log('No user data found, returning guest role');
   return { role: 'guest', profile: null };
 }
 
 export async function findUserByUsernameOrEmail(identifier) {
-  // Check therapists collection first
+  // Check doctors collection
+  const dQ = query(collection(db, 'doctors'), where('username', '==', identifier));
+  const dR = await getDocs(dQ);
+  if (!dR.empty) return { id: dR.docs[0].id, ...dR.docs[0].data() };
+
+  const dQE = query(collection(db, 'doctors'), where('email', '==', identifier));
+  const dRE = await getDocs(dQE);
+  if (!dRE.empty) return { id: dRE.docs[0].id, ...dRE.docs[0].data() };
+
+  // Check therapists collection
   const tQ = query(collection(db, 'therapists'), where('username', '==', identifier));
   const tR = await getDocs(tQ);
   if (!tR.empty) return { id: tR.docs[0].id, ...tR.docs[0].data() };
-  
+
   // Check therapists by email
   const tQE = query(collection(db, 'therapists'), where('email', '==', identifier));
   const tRE = await getDocs(tQE);
   if (!tRE.empty) return { id: tRE.docs[0].id, ...tRE.docs[0].data() };
-  
+
   // Check auth collection for clients
   const cQ = query(collection(db, 'auth'), where('username', '==', identifier));
   const cR = await getDocs(cQ);
   if (!cR.empty) return { id: cR.docs[0].id, ...cR.docs[0].data() };
-  
+
   const cQE = query(collection(db, 'auth'), where('email', '==', identifier));
   const cRE = await getDocs(cQE);
   if (!cRE.empty) return { id: cRE.docs[0].id, ...cRE.docs[0].data() };
-  
+
   return null;
 }
 

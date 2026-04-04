@@ -26,6 +26,9 @@ import ClientResources from './Resources';
 import ClientBilling from './Billing';
 import ClientSettings from './Settings';
 import ClientSupport from './Support';
+import TherapistDetails from './TherapistDetails';
+import WorksheetView from './WorksheetView';
+import NoteView from './NoteView';
 
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
@@ -158,6 +161,9 @@ export default function ClientDashboard({ profile }) {
           <Route path="/billing" element={<ClientBilling />} />
           <Route path="/settings" element={<ClientSettings />} />
           <Route path="/support" element={<ClientSupport />} />
+          <Route path="/therapist/:therapistId" element={<TherapistDetails />} />
+          <Route path="/resources/worksheet/:worksheetId" element={<WorksheetView />} />
+          <Route path="/resources/note/:noteId" element={<NoteView />} />
         </Routes>
       </main>
     </div>

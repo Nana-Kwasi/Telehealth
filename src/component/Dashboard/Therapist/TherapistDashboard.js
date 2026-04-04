@@ -1,18 +1,20 @@
 import React from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Home, 
-  Users, 
-  MessageSquare, 
-  Video, 
-  Calendar, 
-  BookOpen, 
-  Settings, 
+import {
+  Home,
+  Users,
+  MessageSquare,
+  Video,
+  Calendar,
+  BookOpen,
+  Settings,
   LogOut,
   UserPlus,
   Clock,
   FileText,
-  Flag
+  Flag,
+  Stethoscope,
+  Activity,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
@@ -32,6 +34,11 @@ import TherapistReports from './Reports';
 import TherapistSettings from './Settings';
 import TherapistLogs from './Logs';
 import OnboardTherapist from '../Admin/OnboardTherapist';
+import OnboardDoctor from '../Admin/OnboardDoctor';
+import ClientDetails from './ClientDetails';
+import ViewNote from './ViewNote';
+import ReportDetails from './ReportDetails';
+import Notifications from './Notifications';
 
 export default function TherapistDashboard({ profile }) {
   const location = useLocation();
@@ -60,6 +67,12 @@ export default function TherapistDashboard({ profile }) {
         icon: UserPlus,
         label: 'Onboard Therapist',
         component: OnboardTherapist
+      },
+      {
+        path: '/dashboard/onboard-doctor',
+        icon: Stethoscope,
+        label: 'Onboard Doctor',
+        component: OnboardDoctor
       }
     );
   }
@@ -110,9 +123,14 @@ export default function TherapistDashboard({ profile }) {
       {/* Sidebar */}
       <aside className="therapist-sidebar">
         <div className="sidebar-header">
+          {/* Logo */}
           <div className="logo">
+            <Activity size={22} color="#818cf8" />
             <h2>NessaHub</h2>
+            <span className="logo-badge">Therapy</span>
           </div>
+
+          {/* User Card */}
           <div className="user-info">
             <div className="user-avatar" onClick={() => document.getElementById('therapist-profile-image-input').click()}>
               {profile?.photoURL ? (
@@ -120,29 +138,19 @@ export default function TherapistDashboard({ profile }) {
               ) : (
                 <span>{profile?.name ? profile.name.charAt(0).toUpperCase() : 'T'}</span>
               )}
-              <div className="avatar-overlay">
-                <span>📷</span>
-              </div>
+              <div className="avatar-overlay"><span>📷</span></div>
             </div>
-            <input
-              id="therapist-profile-image-input"
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={handleProfileImageUpload}
-            />
+            <input id="therapist-profile-image-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfileImageUpload} />
             <div className="user-details">
-              <p className="user-name">Dr.{profile?.name || 'Therapist'}</p>
-              <p className="user-role">
-                {isAdmin ? 'Admin Therapist' : 'Therapist'}
-              </p>
+              <p className="user-name">Dr. {profile?.name || 'Therapist'}</p>
+              <p className="user-role">{isAdmin ? 'Admin Therapist' : 'Therapist'}</p>
             </div>
           </div>
         </div>
 
         <nav className="sidebar-nav">
           <div className="nav-section">
-            <h3>NAVIGATION</h3>
+            <h3>MAIN MENU</h3>
             <ul className="nav-list">
               {navigationItems.map((item) => (
                 <li key={item.path}>
@@ -150,7 +158,7 @@ export default function TherapistDashboard({ profile }) {
                     className={`nav-item ${isActiveRoute(item.path) ? 'active' : ''}`}
                     onClick={() => navigate(item.path)}
                   >
-                    <item.icon size={20} />
+                    <item.icon size={18} />
                     <span>{item.label}</span>
                   </button>
                 </li>
@@ -161,9 +169,9 @@ export default function TherapistDashboard({ profile }) {
 
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={20} />
+            <LogOut size={18} />
             <span>Logout</span>
-            </button>
+          </button>
         </div>
       </aside>
 
@@ -179,8 +187,13 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/resources" element={<TherapistResources />} />
           <Route path="/reports" element={<TherapistReports />} />
           <Route path="/settings" element={<TherapistSettings />} />
+          <Route path="/clients/:clientId" element={<ClientDetails />} />
+          <Route path="/notes/:noteId" element={<ViewNote />} />
+          <Route path="/reports/:reportId" element={<ReportDetails />} />
+          <Route path="/notifications" element={<Notifications />} />
           {isAdmin && <Route path="/logs" element={<TherapistLogs />} />}
           {isAdmin && <Route path="/admin" element={<OnboardTherapist />} />}
+          {isAdmin && <Route path="/onboard-doctor" element={<OnboardDoctor profile={profile} />} />}
         </Routes>
       </main>
     </div>

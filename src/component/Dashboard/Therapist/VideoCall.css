@@ -1,140 +1,331 @@
+/* ============================================================
+   VideoCall.css — Premium Video Call UI
+   Design System: Indigo #4f46e5 / Teal #0d9488
+   ============================================================ */
+
+/* ── Page Shell ── */
 .dashboard-page {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  background: #f4f6fb;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .page-title {
-  font-size: 2rem;
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.375rem;
+  letter-spacing: -0.025em;
 }
 
 .subtitle {
-  color: #666;
+  color: #94a3b8;
   margin-bottom: 2rem;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  font-weight: 400;
 }
 
+/* ── Video Container Card ── */
 .video-container {
-  background: white;
-  border-radius: 16px;
-  padding: 3rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  background: #0f172a;
+  border-radius: 20px;
+  padding: 0;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35), 0 6px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Video Placeholder (pre-call state) ── */
+.video-placeholder {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
   text-align: center;
 }
 
-.video-placeholder {
-  max-width: 600px;
-  margin: 0 auto;
-}
-
 .video-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
+  font-size: 4.5rem;
+  margin-bottom: 1.25rem;
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(79, 70, 229, 0.4));
 }
 
 .video-placeholder h3 {
-  font-size: 1.8rem;
-  color: #333;
-  margin-bottom: 1rem;
-  font-weight: 600;
+  font-size: 1.75rem;
+  color: #f8fafc;
+  margin-bottom: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .video-placeholder p {
-  color: #666;
-  margin-bottom: 2rem;
-  font-size: 1.1rem;
-  line-height: 1.6;
+  color: #94a3b8;
+  margin-bottom: 2.5rem;
+  font-size: 1.05rem;
+  line-height: 1.7;
 }
 
+/* ── Session Tools (pre-call buttons) ── */
 .session-tools {
   display: flex;
   gap: 1rem;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
   flex-wrap: wrap;
 }
 
+/* ── Generic Button Base ── */
 .btn {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  padding: 0.75rem 1.75rem;
+  border-radius: 10px;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  letter-spacing: 0.01em;
 }
 
+/* Primary — indigo gradient */
 .btn.primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
 }
 
 .btn.primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.45);
 }
 
+.btn.primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+/* Secondary — glass on dark */
 .btn:not(.primary) {
-  background: #f8f9fa;
-  color: #333;
-  border: 2px solid #e1e5e9;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
 }
 
 .btn:not(.primary):hover {
-  background: #e9ecef;
-  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
 }
 
+/* ── In-Call Control Bar ── */
+.call-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Rounded icon control buttons */
+.control-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Mic / Camera — white */
+.control-btn.mic,
+.control-btn.camera {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.control-btn.mic:hover,
+.control-btn.camera:hover {
+  background: #f1f5f9;
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Muted state */
+.control-btn.mic.muted,
+.control-btn.camera.off {
+  background: #334155;
+  color: #94a3b8;
+}
+
+/* Screen share — indigo */
+.control-btn.screen-share {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+}
+
+.control-btn.screen-share:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.55);
+}
+
+/* End call — red gradient */
+.control-btn.end-call {
+  width: 62px;
+  height: 62px;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.45);
+}
+
+.control-btn.end-call:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.6);
+}
+
+/* ── Participant Grid ── */
+.participant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.participant-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  transition: border-color 0.2s;
+}
+
+.participant-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.participant-card.speaking {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.35);
+}
+
+.participant-card.self {
+  border-color: rgba(79, 70, 229, 0.4);
+}
+
+.participant-label {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  color: #f8fafc;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+}
+
+/* ── Call Features List ── */
 .call-features {
   text-align: left;
-  max-width: 500px;
+  max-width: 520px;
   margin: 0 auto;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.5rem;
 }
 
 .call-features h4 {
-  color: #333;
+  color: #e2e8f0;
   margin-bottom: 1rem;
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .call-features ul {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .call-features li {
-  padding: 0.5rem 0;
-  color: #666;
-  font-size: 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0.625rem 0;
+  color: #94a3b8;
+  font-size: 0.9375rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.call-features li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0d9488;
+  flex-shrink: 0;
 }
 
 .call-features li:last-child {
   border-bottom: none;
 }
 
-/* Responsive Design */
+/* ── Responsive ── */
 @media (max-width: 768px) {
   .dashboard-page {
     padding: 1rem;
   }
-  
-  .video-container {
-    padding: 2rem 1rem;
+
+  .video-placeholder {
+    padding: 2.5rem 1.25rem;
   }
-  
+
   .session-tools {
     flex-direction: column;
     align-items: center;
   }
-  
+
   .btn {
     width: 100%;
-    max-width: 300px;
+    max-width: 320px;
+    justify-content: center;
+  }
+
+  .call-controls {
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .control-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .control-btn.end-call {
+    width: 52px;
+    height: 52px;
+  }
+
+  .participant-grid {
+    grid-template-columns: 1fr;
   }
 }
-

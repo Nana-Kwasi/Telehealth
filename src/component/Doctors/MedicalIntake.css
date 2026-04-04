@@ -1,0 +1,214 @@
+/* ═══════════════════════════════════
+   NESSAHUB — MEDICAL INTAKE
+   Simple 3-step condition form
+   ═══════════════════════════════════ */
+
+.mi-page {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #0f172a 0%, #1a3a5c 60%, #0d2233 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  font-family: var(--font-sans);
+}
+
+.mi-card {
+  background: white;
+  border-radius: 24px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+  position: relative;
+}
+
+.mi-back {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: color 120ms ease;
+}
+.mi-back:hover { color: #111827; }
+
+/* Progress */
+.mi-progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 1.75rem;
+}
+
+.mi-dot {
+  width: 28px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #e5e7eb;
+  transition: background 250ms ease;
+}
+.mi-dot.active { background: var(--color-medical-500, #1e6bb8); }
+
+/* Header */
+.mi-icon-top {
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  line-height: 1;
+}
+
+.mi-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #111827;
+  text-align: center;
+  margin: 0 0 0.4rem;
+  letter-spacing: -0.3px;
+}
+
+.mi-sub {
+  font-size: 0.9rem;
+  color: #6b7280;
+  text-align: center;
+  margin: 0 0 1.75rem;
+  line-height: 1.55;
+}
+
+/* Category grid */
+.mi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.6rem;
+}
+
+.mi-cat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.75rem 0.25rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 14px;
+  background: white;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.mi-cat-btn:hover {
+  border-color: var(--color-medical-500, #1e6bb8);
+  background: #f0f7ff;
+  transform: translateY(-2px);
+}
+
+.mi-cat-emoji { font-size: 1.5rem; line-height: 1; }
+.mi-cat-label { font-size: 0.68rem; font-weight: 600; color: #374151; text-align: center; line-height: 1.2; }
+
+/* Textarea */
+.mi-textarea {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  color: #111827;
+  font-family: var(--font-sans);
+  resize: none;
+  box-sizing: border-box;
+  outline: none;
+  background: #f9fafb;
+  transition: border-color 150ms ease, background 150ms ease;
+  margin-bottom: 1.25rem;
+  line-height: 1.6;
+}
+.mi-textarea:focus { border-color: var(--color-medical-500, #1e6bb8); background: white; }
+.mi-textarea::placeholder { color: #9ca3af; }
+
+/* Urgency */
+.mi-urgency-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.mi-urgency-btn {
+  text-align: left;
+  padding: 0.875rem 1.1rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 14px;
+  background: white;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.mi-urgency-btn:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.mi-urgency-btn.selected {
+  border-color: var(--color-medical-500, #1e6bb8);
+  background: var(--color-medical-100, #e8f1fb);
+}
+
+.mi-urgency-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.15rem;
+}
+.mi-urgency-btn.selected .mi-urgency-label { color: var(--color-medical-500, #1e6bb8); }
+
+.mi-urgency-desc {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* CTA */
+.mi-btn {
+  width: 100%;
+  background: linear-gradient(135deg, var(--color-medical-500, #1e6bb8), var(--color-medical-600, #155a9c));
+  color: white;
+  border: none;
+  border-radius: 14px;
+  padding: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: opacity 200ms ease, transform 200ms ease;
+  box-shadow: 0 4px 14px rgba(30,107,184,0.3);
+}
+.mi-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,107,184,0.35); }
+
+/* Mobile */
+@media (max-width: 480px) {
+  .mi-card { padding: 2rem 1.25rem; }
+  .mi-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.mi-skip-row {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+.mi-skip-link {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.55);
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 180ms;
+  padding: 0;
+}
+.mi-skip-link:hover { color: rgba(255,255,255,0.85); }

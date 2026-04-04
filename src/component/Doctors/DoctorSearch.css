@@ -1,0 +1,576 @@
+/* ═══════════════════════════════════════════════
+   NESSAHUB — DOCTOR SEARCH (Zocdoc-style)
+   ═══════════════════════════════════════════════ */
+
+.ds-page {
+  min-height: 100vh;
+  background: var(--surface-page, #f5f7fa);
+  font-family: var(--font-sans);
+}
+
+/* ── Intake banner ── */
+.ds-intake-banner {
+  background: linear-gradient(90deg, #eff6ff, #f0fdf4);
+  border-bottom: 1px solid #bfdbfe;
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e40af;
+  font-family: var(--font-sans);
+}
+
+.ds-intake-clear {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-decoration: underline;
+}
+
+/* ── Search Hero ── */
+.ds-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1a3a5c 60%, #0d2233 100%);
+  padding: 3.5rem 2rem 3rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ds-hero::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -10%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(30,107,184,0.2) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+.ds-hero-inner {
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.ds-hero-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #93c5fd;
+  margin-bottom: 0.75rem;
+}
+
+.ds-hero-title {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 800;
+  color: white;
+  margin: 0 0 0.75rem;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+
+.ds-hero-sub {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.6);
+  margin: 0 0 1.75rem;
+  line-height: 1.6;
+}
+
+/* Search bar */
+.ds-search-bar {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 14px;
+  padding: 0 1rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.ds-search-icon-wrap {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.ds-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  color: #111827;
+  padding: 0.9rem 0;
+  background: transparent;
+  font-family: var(--font-sans);
+}
+
+.ds-search-input::placeholder { color: #9ca3af; }
+
+.ds-search-clear {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.25rem;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 120ms ease;
+}
+.ds-search-clear:hover { color: #374151; }
+
+/* Quick-pick chips */
+.ds-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ds-hero-chip {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  border-radius: 9999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  font-family: var(--font-sans);
+}
+
+.ds-hero-chip:hover {
+  background: rgba(255,255,255,0.22);
+  border-color: rgba(255,255,255,0.4);
+}
+
+/* ── Body layout ── */
+.ds-body {
+  display: flex;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+/* ── Sidebar ── */
+.ds-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: white;
+  border: 1px solid var(--color-gray-200, #e5e7eb);
+  border-radius: 16px;
+  padding: 1.5rem;
+  position: sticky;
+  top: 90px;
+}
+
+.ds-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.ds-sidebar-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.ds-reset-btn {
+  background: none;
+  border: none;
+  color: var(--color-medical-500, #1e6bb8);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-sans);
+}
+.ds-reset-btn:hover { text-decoration: underline; }
+
+.ds-filter-group {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+.ds-filter-group:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+.ds-filter-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.6rem;
+}
+
+.ds-filter-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #374151;
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.ds-filter-radio input[type="radio"] {
+  accent-color: var(--color-medical-500, #1e6bb8);
+  flex-shrink: 0;
+}
+
+.ds-filter-select,
+.ds-filter-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #111827;
+  background: #f9fafb;
+  font-family: var(--font-sans);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 120ms ease;
+}
+
+.ds-filter-select:focus,
+.ds-filter-input:focus {
+  border-color: var(--color-medical-500, #1e6bb8);
+  background: white;
+}
+
+/* ── Results ── */
+.ds-results {
+  flex: 1;
+  min-width: 0;
+}
+
+.ds-results-header {
+  margin-bottom: 1rem;
+}
+
+.ds-results-count {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* Loading */
+.ds-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  color: #6b7280;
+  gap: 1rem;
+}
+
+.ds-spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--color-medical-500, #1e6bb8);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.ds-empty {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: #6b7280;
+}
+
+.ds-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.ds-empty h3 {
+  font-size: 1.2rem;
+  color: #374151;
+  margin: 0 0 0.5rem;
+}
+
+.ds-empty p {
+  font-size: 0.9rem;
+  margin: 0 0 1.25rem;
+}
+
+.ds-reset-inline-btn {
+  background: none;
+  border: 1.5px solid var(--color-medical-500, #1e6bb8);
+  color: var(--color-medical-500, #1e6bb8);
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 150ms ease;
+}
+.ds-reset-inline-btn:hover {
+  background: var(--color-medical-100, #e8f1fb);
+}
+
+/* ── Doctor Cards ── */
+.ds-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ds-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  gap: 1.25rem;
+  cursor: pointer;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.ds-card:hover {
+  border-color: var(--color-medical-500, #1e6bb8);
+  box-shadow: 0 6px 20px rgba(30,107,184,0.1);
+  transform: translateY(-2px);
+}
+
+/* Avatar */
+.ds-card-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ds-avatar-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e5e7eb;
+}
+
+.ds-avatar-initials {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-medical-500, #1e6bb8), #155a9c);
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ds-verified-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid white;
+}
+
+/* Card body */
+.ds-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ds-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.2rem;
+}
+
+.ds-card-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.ds-verified-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #059669;
+  background: #d1fae5;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+}
+
+.ds-card-specialty {
+  font-size: 0.875rem;
+  color: var(--color-medical-500, #1e6bb8);
+  font-weight: 500;
+  margin: 0 0 0.5rem;
+}
+
+.ds-card-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.ds-stars { display: inline-flex; gap: 1px; }
+.ds-star { color: #d1d5db; font-size: 0.9rem; line-height: 1; }
+.ds-star.filled { color: #f59e0b; }
+
+.ds-rating-num {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.ds-rating-count {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.ds-exp-badge {
+  font-size: 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.ds-card-langs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.ds-lang-tag {
+  font-size: 0.75rem;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.ds-card-types {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.ds-type-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.ds-type-badge.type-video { background: #eff6ff; color: #1e40af; }
+.ds-type-badge.type-audio { background: #f0fdf4; color: #166534; }
+.ds-type-badge.type-chat  { background: #faf5ff; color: #6b21a8; }
+
+/* Card right */
+.ds-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.ds-card-fee {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #111827;
+  line-height: 1;
+}
+
+.ds-card-fee-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+}
+
+.ds-book-btn {
+  background: var(--color-medical-500, #1e6bb8);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.ds-book-btn:hover {
+  background: var(--color-medical-600, #155a9c);
+  transform: translateY(-1px);
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .ds-body {
+    flex-direction: column;
+    padding: 1.5rem 1rem;
+  }
+  .ds-sidebar {
+    width: 100%;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    padding: 1.25rem;
+  }
+  .ds-sidebar-header { grid-column: 1 / -1; }
+  .ds-filter-group { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+}
+
+@media (max-width: 560px) {
+  .ds-card {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .ds-card-right {
+    flex-direction: row;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .ds-card-fee-label { display: none; }
+}

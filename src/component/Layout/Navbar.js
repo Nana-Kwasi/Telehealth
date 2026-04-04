@@ -1,66 +1,126 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import './Navbar.css';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { auth } from '../Auth/firebaseConfig';
+import './Navbar.css';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, setUser);
     return unsub;
   }, []);
-  
-  console.log('Navbar - User state:', user); // Debug log
-  
-  // Hide navbar when user is in dashboard
-  const isInDashboard = location.pathname.startsWith('/dashboard');
-  if (isInDashboard) {
-    return null;
-  }
-  
+
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Hide navbar inside dashboard
+  if (location.pathname.startsWith('/dashboard')) return null;
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate('/');
+  };
+
+  const navLinks = [
+    { to: '/about', label: 'About' },
+    { to: '/faqs', label: 'FAQs' },
+    { to: '/advice', label: 'Resources' },
+    { to: '/contact', label: 'Contact' },
+  ];
+
   return (
     <header className="navbar">
       <div className="navbar-container">
-        <div className="navbar-logo" onClick={() => navigate('/')}>NessaHub</div>
-        <nav className="navbar-links">
-          <NavLink className="navbar-link" to="/about">About</NavLink>
-          <NavLink className="navbar-link" to="/contact">Contact</NavLink>
-          <NavLink className="navbar-link" to="/faqs">FAQs</NavLink>
-          <NavLink className="navbar-link" to="/advice">Advice</NavLink>
-        </nav>
-        <div className="navbar-auth">
-          <NavLink className="auth-button login" to="/login">Login</NavLink>
+
+        {/* Logo */}
+        <div className="navbar-logo" onClick={() => navigate('/')} role="link" tabIndex={0}
+          onKeyDown={e => e.key === 'Enter' && navigate('/')}>
+          <div className="navbar-logo-mark">N</div>
+          <span className="navbar-logo-text">NessaHub</span>
         </div>
-        
-        {/* Mobile Menu Button */}
-        <button 
+
+        {/* Desktop nav links */}
+        <nav className="navbar-links">
+          {navLinks.map(({ to, label }) => (
+            <NavLink key={to} className="navbar-link" to={to}>{label}</NavLink>
+          ))}
+        </nav>
+
+        {/* Service pills */}
+        <div className="navbar-services">
+          <span className="navbar-service-pill therapy">
+            <span className="navbar-service-dot" />
+            Therapy
+          </span>
+          <span className="navbar-service-pill medical">
+            <span className="navbar-service-dot" />
+            Medical
+          </span>
+        </div>
+
+        {/* Auth buttons */}
+        <div className="navbar-auth">
+          {user ? (
+            <>
+              <button className="auth-button dashboard" onClick={() => navigate('/dashboard')}>
+                Dashboard
+              </button>
+              <button className="auth-button logout" onClick={handleLogout}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <NavLink className="auth-button login" to="/login">Log in</NavLink>
+              <NavLink className="auth-button signup" to="/login">Get Started</NavLink>
+            </>
+          )}
+        </div>
+
+        {/* Mobile toggle */}
+        <button
           className="mobile-menu-button"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+          aria-expanded={mobileMenuOpen}
         >
-          ☰
+          {mobileMenuOpen ? '✕' : '☰'}
         </button>
       </div>
-      
-      {/* Mobile Menu */}
+
+      {/* Mobile drawer */}
       <div className={`mobile-menu ${mobileMenuOpen ? 'open' : ''}`}>
         <nav className="navbar-links">
-          <NavLink className="navbar-link" to="/about">About</NavLink>
-          <NavLink className="navbar-link" to="/contact">Contact</NavLink>
-          <NavLink className="navbar-link" to="/faqs">FAQs</NavLink>
-          <NavLink className="navbar-link" to="/advice">Advice</NavLink>
+          {navLinks.map(({ to, label }) => (
+            <NavLink key={to} className="navbar-link" to={to}>{label}</NavLink>
+          ))}
         </nav>
         <div className="navbar-auth">
-          <NavLink className="auth-button login" to="/login">Login</NavLink>
+          {user ? (
+            <>
+              <button className="auth-button dashboard" onClick={() => navigate('/dashboard')}>Dashboard</button>
+              <button className="auth-button logout" onClick={handleLogout}>Sign out</button>
+            </>
+          ) : (
+            <>
+              <NavLink className="auth-button login" to="/login">Log in</NavLink>
+              <NavLink className="auth-button signup" to="/login">Get Started</NavLink>
+            </>
+          )}
+        </div>
+        <div className="navbar-services">
+          <span className="navbar-service-pill therapy"><span className="navbar-service-dot" />Therapy</span>
+          <span className="navbar-service-pill medical"><span className="navbar-service-dot" />Medical</span>
         </div>
       </div>
     </header>
   );
 }
-
-

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../Auth/firebaseConfig';
 import './Resources.css';
 import { 
@@ -34,6 +35,7 @@ import {
 import jsPDF from 'jspdf';
 
 export default function ClientResources() {
+  const navigate = useNavigate();
   const [resources, setResources] = useState([]);
   const [worksheets, setWorksheets] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -377,8 +379,7 @@ export default function ClientResources() {
 
   // Handle worksheet view
   const handleWorksheetView = (worksheet) => {
-    setSelectedWorksheet(worksheet);
-    setShowWorksheetModal(true);
+    navigate(`/dashboard/resources/worksheet/${worksheet.id}`);
     
     // Initialize responses for this worksheet
     const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
@@ -1200,8 +1201,7 @@ export default function ClientResources() {
 
   // Handle download
   const handleViewNote = (note) => {
-    setSelectedNote(note);
-    setShowNoteModal(true);
+    navigate(`/dashboard/resources/note/${note.id}`);
   };
 
   const handleDownload = (item) => {
@@ -1345,12 +1345,27 @@ export default function ClientResources() {
                 {item.type === 'worksheet' && item.goal && (
                   <div className="worksheet-goal">
                     <strong>Goal:</strong> {item.goal}
-                    {hasUpdates(item) && (
-                      <span className="update-indicator">
-                        <AlertCircle size={14} />
-                        Updated with new fields
-                      </span>
-                    )}
+                    {(() => {
+                      const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+                      const clientResponse = item.clientResponses?.[clientId];
+                      const isCompleted = clientResponse?.status === 'completed';
+                      return (
+                        <>
+                          {isCompleted && (
+                            <span className="completed-badge" style={{ marginLeft: '0.5rem', background: '#10b981', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>
+                              <CheckCircle size={12} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                              Completed
+                            </span>
+                          )}
+                          {hasUpdates(item) && (
+                            <span className="update-indicator">
+                              <AlertCircle size={14} />
+                              Updated with new fields
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
