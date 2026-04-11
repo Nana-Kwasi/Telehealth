@@ -1,0 +1,368 @@
+.mood-dashboard {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.mood-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.mood-header-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #eef2ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mood-header h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0 0 4px;
+}
+
+.mood-header p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ── Loading ── */
+.mood-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 80px 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.mood-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: mood-spin 0.7s linear infinite;
+}
+
+@keyframes mood-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Search ── */
+.mood-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+}
+
+.mood-search-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.mood-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #1e293b;
+  background: transparent;
+}
+
+.mood-search-input::placeholder {
+  color: #94a3b8;
+}
+
+/* ── Empty state ── */
+.mood-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 60px 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* ── Clients grid ── */
+.mood-clients-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mood-client-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.mood-client-card:hover {
+  border-color: #818cf8;
+  box-shadow: 0 2px 12px rgba(79, 70, 229, 0.08);
+}
+
+.mood-client-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mood-client-info {
+  flex: 1;
+}
+
+.mood-client-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.mood-client-email {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.mood-client-status {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.mood-status-active {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.mood-status-inactive {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+/* ── Detail header ── */
+.mood-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.mood-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mood-back-btn:hover {
+  background: #e2e8f0;
+}
+
+.mood-detail-header h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0 0 3px;
+}
+
+.mood-detail-header p {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ── Summary cards ── */
+.mood-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.mood-summary-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-top-width: 3px;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.mood-summary-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.mood-summary-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Chart cards ── */
+.mood-chart-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.mood-chart-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px;
+}
+
+/* ── Entry list ── */
+.mood-entries-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.mood-entries-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px;
+}
+
+.mood-entries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mood-entry-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.mood-entry-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.mood-entry-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.mood-entry-val {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mood-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mood-entry-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+
+.mood-entry-journal {
+  font-size: 13px;
+  color: #475569;
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
+.mood-entry-gratitude,
+.mood-entry-challenges {
+  font-size: 12px;
+  color: #64748b;
+  margin: 3px 0 0;
+}
+
+.mood-entry-date {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .mood-dashboard {
+    padding: 16px;
+  }
+
+  .mood-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mood-summary-grid > :last-child {
+    grid-column: span 2;
+  }
+}

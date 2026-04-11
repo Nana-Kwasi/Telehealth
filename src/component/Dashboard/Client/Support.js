@@ -448,11 +448,45 @@ export default function ClientSupport() {
     );
   }
 
+  const crisisHotlines = [
+    { name: '988 Suicide & Crisis Lifeline', desc: 'Call or text 988 — free, 24/7', href: 'tel:988', color: '#dc2626' },
+    { name: 'Crisis Text Line', desc: 'Text HOME to 741741', href: 'sms:741741?body=HOME', color: '#7c3aed' },
+    { name: 'Emergency Services', desc: 'Call 911 for immediate danger', href: 'tel:911', color: '#ea580c' },
+    { name: 'Trevor Project (LGBTQ+)', desc: '1-866-488-7386 | 24/7', href: 'tel:18664887386', color: '#0ea5e9' },
+    { name: 'NAMI Helpline', desc: '1-800-950-6264 (Mon–Fri)', href: 'tel:18009506264', color: '#16a34a' },
+  ];
+
   return (
     <div className="client-support">
       <div className="support-header">
         <h1 className="page-title">Feedback & Support</h1>
         <p className="subtitle">Rate your sessions and get help when you need it</p>
+      </div>
+
+      {/* Emergency & Crisis Section */}
+      <div className="crisis-section">
+        <div className="crisis-section-header">
+          <AlertTriangle size={24} color="#dc2626" />
+          <div>
+            <h2>Crisis & Emergency Support</h2>
+            <p>If you are in immediate danger or experiencing a mental health crisis, reach out now. Help is available 24/7.</p>
+          </div>
+        </div>
+        <div className="crisis-hotlines-grid">
+          {crisisHotlines.map((h, i) => (
+            <a key={i} href={h.href} className="crisis-hotline-card" style={{ borderLeftColor: h.color }}>
+              <div className="crisis-hotline-dot" style={{ background: h.color }} />
+              <div>
+                <div className="crisis-hotline-name">{h.name}</div>
+                <div className="crisis-hotline-desc">{h.desc}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+        <div className="crisis-safety-note">
+          <Flag size={16} />
+          <span>This platform is not for emergencies. If you are in danger, call 911 or go to your nearest emergency room.</span>
+        </div>
       </div>
 
       {/* Quick Actions */}

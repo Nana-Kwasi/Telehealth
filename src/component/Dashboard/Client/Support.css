@@ -1260,3 +1260,71 @@
     gap: 1rem;
   }
 }
+
+/* ── Crisis Section ── */
+.crisis-section {
+  background: linear-gradient(135deg, #fff1f2 0%, #fef2f2 100%);
+  border: 1px solid #fca5a5;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+.crisis-section-header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+.crisis-section-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #dc2626;
+  margin: 0 0 0.2rem 0;
+}
+.crisis-section-header p {
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin: 0;
+}
+.crisis-hotlines-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.crisis-hotline-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  border-left: 4px solid;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  transition: box-shadow 0.15s;
+}
+.crisis-hotline-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.crisis-hotline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.crisis-hotline-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #1f2937;
+}
+.crisis-hotline-desc {
+  font-size: 0.775rem;
+  color: #6b7280;
+  margin-top: 0.1rem;
+}
+.crisis-safety-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
+}

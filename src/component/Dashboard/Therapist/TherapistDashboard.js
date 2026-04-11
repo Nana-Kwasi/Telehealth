@@ -15,6 +15,7 @@ import {
   Flag,
   Stethoscope,
   Activity,
+  Heart,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
@@ -33,6 +34,7 @@ import TherapistResources from './Resources';
 import TherapistReports from './Reports';
 import TherapistSettings from './Settings';
 import TherapistLogs from './Logs';
+import MoodDashboard from './MoodDashboard';
 import OnboardTherapist from '../Admin/OnboardTherapist';
 import OnboardDoctor from '../Admin/OnboardDoctor';
 import ClientDetails from './ClientDetails';
@@ -54,6 +56,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: TherapistResources },
+    { path: '/dashboard/mood', icon: Heart, label: 'Client Moods', component: MoodDashboard },
     { path: '/dashboard/reports', icon: Flag, label: 'Reports', component: TherapistReports },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: TherapistSettings }
   ];
@@ -178,13 +181,14 @@ export default function TherapistDashboard({ profile }) {
       {/* Main Content */}
       <main className="therapist-main">
         <Routes>
-          <Route path="/" element={<TherapistHome />} />
+          <Route path="/" element={<TherapistHome profile={profile} />} />
           <Route path="/clients" element={<TherapistClients profile={profile} />} />
           <Route path="/staff" element={<TherapistMessages />} />
           <Route path="/video" element={<TherapistVideoCall profile={profile} />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/resources" element={<TherapistResources />} />
+          <Route path="/mood" element={<MoodDashboard />} />
           <Route path="/reports" element={<TherapistReports />} />
           <Route path="/settings" element={<TherapistSettings />} />
           <Route path="/clients/:clientId" element={<ClientDetails />} />

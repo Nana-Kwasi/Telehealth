@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X } from 'lucide-react';
 import './Home.css';
 import { auth, db } from '../../Auth/firebaseConfig';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  orderBy, 
-  limit, 
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
   onSnapshot,
   doc,
   getDoc,
-  addDoc
+  addDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import {
   Chart as ChartJS,
@@ -44,7 +46,9 @@ ChartJS.register(
 );
 
 export default function ClientHome({ profile }) {
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [clientData, setClientData] = useState({});
   const [therapistData, setTherapistData] = useState(null);
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
@@ -1411,8 +1415,8 @@ export default function ClientHome({ profile }) {
         gratitude: moodAnswers.gratitude || '',
         challenges: moodAnswers.challenges || '',
         date: new Date().toISOString().split('T')[0],
-        timestamp: new Date(),
-        createdAt: new Date()
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
       };
 
       await addDoc(collection(db, 'Client daily mood tracking'), moodEntry);
@@ -1748,218 +1752,175 @@ export default function ClientHome({ profile }) {
 
   return (
     <div className="dashboard-home">
-      {/* Header with Client Info, Search, and Notifications */}
-      <div className="dashboard-header">
-        <div className="header-content">
-          <div className="client-info-section">
-            <div className="client-profile">
-              <div className="client-avatar">
-                {profile?.photoURL ? (
-                  <img src={profile.photoURL} alt="Client" className="avatar-image" />
-                ) : (
-                  <div className="avatar-placeholder">
-                    {profile?.name ? profile.name.charAt(0).toUpperCase() : 'U'}
+      {/* Clean Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '1.25rem 1.5rem', background: '#fff',
+        borderBottom: '1px solid #f1f5f9', marginBottom: '1.5rem',
+        borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontWeight: 700, fontSize: '1.1rem', flexShrink: 0
+          }}>
+            {profile?.photoURL
+              ? <img src={profile.photoURL} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
+              : (profile?.name?.charAt(0).toUpperCase() || 'C')}
           </div>
-                )}
-              </div>
-              <div className="client-greeting">
-                <h1 className="welcome-title">
-                  Hi {profile?.name || 'User'}, Welcome to your Dashboard
-                </h1>
-              </div>
-            </div>
-            
-            <div className="search-section">
-              <div className="search-bar">
-                <Search size={20} className="search-icon" />
-                <input 
-                  type="text" 
-                  placeholder={`Hi ${profile?.name || 'User'}, what are you looking for?`}
-                  className="search-input"
-                />
-              </div>
-            </div>
-            
-            <div className="notification-section">
-            <div className="notification-icon" onClick={() => {/* Handle notification click */}}>
-              <Bell size={24} />
-              {(unreadCount > 0 || Object.values(newContentCounts).some(count => count > 0)) && (
-                <span className="notification-badge">
-                  {unreadCount + Object.values(newContentCounts).reduce((sum, count) => sum + count, 0)}
-                </span>
-              )}
-            </div>
+          <div>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </p>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {profile?.name?.split(' ')[0] || 'there'} 👋
+            </h2>
           </div>
-          </div>
-          
-          <div className="therapist-info-section">
-            <div className="therapist-card">
-              <div className="therapist-avatar">
-                {therapistData?.photoURL ? (
-                  <img src={therapistData.photoURL} alt={therapistData.name} className="therapist-image" />
-                ) : (
-                  <div className="therapist-avatar-placeholder">
-                    {therapistData?.name ? therapistData.name.charAt(0).toUpperCase() : 'T'}
-                  </div>
-                )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {therapistData && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.6rem',
+              background: '#f0f7ff', borderRadius: '10px', padding: '0.5rem 0.85rem',
+              border: '1px solid #dbeafe'
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#4f46e5,#6366f1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0
+              }}>
+                {therapistData.photoURL
+                  ? <img src={therapistData.photoURL} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                  : therapistData.name?.charAt(0).toUpperCase()}
               </div>
-              <div className="therapist-details">
-                <h3 className="therapist-name">{therapistName}</h3>
-                <p className="therapist-role">Your Therapist</p>
+              <div>
+                <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>Your Therapist</p>
+                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: '#1e293b' }}>{therapistData.name || therapistName}</p>
               </div>
             </div>
+          )}
+          <div
+            style={{ position: 'relative', cursor: 'pointer', padding: '0.5rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}
+            onClick={() => setShowMoodModal(true)}
+            title="Log your mood"
+          >
+            <Activity size={20} color="#6366f1" />
+          </div>
+          <div style={{ position: 'relative', cursor: 'pointer', padding: '0.5rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <Bell size={20} color="#64748b" />
+            {(unreadCount > 0 || Object.values(newContentCounts).some(c => c > 0)) && (
+              <span style={{
+                position: 'absolute', top: 2, right: 2, width: 8, height: 8,
+                background: '#ef4444', borderRadius: '50%'
+              }} />
+            )}
           </div>
         </div>
       </div>
 
 
-      {/* Quick Stats */}
-      <div className="stats-section">
-        <div className="payment-cards-grid">
-          <div className="payment-card payment-card-green">
-            <div className="card-header">
-              <div className="card-logo">
-                <div className="logo-squares">
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-            </div>
-            </div>
-              <div className="contactless-icon">
-                <div className="wifi-symbol"></div>
-          </div>
-            </div>
-            <div className="card-content">
-              <div className="card-name">Sessions Completed</div>
-              <div className="card-balance">
-                <div className="balance-label">Total Sessions</div>
-                <div className="balance-amount">{sessionsCompleted}</div>
-            </div>
-              <div className="card-details">
-                <div className="exp-cvv">
-                 
-                  <div className="cvv">
-                   
-          </div>
-            </div>
-            </div>
-          </div>
-            </div>
-          
-          <div className="payment-card payment-card-blue">
-            <div className="card-header">
-              <div className="card-logo">
-                <div className="logo-squares">
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-            </div>
-          </div>
-              <div className="contactless-icon">
-                <div className="wifi-symbol"></div>
+      {/* Emergency Banner */}
+      <div className="emergency-banner">
+        <div className="emergency-banner-left">
+          <AlertTriangle size={20} className="emergency-banner-icon" />
+          <span>In crisis? Get immediate help</span>
         </div>
-      </div>
-            <div className="card-content">
-              <div className="card-name">Progress Score</div>
-              <div className="card-balance">
-                <div className="balance-label">Current Score</div>
-                <div className="balance-amount">{progressScore}%</div>
-              </div>
-              <div className="card-details">
-                <div className="exp-cvv">
-                
-                 
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="payment-card payment-card-white">
-            <div className="card-header">
-              <div className="card-logo">
-                <div className="logo-squares">
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-            </div>
-          </div>
-        </div>
-            <div className="card-content">
-              <div className="card-name">Goals Achieved</div>
-              <div className="card-balance">
-                <div className="balance-label">Total Goals</div>
-                <div className="balance-amount">{goalsAchieved}</div>
-          </div>
+        <div className="emergency-banner-actions">
+          <button className="book-session-btn" onClick={() => navigate('/dashboard/video')}>
+            <Calendar size={16} />
+            Book Session
+          </button>
+          <button className="emergency-btn" onClick={() => setShowEmergencyModal(true)}>
+            <Phone size={16} />
+            Emergency Help
+          </button>
         </div>
       </div>
 
-          <div className="payment-card payment-card-gray">
-            <div className="card-header">
-              <div className="card-logo">
-                <div className="logo-squares">
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                </div>
-              </div>
-              <div className="contactless-icon">
-                <div className="wifi-symbol"></div>
-              </div>
+      {/* Emergency Modal */}
+      {showEmergencyModal && (
+        <div className="emergency-modal-overlay" onClick={() => setShowEmergencyModal(false)}>
+          <div className="emergency-modal" onClick={e => e.stopPropagation()}>
+            <div className="emergency-modal-header">
+              <AlertTriangle size={28} color="#dc2626" />
+              <h2>Crisis & Emergency Support</h2>
+              <button className="emergency-modal-close" onClick={() => setShowEmergencyModal(false)}>
+                <X size={24} />
+              </button>
             </div>
-            <div className="card-content">
-              <div className="card-name">Days Active</div>
-              <div className="card-balance">
-                <div className="balance-label">Active Days</div>
-                <div className="balance-amount">{daysActive}</div>
-              </div>
-              <div className="card-details">
-                <div className="exp-cvv">
-               
-                 
+            <p className="emergency-modal-intro">You are not alone. Reach out immediately:</p>
+            <div className="emergency-hotlines">
+              <a className="hotline-card" href="tel:988">
+                <div className="hotline-icon">📞</div>
+                <div>
+                  <div className="hotline-name">988 Suicide & Crisis Lifeline</div>
+                  <div className="hotline-desc">Call or text 988 — 24/7 free support</div>
                 </div>
-              </div>
+              </a>
+              <a className="hotline-card" href="sms:741741?body=HELLO">
+                <div className="hotline-icon">💬</div>
+                <div>
+                  <div className="hotline-name">Crisis Text Line</div>
+                  <div className="hotline-desc">Text HOME to 741741</div>
+                </div>
+              </a>
+              <a className="hotline-card" href="tel:911">
+                <div className="hotline-icon">🚨</div>
+                <div>
+                  <div className="hotline-name">Emergency Services</div>
+                  <div className="hotline-desc">Call 911 for immediate danger</div>
+                </div>
+              </a>
+              <a className="hotline-card" href="tel:18002738255">
+                <div className="hotline-icon">🌈</div>
+                <div>
+                  <div className="hotline-name">Trevor Project (LGBTQ+)</div>
+                  <div className="hotline-desc">1-800-273-8255</div>
+                </div>
+              </a>
             </div>
-          </div>
-          
-          <div className="payment-card payment-card-purple">
-            <div className="card-header">
-              <div className="card-logo">
-                <div className="logo-squares">
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                  <div className="logo-square"></div>
-                </div>
-              </div>
-              <div className="contactless-icon">
-                <div className="wifi-symbol"></div>
-              </div>
-            </div>
-            <div className="card-content">
-              <div className="card-name">Next Session</div>
-              <div className="card-balance">
-                <div className="balance-label">Scheduled</div>
-                <div className="balance-amount">21/09/2025</div>
-              </div>
-              <div className="card-details">
-                <div className="exp-cvv">
-                  <div className="exp">
-                    <div className="exp-label">TIME</div>
-                    <div className="exp-value">15:41</div>
-                  </div>
-                  <div className="cvv">
-                    <div className="cvv-label">TYPE</div>
-                    <div className="cvv-value">Individual</div>
-                  </div>
-                </div>
-              </div>
+            <div className="emergency-modal-footer">
+              <button className="emergency-message-therapist" onClick={() => { setShowEmergencyModal(false); navigate('/dashboard/messages'); }}>
+                <MessageSquare size={16} />
+                Message My Therapist
+              </button>
+              <button className="emergency-close-btn" onClick={() => setShowEmergencyModal(false)}>
+                Close
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* KPI Stats Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        {[
+          { label: 'Sessions Completed', value: sessionsCompleted, icon: '✅', color: '#10b981', bg: '#f0fdf4' },
+          { label: 'Progress Score', value: `${progressScore}%`, icon: '📈', color: '#6366f1', bg: '#f0f7ff' },
+          { label: 'Goals Achieved', value: goalsAchieved, icon: '🎯', color: '#f59e0b', bg: '#fffbeb' },
+          { label: 'Days Active', value: daysActive, icon: '🗓️', color: '#8b5cf6', bg: '#f5f3ff' },
+          { label: 'Next Session', value: nextSession
+              ? (() => { const d = nextSession.scheduledTime?.toDate ? nextSession.scheduledTime.toDate() : new Date(nextSession.scheduledTime); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()
+              : 'None', icon: '📅', color: '#0ea5e9', bg: '#f0f9ff' },
+        ].map((kpi, i) => (
+          <div key={i} style={{
+            background: '#fff', borderRadius: '14px', padding: '1.1rem',
+            border: '1px solid #f1f5f9', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+            display: 'flex', alignItems: 'center', gap: '0.85rem'
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: '10px',
+              background: kpi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.2rem', flexShrink: 0
+            }}>{kpi.icon}</div>
+            <div>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</p>
+              <p style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>{kpi.value}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Progress and Activities Cards */}

@@ -1,25 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db, storage } from '../../Auth/firebaseConfig';
 import './Settings.css';
-import { 
-  doc, 
-  getDoc, 
-  updateDoc
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc
 } from 'firebase/firestore';
-import { 
+import {
   updatePassword,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  deleteUser
 } from 'firebase/auth';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Calendar, 
-  Shield, 
-  Save, 
-  Eye, 
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Shield,
+  Save,
+  Eye,
   EyeOff,
   Settings as SettingsIcon,
   Bell,
@@ -33,7 +36,9 @@ import {
   Edit,
   Globe,
   Moon,
-  Sun
+  Sun,
+  Trash2,
+  Camera
 } from 'lucide-react';
 
 export default function ClientSettings() {
@@ -55,6 +60,10 @@ export default function ClientSettings() {
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('basic');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const currentUser = auth.currentUser;
 
@@ -302,6 +311,60 @@ export default function ClientSettings() {
     return `${total}/27 (${total <= 4 ? 'Minimal' : total <= 9 ? 'Mild' : total <= 14 ? 'Moderate' : total <= 19 ? 'Moderately Severe' : 'Severe'})`;
   };
 
+  const handleProfilePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentUser) return;
+    setUploadingPhoto(true);
+    try {
+      const storageRef = ref(storage, `profile-images/${currentUser.uid}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+      await updateDoc(doc(db, 'clients', clientId), { photoURL: downloadURL });
+      setClientData(prev => ({ ...prev, photoURL: downloadURL }));
+      setSuccessMessage('Profile photo updated!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setPasswordError('Failed to upload photo: ' + err.message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleSavePreferences = async (updates) => {
+    if (!currentUser) return;
+    try {
+      setSaving(true);
+      const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+      await updateDoc(doc(db, 'clients', clientId), updates);
+      setClientData(prev => ({ ...prev, ...updates }));
+      setSuccessMessage('Preferences saved!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setPasswordError('Failed to save: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!currentUser || !deletePassword) return;
+    setDeletingAccount(true);
+    try {
+      const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+      await deleteDoc(doc(db, 'clients', clientId));
+      await deleteDoc(doc(db, 'auth', currentUser.uid));
+      await deleteUser(currentUser);
+      window.location.href = '/';
+    } catch (err) {
+      setPasswordError(err.code === 'auth/wrong-password' ? 'Incorrect password' : 'Failed to delete: ' + err.message);
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="settings-loading">
@@ -352,12 +415,26 @@ export default function ClientSettings() {
             <Lock size={20} />
             Security
           </button>
-          <button 
+          <button
             className={`settings-nav-item ${activeSection === 'preferences' ? 'active' : ''}`}
             onClick={() => setActiveSection('preferences')}
           >
             <Bell size={20} />
             Preferences
+          </button>
+          <button
+            className={`settings-nav-item ${activeSection === 'privacy' ? 'active' : ''}`}
+            onClick={() => setActiveSection('privacy')}
+          >
+            <Shield size={20} />
+            Privacy
+          </button>
+          <button
+            className={`settings-nav-item settings-nav-danger ${activeSection === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveSection('account')}
+          >
+            <Trash2 size={20} />
+            Account
           </button>
         </div>
 
@@ -386,7 +463,25 @@ export default function ClientSettings() {
                 <h2>Basic Information</h2>
                 <p>Your personal details and contact information</p>
               </div>
-              
+
+              {/* Profile Photo */}
+              <div className="settings-photo-upload">
+                <div className="settings-photo-avatar">
+                  {clientData?.photoURL ? (
+                    <img src={clientData.photoURL} alt="Profile" className="settings-photo-img" />
+                  ) : (
+                    <span className="settings-photo-initials">
+                      {clientData?.name ? clientData.name.charAt(0).toUpperCase() : 'C'}
+                    </span>
+                  )}
+                  <label className="settings-photo-overlay" htmlFor="profile-photo-input">
+                    <Camera size={18} />
+                    {uploadingPhoto ? 'Uploading...' : 'Change Photo'}
+                  </label>
+                  <input id="profile-photo-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfilePhotoUpload} />
+                </div>
+              </div>
+
               <div className="settings-form">
                 <div className="settings-form-row">
                   <div className="settings-form-group">
@@ -770,8 +865,137 @@ export default function ClientSettings() {
                     <span key={index} className="settings-tag">{expectation}</span>
                   )) || <span className="settings-tag-empty">No expectations specified</span>}
                 </div>
-          </div>
-          </div>
+              </div>
+
+              <div className="settings-form">
+                <div className="settings-form-row">
+                  <div className="settings-form-group">
+                    <label><Globe size={16} /> Language</label>
+                    <select
+                      value={clientData?.language || 'en'}
+                      onChange={(e) => setClientData({ ...clientData, language: e.target.value })}
+                    >
+                      <option value="en">English</option>
+                      <option value="es">Spanish</option>
+                      <option value="fr">French</option>
+                      <option value="de">German</option>
+                      <option value="pt">Portuguese</option>
+                      <option value="zh">Chinese</option>
+                      <option value="ar">Arabic</option>
+                      <option value="hi">Hindi</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="settings-form-actions">
+                  <button className="settings-btn-primary" onClick={() => handleSavePreferences({ language: clientData?.language || 'en' })} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Language'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Privacy Section */}
+          {activeSection === 'privacy' && (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <h2>Privacy & Data</h2>
+                <p>Control your profile visibility and data sharing</p>
+              </div>
+
+              <div className="settings-form">
+                <div className="settings-form-group">
+                  <label>Profile Visibility</label>
+                  <select
+                    value={clientData?.profileVisibility || 'therapist-only'}
+                    onChange={(e) => setClientData({ ...clientData, profileVisibility: e.target.value })}
+                  >
+                    <option value="therapist-only">Therapist Only (Recommended)</option>
+                    <option value="private">Private — Only me</option>
+                    <option value="public">Public</option>
+                  </select>
+                  <small className="settings-field-hint">Controls who can view your profile information</small>
+                </div>
+
+                <div className="settings-toggle-row">
+                  <div className="settings-toggle-info">
+                    <label>Share progress data with therapist</label>
+                    <small>Allow your therapist to view mood check-ins and progress metrics</small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="settings-toggle"
+                    checked={clientData?.shareProgressWithTherapist !== false}
+                    onChange={(e) => setClientData({ ...clientData, shareProgressWithTherapist: e.target.checked })}
+                  />
+                </div>
+
+                <div className="settings-toggle-row">
+                  <div className="settings-toggle-info">
+                    <label>Allow anonymous data for research</label>
+                    <small>Contribute anonymised, de-identified data to mental health research</small>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="settings-toggle"
+                    checked={clientData?.allowAnonymousResearch === true}
+                    onChange={(e) => setClientData({ ...clientData, allowAnonymousResearch: e.target.checked })}
+                  />
+                </div>
+
+                <div className="settings-form-actions">
+                  <button className="settings-btn-primary" onClick={() => handleSavePreferences({
+                    profileVisibility: clientData?.profileVisibility || 'therapist-only',
+                    shareProgressWithTherapist: clientData?.shareProgressWithTherapist !== false,
+                    allowAnonymousResearch: clientData?.allowAnonymousResearch === true,
+                  })} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Privacy Settings'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Account Section */}
+          {activeSection === 'account' && (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <h2>Account</h2>
+                <p>Manage or permanently delete your account</p>
+              </div>
+
+              {!showDeleteConfirm ? (
+                <div className="settings-danger-zone">
+                  <div className="settings-danger-info">
+                    <AlertTriangle size={22} color="#dc2626" />
+                    <div>
+                      <h4>Delete Account</h4>
+                      <p>This permanently deletes your account and all associated data. This action cannot be undone.</p>
+                    </div>
+                  </div>
+                  <button className="settings-btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+                    <Trash2 size={16} />
+                    Delete My Account
+                  </button>
+                </div>
+              ) : (
+                <div className="settings-delete-confirm">
+                  <p className="settings-delete-warning">Enter your password to confirm account deletion:</p>
+                  <div className="settings-form-group">
+                    <label>Current Password</label>
+                    <input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Enter your password" />
+                  </div>
+                  <div className="settings-form-actions">
+                    <button className="settings-btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }}>
+                      Cancel
+                    </button>
+                    <button className="settings-btn-danger" onClick={handleDeleteAccount} disabled={deletingAccount || !deletePassword}>
+                      {deletingAccount ? 'Deleting...' : 'Confirm Delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

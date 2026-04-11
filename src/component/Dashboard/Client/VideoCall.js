@@ -84,6 +84,8 @@ const ClientVideoCall = ({ profile }) => {
     isAnonymous: false
   });
   const [incidentId, setIncidentId] = useState('');
+  const [hasAssignedTherapist, setHasAssignedTherapist] = useState(false);
+  const [assignedTherapistName, setAssignedTherapistName] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -121,38 +123,32 @@ const ClientVideoCall = ({ profile }) => {
           setClientProfile(clientProfile);
           console.log('👤 Client profile set:', clientProfile);
 
-          // Fetch assigned therapist data
-          if (clientData.assignedTherapist) {
-            console.log('👨‍⚕️ Fetching therapist data for ID:', clientData.assignedTherapist);
-            
-            // Try therapistt collection first
-            const therapistDoc = await getDoc(doc(db, 'therapistt', clientData.assignedTherapist));
-            if (therapistDoc.exists()) {
-              const therapistData = { id: therapistDoc.id, ...therapistDoc.data() };
-              console.log('✅ Therapist found in therapistt collection:', therapistData);
-              setTherapistData(therapistData);
-            } else {
-              console.log('❌ Therapist not found in therapistt collection, trying therapists collection...');
-              
-              // Try therapists collection as fallback
-              const therapistDoc2 = await getDoc(doc(db, 'therapists', clientData.assignedTherapist));
-              if (therapistDoc2.exists()) {
-                const therapistData = { id: therapistDoc2.id, ...therapistDoc2.data() };
-                console.log('✅ Therapist found in therapists collection:', therapistData);
-                setTherapistData(therapistData);
-              } else {
-                console.log('❌ Therapist not found in therapists collection either');
-                
-                // Let's also check what therapists exist
-                console.log('🔍 Checking what therapists exist...');
-                const allTherapistsQuery = query(collection(db, 'therapistt'));
-                const allTherapistsSnapshot = await getDocs(allTherapistsQuery);
-                console.log('📋 Therapists in therapistt collection:', allTherapistsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
-                
-                const allTherapistsQuery2 = query(collection(db, 'therapists'));
-                const allTherapistsSnapshot2 = await getDocs(allTherapistsQuery2);
-                console.log('📋 Therapists in therapists collection:', allTherapistsSnapshot2.docs.map(doc => ({ id: doc.id, name: doc.data().name })));
-              }
+          // Get assigned provider ID — support multiple field names
+          const assignedId = clientData.assignedTherapist || clientData.assignedTherapistId || clientData.assignedDoctor || clientData.assignedDoctorId || '';
+          const assignedName = clientData.assignedTherapistName || clientData.assignedDoctorName || '';
+
+          // Track whether client has an assigned provider (even if doc lookup fails later)
+          if (assignedId) {
+            setHasAssignedTherapist(true);
+            setAssignedTherapistName(assignedName);
+          }
+
+          // Fetch assigned provider data — try all possible collections
+          if (assignedId) {
+            const collections = ['therapists', 'therapistt', 'doctors'];
+            let found = false;
+            for (const col of collections) {
+              try {
+                const snap = await getDoc(doc(db, col, assignedId));
+                if (snap.exists()) {
+                  setTherapistData({ id: snap.id, ...snap.data() });
+                  found = true;
+                  break;
+                }
+              } catch (_) {}
+            }
+            if (!found) {
+              console.log('Provider not found in any collection for ID:', assignedId);
             }
           } else {
             console.log('❌ No assigned therapist field in client data');
@@ -749,6 +745,29 @@ const ClientVideoCall = ({ profile }) => {
               className="btn-primary"
               onClick={() => setShowScheduleForm(true)}
             >
+              <Calendar size={16} />
+              Schedule Call
+            </button>
+          </div>
+        </div>
+      ) : hasAssignedTherapist ? (
+        <div className="therapist-card">
+          <div className="therapist-info">
+            <div className="therapist-avatar">
+              <User size={32} />
+            </div>
+            <div className="therapist-details">
+              <h3 className="therapist-name-clickable">{assignedTherapistName || 'Your Therapist'}</h3>
+              <p className="therapist-title">Assigned Therapist</p>
+              <p className="therapist-specialties">Loading therapist details...</p>
+            </div>
+          </div>
+          <div className="therapist-actions">
+            <button className="btn-secondary" onClick={handleMessageClick}>
+              <MessageSquare size={16} />
+              Message
+            </button>
+            <button className="btn-primary" onClick={() => setShowScheduleForm(true)}>
               <Calendar size={16} />
               Schedule Call
             </button>

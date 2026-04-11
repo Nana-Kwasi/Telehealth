@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Calendar, 
-  Clock, 
-  Plus, 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  Calendar,
+  Clock,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
   Search,
   Bell,
   Settings,
@@ -15,18 +15,20 @@ import {
   Filter
 } from 'lucide-react';
 import { auth, db } from '../../Auth/firebaseConfig';
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
   doc,
   getDocs,
-  serverTimestamp 
+  getDoc,
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import './Schedule.css';
 
@@ -39,6 +41,7 @@ export default function TherapistSchedule() {
   const [selectedTherapists, setSelectedTherapists] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
+    clientId: '',
     clientName: '',
     type: 'individual',
     startTime: '',
@@ -46,6 +49,7 @@ export default function TherapistSchedule() {
     therapistId: '',
     notes: ''
   });
+  const [clients, setClients] = useState([]);
 
   const currentUser = auth.currentUser;
 
@@ -101,6 +105,32 @@ export default function TherapistSchedule() {
     });
 
     return () => unsubscribe();
+  }, [currentUser]);
+
+  // Fetch clients assigned to this therapist
+  useEffect(() => {
+    if (!currentUser) return;
+    const loadClients = async () => {
+      try {
+        const ref = collection(db, 'therapists', currentUser.uid, 'clients');
+        const snap = await getDocs(ref);
+        const ids = snap.docs.map(d => d.data().clientId).filter(Boolean);
+        const list = [];
+        for (const id of ids) {
+          try {
+            const cSnap = await getDoc(doc(db, 'clients', id));
+            if (cSnap.exists()) {
+              const cd = cSnap.data();
+              list.push({ id, name: cd.name || cd.displayName || cd.email || 'Client' });
+            }
+          } catch (_) {}
+        }
+        setClients(list);
+      } catch (e) {
+        console.error('Error loading clients for schedule:', e);
+      }
+    };
+    loadClients();
   }, [currentUser]);
 
   // Get appointments for selected date
@@ -169,20 +199,32 @@ export default function TherapistSchedule() {
 
   // Create new appointment
   const handleCreateAppointment = async () => {
+    if (!newAppointment.startTime) {
+      alert('Please provide a start time.');
+      return;
+    }
     try {
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      const scheduledDate = new Date(`${dateStr}T${newAppointment.startTime}`);
       const appointmentData = {
-        ...newAppointment,
         therapistId: currentUser.uid,
         therapistName: currentUser.displayName || 'Therapist',
-        scheduledTime: new Date(`${selectedDate.toISOString().split('T')[0]}T${newAppointment.startTime}`),
-        endTime: new Date(`${selectedDate.toISOString().split('T')[0]}T${newAppointment.endTime}`),
+        clientId: newAppointment.clientId || '',
+        clientName: newAppointment.clientName || '',
+        sessionType: newAppointment.type || 'individual',
+        scheduledTime: Timestamp.fromDate(scheduledDate),
+        duration: newAppointment.endTime
+          ? Math.round((new Date(`${dateStr}T${newAppointment.endTime}`) - scheduledDate) / 60000)
+          : 50,
+        notes: newAppointment.notes || '',
         status: 'scheduled',
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       };
 
       await addDoc(collection(db, 'scheduledCalls'), appointmentData);
       setShowAddModal(false);
       setNewAppointment({
+        clientId: '',
         clientName: '',
         type: 'individual',
         startTime: '',
@@ -419,14 +461,35 @@ export default function TherapistSchedule() {
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Client Name</label>
-                <input
-                  type="text"
-                  value={newAppointment.clientName}
-                  onChange={(e) => setNewAppointment(prev => ({ ...prev, clientName: e.target.value }))}
-                  placeholder="Enter client name"
-                />
+                <label>Select Client</label>
+                <select
+                  value={newAppointment.clientId}
+                  onChange={(e) => {
+                    const selected = clients.find(c => c.id === e.target.value);
+                    setNewAppointment(prev => ({
+                      ...prev,
+                      clientId: e.target.value,
+                      clientName: selected?.name || ''
+                    }));
+                  }}
+                >
+                  <option value="">-- Select a client --</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
+              {!newAppointment.clientId && (
+                <div className="form-group">
+                  <label>Or enter client name manually</label>
+                  <input
+                    type="text"
+                    value={newAppointment.clientName}
+                    onChange={(e) => setNewAppointment(prev => ({ ...prev, clientName: e.target.value }))}
+                    placeholder="Client name"
+                  />
+                </div>
+              )}
               <div className="form-group">
                 <label>Type</label>
                 <select
