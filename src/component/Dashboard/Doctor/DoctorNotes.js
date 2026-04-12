@@ -71,6 +71,10 @@ export default function DoctorNotes({ profile }) {
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.content.trim()) return;
+    if (form.patientIds.length === 0 && !editingNote) {
+      alert('Please select a patient before saving the note.');
+      return;
+    }
     try {
       if (editingNote) {
         // When editing, keep original patient assignment
@@ -78,7 +82,7 @@ export default function DoctorNotes({ profile }) {
           doctorId: profile.id,
           doctorName: profile.name || 'Doctor',
           patientId: editingNote.patientId || '',
-          patientName: editingNote.patientName || 'General',
+          patientName: editingNote.patientName || '',
           title: form.title.trim(),
           content: form.content.trim(),
           type: form.type,
@@ -86,13 +90,8 @@ export default function DoctorNotes({ profile }) {
         };
         await updateDoc(doc(db, 'doctorNotes', editingNote.id), noteData);
       } else if (form.patientIds.length === 0) {
-        // General note — no patient
-        await addDoc(collection(db, 'doctorNotes'), {
-          doctorId: profile.id, doctorName: profile.name || 'Doctor',
-          patientId: '', patientName: 'General',
-          title: form.title.trim(), content: form.content.trim(),
-          type: form.type, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-        });
+        // This branch is now blocked by validation above — kept as safety net
+        return;
       } else {
         // Create one note per selected patient
         await Promise.all(form.patientIds.map(pid => {
@@ -185,7 +184,7 @@ export default function DoctorNotes({ profile }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div className="doctor-form-group" style={{ marginBottom: 0 }}>
-              <label>Patients <span style={{ color: '#94a3b8', fontWeight: 400 }}>(select one or more to sync to their screens)</span></label>
+              <label>Patient * <span style={{ color: '#ef4444', fontWeight: 400, fontSize: '0.75rem' }}>(required)</span></label>
               <div
                 onClick={() => setShowPatientPicker(v => !v)}
                 style={{ cursor: 'pointer', padding: '0.55rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, background: 'white', fontSize: '0.875rem', color: form.patientIds.length ? '#0f172a' : '#94a3b8', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}

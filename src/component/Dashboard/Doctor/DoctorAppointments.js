@@ -7,7 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../Auth/firebaseConfig';
 import {
-  collection, query, where, getDocs, doc, updateDoc,
+  collection, query, where, getDocs, doc, getDoc, updateDoc,
   setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
 
@@ -88,17 +88,39 @@ export default function DoctorAppointments({ profile }) {
       const snap = await getDocs(q);
       const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       appts.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
-      setAppointments(appts);
-      // Build unique patient list
+
+      // Build unique patient list and enrich names missing or stored as "Patient"
       const seen = new Set();
-      const pts = [];
+      const rawPts = [];
       for (const a of appts) {
         if (a.clientId && !seen.has(a.clientId)) {
           seen.add(a.clientId);
-          pts.push({ id: a.clientId, name: a.clientName || 'Patient' });
+          rawPts.push({ id: a.clientId, name: a.clientName || '' });
         }
       }
-      setPatients(pts);
+      const enrichedPts = await Promise.all(rawPts.map(async p => {
+        if (!p.name || p.name === 'Patient') {
+          try {
+            const authSnap = await getDoc(doc(db, 'auth', p.id));
+            if (authSnap.exists()) {
+              const d = authSnap.data();
+              const name = d.name || d.displayName || d.fullName || null;
+              if (name) return { ...p, name };
+            }
+          } catch (_) {}
+        }
+        return { ...p, name: p.name || 'Patient' };
+      }));
+
+      // Build a lookup so appointment rows also show enriched names
+      const nameById = Object.fromEntries(enrichedPts.map(p => [p.id, p.name]));
+      const enrichedAppts = appts.map(a => ({
+        ...a,
+        clientName: (a.clientName && a.clientName !== 'Patient') ? a.clientName : (nameById[a.clientId] || a.clientName || 'Patient'),
+      }));
+
+      setAppointments(enrichedAppts);
+      setPatients(enrichedPts);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };

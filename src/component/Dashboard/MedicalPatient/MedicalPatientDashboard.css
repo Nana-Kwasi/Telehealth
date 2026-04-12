@@ -181,7 +181,8 @@
 
 .mp-page {
   padding: 2rem;
-  max-width: 1200px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .mp-page-header { margin-bottom: 1.75rem; }

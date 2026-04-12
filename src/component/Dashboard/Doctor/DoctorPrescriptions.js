@@ -27,13 +27,33 @@ export default function DoctorPrescriptions({ profile }) {
 
   const loadPrescriptions = async () => {
     try {
-      const q = query(
+      // No orderBy to avoid composite index requirement — sort in JS
+      const snap = await getDocs(query(
         collection(db, 'doctorPrescriptions'),
-        where('doctorId', '==', profile.id),
-        orderBy('date', 'desc')
-      );
-      const snap = await getDocs(q);
-      setPrescriptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        where('doctorId', '==', profile.id)
+      ));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Sort newest first
+      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+      // Enrich patient names stored as "Patient" placeholder
+      const isNameMissing = r => !r.patientName || r.patientName === 'Patient';
+      const missingIds = [...new Set(list.filter(isNameMissing).map(r => r.patientId).filter(Boolean))];
+      if (missingIds.length > 0) {
+        await Promise.all(missingIds.map(async id => {
+          try {
+            const snap = await getDoc(doc(db, 'auth', id));
+            if (snap.exists()) {
+              const d = snap.data();
+              const name = d.name || d.displayName || d.fullName || null;
+              if (name) list.forEach(r => { if (r.patientId === id && isNameMissing(r)) r.patientName = name; });
+            }
+          } catch (_) {}
+        }));
+      }
+      list.forEach(r => { if (!r.patientName) r.patientName = 'Patient'; });
+
+      setPrescriptions(list);
     } catch (error) {
       console.error('Error loading prescriptions:', error);
     } finally {
@@ -187,12 +207,13 @@ export default function DoctorPrescriptions({ profile }) {
       <p><strong>Specialization:</strong> ${profile.specialization || 'General Practice'}</p>
       <p><strong>Patient:</strong> ${rx.patientName || 'Patient'}</p>
       <p><strong>Date:</strong> ${rx.date || new Date().toLocaleDateString()}</p>
-      <p><strong>Diagnosis:</strong> ${rx.diagnosis}</p>
+      <p><strong>Diagnosis:</strong> ${rx.diagnosis || rx.reason || '—'}</p>
       <h3>Medications</h3>
       <table><thead><tr><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Duration</th></tr></thead>
-      <tbody>${(rx.medications || []).map(m =>
-        `<tr><td>${m.name}</td><td>${m.dosage}</td><td>${m.frequency}</td><td>${m.duration}</td></tr>`
-      ).join('')}</tbody></table>
+      <tbody>${rx.medications && rx.medications.length > 0
+        ? rx.medications.map(m => `<tr><td>${m.name}</td><td>${m.dosage || ''}</td><td>${m.frequency || ''}</td><td>${m.duration || ''}</td></tr>`).join('')
+        : `<tr><td>${rx.medication || rx.medicationName || '—'}</td><td>${rx.dosage || ''}</td><td>${rx.frequency || ''}</td><td>${rx.duration || ''}</td></tr>`
+      }</tbody></table>
       ${rx.instructions ? `<p><strong>Instructions:</strong> ${rx.instructions}</p>` : ''}
       ${rx.followUpDate ? `<p><strong>Follow-up:</strong> ${rx.followUpDate}</p>` : ''}
       <div class="footer"><p>This prescription was generated via NessaHub Medical Platform.</p></div>
@@ -306,7 +327,7 @@ export default function DoctorPrescriptions({ profile }) {
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button className="doctor-btn doctor-btn-primary" onClick={handleSave}
-              disabled={!form.patientId || !form.diagnosis.trim()}>
+              disabled={form.patientIds.length === 0 || !form.diagnosis.trim() || form.medications.every(m => !m.name.trim())}>
               <Save size={16} /> {editingPrescription ? 'Update' : 'Save Prescription'}
             </button>
             <button className="doctor-btn doctor-btn-outline" onClick={resetForm}>Cancel</button>
@@ -337,25 +358,45 @@ export default function DoctorPrescriptions({ profile }) {
                 <th>Patient</th>
                 <th>Diagnosis</th>
                 <th>Medications</th>
+                <th>Status</th>
                 <th>Date</th>
                 <th>Follow-up</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(rx => (
-                <tr key={rx.id}>
-                  <td style={{ fontWeight: 500 }}>{rx.patientName || 'Patient'}</td>
-                  <td>{rx.diagnosis}</td>
+              {filtered.map(rx => {
+                const isDone = rx.status === 'completed';
+                return (
+                <tr key={rx.id} style={isDone ? { borderLeft: '3px solid #22c55e' } : {}}>
+                  <td style={{ fontWeight: 600 }}>{rx.patientName || 'Patient'}</td>
+                  <td>{rx.diagnosis || rx.reason || '—'}</td>
                   <td>
                     <div style={{ fontSize: '0.8rem', lineHeight: 1.5 }}>
-                      {(rx.medications || []).slice(0, 2).map((m, i) => (
-                        <div key={i}>{m.name} {m.dosage && `— ${m.dosage}`}</div>
-                      ))}
-                      {(rx.medications || []).length > 2 && (
-                        <span style={{ color: '#94a3b8' }}>+{rx.medications.length - 2} more</span>
-                      )}
+                      {rx.medications && rx.medications.length > 0 ? (
+                        <>
+                          {rx.medications.slice(0, 2).map((m, i) => (
+                            <div key={i}>{m.name} {m.dosage && `— ${m.dosage}`}</div>
+                          ))}
+                          {rx.medications.length > 2 && (
+                            <span style={{ color: '#94a3b8' }}>+{rx.medications.length - 2} more</span>
+                          )}
+                        </>
+                      ) : (rx.medication || rx.medicationName) ? (
+                        <div>{rx.medication || rx.medicationName}{rx.dosage ? ` — ${rx.dosage}` : ''}</div>
+                      ) : '—'}
                     </div>
+                  </td>
+                  <td>
+                    {isDone ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
+                        ✓ Completed
+                      </span>
+                    ) : (
+                      <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
+                        Active
+                      </span>
+                    )}
                   </td>
                   <td>{rx.date || '—'}</td>
                   <td>{rx.followUpDate || '—'}</td>
@@ -371,7 +412,8 @@ export default function DoctorPrescriptions({ profile }) {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

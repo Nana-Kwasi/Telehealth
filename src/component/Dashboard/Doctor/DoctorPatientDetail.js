@@ -40,7 +40,10 @@ export default function DoctorPatientDetail({ profile }) {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [patientProfile, setPatientProfile] = useState(null); // insurance, emergency, etc.
+  const [patientProfile, setPatientProfile] = useState(null);
+  const [intakeData, setIntakeData] = useState(null);
+  const [dailyFeelings, setDailyFeelings] = useState([]);
+  const [viewingFeeling, setViewingFeeling] = useState(null);
 
   // Note form
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -123,6 +126,23 @@ export default function DoctorPatientDetail({ profile }) {
         rxList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         setPrescriptions(rxList);
       } catch { /* ignore */ }
+
+      // Load intake / questionnaire data
+      try {
+        const intakeSnap = await getDoc(doc(db, 'patientIntake', patientId));
+        if (intakeSnap.exists()) setIntakeData(intakeSnap.data());
+      } catch (_) {}
+
+      // Load daily feelings
+      try {
+        const feelSnap = await getDocs(query(
+          collection(db, 'patientDailyFeelings'),
+          where('patientId', '==', patientId)
+        ));
+        const feelings = feelSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setDailyFeelings(feelings);
+      } catch (_) {}
 
     } catch (err) {
       console.error('Error loading patient data:', err);
@@ -297,8 +317,8 @@ export default function DoctorPatientDetail({ profile }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0' }}>
-        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['info','Patient Info']].map(([key, label]) => (
+      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', flexWrap: 'wrap' }}>
+        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['info','Patient Info'],['feelings','Daily Feeling']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -491,29 +511,57 @@ export default function DoctorPatientDetail({ profile }) {
           )}
 
           <div className="doctor-card">
-            <h3>Prescriptions ({prescriptions.length})</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0 }}>Prescriptions ({prescriptions.length})</h3>
+              <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={async () => {
+                try {
+                  const rxSnap = await getDocs(query(collection(db, 'doctorPrescriptions'), where('doctorId', '==', profile.id), where('patientId', '==', patientId)));
+                  const rxList = rxSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                  rxList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                  setPrescriptions(rxList);
+                } catch (_) {}
+              }}>↻ Refresh</button>
+            </div>
             {prescriptions.length === 0 ? (
               <div className="doctor-empty-state"><Pill size={36} /><p>No prescriptions issued yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {prescriptions.map(rx => (
-                  <div key={rx.id} style={{ padding: '1rem', background: '#f8fafc', borderRadius: 10, border: '1.5px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{rx.medication}</p>
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
-                          {rx.dosage && `${rx.dosage} • `}{rx.frequency && `${rx.frequency} • `}{rx.duration}
-                        </p>
+                {prescriptions.map(rx => {
+                  const isDone = rx.status === 'completed';
+                  const medName = rx.medication || rx.medications?.[0]?.name || 'Medication';
+                  const metaLine = [
+                    rx.dosage || rx.medications?.[0]?.dosage,
+                    rx.frequency || rx.medications?.[0]?.frequency,
+                    rx.duration || rx.medications?.[0]?.duration,
+                  ].filter(Boolean).join(' • ');
+                  return (
+                    <div key={rx.id} style={{ padding: '1rem', background: isDone ? '#f0fdf4' : '#f8fafc', borderRadius: 10, border: `1.5px solid ${isDone ? '#bbf7d0' : '#e2e8f0'}`, borderLeft: isDone ? '4px solid #22c55e' : '1.5px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{medName}</p>
+                          {metaLine && <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: '#64748b' }}>{metaLine}</p>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                          {isDone ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
+                              ✓ Completed
+                            </span>
+                          ) : (
+                            <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
+                              Active
+                            </span>
+                          )}
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{rx.createdAt?.toDate?.()?.toLocaleDateString() || ''}</span>
+                        </div>
                       </div>
-                      <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{rx.createdAt?.toDate?.()?.toLocaleDateString() || ''}</span>
+                      {rx.instructions && (
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#475569', background: '#fff', padding: '0.5rem 0.75rem', borderRadius: 6, borderLeft: '3px solid #059669' }}>
+                          {rx.instructions}
+                        </p>
+                      )}
                     </div>
-                    {rx.instructions && (
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#475569', background: '#fff', padding: '0.5rem 0.75rem', borderRadius: 6, borderLeft: '3px solid #059669' }}>
-                        {rx.instructions}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -608,7 +656,16 @@ export default function DoctorPatientDetail({ profile }) {
             <h3 style={{ marginBottom: '1rem' }}>Health Information</h3>
             {['bloodType', 'allergies', 'dob', 'phone'].some(k => patient[k]) ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {[['Blood Type', patient.bloodType], ['Allergies', patient.allergies], ['Date of Birth', patient.dob], ['Phone', patient.phone]].map(([label, val]) => val ? (
+                {patient.allergies && (
+                  <div style={{ background: '#fff0f0', border: '1.5px solid #fecaca', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '1rem' }}>⚠️</span>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#b91c1c' }}>Allergies</p>
+                      <p style={{ margin: 0, fontSize: '0.875rem', color: '#b91c1c' }}>{patient.allergies}</p>
+                    </div>
+                  </div>
+                )}
+                {[['Blood Type', patient.bloodType], ['Date of Birth', patient.dob], ['Phone', patient.phone]].map(([label, val]) => val ? (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>{label}</span>
                     <span style={{ fontSize: '0.875rem', color: '#0f172a', fontWeight: 500 }}>{val}</span>
@@ -621,6 +678,183 @@ export default function DoctorPatientDetail({ profile }) {
           </div>
         </div>
       )}
+
+      {/* ── INTAKE / COMPLAINT DATA (appended to Patient Info) ── */}
+      {activeTab === 'info' && intakeData && (
+        <div className="doctor-card" style={{ marginTop: '1.25rem' }}>
+          <h3 style={{ marginBottom: '1rem' }}>Initial Complaint (Patient Intake)</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            {[
+              ['Main Complaint', intakeData.complaint],
+              ['Duration', intakeData.duration],
+              ['Severity', intakeData.severity ? `${intakeData.severity}/10` : null],
+              ['Symptoms', Array.isArray(intakeData.symptoms) ? intakeData.symptoms.join(', ') : intakeData.symptoms],
+              ['Additional Notes', intakeData.notes],
+            ].filter(([, val]) => val).map(([label, val]) => (
+              <div key={label} style={{ padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.2rem' }}>{label}</p>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#0f172a' }}>{val}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── DAILY FEELING TAB ── */}
+      {activeTab === 'feelings' && (
+        <div>
+          {dailyFeelings.length === 0 ? (
+            <div className="doctor-card">
+              <div className="doctor-empty-state">
+                <span style={{ fontSize: '2rem' }}>😊</span>
+                <h3>No daily check-ins yet</h3>
+                <p>The patient has not submitted any daily feeling reports.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {dailyFeelings.map(f => {
+                const MOOD_META = {
+                  great: { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', emoji: '😊' },
+                  good:  { color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', emoji: '🙂' },
+                  okay:  { color: '#d97706', bg: '#fffbeb', border: '#fde68a', emoji: '😐' },
+                  poor:  { color: '#dc2626', bg: '#fff7ed', border: '#fed7aa', emoji: '😟' },
+                  bad:   { color: '#b91c1c', bg: '#fff1f2', border: '#fecdd3', emoji: '😢' },
+                };
+                const meta = MOOD_META[f.mood?.toLowerCase()] || { color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', emoji: '❓' };
+                const dateStr = f.createdAt?.seconds ? new Date(f.createdAt.seconds * 1000).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                const timeStr = f.createdAt?.seconds ? new Date(f.createdAt.seconds * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                const painColor = f.painLevel >= 7 ? '#ef4444' : f.painLevel >= 4 ? '#f59e0b' : '#22c55e';
+                const symptomList = Array.isArray(f.symptoms) ? f.symptoms.filter(Boolean) : [];
+                return (
+                  <div key={f.id} style={{ background: meta.bg, border: `1.5px solid ${meta.border}`, borderRadius: 14, padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: 48, height: 48, borderRadius: '50%', background: meta.color + '18', border: `1.5px solid ${meta.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>
+                          {meta.emoji}
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: meta.color, textTransform: 'capitalize' }}>{f.mood || 'Check-in'}</p>
+                          <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>{dateStr}{timeStr ? ` • ${timeStr}` : ''}</p>
+                        </div>
+                      </div>
+                      {f.painLevel != null && (
+                        <div style={{ textAlign: 'center', background: 'white', borderRadius: 10, padding: '0.5rem 0.85rem', border: '1.5px solid #e2e8f0' }}>
+                          <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>PAIN</p>
+                          <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: painColor, lineHeight: 1 }}>{f.painLevel}<span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>/10</span></p>
+                        </div>
+                      )}
+                    </div>
+
+                    {symptomList.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                        {symptomList.slice(0, 3).map((s, i) => (
+                          <span key={i} style={{ background: '#fff0f0', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 20, padding: '0.2rem 0.65rem', fontSize: '0.78rem', fontWeight: 600 }}>{s}</span>
+                        ))}
+                        {symptomList.length > 3 && <span style={{ color: '#94a3b8', fontSize: '0.78rem', alignSelf: 'center' }}>+{symptomList.length - 3} more</span>}
+                      </div>
+                    )}
+
+                    {f.notes && (
+                      <p style={{ margin: '0 0 0.6rem', fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>{f.notes.length > 120 ? f.notes.slice(0, 120) + '…' : f.notes}</p>
+                    )}
+
+                    <button
+                      className="doctor-btn doctor-btn-sm doctor-btn-outline"
+                      style={{ borderColor: meta.color + '60', color: meta.color }}
+                      onClick={() => setViewingFeeling(f)}
+                    >
+                      View Full Details
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Daily Feeling Detail Modal */}
+      {viewingFeeling && (() => {
+        const MOOD_META = {
+          great: { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', emoji: '😊' },
+          good:  { color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', emoji: '🙂' },
+          okay:  { color: '#d97706', bg: '#fffbeb', border: '#fde68a', emoji: '😐' },
+          poor:  { color: '#dc2626', bg: '#fff7ed', border: '#fed7aa', emoji: '😟' },
+          bad:   { color: '#b91c1c', bg: '#fff1f2', border: '#fecdd3', emoji: '😢' },
+        };
+        const meta = MOOD_META[viewingFeeling.mood?.toLowerCase()] || { color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', emoji: '❓' };
+        const dateStr = viewingFeeling.createdAt?.seconds ? new Date(viewingFeeling.createdAt.seconds * 1000).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '';
+        const timeStr = viewingFeeling.createdAt?.seconds ? new Date(viewingFeeling.createdAt.seconds * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+        const painColor = viewingFeeling.painLevel >= 7 ? '#ef4444' : viewingFeeling.painLevel >= 4 ? '#f59e0b' : '#22c55e';
+        const symptomList = Array.isArray(viewingFeeling.symptoms) ? viewingFeeling.symptoms.filter(Boolean) : [];
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}>
+            <div style={{ background: 'white', borderRadius: 20, maxWidth: 500, width: '100%', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              {/* Header */}
+              <div style={{ background: meta.bg, borderBottom: `1.5px solid ${meta.border}`, padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{ fontSize: '2rem' }}>{meta.emoji}</div>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: meta.color, textTransform: 'capitalize' }}>{viewingFeeling.mood || 'Check-in'}</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>{dateStr}</p>
+                      {timeStr && <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>{timeStr}</p>}
+                    </div>
+                  </div>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b', padding: '0.25rem' }} onClick={() => setViewingFeeling(null)}>✕</button>
+                </div>
+              </div>
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Pain */}
+                {viewingFeeling.painLevel != null && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', borderRadius: 12, padding: '1rem 1.25rem', border: '1.5px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '1.2rem' }}>❤️‍🩹</span>
+                      <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>Pain Level</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                      <span style={{ fontSize: '2rem', fontWeight: 900, color: painColor }}>{viewingFeeling.painLevel}</span>
+                      <span style={{ fontSize: '1rem', color: '#94a3b8', fontWeight: 600 }}>/10</span>
+                    </div>
+                  </div>
+                )}
+                {/* Symptoms */}
+                {symptomList.length > 0 && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Symptoms</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {symptomList.map((s, i) => <span key={i} style={{ background: '#fff0f0', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 20, padding: '0.3rem 0.75rem', fontSize: '0.85rem', fontWeight: 600 }}>{s}</span>)}
+                    </div>
+                  </div>
+                )}
+                {/* Medications */}
+                {viewingFeeling.medications && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Medications Taken</p>
+                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a' }}>
+                      {Array.isArray(viewingFeeling.medications) ? viewingFeeling.medications.join(', ') : viewingFeeling.medications}
+                    </div>
+                  </div>
+                )}
+                {/* Notes */}
+                {viewingFeeling.notes && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Patient Notes</p>
+                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', color: '#475569', lineHeight: 1.6 }}>
+                      {viewingFeeling.notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{ padding: '1rem 1.5rem', borderTop: '1.5px solid #f1f5f9' }}>
+                <button className="doctor-btn doctor-btn-primary" style={{ width: '100%', background: meta.color }} onClick={() => setViewingFeeling(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── DISCHARGE MODAL ── */}
       {showDischarge && (

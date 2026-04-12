@@ -5,13 +5,15 @@ import {
   LogOut, Activity, ChevronLeft, ChevronRight, Send, Clock,
   CheckCircle, Video, Phone, MessageCircle, Pill,
   Bell, CreditCard, AlertCircle, TrendingUp, User,
-  BarChart2, Heart, Star, Shield, Download, Plus,
+  BarChart2, Heart, Star, Shield, Download, Plus, Smile, AlertTriangle, Search,
+  Mic, MicOff, Paperclip,
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { signOut } from 'firebase/auth';
 import { auth, db, storage } from '../../Auth/firebaseConfig';
 import {
   collection, query, where, getDocs, doc, getDoc, setDoc,
-  addDoc, orderBy, onSnapshot, serverTimestamp,
+  addDoc, updateDoc, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import './MedicalPatientDashboard.css';
@@ -37,29 +39,58 @@ function StatusBadge({ status }) {
 function MedPatHome({ profile }) {
   const navigate = useNavigate();
   const [appts, setAppts] = useState([]);
+  const [allAppts, setAllAppts] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
+  const [moodHistory, setMoodHistory] = useState([]);
   const [stats, setStats] = useState({ upcoming: 0, completed: 0, pending: 0, prescriptions: 0 });
   const [loading, setLoading] = useState(true);
-  const [primaryDoctor, setPrimaryDoctor] = useState(null); // first doctor from appointments
-  const [patientStatus, setPatientStatus] = useState('active'); // 'active' | 'discharged'
+  const [primaryDoctor, setPrimaryDoctor] = useState(null);
+  const [patientStatus, setPatientStatus] = useState('active');
   const [lastBookedDoctor, setLastBookedDoctor] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('th.lastBookedDoctor') || 'null'); } catch { return null; }
   });
+
+  // "Tell doctor what's wrong" intake button
+  const [showIntakeBtn, setShowIntakeBtn] = useState(false);
+  const [showIntakeModal, setShowIntakeModal] = useState(false);
+  const [intakeForm, setIntakeForm] = useState({ complaint: '', duration: '', severity: '5', symptoms: '', notes: '' });
+  const [submittingIntake, setSubmittingIntake] = useState(false);
+
+  // Daily mood popup
+  const [showMoodModal, setShowMoodModal] = useState(false);
+  const [moodForm, setMoodForm] = useState({ mood: '', painLevel: '', symptoms: '', medications: '', notes: '' });
+  const [submittingMood, setSubmittingMood] = useState(false);
 
   const TODAY = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     if (!profile?.id) return;
     (async () => {
-      const [apptSnap, rxSnap] = await Promise.all([
+      const [apptSnap, rxSnap, moodSnap] = await Promise.all([
         getDocs(query(collection(db, 'doctorAppointments'), where('clientId', '==', profile.id))),
         getDocs(query(collection(db, 'doctorPrescriptions'), where('patientId', '==', profile.id))),
+        getDocs(query(collection(db, 'patientDailyFeelings'), where('patientId', '==', profile.id))),
       ]);
       const all = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const upcoming = all.filter(a => a.date >= TODAY && a.status !== 'cancelled').sort((a, b) => a.date.localeCompare(b.date));
       const rx = rxSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAppts(upcoming.slice(0, 4));
+      setAllAppts(all.sort((a, b) => (b.date || '').localeCompare(a.date || '')));
       setPrescriptions(rx.slice(0, 3));
+
+      // Process mood history for charts (last 7 entries)
+      const moodScore = { Great: 5, Good: 4, Okay: 3, Poor: 2, Bad: 1 };
+      const moodList = moodSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+        .slice(0, 7)
+        .reverse()
+        .map((m, i) => ({
+          day: m.createdAt?.toDate ? m.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : `Day ${i + 1}`,
+          mood: moodScore[m.mood] || 3,
+          moodLabel: m.mood || 'Okay',
+          pain: m.painLevel || 0,
+        }));
+      setMoodHistory(moodList);
       setStats({
         upcoming: upcoming.length,
         completed: all.filter(a => a.status === 'completed').length,
@@ -68,7 +99,9 @@ function MedPatHome({ profile }) {
       });
       // Derive primary doctor from most recent non-cancelled appointment
       const withDoc = all.filter(a => a.doctorId && a.status !== 'cancelled').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      let hasPrimaryDoctor = false;
       if (withDoc.length > 0) {
+        hasPrimaryDoctor = true;
         const pd = { id: withDoc[0].doctorId, name: withDoc[0].doctorName, spec: withDoc[0].doctorSpecialization || 'Medical Doctor', photoURL: null };
         try {
           const drSnap = await getDoc(doc(db, 'doctors', pd.id));
@@ -78,6 +111,21 @@ function MedPatHome({ profile }) {
         sessionStorage.removeItem('th.lastBookedDoctor');
         setLastBookedDoctor(null);
       }
+      // Check if patient has submitted intake data
+      if (hasPrimaryDoctor) {
+        try {
+          const intakeSnap = await getDoc(doc(db, 'patientIntake', profile.id));
+          const lsKey = `intakeSubmitted_${profile.id}`;
+          const localDone = localStorage.getItem(lsKey);
+          if (!intakeSnap.exists() && !localDone) setShowIntakeBtn(true);
+        } catch (_) {}
+      }
+      // Daily mood: show popup if not submitted in last 24h
+      try {
+        const lastFeelingStr = localStorage.getItem(`lastDailyFeeling_${profile.id}`);
+        const lastFeeling = lastFeelingStr ? parseInt(lastFeelingStr) : 0;
+        if (Date.now() - lastFeeling > 24 * 60 * 60 * 1000) setShowMoodModal(true);
+      } catch (_) {}
       // Fetch patient status
       try {
         const profSnap = await getDoc(doc(db, 'patientProfiles', profile.id));
@@ -86,6 +134,45 @@ function MedPatHome({ profile }) {
       setLoading(false);
     })();
   }, [profile]);
+
+  const submitIntake = async () => {
+    if (!intakeForm.complaint.trim()) return;
+    setSubmittingIntake(true);
+    try {
+      await setDoc(doc(db, 'patientIntake', profile.id), {
+        patientId: profile.id,
+        complaint: intakeForm.complaint.trim(),
+        duration: intakeForm.duration.trim(),
+        severity: parseInt(intakeForm.severity) || 5,
+        symptoms: intakeForm.symptoms.split(',').map(s => s.trim()).filter(Boolean),
+        notes: intakeForm.notes.trim(),
+        submittedAt: serverTimestamp(),
+      });
+      localStorage.setItem(`intakeSubmitted_${profile.id}`, '1');
+      setShowIntakeBtn(false);
+      setShowIntakeModal(false);
+    } catch (_) {}
+    finally { setSubmittingIntake(false); }
+  };
+
+  const submitMood = async () => {
+    if (!moodForm.mood) return;
+    setSubmittingMood(true);
+    try {
+      await addDoc(collection(db, 'patientDailyFeelings'), {
+        patientId: profile.id,
+        mood: moodForm.mood,
+        painLevel: parseInt(moodForm.painLevel) || 0,
+        symptoms: moodForm.symptoms.split(',').map(s => s.trim()).filter(Boolean),
+        medications: moodForm.medications,
+        notes: moodForm.notes,
+        createdAt: serverTimestamp(),
+      });
+      localStorage.setItem(`lastDailyFeeling_${profile.id}`, String(Date.now()));
+      setShowMoodModal(false);
+    } catch (_) {}
+    finally { setSubmittingMood(false); }
+  };
 
   const nextAppt = appts[0];
   const todayAppts = appts.filter(a => a.date === TODAY);
@@ -303,7 +390,7 @@ function MedPatHome({ profile }) {
           {loading ? <p className="mp-loading-text">Loading…</p> : (() => {
             const seen = new Set();
             const doctors = [];
-            appts.forEach(a => {
+            allAppts.forEach(a => {
               if (a.doctorId && !seen.has(a.doctorId)) {
                 seen.add(a.doctorId);
                 doctors.push({ id: a.doctorId, name: a.doctorName, spec: a.doctorSpecialization });
@@ -333,11 +420,11 @@ function MedPatHome({ profile }) {
         {/* Activity Feed */}
         <div className="mp-card">
           <div className="mp-card-header"><h3>Recent Activity</h3></div>
-          {loading ? <p className="mp-loading-text">Loading…</p> : appts.length === 0 ? (
+          {loading ? <p className="mp-loading-text">Loading…</p> : allAppts.length === 0 ? (
             <div className="mp-empty-small"><Activity size={32} /><p>No activity yet</p></div>
           ) : (
             <div className="mp-activity-feed">
-              {appts.slice(0, 5).map((a, i) => {
+              {allAppts.slice(0, 5).map((a, i) => {
                 const iconMap = { confirmed: CheckCircle, pending: Clock, completed: Star, cancelled: AlertCircle };
                 const colorMap = { confirmed: '#16a34a', pending: '#d97706', completed: '#2563eb', cancelled: '#dc2626' };
                 const Icon = iconMap[a.status] || Clock;
@@ -416,8 +503,215 @@ function MedPatHome({ profile }) {
         </div>
       </div>
 
+      {/* "Tell doctor what's wrong" intake button — shown if no intake submitted yet */}
+      {showIntakeBtn && (
+        <div style={{ marginTop: '0.75rem', background: 'white', border: '2px solid #ef4444', borderRadius: 14, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }} onClick={() => setShowIntakeModal(true)}>
+          <AlertTriangle size={22} color="#ef4444" />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 700, color: '#ef4444', fontSize: '0.95rem' }}>Tell your doctor what's wrong</p>
+            <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Describe your symptoms so your doctor can prepare for your consultation.</p>
+          </div>
+          <button style={{ background: 'none', border: '1.5px solid #ef4444', borderRadius: 8, color: '#ef4444', fontWeight: 700, padding: '0.4rem 0.85rem', cursor: 'pointer', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+            Tell Us
+          </button>
+        </div>
+      )}
+
+      {/* Daily Mood Popup Modal */}
+      {showMoodModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 480, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Smile size={22} color="#1e6bb8" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Daily Check-In</h3>
+              </div>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowMoodModal(false)}>✕</button>
+            </div>
+            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Tell your doctor how you're feeling today.</p>
+
+            <p style={{ margin: '0 0 0.5rem', fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>How are you feeling? *</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              {['Great','Good','Okay','Poor','Bad'].map(m => (
+                <button key={m} onClick={() => setMoodForm(f => ({ ...f, mood: m }))} style={{ padding: '0.4rem 1rem', borderRadius: 20, border: `2px solid ${moodForm.mood === m ? '#1e6bb8' : '#e2e8f0'}`, background: moodForm.mood === m ? '#1e6bb8' : 'white', color: moodForm.mood === m ? 'white' : '#64748b', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                  {m}
+                </button>
+              ))}
+            </div>
+
+            {[
+              { key: 'painLevel', label: 'Pain Level (0–10)', placeholder: '0 = no pain, 10 = severe', type: 'number' },
+              { key: 'symptoms', label: 'Symptoms Today', placeholder: 'e.g. Headache, nausea (comma-separated)' },
+              { key: 'medications', label: 'Medications Taken Today', placeholder: 'e.g. Amoxicillin 500mg' },
+              { key: 'notes', label: 'Additional Notes', placeholder: 'Any other concerns...', multiline: true },
+            ].map(f => (
+              <div key={f.key} style={{ marginBottom: '0.85rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '0.3rem' }}>{f.label}</label>
+                {f.multiline ? (
+                  <textarea style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', resize: 'vertical', minHeight: 70, boxSizing: 'border-box' }}
+                    placeholder={f.placeholder} value={moodForm[f.key]} onChange={e => setMoodForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                ) : (
+                  <input type={f.type || 'text'} style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+                    placeholder={f.placeholder} value={moodForm[f.key]} onChange={e => setMoodForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                )}
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowMoodModal(false)}>Skip for Now</button>
+              <button style={{ flex: 2, padding: '0.7rem', background: '#1e6bb8', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !moodForm.mood || submittingMood ? 'not-allowed' : 'pointer', opacity: !moodForm.mood || submittingMood ? 0.6 : 1 }} onClick={submitMood} disabled={!moodForm.mood || submittingMood}>
+                {submittingMood ? 'Submitting…' : 'Submit Check-In'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Intake Modal */}
+      {showIntakeModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 500, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <AlertTriangle size={20} color="#ef4444" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ef4444' }}>Tell Your Doctor What's Wrong</h3>
+              </div>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowIntakeModal(false)}>✕</button>
+            </div>
+            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Describe your main health concern so your doctor can prepare for your consultation.</p>
+
+            {[
+              { key: 'complaint', label: 'Main Complaint *', placeholder: 'e.g. I have been experiencing chest pain for 3 days', multiline: true },
+              { key: 'duration', label: 'How long have you had this?', placeholder: 'e.g. 3 days, 2 weeks' },
+              { key: 'severity', label: 'Severity (1–10)', placeholder: '10 = worst possible', type: 'number' },
+              { key: 'symptoms', label: 'Other Symptoms', placeholder: 'e.g. Fever, headache (comma-separated)' },
+              { key: 'notes', label: 'Additional Notes', placeholder: 'Anything else your doctor should know...', multiline: true },
+            ].map(f => (
+              <div key={f.key} style={{ marginBottom: '0.85rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '0.3rem' }}>{f.label}</label>
+                {f.multiline ? (
+                  <textarea style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', resize: 'vertical', minHeight: 70, boxSizing: 'border-box' }}
+                    placeholder={f.placeholder} value={intakeForm[f.key]} onChange={e => setIntakeForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                ) : (
+                  <input type={f.type || 'text'} style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+                    placeholder={f.placeholder} value={intakeForm[f.key]} onChange={e => setIntakeForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                )}
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowIntakeModal(false)}>Cancel</button>
+              <button style={{ flex: 2, padding: '0.7rem', background: '#ef4444', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !intakeForm.complaint.trim() || submittingIntake ? 'not-allowed' : 'pointer', opacity: !intakeForm.complaint.trim() || submittingIntake ? 0.6 : 1 }} onClick={submitIntake} disabled={!intakeForm.complaint.trim() || submittingIntake}>
+                {submittingIntake ? 'Submitting…' : 'Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>{/* end mp-home-right */}
     </div>{/* end mp-home-main-grid */}
+
+    {/* ── Health Overview — last section, full width ── */}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.25rem', marginTop: '1.25rem', alignItems: 'start' }}>
+
+      {/* LEFT card: Mood & Pain Trend — line chart style */}
+      <div className="mp-card" style={{ padding: '1.75rem' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>Mood &amp; Pain Trend</h3>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Based on your daily check-ins</span>
+        </div>
+        {moodHistory.length === 0 ? (
+          <div style={{ height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '0.5rem' }}>
+            <Smile size={36} color="#cbd5e1" />
+            <p style={{ margin: 0, fontSize: '0.875rem' }}>Complete a daily check-in to see your trend</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={230}>
+            <LineChart data={moodHistory} margin={{ top: 8, right: 16, bottom: 0, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis
+                domain={[0, 5]}
+                ticks={[0, 1, 2, 3, 4, 5]}
+                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={v => ['', 'Bad', 'Poor', 'Okay', 'Good', 'Great'][v] || v}
+              />
+              <Tooltip
+                contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.8rem', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', padding: '0.6rem 1rem' }}
+                labelStyle={{ fontWeight: 700, marginBottom: 4, color: '#1e293b' }}
+                formatter={(v, name) => name === 'Mood' ? [['', 'Bad', 'Poor', 'Okay', 'Good', 'Great'][v] || v, 'Mood'] : [v, 'Pain Level']}
+              />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.78rem', paddingTop: '0.75rem' }} />
+              <Line type="monotone" dataKey="mood" name="Mood" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4, fill: '#2563eb', strokeWidth: 2, stroke: 'white' }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="pain" name="Pain Level" stroke="#7c3aed" strokeWidth={2} dot={{ r: 4, fill: '#7c3aed', strokeWidth: 2, stroke: 'white' }} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* RIGHT card: Session Breakdown — donut pie */}
+      <div className="mp-card" style={{ padding: '1.75rem' }}>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem', fontWeight: 700, color: '#1e293b' }}>Session Breakdown</h3>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>All appointments</span>
+        </div>
+        {(stats.completed + stats.upcoming + stats.pending) === 0 ? (
+          <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '0.5rem' }}>
+            <Activity size={36} color="#cbd5e1" />
+            <p style={{ margin: 0, fontSize: '0.875rem' }}>No appointment data yet</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflow: 'hidden' }}>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <Pie
+                    data={[
+                      { name: 'Completed', value: stats.completed, color: '#2563eb' },
+                      { name: 'Upcoming', value: stats.upcoming, color: '#16a34a' },
+                      { name: 'Pending', value: stats.pending, color: '#d97706' },
+                    ].filter(d => d.value > 0)}
+                    cx="50%" cy="50%"
+                    innerRadius={58} outerRadius={84}
+                    paddingAngle={3}
+                    dataKey="value"
+                    strokeWidth={0}
+                  >
+                    {[
+                      { name: 'Completed', value: stats.completed, color: '#2563eb' },
+                      { name: 'Upcoming', value: stats.upcoming, color: '#16a34a' },
+                      { name: 'Pending', value: stats.pending, color: '#d97706' },
+                    ].filter(d => d.value > 0).map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.78rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginTop: '0.5rem' }}>
+              {[
+                { name: 'Completed', value: stats.completed, color: '#2563eb' },
+                { name: 'Upcoming', value: stats.upcoming, color: '#16a34a' },
+                { name: 'Pending', value: stats.pending, color: '#d97706' },
+              ].map(s => (
+                <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: '#475569' }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+                    {s.name}
+                  </div>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+    </div>
 
     </div>
   );
@@ -1036,6 +1330,9 @@ function MedPatVideoCalls({ profile }) {
 function MedPatPrescriptions({ profile }) {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [completingRx, setCompletingRx] = useState(null);
+  const [showWarning, setShowWarning] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -1049,11 +1346,85 @@ function MedPatPrescriptions({ profile }) {
     })();
   }, [profile]);
 
+  const handleTickPress = (rx) => {
+    if (rx.status === 'completed') return;
+    setCompletingRx(rx);
+    setShowWarning(true);
+  };
+
+  const confirmComplete = async () => {
+    if (!completingRx) return;
+    setUpdating(true);
+    try {
+      await updateDoc(doc(db, 'doctorPrescriptions', completingRx.id), {
+        status: 'completed', completedAt: serverTimestamp(),
+      });
+      setPrescriptions(prev => prev.map(r => r.id === completingRx.id ? { ...r, status: 'completed' } : r));
+      setShowWarning(false);
+      setCompletingRx(null);
+    } catch (_) { alert('Could not update prescription. Please try again.'); }
+    finally { setUpdating(false); }
+  };
+
+  const active = prescriptions.filter(r => r.status !== 'completed');
+  const completed = prescriptions.filter(r => r.status === 'completed');
+
+  const renderRxCard = (rx) => {
+    const meds = Array.isArray(rx.medications) && rx.medications.length > 0
+      ? rx.medications
+      : rx.medication || rx.medicationName
+        ? [{ name: rx.medication || rx.medicationName, dosage: rx.dosage, frequency: rx.frequency, duration: rx.duration }]
+        : [];
+    const isDone = rx.status === 'completed';
+    return (
+      <div key={rx.id} className="mp-rx-card" style={isDone ? { opacity: 0.8, borderColor: '#bbf7d0' } : {}}>
+        <div className="mp-rx-card-header">
+          <div className="mp-rx-card-icon" style={{ background: isDone ? '#f0fdf4' : undefined }}><Pill size={20} color={isDone ? '#22c55e' : '#059669'} /></div>
+          <div style={{ flex: 1 }}>
+            <p className="mp-rx-card-name" style={isDone ? { textDecoration: 'line-through', color: '#94a3b8' } : {}}>{meds[0]?.name || 'Prescription'}</p>
+            {rx.diagnosis && <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>Diagnosis: {rx.diagnosis}</p>}
+            <p className="mp-rx-card-doctor">Dr. {rx.doctorName || 'Doctor'}</p>
+          </div>
+          {/* Tick/complete button */}
+          <button
+            onClick={() => handleTickPress(rx)}
+            disabled={isDone}
+            title={isDone ? 'Completed' : 'Mark as completed'}
+            style={{ background: 'none', border: 'none', cursor: isDone ? 'default' : 'pointer', padding: '0.25rem', fontSize: '1.4rem', lineHeight: 1, color: isDone ? '#22c55e' : '#cbd5e1', flexShrink: 0 }}
+          >
+            {isDone ? '✅' : '⭕'}
+          </button>
+        </div>
+        {meds.map((m, i) => (
+          <div key={i} className="mp-rx-card-details" style={i > 0 ? { borderTop: '1px solid #e2e8f0', marginTop: '0.5rem', paddingTop: '0.5rem' } : {}}>
+            {i > 0 && <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: '0.4rem' }}>{m.name}</div>}
+            {m.dosage && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Dosage</span><span>{m.dosage}</span></div>}
+            {m.frequency && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Frequency</span><span>{m.frequency}</span></div>}
+            {m.duration && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Duration</span><span>{m.duration}</span></div>}
+            {i === 0 && rx.createdAt?.toDate && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Date</span><span>{rx.createdAt.toDate().toLocaleDateString()}</span></div>}
+          </div>
+        ))}
+        {rx.instructions && (
+          <div className="mp-rx-instructions">
+            <p className="mp-rx-detail-label">Instructions</p>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>{rx.instructions}</p>
+          </div>
+        )}
+        {isDone && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #bbf7d0' }}>
+            <span style={{ fontSize: '0.85rem' }}>✅</span>
+            <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 600, color: '#16a34a' }}>Prescription completed</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="mp-page">
       <div className="mp-page-header">
         <h1>Prescriptions</h1>
-        <p>Medications prescribed by your doctors</p>
+        <p>Tap the circle to mark a prescription as completed</p>
       </div>
 
       {loading ? <p className="mp-loading-text">Loading…</p> : prescriptions.length === 0 ? (
@@ -1065,43 +1436,54 @@ function MedPatPrescriptions({ profile }) {
           <p style={{ color: '#64748b' }}>Prescriptions from your doctor will appear here after your consultation.</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {prescriptions.map(rx => {
-            // Support both medications array (from DoctorPrescriptions) and flat fields
-            const meds = Array.isArray(rx.medications) && rx.medications.length > 0
-              ? rx.medications
-              : rx.medication || rx.medicationName
-                ? [{ name: rx.medication || rx.medicationName, dosage: rx.dosage, frequency: rx.frequency, duration: rx.duration }]
-                : [];
-            return (
-              <div key={rx.id} className="mp-rx-card">
-                <div className="mp-rx-card-header">
-                  <div className="mp-rx-card-icon"><Pill size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <p className="mp-rx-card-name">{meds[0]?.name || 'Prescription'}</p>
-                    {rx.diagnosis && <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>Diagnosis: {rx.diagnosis}</p>}
-                    <p className="mp-rx-card-doctor">Prescribed by Dr. {rx.doctorName || 'Doctor'}</p>
-                  </div>
-                  <span className="mp-rx-status-badge">Active</span>
-                </div>
-                {meds.map((m, i) => (
-                  <div key={i} className="mp-rx-card-details" style={i > 0 ? { borderTop: '1px solid #e2e8f0', marginTop: '0.5rem', paddingTop: '0.5rem' } : {}}>
-                    {i > 0 && <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: '0.4rem' }}>{m.name}</div>}
-                    {m.dosage && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Dosage</span><span>{m.dosage}</span></div>}
-                    {m.frequency && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Frequency</span><span>{m.frequency}</span></div>}
-                    {m.duration && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Duration</span><span>{m.duration}</span></div>}
-                    {i === 0 && rx.createdAt?.toDate && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Date</span><span>{rx.createdAt.toDate().toLocaleDateString()}</span></div>}
-                  </div>
-                ))}
-                {rx.instructions && (
-                  <div className="mp-rx-instructions">
-                    <p className="mp-rx-detail-label">Instructions</p>
-                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>{rx.instructions}</p>
-                  </div>
-                )}
+        <>
+          {active.length > 0 && (
+            <>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>ACTIVE</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                {active.map(renderRxCard)}
               </div>
-            );
-          })}
+            </>
+          )}
+          {completed.length > 0 && (
+            <>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>COMPLETED</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {completed.map(renderRxCard)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Completion Warning Modal */}
+      {showWarning && completingRx && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 440, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontSize: '1.75rem' }}>⚠️</div>
+            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontWeight: 800 }}>Mark as Completed?</h3>
+            <p style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              Before marking <strong>{completingRx.medication || completingRx.medications?.[0]?.name || 'this prescription'}</strong> as completed, please confirm:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+              {['I have taken all doses as prescribed by my doctor.', 'I did not stop early without medical advice.', 'I understand stopping early may reduce effectiveness.'].map((item, i) => (
+                <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                  <span style={{ color: '#f59e0b', fontSize: '1rem', flexShrink: 0 }}>✓</span>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#475569', lineHeight: 1.5 }}>{item}</p>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1.25rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+              <span style={{ flexShrink: 0 }}>ℹ️</span>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>If you are experiencing side effects or stopped early, please inform your doctor first.</p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button style={{ flex: 1, padding: '0.75rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => { setShowWarning(false); setCompletingRx(null); }}>Cancel</button>
+              <button style={{ flex: 2, padding: '0.75rem', background: '#22c55e', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: updating ? 'not-allowed' : 'pointer', opacity: updating ? 0.6 : 1 }} onClick={confirmComplete} disabled={updating}>
+                {updating ? 'Saving…' : 'Yes, Completed'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1115,17 +1497,65 @@ function MedPatMessages({ profile }) {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [lastMsgs, setLastMsgs] = useState({});
+  const [search, setSearch] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSecs, setRecordingSecs] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  // Presence & read receipts
+  const [doctorPresence, setDoctorPresence] = useState(null);
+  const [doctorLastRead, setDoctorLastRead] = useState(null);
   const endRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const presenceUnsubRef = useRef(null);
+  const seenUnsubRef = useRef(null);
+
+  const fmtTime = ts => ts?.toDate ? ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const fmtConvTime = ts => {
+    if (!ts?.toDate) return '';
+    const d = ts.toDate(), diff = Date.now() - d;
+    if (diff < 60000) return 'Just now';
+    if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+  const fmtFileSize = bytes => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  };
+  const fmtDuration = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const fmtLastSeen = ts => {
+    if (!ts?.toDate) return 'Offline';
+    const d = ts.toDate(), diff = Date.now() - d;
+    if (diff < 60000) return 'Online';
+    if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `Last seen today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `Last seen ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  };
+
+  // Own presence
+  useEffect(() => {
+    if (!profile?.id) return;
+    const presenceRef = doc(db, 'userPresence', profile.id);
+    setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    const handleUnload = () => setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
+    };
+  }, [profile]);
 
   useEffect(() => {
     if (!profile?.id) return;
     (async () => {
-      const q = query(collection(db, 'doctorAppointments'), where('clientId', '==', profile.id));
-      const snap = await getDocs(q);
-      const appts = snap.docs.map(d => d.data());
-      const seen = new Set();
-      const docList = [];
-      for (const a of appts) {
+      const snap = await getDocs(query(collection(db, 'doctorAppointments'), where('clientId', '==', profile.id)));
+      const seen = new Set(); const docList = [];
+      for (const a of snap.docs.map(d => d.data())) {
         if (a.doctorId && !seen.has(a.doctorId)) {
           seen.add(a.doctorId);
           docList.push({ id: a.doctorId, name: a.doctorName || 'Doctor', specialization: a.doctorSpecialization || '' });
@@ -1139,75 +1569,300 @@ function MedPatMessages({ profile }) {
   useEffect(() => {
     if (!activeDoctor || !profile?.id) return;
     const chatId = [profile.id, activeDoctor.id].sort().join('_');
-    const q = query(collection(db, 'doctor_chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
-    const unsub = onSnapshot(q, snap => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    });
+    const unsub = onSnapshot(
+      query(collection(db, 'doctor_chats', chatId, 'messages'), orderBy('timestamp', 'asc')),
+      snap => {
+        const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setMessages(msgs);
+        if (msgs.length > 0) setLastMsgs(prev => ({ ...prev, [activeDoctor.id]: msgs[msgs.length - 1] }));
+        setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    );
     return () => unsub();
   }, [activeDoctor, profile]);
 
-  const sendMessage = async () => {
-    if (!newMsg.trim() || !activeDoctor) return;
+  // Subscribe to doctor presence + chatSeen when active doctor changes
+  useEffect(() => {
+    presenceUnsubRef.current?.();
+    seenUnsubRef.current?.();
+    if (!activeDoctor || !profile?.id) return;
     const chatId = [profile.id, activeDoctor.id].sort().join('_');
-    await addDoc(collection(db, 'doctor_chats', chatId, 'messages'), {
-      text: newMsg.trim(), from: profile.id, fromName: profile.name || 'Patient',
-      to: activeDoctor.id, toName: activeDoctor.name,
-      timestamp: serverTimestamp(), type: 'text',
+    // Mark patient's own last-read
+    setDoc(doc(db, 'chatSeen', `${chatId}_${profile.id}`), { lastReadAt: serverTimestamp() }, { merge: true });
+    // Subscribe to doctor presence
+    presenceUnsubRef.current = onSnapshot(doc(db, 'userPresence', activeDoctor.id), snap => {
+      setDoctorPresence(snap.exists() ? snap.data() : null);
     });
-    setNewMsg('');
+    // Subscribe to doctor's last-read for this chat
+    seenUnsubRef.current = onSnapshot(doc(db, 'chatSeen', `${chatId}_${activeDoctor.id}`), snap => {
+      setDoctorLastRead(snap.exists() ? snap.data().lastReadAt : null);
+    });
+    return () => { presenceUnsubRef.current?.(); seenUnsubRef.current?.(); };
+  }, [activeDoctor, profile]);
+
+  const getChatId = () => activeDoctor ? [profile.id, activeDoctor.id].sort().join('_') : null;
+
+  const sendTextMessage = async () => {
+    if (!newMsg.trim() || !activeDoctor) return;
+    const text = newMsg.trim(); setNewMsg('');
+    await addDoc(collection(db, 'doctor_chats', getChatId(), 'messages'), {
+      text, type: 'text', from: profile.id, fromName: profile.name || 'Patient',
+      to: activeDoctor.id, toName: `Dr. ${activeDoctor.name}`, timestamp: serverTimestamp(),
+    });
   };
 
-  return (
-    <div className="mp-page">
-      <div className="mp-page-header"><h1>Messages</h1><p>Secure messaging with your doctors</p></div>
-      <div className="mp-messages-layout">
-        <div className="mp-card mp-conv-list">
-          <h3>My Doctors</h3>
-          {loading ? <p className="mp-loading-text">Loading…</p> : doctors.length === 0 ? (
-            <div className="mp-empty"><MessageSquare size={32} /><p>No doctors yet</p></div>
-          ) : doctors.map(d => (
-            <div key={d.id} className={`mp-conv-item ${activeDoctor?.id === d.id ? 'active' : ''}`} onClick={() => setActiveDoctor(d)}>
-              <div className="mp-conv-avatar">{getInitials(d.name)}</div>
-              <div><p className="mp-conv-name">Dr. {d.name}</p>{d.specialization && <p className="mp-conv-spec">{d.specialization}</p>}</div>
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeDoctor) return;
+    e.target.value = '';
+    setUploading(true);
+    try {
+      const chatId = getChatId();
+      const isImage = file.type.startsWith('image/');
+      const sRef = storageRef(storage, `chat_files/${chatId}/${Date.now()}_${file.name}`);
+      await uploadBytes(sRef, file);
+      const url = await getDownloadURL(sRef);
+      await addDoc(collection(db, 'doctor_chats', chatId, 'messages'), {
+        type: isImage ? 'image' : 'file', fileName: file.name, fileSize: file.size, fileUrl: url,
+        from: profile.id, fromName: profile.name || 'Patient',
+        to: activeDoctor.id, toName: `Dr. ${activeDoctor.name}`, timestamp: serverTimestamp(),
+      });
+    } catch (err) { alert('Failed to upload file.'); }
+    finally { setUploading(false); }
+  };
+
+  const startRecording = async () => {
+    if (!activeDoctor) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setUploading(true);
+        try {
+          const chatId = getChatId();
+          const sRef = storageRef(storage, `chat_voice/${chatId}/${Date.now()}.webm`);
+          await uploadBytes(sRef, blob);
+          const url = await getDownloadURL(sRef);
+          await addDoc(collection(db, 'doctor_chats', chatId, 'messages'), {
+            type: 'audio', fileUrl: url, duration: recordingSecs,
+            from: profile.id, fromName: profile.name || 'Patient',
+            to: activeDoctor.id, toName: `Dr. ${activeDoctor.name}`, timestamp: serverTimestamp(),
+          });
+        } catch (_) {}
+        finally { setUploading(false); setRecordingSecs(0); }
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true); setRecordingSecs(0);
+      timerRef.current = setInterval(() => setRecordingSecs(s => s + 1), 1000);
+    } catch (_) { alert('Microphone access denied.'); }
+  };
+
+  const stopRecording = () => {
+    clearInterval(timerRef.current);
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const getMsgStatus = (m) => {
+    if (m.from !== profile.id) return null;
+    if (!doctorLastRead || !m.timestamp) return 'sent';
+    return (m.timestamp?.seconds || 0) <= (doctorLastRead?.seconds || 0) ? 'read' : 'delivered';
+  };
+  const TickIcon = ({ status }) => {
+    if (!status) return null;
+    if (status === 'sent') return <span style={{ fontSize: '0.63rem', opacity: 0.55 }}>✓</span>;
+    if (status === 'delivered') return <span style={{ fontSize: '0.63rem', opacity: 0.55 }}>✓✓</span>;
+    return <span style={{ fontSize: '0.63rem', color: '#60a5fa' }}>✓✓</span>;
+  };
+  const isDrOnline = doctorPresence?.online === true;
+  const drPresenceLabel = doctorPresence ? (isDrOnline ? 'Online' : fmtLastSeen(doctorPresence.lastSeen)) : 'Offline';
+
+  const renderMessage = (m, i) => {
+    const isMe = m.from === profile.id;
+    const prev = messages[i - 1];
+    const showAvatar = !isMe && (!prev || prev.from !== m.from);
+    const gapTop = i > 0 && messages[i - 1].from !== m.from ? '0.65rem' : '0.15rem';
+    const status = getMsgStatus(m);
+    return (
+      <div key={m.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: '0.4rem', marginTop: gapTop }}>
+        {!isMe && (
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#e8f1fb', color: '#1e6bb8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: 700, flexShrink: 0, opacity: showAvatar ? 1 : 0 }}>
+            {getInitials(activeDoctor?.name)}
+          </div>
+        )}
+        <div style={{ maxWidth: '68%' }}>
+          {m.type === 'text' && (
+            <div style={{ padding: '0.6rem 0.95rem', borderRadius: 18, borderBottomRightRadius: isMe ? 4 : 18, borderBottomLeftRadius: isMe ? 18 : 4, background: isMe ? '#2563eb' : 'white', color: isMe ? 'white' : '#1e293b', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', lineHeight: 1.45, wordBreak: 'break-word' }}>{m.text}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end', marginTop: '0.2rem' }}>
+                <span style={{ fontSize: '0.63rem', opacity: 0.7 }}>{fmtTime(m.timestamp)}</span>
+                <TickIcon status={status} />
+              </div>
             </div>
-          ))}
+          )}
+          {m.type === 'image' && (
+            <div style={{ borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.12)' }}>
+              <img src={m.fileUrl} alt={m.fileName} style={{ display: 'block', maxWidth: 240, maxHeight: 200, objectFit: 'cover' }} />
+              <div style={{ background: isMe ? '#2563eb' : 'white', padding: '0.3rem 0.7rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <a href={m.fileUrl} download={m.fileName} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.7rem', color: isMe ? 'rgba(255,255,255,0.85)' : '#1e6bb8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}><Download size={11} /> Download</a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <span style={{ fontSize: '0.63rem', color: isMe ? 'rgba(255,255,255,0.7)' : '#94a3b8' }}>{fmtTime(m.timestamp)}</span>
+                  <TickIcon status={status} />
+                </div>
+              </div>
+            </div>
+          )}
+          {m.type === 'file' && (
+            <div style={{ padding: '0.7rem 0.95rem', borderRadius: 14, background: isMe ? '#2563eb' : 'white', color: isMe ? 'white' : '#1e293b', boxShadow: '0 1px 2px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 200 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: isMe ? 'rgba(255,255,255,0.2)' : '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <FileText size={18} color={isMe ? 'white' : '#2563eb'} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.fileName}</p>
+                <p style={{ margin: '0.1rem 0 0', fontSize: '0.7rem', opacity: 0.7 }}>{fmtFileSize(m.fileSize)}</p>
+              </div>
+              <a href={m.fileUrl} download={m.fileName} target="_blank" rel="noopener noreferrer" style={{ color: isMe ? 'white' : '#2563eb' }}><Download size={16} /></a>
+            </div>
+          )}
+          {m.type === 'audio' && (
+            <div style={{ padding: '0.6rem 0.95rem', borderRadius: 18, borderBottomRightRadius: isMe ? 4 : 18, borderBottomLeftRadius: isMe ? 18 : 4, background: isMe ? '#2563eb' : 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.08)', minWidth: 200 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Mic size={14} color={isMe ? 'rgba(255,255,255,0.9)' : '#2563eb'} />
+                <audio controls src={m.fileUrl} style={{ height: 28, flex: 1, minWidth: 140 }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', marginTop: '0.2rem' }}>
+                <span style={{ fontSize: '0.63rem', color: isMe ? 'rgba(255,255,255,0.7)' : '#94a3b8' }}>{fmtTime(m.timestamp)}</span>
+                <TickIcon status={status} />
+              </div>
+            </div>
+          )}
         </div>
-        <div className="mp-card mp-chat-area">
+      </div>
+    );
+  };
+
+  const filteredDoctors = doctors.filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="mp-page" style={{ padding: 0, height: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* ── Sidebar ── */}
+        <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'white', borderRight: '1px solid #e2e8f0' }}>
+          <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 style={{ margin: '0 0 0.75rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>Messages</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f1f5f9', borderRadius: 10, padding: '0.45rem 0.85rem' }}>
+              <Search size={14} color="#94a3b8" />
+              <input style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.82rem', flex: 1 }}
+                placeholder="Search doctors..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {loading ? <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem', fontSize: '0.85rem' }}>Loading…</p>
+              : filteredDoctors.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                  <MessageSquare size={32} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+                  <p style={{ margin: 0, fontSize: '0.85rem' }}>No doctors yet</p>
+                </div>
+              ) : filteredDoctors.map(d => {
+                const last = lastMsgs[d.id];
+                const isActive = activeDoctor?.id === d.id;
+                return (
+                  <div key={d.id} onClick={() => { setActiveDoctor(d); setMessages([]); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1.25rem', cursor: 'pointer', background: isActive ? '#eff6ff' : 'transparent', borderLeft: `3px solid ${isActive ? '#2563eb' : 'transparent'}`, transition: 'all 0.12s' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: isActive ? '#2563eb' : '#e8f1fb', color: isActive ? 'white' : '#1e6bb8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>
+                      {getInitials(d.name)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Dr. {d.name}</p>
+                        {last && <span style={{ fontSize: '0.68rem', color: '#94a3b8', flexShrink: 0, marginLeft: 4 }}>{fmtConvTime(last.timestamp)}</span>}
+                      </div>
+                      <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {last ? (last.from === profile.id ? `You: ${last.type !== 'text' ? `📎 ${last.type === 'audio' ? 'Voice message' : last.fileName || 'File'}` : last.text}` : (last.type !== 'text' ? `📎 ${last.type === 'audio' ? 'Voice message' : last.fileName || 'File'}` : last.text)) : d.specialization || 'Tap to start a conversation'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* ── Chat area ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f4f8' }}>
           {!activeDoctor ? (
-            <div className="mp-empty" style={{ flex: 1, justifyContent: 'center' }}>
-              <MessageSquare size={48} /><h3>Select a doctor</h3><p>Choose from the list on the left</p>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', background: 'white' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MessageSquare size={28} color="#94a3b8" />
+              </div>
+              <h3 style={{ margin: 0, color: '#64748b', fontWeight: 700 }}>Select a conversation</h3>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8' }}>Choose a doctor from the list to start messaging</p>
             </div>
           ) : (
             <>
-              <div className="mp-chat-header">
-                <div className="mp-conv-avatar">{getInitials(activeDoctor.name)}</div>
-                <div><p className="mp-conv-name">Dr. {activeDoctor.name}</p>{activeDoctor.specialization && <p className="mp-conv-spec">{activeDoctor.specialization}</p>}</div>
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.72rem', background: '#dcfce7', color: '#16a34a', padding: '0.2rem 0.55rem', borderRadius: 6, fontWeight: 600 }}>
-                    <Shield size={11} style={{ display: 'inline', marginRight: 3 }} />Secure
-                  </span>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.85rem 1.25rem', background: 'white', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.875rem' }}>
+                  {getInitials(activeDoctor.name)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>Dr. {activeDoctor.name}</p>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>● {activeDoctor.specialization || 'Medical Doctor'} — Encrypted channel</p>
                 </div>
               </div>
-              <div className="mp-chat-messages">
+
+              {/* Messages */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                 {messages.length === 0 ? (
-                  <p className="mp-empty-text">No messages yet. Start the conversation.</p>
-                ) : messages.map(m => {
-                  const isMe = m.from === profile.id;
-                  return (
-                    <div key={m.id} className={`mp-msg-wrap ${isMe ? 'me' : 'them'}`}>
-                      <div className={`mp-msg-bubble ${isMe ? 'me' : 'them'}`}>
-                        <p>{m.text}</p>
-                        <span className="mp-msg-time">{m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                  <div style={{ textAlign: 'center', margin: 'auto' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.85)', borderRadius: 12, padding: '0.6rem 1.25rem', display: 'inline-block', fontSize: '0.82rem', color: '#64748b' }}>No messages yet — send the first message</div>
+                  </div>
+                ) : messages.map((m, i) => renderMessage(m, i))}
                 <div ref={endRef} />
               </div>
-              <div className="mp-chat-input-row">
-                <input className="mp-chat-input" placeholder="Type a message…" value={newMsg} onChange={e => setNewMsg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} />
-                <button className="mp-btn mp-btn-primary mp-send-btn" onClick={sendMessage} disabled={!newMsg.trim()}><Send size={18} /></button>
+
+              {/* Input bar */}
+              <div style={{ background: 'white', borderTop: '1px solid #e2e8f0', flexShrink: 0 }}>
+                {isRecording && (
+                  <div style={{ padding: '0.5rem 1.25rem', background: '#fef2f2', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }} />
+                    <span style={{ fontSize: '0.85rem', color: '#ef4444', fontWeight: 600 }}>Recording… {fmtDuration(recordingSecs)}</span>
+                    <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginLeft: 'auto' }}>Release to send</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem' }}>
+                  <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                    style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}>
+                    <Paperclip size={17} />
+                  </button>
+                  <input
+                    style={{ flex: 1, padding: '0.65rem 1rem', border: '1.5px solid #e2e8f0', borderRadius: 24, fontSize: '0.875rem', outline: 'none', background: '#f8fafc' }}
+                    placeholder={uploading ? 'Uploading…' : `Message Dr. ${activeDoctor.name}…`}
+                    value={newMsg} onChange={e => setNewMsg(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage(); } }}
+                    onFocus={e => e.target.style.borderColor = '#2563eb'}
+                    onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                    disabled={isRecording}
+                  />
+                  {newMsg.trim() ? (
+                    <button onClick={sendTextMessage}
+                      style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: '#2563eb', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Send size={17} />
+                    </button>
+                  ) : (
+                    <button
+                      onMouseDown={startRecording} onMouseUp={stopRecording}
+                      onTouchStart={startRecording} onTouchEnd={stopRecording}
+                      style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: isRecording ? '#ef4444' : '#f1f5f9', color: isRecording ? 'white' : '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                      {isRecording ? <MicOff size={17} /> : <Mic size={17} />}
+                    </button>
+                  )}
+                </div>
               </div>
             </>
           )}
@@ -1220,50 +1875,54 @@ function MedPatMessages({ profile }) {
 // ─── Medical History Screen ───────────────────────────────────────────────────
 function MedPatHistory({ profile }) {
   const [history, setHistory] = useState([]);
-  const [notes, setNotes] = useState([]);
+  const [prescriptions, setHistPrescriptions] = useState([]);
+  const [healthProfile, setHealthProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('visits');
+  const [tab, setTab] = useState('consultations');
 
   useEffect(() => {
     if (!profile?.id) return;
     (async () => {
-      const [apptSnap, notesSnap] = await Promise.all([
+      const [apptSnap, rxSnap, profSnap] = await Promise.all([
         getDocs(query(collection(db, 'doctorAppointments'), where('clientId', '==', profile.id))),
-        getDocs(query(collection(db, 'doctorNotes'), where('patientId', '==', profile.id))),
+        getDocs(query(collection(db, 'doctorPrescriptions'), where('patientId', '==', profile.id))),
+        getDoc(doc(db, 'patientProfiles', profile.id)),
       ]);
       const all = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         .filter(a => a.status === 'completed')
-        .sort((a, b) => b.date?.localeCompare(a.date || '') || 0);
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       setHistory(all);
-      const noteList = notesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const rxList = rxSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setNotes(noteList);
+      setHistPrescriptions(rxList);
+      if (profSnap.exists()) setHealthProfile(profSnap.data());
       setLoading(false);
     })();
   }, [profile]);
 
-  const noteTypeColors = {
-    consultation: '#1e6bb8', followup: '#7c3aed', prescription: '#059669',
-    referral: '#d97706', general: '#64748b', discharge: '#dc2626',
-  };
+  const activeRx = prescriptions.filter(r => r.status !== 'completed');
+  const completedRx = prescriptions.filter(r => r.status === 'completed');
 
   return (
     <div className="mp-page">
-      <div className="mp-page-header"><h1>Medical History</h1><p>Your complete health record and clinical notes</p></div>
+      <div className="mp-page-header"><h1>Medical History</h1><p>Your complete health record and consultation history</p></div>
 
       <div className="mp-view-toggle" style={{ marginBottom: '1.25rem' }}>
-        <button className={`mp-toggle-btn ${tab === 'visits' ? 'active' : ''}`} onClick={() => setTab('visits')}>
-          <CheckCircle size={16} /> Visit History ({history.length})
+        <button className={`mp-toggle-btn ${tab === 'consultations' ? 'active' : ''}`} onClick={() => setTab('consultations')}>
+          <CheckCircle size={16} /> Consultations ({history.length})
         </button>
-        <button className={`mp-toggle-btn ${tab === 'notes' ? 'active' : ''}`} onClick={() => setTab('notes')}>
-          <FileText size={16} /> Doctor Notes ({notes.length})
+        <button className={`mp-toggle-btn ${tab === 'prescriptions' ? 'active' : ''}`} onClick={() => setTab('prescriptions')}>
+          <Pill size={16} /> Prescriptions ({prescriptions.length})
+        </button>
+        <button className={`mp-toggle-btn ${tab === 'records' ? 'active' : ''}`} onClick={() => setTab('records')}>
+          <Shield size={16} /> Health Records
         </button>
       </div>
 
       <div className="mp-card">
-        {loading ? <p className="mp-loading-text">Loading…</p> : tab === 'visits' ? (
+        {loading ? <p className="mp-loading-text">Loading…</p> : tab === 'consultations' ? (
           history.length === 0 ? (
-            <div className="mp-empty"><FileText size={40} /><h3>No visit history yet</h3><p>Completed consultations will appear here.</p></div>
+            <div className="mp-empty"><CheckCircle size={40} /><h3>No consultations yet</h3><p>Completed appointments will appear here.</p></div>
           ) : (
             <div className="mp-history-list">
               {history.map(a => (
@@ -1288,35 +1947,131 @@ function MedPatHistory({ profile }) {
               ))}
             </div>
           )
-        ) : (
-          notes.length === 0 ? (
-            <div className="mp-empty"><FileText size={40} /><h3>No notes yet</h3><p>Clinical notes from your doctor will appear here.</p></div>
+        ) : tab === 'prescriptions' ? (
+          prescriptions.length === 0 ? (
+            <div className="mp-empty"><Pill size={40} /><h3>No prescriptions yet</h3><p>Prescriptions from your doctor will appear here.</p></div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {notes.map(n => {
-                const color = noteTypeColors[n.type] || '#64748b';
-                return (
-                  <div key={n.id} style={{ padding: '1rem 1.25rem', background: '#f8fafc', borderRadius: 10, borderLeft: `4px solid ${color}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{n.title}</p>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
-                          <span style={{ background: color + '18', color, padding: '0.1rem 0.45rem', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600 }}>
-                            {n.type ? n.type.charAt(0).toUpperCase() + n.type.slice(1) : 'Note'}
-                          </span>
-                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Dr. {n.doctorName || 'Doctor'}</span>
-                          {n.createdAt?.toDate && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{n.createdAt.toDate().toLocaleDateString()}</span>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {activeRx.length > 0 && (
+                <div>
+                  <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: '#1e6bb8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active ({activeRx.length})</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    {activeRx.map(rx => (
+                      <div key={rx.id} style={{ padding: '1rem 1.25rem', background: '#f0f9ff', borderRadius: 10, borderLeft: '4px solid #1e6bb8' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: '0 0 0.2rem', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{rx.medication}</p>
+                            {rx.dosage && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#475569' }}>Dosage: {rx.dosage}</p>}
+                            {rx.frequency && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#475569' }}>Frequency: {rx.frequency}</p>}
+                            {rx.duration && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#475569' }}>Duration: {rx.duration}</p>}
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                              <span style={{ background: '#dbeafe', color: '#1e6bb8', padding: '0.1rem 0.55rem', borderRadius: 4, fontSize: '0.72rem', fontWeight: 700 }}>Active</span>
+                              {rx.doctorName && <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Dr. {rx.doctorName}</span>}
+                              {rx.createdAt?.toDate && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{rx.createdAt.toDate().toLocaleDateString()}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        {rx.instructions && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic' }}>{rx.instructions}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {completedRx.length > 0 && (
+                <div>
+                  <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completed ({completedRx.length})</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    {completedRx.map(rx => (
+                      <div key={rx.id} style={{ padding: '1rem 1.25rem', background: '#f0fdf4', borderRadius: 10, borderLeft: '4px solid #22c55e' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: '0 0 0.2rem', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{rx.medication}</p>
+                            {rx.dosage && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#475569' }}>Dosage: {rx.dosage}</p>}
+                            {rx.frequency && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#475569' }}>Frequency: {rx.frequency}</p>}
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                              <span style={{ background: '#dcfce7', color: '#16a34a', padding: '0.1rem 0.55rem', borderRadius: 4, fontSize: '0.72rem', fontWeight: 700 }}>✓ Completed</span>
+                              {rx.doctorName && <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Dr. {rx.doctorName}</span>}
+                              {rx.completedAt?.toDate && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Completed {rx.completedAt.toDate().toLocaleDateString()}</span>}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                      {n.content?.length > 400 ? n.content.slice(0, 400) + '…' : n.content}
-                    </p>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           )
+        ) : (
+          // Health Records tab
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Allergies card */}
+            <div>
+              <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Allergies</h4>
+              {healthProfile?.allergies && healthProfile.allergies.length > 0 ? (
+                <div style={{ padding: '1rem 1.25rem', background: '#fef2f2', borderRadius: 10, border: '1px solid #fecaca' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {(Array.isArray(healthProfile.allergies) ? healthProfile.allergies : healthProfile.allergies.split(',').map(s => s.trim())).filter(Boolean).map((al, i) => (
+                      <span key={i} style={{ background: '#fee2e2', color: '#dc2626', padding: '0.25rem 0.75rem', borderRadius: 20, fontSize: '0.82rem', fontWeight: 600 }}>
+                        ⚠ {al}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8', padding: '0.75rem 1.25rem', background: '#f8fafc', borderRadius: 10 }}>No known allergies on record.</p>
+              )}
+            </div>
+
+            {/* Health info */}
+            {healthProfile && (
+              <div>
+                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Health Information</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                  {[
+                    { label: 'Blood Type', value: healthProfile.bloodType },
+                    { label: 'Height', value: healthProfile.height },
+                    { label: 'Weight', value: healthProfile.weight },
+                    { label: 'Chronic Conditions', value: Array.isArray(healthProfile.chronicConditions) ? healthProfile.chronicConditions.join(', ') : healthProfile.chronicConditions },
+                  ].filter(f => f.value).map(f => (
+                    <div key={f.label} style={{ padding: '0.85rem 1rem', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>{f.label}</p>
+                      <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{f.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Downloadable health records */}
+            {healthProfile?.healthRecords && healthProfile.healthRecords.length > 0 && (
+              <div>
+                <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Documents &amp; Files</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {healthProfile.healthRecords.map((rec, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.85rem 1rem', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <FileText size={16} color="#1e6bb8" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#0f172a' }}>{rec.name || `Health Record ${i + 1}`}</p>
+                        {rec.uploadedAt?.toDate && <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>{rec.uploadedAt.toDate().toLocaleDateString()}</p>}
+                      </div>
+                      {rec.url && (
+                        <a href={rec.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: '#1e6bb8', fontWeight: 600, textDecoration: 'none' }}>
+                          <Download size={14} /> Download
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!healthProfile && (
+              <div className="mp-empty"><Shield size={40} /><h3>No health records yet</h3><p>Your health information will appear here once added.</p></div>
+            )}
+          </div>
         )}
       </div>
     </div>
