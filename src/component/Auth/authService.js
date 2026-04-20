@@ -392,6 +392,39 @@ export async function signInWithEmailOrUsername(identifier, password) {
 export async function resolveRole(uid) {
   console.log('Resolving role for UID:', uid);
 
+  // Check pharmacies collection (parent pharmacy accounts)
+  const pharmacyRef = doc(db, 'pharmacies', uid);
+  const pharmacySnap = await getDoc(pharmacyRef);
+  if (pharmacySnap.exists()) {
+    const data = pharmacySnap.data();
+    return {
+      role: 'pharmacy',
+      profile: { id: pharmacySnap.id, ...data, role: 'pharmacy' },
+    };
+  }
+
+  // Check pharmacy branches
+  const branchRef = doc(db, 'pharmacyBranches', uid);
+  const branchSnap = await getDoc(branchRef);
+  if (branchSnap.exists()) {
+    const data = branchSnap.data();
+    return {
+      role: 'branch_user',
+      profile: { id: branchSnap.id, ...data, role: 'branch_user' },
+    };
+  }
+
+  // Check admin collection (standalone admins separate from therapists)
+  const adminRef = doc(db, 'admins', uid);
+  const adminSnap = await getDoc(adminRef);
+  if (adminSnap.exists()) {
+    const data = adminSnap.data();
+    return {
+      role: 'admin',
+      profile: { id: adminSnap.id, ...data, role: 'admin' },
+    };
+  }
+
   // Check doctors collection first
   const doctorRef = doc(db, 'doctors', uid);
   const doctorSnap = await getDoc(doctorRef);
@@ -503,6 +536,21 @@ export async function resolveRole(uid) {
 }
 
 export async function findUserByUsernameOrEmail(identifier) {
+  // Check pharmacies
+  const phQ = query(collection(db, 'pharmacies'), where('username', '==', identifier));
+  const phR = await getDocs(phQ);
+  if (!phR.empty) return { id: phR.docs[0].id, ...phR.docs[0].data() };
+
+  // Check pharmacy branches
+  const brQ = query(collection(db, 'pharmacyBranches'), where('username', '==', identifier));
+  const brR = await getDocs(brQ);
+  if (!brR.empty) return { id: brR.docs[0].id, ...brR.docs[0].data() };
+
+  // Check admins
+  const adQ = query(collection(db, 'admins'), where('username', '==', identifier));
+  const adR = await getDocs(adQ);
+  if (!adR.empty) return { id: adR.docs[0].id, ...adR.docs[0].data() };
+
   // Check doctors collection
   const dQ = query(collection(db, 'doctors'), where('username', '==', identifier));
   const dR = await getDocs(dQ);

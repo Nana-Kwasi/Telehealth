@@ -61,6 +61,12 @@ function MedPatHome({ profile }) {
   const [moodForm, setMoodForm] = useState({ mood: '', painLevel: '', symptoms: '', medications: '', notes: '' });
   const [submittingMood, setSubmittingMood] = useState(false);
 
+  // Vitals modal
+  const EMPTY_VITALS = { bpSystolic: '', bpDiastolic: '', heartRate: '', respiratoryRate: '', spo2: '', temperature: '', tempUnit: 'C' };
+  const [showVitalsModal, setShowVitalsModal] = useState(false);
+  const [vitalsForm, setVitalsForm] = useState(EMPTY_VITALS);
+  const [submittingVitals, setSubmittingVitals] = useState(false);
+
   const TODAY = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
@@ -172,6 +178,25 @@ function MedPatHome({ profile }) {
       setShowMoodModal(false);
     } catch (_) {}
     finally { setSubmittingMood(false); }
+  };
+
+  const submitVitals = async () => {
+    const hasData = vitalsForm.bpSystolic || vitalsForm.heartRate || vitalsForm.spo2 || vitalsForm.temperature || vitalsForm.respiratoryRate;
+    if (!hasData) return;
+    setSubmittingVitals(true);
+    try {
+      await setDoc(doc(db, 'patientProfiles', profile.id), {
+        vitals: {
+          latest: {
+            ...vitalsForm,
+            recordedAt: serverTimestamp(),
+          },
+        },
+      }, { merge: true });
+      setVitalsForm(EMPTY_VITALS);
+      setShowVitalsModal(false);
+    } catch (err) { console.error('Error saving vitals:', err); }
+    finally { setSubmittingVitals(false); }
   };
 
   const nextAppt = appts[0];
@@ -492,6 +517,8 @@ function MedPatHome({ profile }) {
             { icon: Shield, label: 'Insurance', color: '#0e7490', bg: '#ecfeff', action: () => navigate('/dashboard/insurance') },
             { icon: Phone, label: 'Emergency Contacts', color: '#ea580c', bg: '#fff7ed', action: () => navigate('/dashboard/emergency') },
             { icon: Download, label: 'Health Records', color: '#059669', bg: '#f0fdf4', action: () => navigate('/dashboard/records') },
+            { icon: Heart, label: 'Record Vitals', color: '#dc2626', bg: '#fef2f2', action: () => setShowVitalsModal(true) },
+            { icon: Pill, label: 'E-Pharmacy', color: '#7c3aed', bg: '#f3e8ff', action: () => navigate('/dashboard/epharmacy') },
             { icon: Settings, label: 'My Profile', color: '#64748b', bg: '#f1f5f9', action: () => navigate('/dashboard/settings') },
             { icon: AlertCircle, label: 'Support', color: '#dc2626', bg: '#fef2f2', action: () => navigate('/dashboard/support') },
           ].map(({ icon: Icon, label, color, bg, action }) => (
@@ -501,6 +528,18 @@ function MedPatHome({ profile }) {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Record Vitals Red Button */}
+      <div style={{ marginTop: '0.75rem', background: 'white', border: '2px solid #dc2626', borderRadius: 14, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }} onClick={() => setShowVitalsModal(true)}>
+        <Heart size={22} color="#dc2626" />
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 700, color: '#dc2626', fontSize: '0.95rem' }}>Record Your Vitals</p>
+          <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Log your blood pressure, heart rate, SpO2 and more for your doctor.</p>
+        </div>
+        <button style={{ background: '#dc2626', border: 'none', borderRadius: 8, color: 'white', fontWeight: 700, padding: '0.4rem 0.85rem', cursor: 'pointer', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+          Record
+        </button>
       </div>
 
       {/* "Tell doctor what's wrong" intake button — shown if no intake submitted yet */}
@@ -561,6 +600,74 @@ function MedPatHome({ profile }) {
               <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowMoodModal(false)}>Skip for Now</button>
               <button style={{ flex: 2, padding: '0.7rem', background: '#1e6bb8', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !moodForm.mood || submittingMood ? 'not-allowed' : 'pointer', opacity: !moodForm.mood || submittingMood ? 0.6 : 1 }} onClick={submitMood} disabled={!moodForm.mood || submittingMood}>
                 {submittingMood ? 'Submitting…' : 'Submit Check-In'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vitals Modal */}
+      {showVitalsModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Heart size={20} color="#dc2626" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>Record Vitals</h3>
+              </div>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowVitalsModal(false)}>✕</button>
+            </div>
+            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Enter your current readings. Leave fields blank if not available.</p>
+
+            {/* Blood Pressure */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.4rem' }}>❤️ Blood Pressure (mmHg)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.2rem' }}>Systolic</label>
+                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 120" value={vitalsForm.bpSystolic} onChange={e => setVitalsForm(f => ({ ...f, bpSystolic: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.2rem' }}>Diastolic</label>
+                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 80" value={vitalsForm.bpDiastolic} onChange={e => setVitalsForm(f => ({ ...f, bpDiastolic: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            {/* Heart Rate + SpO2 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.4rem' }}>💓 Heart Rate (bpm)</label>
+                <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 72" value={vitalsForm.heartRate} onChange={e => setVitalsForm(f => ({ ...f, heartRate: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#16a34a', marginBottom: '0.4rem' }}>🫁 SpO2 (%)</label>
+                <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #bbf7d0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#f0fdf4' }} placeholder="e.g. 98" value={vitalsForm.spo2} onChange={e => setVitalsForm(f => ({ ...f, spo2: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Respiratory Rate + Temperature */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '0.4rem' }}>🌬️ Respiratory Rate (breaths/min)</label>
+                <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #bfdbfe', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#eff6ff' }} placeholder="e.g. 16" value={vitalsForm.respiratoryRate} onChange={e => setVitalsForm(f => ({ ...f, respiratoryRate: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#d97706', marginBottom: '0.4rem' }}>🌡️ Temperature</label>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <input type="number" style={{ flex: 1, padding: '0.6rem 0.85rem', border: '1.5px solid #fed7aa', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff7ed' }} placeholder="e.g. 37.0" value={vitalsForm.temperature} onChange={e => setVitalsForm(f => ({ ...f, temperature: e.target.value }))} />
+                  <select style={{ padding: '0.6rem 0.5rem', border: '1.5px solid #fed7aa', borderRadius: 8, fontSize: '0.875rem', outline: 'none', background: '#fff7ed', cursor: 'pointer' }} value={vitalsForm.tempUnit} onChange={e => setVitalsForm(f => ({ ...f, tempUnit: e.target.value }))}>
+                    <option value="C">°C</option>
+                    <option value="F">°F</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => { setShowVitalsModal(false); setVitalsForm(EMPTY_VITALS); }}>Cancel</button>
+              <button style={{ flex: 2, padding: '0.7rem', background: '#dc2626', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: submittingVitals ? 'not-allowed' : 'pointer', opacity: submittingVitals ? 0.6 : 1 }} onClick={submitVitals} disabled={submittingVitals}>
+                {submittingVitals ? 'Saving…' : '❤️ Save Vitals'}
               </button>
             </div>
           </div>
@@ -2361,19 +2468,32 @@ function MedPatEmergencyContacts({ profile }) {
 }
 
 // ─── Health Records Screen ────────────────────────────────────────────────────
-const HR_TYPES = ['Lab Result', 'X-Ray', 'MRI / CT Scan', 'Vaccination', 'Surgery Report', 'Allergy Test', 'Blood Test', 'Ultrasound', 'Prescription', 'Other'];
-const emptyRecord = { name: '', type: 'Lab Result', date: '', notes: '', fileUrl: '', fileName: '' };
+const HR_RADIOLOGY = ['MRI', 'CT Scan', 'Ultrasound', 'X-Ray'];
+const HR_LAB = ['CBC (Complete Blood Count)', 'BMP (Basic Metabolic Panel)', 'CMP (Comprehensive Metabolic Panel)', 'LFT (Liver Function Tests)', 'TFT (Thyroid Function Tests)', 'Lipid Panel', 'HbA1c', 'Lab Result', 'Blood Test', 'Urinalysis', 'Allergy Test'];
+const HR_OTHER = ['Vaccination', 'Surgical Report', 'Drug Allergy', 'Prescribed Medication', 'Over-the-Counter Medication', 'Prescription', 'Other'];
+const HR_GROUPS = [
+  { label: 'Radiology', color: '#7c3aed', bg: '#f3e8ff', border: '#ddd6fe', types: HR_RADIOLOGY },
+  { label: 'Lab Results', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', types: HR_LAB },
+  { label: 'Other', color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0', types: HR_OTHER },
+];
+const HR_REQUIRES_FILE = new Set(['MRI', 'CT Scan', 'Ultrasound', 'X-Ray', 'Surgical Report']);
+const emptyRecord = { name: '', types: [], date: '', notes: '', radiologyFiles: {}, fileUrl: '', fileName: '' };
+const todayFormatted = () => new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
 function MedPatHealthRecords({ profile }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // uploading: null | 'general' | '<radiology type>'
+  const [uploading, setUploading] = useState(null);
   const [records, setRecords] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
   const [form, setForm] = useState(emptyRecord);
   const [error, setError] = useState('');
-  const fileInputRef = React.useRef(null);
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+  // one hidden file input per upload slot
+  const generalFileRef = React.useRef(null);
+  const radiologyFileRefs = React.useRef({});
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -2390,31 +2510,70 @@ function MedPatHealthRecords({ profile }) {
     await setDoc(doc(db, 'patientProfiles', profile.id), { healthRecords: updated, updatedAt: serverTimestamp() }, { merge: true });
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
+  const uploadFile = async (file, radioType = null) => {
+    setUploading(radioType || 'general');
     try {
       const sRef = storageRef(storage, `healthRecords/${profile.id}/${Date.now()}_${file.name}`);
       await uploadBytes(sRef, file);
       const downloadURL = await getDownloadURL(sRef);
-      setForm(f => ({ ...f, fileUrl: downloadURL, fileName: file.name }));
+      if (radioType) {
+        setForm(f => ({ ...f, radiologyFiles: { ...(f.radiologyFiles || {}), [radioType]: { fileUrl: downloadURL, fileName: file.name } } }));
+      } else {
+        setForm(f => ({ ...f, fileUrl: downloadURL, fileName: file.name }));
+      }
     } catch (err) {
       console.error('Upload error:', err);
       setError('File upload failed. Please try again.');
     }
-    setUploading(false);
-    e.target.value = '';
+    setUploading(null);
   };
 
-  const openAdd = () => { setForm(emptyRecord); setEditIndex(null); setError(''); setShowModal(true); };
-  const openEdit = (idx) => { setForm({ ...records[idx] }); setEditIndex(idx); setError(''); setShowModal(true); };
+  const toggleType = (t) => setForm(f => {
+    const arr = f.types || [];
+    const newTypes = arr.includes(t) ? arr.filter(x => x !== t) : [...arr, t];
+    // Remove radiology file entry if deselecting
+    let radiologyFiles = { ...(f.radiologyFiles || {}) };
+    if (arr.includes(t) && HR_RADIOLOGY.includes(t)) delete radiologyFiles[t];
+    return { ...f, types: newTypes, radiologyFiles };
+  });
+
+  const toggleGroup = (label) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    next.has(label) ? next.delete(label) : next.add(label);
+    return next;
+  });
+
+  const openAdd = () => {
+    setForm({ ...emptyRecord, date: todayFormatted() });
+    setEditIndex(null);
+    setError('');
+    setExpandedGroups(new Set());
+    setShowModal(true);
+  };
+
+  const openEdit = (idx) => {
+    const r = records[idx];
+    const types = r.types?.length ? r.types : (r.type ? [r.type] : []);
+    setForm({ ...r, types, radiologyFiles: r.radiologyFiles || {}, date: r.date || todayFormatted() });
+    setEditIndex(idx);
+    setError('');
+    setExpandedGroups(new Set());
+    setShowModal(true);
+  };
 
   const handleSaveRecord = async () => {
     if (!form.name.trim()) { setError('Record name is required.'); return; }
+    if (!form.types || form.types.length === 0) { setError('Please select at least one record type.'); return; }
+    // Per-radiology file validation
+    const selectedRadiology = form.types.filter(t => HR_RADIOLOGY.includes(t));
+    for (const rType of selectedRadiology) {
+      if (!form.radiologyFiles?.[rType]?.fileUrl) { setError(`Please upload a file for "${rType}".`); return; }
+    }
+    if (form.types.includes('Surgical Report') && !form.fileUrl) { setError('A file upload is required for Surgical Report records.'); return; }
     setSaving(true);
     try {
       const entry = { ...form, savedAt: new Date().toISOString() };
+      delete entry.type;
       const updated = editIndex !== null ? records.map((r, i) => i === editIndex ? entry : r) : [...records, entry];
       await persistRecords(updated);
       setRecords(updated);
@@ -2429,10 +2588,13 @@ function MedPatHealthRecords({ profile }) {
     try { await persistRecords(updated); setRecords(updated); } catch (_) {}
   };
 
-  const typeColors = { 'Lab Result': '#2563eb', 'X-Ray': '#7c3aed', 'MRI / CT Scan': '#7c3aed', 'Vaccination': '#16a34a', 'Surgery Report': '#dc2626', 'Blood Test': '#dc2626', 'Prescription': '#059669', default: '#64748b' };
-  const typeColor = (t) => typeColors[t] || typeColors.default;
+  const getGroupForType = (t) => HR_GROUPS.find(g => g.types.includes(t));
+  const getDisplayTypes = (r) => r.types?.length ? r.types : (r.type ? [r.type] : ['Other']);
 
   if (loading) return <div className="mp-page"><p className="mp-loading-text">Loading…</p></div>;
+
+  const selectedRadiology = (form.types || []).filter(t => HR_RADIOLOGY.includes(t));
+  const hasNonRadiology = (form.types || []).some(t => !HR_RADIOLOGY.includes(t));
 
   return (
     <div className="mp-page">
@@ -2449,30 +2611,41 @@ function MedPatHealthRecords({ profile }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem', maxWidth: 800 }}>
-          {records.map((r, idx) => (
-            <div key={idx} className="mp-card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1rem 1.25rem' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <FileText size={20} color="#1e6bb8" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 700, marginBottom: 4 }}>{r.name}</p>
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                  <span style={{ background: '#eff6ff', color: typeColor(r.type), fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>{r.type}</span>
-                  {r.date && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{r.date}</span>}
+          {records.map((r, idx) => {
+            const displayTypes = getDisplayTypes(r);
+            return (
+              <div key={idx} className="mp-card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1rem 1.25rem' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <FileText size={20} color="#1e6bb8" />
                 </div>
-                {r.notes && <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>{r.notes}</p>}
-                {r.fileUrl && (
-                  <a href={r.fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: '#16a34a', fontWeight: 600, marginTop: 4 }}>
-                    <Download size={13} /> {r.fileName || 'Download file'}
-                  </a>
-                )}
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 700, marginBottom: 4 }}>{r.name}</p>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
+                    {displayTypes.map(t => {
+                      const grp = getGroupForType(t);
+                      return <span key={t} style={{ background: grp?.bg || '#f1f5f9', color: grp?.color || '#64748b', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>{t}</span>;
+                    })}
+                    {r.date && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{r.date}</span>}
+                  </div>
+                  {r.notes && <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>{r.notes}</p>}
+                  {r.fileUrl && (
+                    <a href={r.fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: '#16a34a', fontWeight: 600, marginTop: 4 }}>
+                      <Download size={13} /> {r.fileName || 'Download file'}
+                    </a>
+                  )}
+                  {r.radiologyFiles && Object.entries(r.radiologyFiles).map(([rType, f]) => f?.fileUrl ? (
+                    <a key={rType} href={f.fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: '#7c3aed', fontWeight: 600, marginTop: 4, marginRight: 10 }}>
+                      <Download size={13} /> {rType}: {f.fileName || 'Download'}
+                    </a>
+                  ) : null)}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                  <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => openEdit(idx)}>Edit</button>
+                  <button className="mp-btn mp-btn-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => handleDelete(idx)}>Remove</button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => openEdit(idx)}>Edit</button>
-                <button className="mp-btn mp-btn-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => handleDelete(idx)}>Remove</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -2480,53 +2653,176 @@ function MedPatHealthRecords({ profile }) {
         <Plus size={16} /> Add Health Record
       </button>
 
-      <input ref={fileInputRef} type="file" accept=".pdf,image/*,.doc,.docx" style={{ display: 'none' }} onChange={handleFileChange} />
+      {/* Hidden file inputs */}
+      <input ref={generalFileRef} type="file" accept=".pdf,image/*,.doc,.docx" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, null); e.target.value = ''; }} />
 
       {showModal && (
         <div className="mp-modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="mp-modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-            <div className="mp-modal-header">
-              <h3>{editIndex !== null ? 'Edit Record' : 'New Record'}</h3>
+          <div className="mp-modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 580, maxHeight: '90vh', overflowY: 'auto' }}>
+            {/* Modal header */}
+            <div className="mp-modal-header" style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '0.875rem', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>{editIndex !== null ? 'Edit Record' : 'New Health Record'}</h3>
+                <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>Fill in the details below</p>
+              </div>
               <button className="mp-modal-close" onClick={() => setShowModal(false)}>&times;</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+
+              {/* Record name */}
               <div className="mp-field-group">
                 <label className="mp-label">Record Name *</label>
                 <input className="mp-input" placeholder="e.g., Complete Blood Count – March 2026" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
+
+              {/* Date — auto-filled, editable */}
               <div className="mp-field-group">
-                <label className="mp-label">Record Type</label>
-                <select className="mp-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                  {HR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <label className="mp-label">Date *</label>
+                <input className="mp-input" type="date"
+                  value={form.date ? (() => { try { return new Date(form.date).toISOString().split('T')[0]; } catch { return ''; } })() : new Date().toISOString().split('T')[0]}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={e => {
+                    if (!e.target.value) return;
+                    const d = new Date(e.target.value + 'T00:00:00');
+                    setForm(f => ({ ...f, date: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }));
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                {form.date && <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>{form.date}</p>}
               </div>
+
+              {/* Type picker */}
               <div className="mp-field-group">
-                <label className="mp-label">Date</label>
-                <input className="mp-input" placeholder="e.g., March 15, 2026" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                <label className="mp-label">Record Type(s) — select all that apply *</label>
+
+                {/* Removable selected tags */}
+                {(form.types || []).length > 0 && (
+                  <div style={{ marginBottom: '0.75rem', padding: '0.75rem', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Selected — click to remove:</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {form.types.map(t => {
+                        const grp = getGroupForType(t);
+                        return (
+                          <button key={t} type="button" onClick={() => toggleType(t)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0.3rem 0.6rem 0.3rem 0.75rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', border: 'none', background: grp?.color || '#64748b', color: '#fff', transition: 'opacity 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                          >
+                            {t}
+                            <span style={{ width: 16, height: 16, borderRadius: 8, background: 'rgba(0,0,0,0.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>✕</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Accordion groups */}
+                {HR_GROUPS.map(group => {
+                  const isExpanded = expandedGroups.has(group.label);
+                  const selectedInGroup = (form.types || []).filter(t => group.types.includes(t));
+                  return (
+                    <div key={group.label} style={{ marginBottom: '0.5rem', borderRadius: 10, border: `1.5px solid ${group.border}`, overflow: 'hidden' }}>
+                      <button type="button"
+                        onClick={() => toggleGroup(group.label)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.875rem', background: group.bg, border: 'none', cursor: 'pointer' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 4, background: group.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: group.color }}>{group.label}</span>
+                          {selectedInGroup.length > 0 && (
+                            <span style={{ background: group.color, color: '#fff', fontSize: '0.68rem', fontWeight: 700, padding: '1px 8px', borderRadius: 12 }}>{selectedInGroup.length} selected</span>
+                          )}
+                        </div>
+                        <span style={{ color: group.color, fontSize: '0.8rem' }}>{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+                      {isExpanded && (
+                        <div style={{ padding: '0.75rem', background: '#fff', borderTop: `1px solid ${group.border}`, display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          {group.types.map(t => {
+                            const isSelected = (form.types || []).includes(t);
+                            return (
+                              <button key={t} type="button" onClick={() => toggleType(t)}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0.3rem 0.75rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', border: `1.5px solid ${isSelected ? group.color : group.border}`, background: isSelected ? group.color : '#fff', color: isSelected ? '#fff' : group.color }}
+                              >
+                                {isSelected && <span style={{ fontSize: 10 }}>✓</span>} {t}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* Per-radiology dedicated upload fields */}
+              {selectedRadiology.length > 0 && (
+                <div style={{ padding: '0.875rem', background: '#faf5ff', borderRadius: 12, border: '1.5px solid #ddd6fe' }}>
+                  <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', fontWeight: 700, color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    🗂 Radiology Files — Upload Each *
+                  </p>
+                  {selectedRadiology.map(rType => {
+                    const rFile = form.radiologyFiles?.[rType];
+                    const isUploading = uploading === rType;
+                    const hasFile = !!rFile?.fileUrl;
+                    return (
+                      <div key={rType} style={{ marginBottom: '0.625rem' }}>
+                        <p style={{ margin: '0 0 0.35rem', fontSize: '0.78rem', fontWeight: 700, color: '#7c3aed' }}>
+                          {rType} — file required *
+                        </p>
+                        <input
+                          type="file" accept=".pdf,image/*,.doc,.docx" style={{ display: 'none' }}
+                          ref={el => { radiologyFileRefs.current[rType] = el; }}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, rType); e.target.value = ''; }}
+                        />
+                        {hasFile ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: '0.8rem', color: '#15803d', fontWeight: 600 }}>
+                            <CheckCircle size={14} color="#16a34a" />
+                            <span style={{ flex: 1 }}>{rFile.fileName || 'Uploaded'}</span>
+                            <button type="button" onClick={() => setForm(f => { const rf = { ...f.radiologyFiles }; delete rf[rType]; return { ...f, radiologyFiles: rf }; })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '1rem', lineHeight: 1 }}>✕</button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => radiologyFileRefs.current[rType]?.click()} disabled={uploading !== null}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.875rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600, color: '#7c3aed', background: '#fff', border: '1.5px dashed #c4b5fd', cursor: 'pointer', opacity: isUploading ? 0.65 : 1 }}>
+                            {isUploading ? '⏳ Uploading…' : <>📎 Upload {rType} file (PDF, Image)</>}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* General file upload — Surgical Report or non-radiology optional */}
+              {(form.types?.includes('Surgical Report') || (hasNonRadiology && !selectedRadiology.length)) && (
+                <div className="mp-field-group">
+                  <label className="mp-label">Attach Document{form.types?.includes('Surgical Report') ? ' *' : ' (optional)'}</label>
+                  <button type="button" className="mp-upload-btn" onClick={() => generalFileRef.current?.click()} disabled={uploading !== null}>
+                    {uploading === 'general' ? 'Uploading…' : form.fileName ? <><Download size={15} /> {form.fileName}</> : <><Plus size={15} /> Upload from Device (PDF, Image, Doc)</>}
+                  </button>
+                  {form.fileUrl && (
+                    <div className="mp-upload-success">
+                      <CheckCircle size={14} color="#16a34a" /> {form.fileName || 'File uploaded'}
+                      <button style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }} onClick={() => setForm(f => ({ ...f, fileUrl: '', fileName: '' }))}>✕</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Notes */}
               <div className="mp-field-group">
                 <label className="mp-label">Notes</label>
                 <textarea className="mp-input" rows={3} style={{ resize: 'vertical' }} placeholder="Key findings, doctor comments, follow-up needed…" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
-              <div className="mp-field-group">
-                <label className="mp-label">Attach Document (optional)</label>
-                <button
-                  type="button"
-                  className="mp-upload-btn"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? 'Uploading…' : form.fileName ? <><Download size={15} /> {form.fileName}</> : <><Plus size={15} /> Upload from Device (PDF, Image, Doc)</>}
-                </button>
-                {form.fileUrl && (
-                  <div className="mp-upload-success">
-                    <CheckCircle size={14} color="#16a34a" /> File uploaded successfully
-                    <button style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }} onClick={() => setForm(f => ({ ...f, fileUrl: '', fileName: '' }))}>✕</button>
-                  </div>
-                )}
-              </div>
-              {error && <p style={{ color: '#dc2626', fontSize: '0.85rem' }}>{error}</p>}
-              <button className="mp-btn mp-btn-primary" onClick={handleSaveRecord} disabled={saving || uploading}>
+
+              {error && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '0.6rem 0.875rem', fontSize: '0.83rem', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  ⚠️ {error}
+                </div>
+              )}
+              <button className="mp-btn mp-btn-primary" onClick={handleSaveRecord} disabled={saving || uploading !== null} style={{ marginTop: '0.25rem' }}>
                 {saving ? 'Saving…' : editIndex !== null ? 'Update Record' : 'Save Record'}
               </button>
             </div>
@@ -2538,45 +2834,514 @@ function MedPatHealthRecords({ profile }) {
 }
 
 // ─── Settings Screen ──────────────────────────────────────────────────────────
-function MedPatSettings({ profile }) {
-  const [form, setForm] = useState({ name: profile?.name || '', email: profile?.email || '', phone: profile?.phone || '', dob: profile?.dob || '', bloodType: profile?.bloodType || '', allergies: profile?.allergies || '', emergencyContact: profile?.emergencyContact || '' });
-  const [saved, setSaved] = useState(false);
+const DEF_PRIVACY = { dataSharing: { records: true, prescriptions: true, appointments: true, labResults: true }, profileVisible: true };
+const DEF_SECURITY = { twoFAEnabled: false, biometricEnabled: false };
+const DEF_EMERGENCY = { medicalNotes: '', organDonor: false, preferredHospital: '', emergencyAccess: true };
+const DEF_LEGAL = { termsAccepted: false, privacyAccepted: false, hipaaAccepted: false, dataSharingConsent: true };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+function Toggle({ on, onChange, color = '#2563eb' }) {
+  return (
+    <button type="button" onClick={onChange}
+      style={{ width: 42, height: 24, borderRadius: 12, background: on ? color : '#e2e8f0', border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+      <span style={{ position: 'absolute', top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: 9, background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+    </button>
+  );
+}
+
+function MedPatSettings({ profile }) {
+  const [tab, setTab] = useState('profile');
+  const [loading, setLoading] = useState(true);
+
+  // Profile
+  const [form, setForm] = useState({ name: profile?.name || '', email: profile?.email || '', phone: '', dob: '', bloodType: '', allergies: '' });
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+
+  // Security
+  const [security, setSecurity] = useState(DEF_SECURITY);
+  const [privacy, setPrivacy] = useState(DEF_PRIVACY);
+  const [showPwdForm, setShowPwdForm] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ current: '', next: '', confirm: '' });
+  const [changingPwd, setChangingPwd] = useState(false);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deletePwd, setDeletePwd] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  // Emergency
+  const [emergency, setEmergency] = useState(DEF_EMERGENCY);
+  const [savingEmergency, setSavingEmergency] = useState(false);
+
+  // Billing
+  const [billingHistory, setBillingHistory] = useState([]);
+  const [insuranceInfo, setInsuranceInfo] = useState(null);
+
+  // Legal
+  const [legal, setLegal] = useState(DEF_LEGAL);
+  const [savingLegal, setSavingLegal] = useState(false);
+  const [consentLogs, setConsentLogs] = useState([]);
+
+  // Discharge
+  const [dischargeForm, setDischargeForm] = useState({ reason: '', message: '', confirmed: false });
+  const [submittingDischarge, setSubmittingDischarge] = useState(false);
+  const [alreadyDischarged, setAlreadyDischarged] = useState(false);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    (async () => {
+      try {
+        const [authSnap, profileSnap] = await Promise.all([
+          getDoc(doc(db, 'auth', profile.id)),
+          getDoc(doc(db, 'patientProfiles', profile.id)),
+        ]);
+        if (authSnap.exists()) {
+          const d = authSnap.data();
+          setForm(f => ({ ...f, name: d.name || profile.name || '', email: d.email || profile.email || '', phone: d.phone || '', dob: d.dob || '', bloodType: d.bloodType || '', allergies: d.allergies || '' }));
+        }
+        if (profileSnap.exists()) {
+          const d = profileSnap.data();
+          if (d.security) setSecurity(s => ({ ...s, ...d.security }));
+          if (d.privacy) setPrivacy(p => ({ ...DEF_PRIVACY, ...d.privacy, dataSharing: { ...DEF_PRIVACY.dataSharing, ...(d.privacy.dataSharing || {}) } }));
+          if (d.emergency) setEmergency(e => ({ ...DEF_EMERGENCY, ...d.emergency }));
+          if (d.legal) { setLegal(l => ({ ...DEF_LEGAL, ...d.legal })); setConsentLogs(d.legal.consentLogs || []); }
+          if (d.billingHistory) setBillingHistory(d.billingHistory);
+          if (d.insurance) setInsuranceInfo(d.insurance);
+          if (d.status === 'self-discharged') setAlreadyDischarged(true);
+        }
+      } catch (err) { console.error(err); }
+      finally { setLoading(false); }
+    })();
+  }, [profile]);
+
+  const flash = (msg) => { setSavedMsg(msg); setTimeout(() => setSavedMsg(''), 3000); };
+
+  const saveProfile = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'auth', profile.id), { name: form.name, phone: form.phone, dob: form.dob, bloodType: form.bloodType, allergies: form.allergies }, { merge: true });
+      flash('Profile saved successfully.');
+    } catch { flash('Failed to save. Please try again.'); }
+    finally { setSaving(false); }
   };
+
+  const saveSecurity = async (newSec, newPriv) => {
+    try {
+      await setDoc(doc(db, 'patientProfiles', profile.id), { ...(newSec ? { security: newSec } : {}), ...(newPriv ? { privacy: newPriv } : {}), updatedAt: serverTimestamp() }, { merge: true });
+    } catch (err) { console.error(err); }
+  };
+
+  const toggleSecurity = async (key) => {
+    const updated = { ...security, [key]: !security[key] };
+    setSecurity(updated);
+    await saveSecurity(updated, null);
+  };
+
+  const toggleDataSharing = async (key) => {
+    const newDs = { ...privacy.dataSharing, [key]: !privacy.dataSharing[key] };
+    const newPrivacy = { ...privacy, dataSharing: newDs };
+    setPrivacy(newPrivacy);
+    await saveSecurity(null, newPrivacy);
+    const log = { action: `dataSharing.${key} set to ${!privacy.dataSharing[key]}`, timestamp: new Date().toISOString() };
+    const updatedLogs = [...consentLogs.slice(-49), log];
+    setConsentLogs(updatedLogs);
+    await setDoc(doc(db, 'patientProfiles', profile.id), { 'legal.consentLogs': updatedLogs }, { merge: true });
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    const { current, next, confirm } = pwdForm;
+    if (!current || !next || !confirm) { alert('Please fill all fields.'); return; }
+    if (next.length < 6) { alert('New password must be at least 6 characters.'); return; }
+    if (next !== confirm) { alert('Passwords do not match.'); return; }
+    setChangingPwd(true);
+    try {
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      const user = auth.currentUser;
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, current));
+      await updatePassword(user, next);
+      setShowPwdForm(false);
+      setPwdForm({ current: '', next: '', confirm: '' });
+      flash('Password changed successfully.');
+    } catch (err) {
+      alert(err.code === 'auth/wrong-password' ? 'Current password is incorrect.' : 'Could not change password.');
+    } finally { setChangingPwd(false); }
+  };
+
+  const downloadMyData = async () => {
+    try {
+      const [authSnap, profileSnap, apptSnap] = await Promise.all([
+        getDoc(doc(db, 'auth', profile.id)),
+        getDoc(doc(db, 'patientProfiles', profile.id)),
+        getDocs(query(collection(db, 'doctorAppointments'), where('clientId', '==', profile.id))),
+      ]);
+      const data = { exportedAt: new Date().toISOString(), profile: authSnap.data() || {}, patientProfile: profileSnap.data() || {}, appointments: apptSnap.docs.map(d => d.data()) };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `nessahub-data-${profile.id}.json`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert('Could not export data.'); }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    if (deleteConfirm !== 'DELETE') { alert('Type DELETE to confirm.'); return; }
+    if (!deletePwd) { alert('Enter your password.'); return; }
+    setDeleting(true);
+    try {
+      const { EmailAuthProvider, reauthenticateWithCredential, deleteUser } = await import('firebase/auth');
+      const user = auth.currentUser;
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, deletePwd));
+      await setDoc(doc(db, 'patientProfiles', user.uid), { deletedAt: new Date().toISOString(), status: 'deleted' }, { merge: true });
+      await deleteUser(user);
+      window.location.href = '/';
+    } catch (err) {
+      alert(err.code === 'auth/wrong-password' ? 'Incorrect password.' : 'Could not delete account.');
+    } finally { setDeleting(false); }
+  };
+
+  const saveEmergency = async () => {
+    setSavingEmergency(true);
+    try {
+      await setDoc(doc(db, 'patientProfiles', profile.id), { emergency, updatedAt: serverTimestamp() }, { merge: true });
+      flash('Emergency information saved.');
+    } catch { flash('Failed to save.'); }
+    finally { setSavingEmergency(false); }
+  };
+
+  const saveLegal = async () => {
+    setSavingLegal(true);
+    try {
+      const log = { action: 'Legal consent updated', timestamp: new Date().toISOString() };
+      const updatedLogs = [...consentLogs.slice(-49), log];
+      setConsentLogs(updatedLogs);
+      await setDoc(doc(db, 'patientProfiles', profile.id), { legal: { ...legal, consentLogs: updatedLogs }, updatedAt: serverTimestamp() }, { merge: true });
+      flash('Legal preferences saved.');
+    } catch { flash('Failed to save.'); }
+    finally { setSavingLegal(false); }
+  };
+
+  const submitDischarge = async () => {
+    if (!dischargeForm.reason.trim()) { alert('Please provide a reason.'); return; }
+    if (!dischargeForm.confirmed) { alert('Please check the confirmation box.'); return; }
+    setSubmittingDischarge(true);
+    try {
+      const [authSnap, profileSnap] = await Promise.all([
+        getDoc(doc(db, 'auth', profile.id)),
+        getDoc(doc(db, 'patientProfiles', profile.id)),
+      ]);
+      const authData = authSnap.data() || {};
+      const profData = profileSnap.data() || {};
+      await addDoc(collection(db, 'dischargeRequests'), {
+        patientId: profile.id, patientName: authData.name || profile.name || '', patientEmail: authData.email || profile.email || '',
+        patientPhone: authData.phone || '', bloodType: authData.bloodType || '', allergies: authData.allergies || '',
+        reason: dischargeForm.reason.trim(), message: dischargeForm.message.trim(), type: 'self',
+        requestedAt: serverTimestamp(), status: 'pending_review',
+        patientProfile: { emergency: profData.emergency || {}, insurance: profData.insurance || {}, legal: profData.legal || {} },
+      });
+      await setDoc(doc(db, 'patientProfiles', profile.id), { status: 'self-discharged', selfDischargeReason: dischargeForm.reason.trim(), selfDischargeMessage: dischargeForm.message.trim(), selfDischargedAt: serverTimestamp() }, { merge: true });
+      setAlreadyDischarged(true);
+    } catch (err) { console.error(err); alert('Could not submit. Please try again.'); }
+    finally { setSubmittingDischarge(false); }
+  };
+
+  const TABS = [
+    { key: 'profile',   label: '👤 Profile' },
+    { key: 'security',  label: '🔒 Security' },
+    { key: 'emergency', label: '🚨 Emergency' },
+    { key: 'billing',   label: '💳 Billing' },
+    { key: 'legal',     label: '📋 Legal' },
+    { key: 'discharge', label: '🚪 Discharge', danger: true },
+  ];
+
+  const tabBtn = (t) => ({
+    padding: '0.55rem 1.1rem', borderRadius: 20, border: `1.5px solid ${tab === t.key ? (t.danger ? '#dc2626' : '#2563eb') : '#e2e8f0'}`,
+    background: tab === t.key ? (t.danger ? '#fef2f2' : '#eff6ff') : '#fff', cursor: 'pointer',
+    fontSize: '0.82rem', fontWeight: 700, color: tab === t.key ? (t.danger ? '#dc2626' : '#2563eb') : '#64748b',
+    whiteSpace: 'nowrap', transition: 'all 0.15s',
+  });
+  const inp = { border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.65rem 0.875rem', fontSize: '0.875rem', color: '#0f172a', outline: 'none', background: '#fafafa', width: '100%', boxSizing: 'border-box' };
+  const lbl = { display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.03em' };
+  const card = { background: '#fff', borderRadius: 14, padding: '1.25rem', marginBottom: '1rem', border: '1px solid #e2e8f0' };
+  const rowItem = (icon, label, desc, rightEl) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 0', borderBottom: '1px solid #f8fafc' }}>
+      <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{icon}</span>
+      <div style={{ flex: 1 }}>
+        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{label}</p>
+        {desc && <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{desc}</p>}
+      </div>
+      {rightEl}
+    </div>
+  );
+
+  if (loading) return <div className="mp-page"><p style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>Loading…</p></div>;
 
   return (
     <div className="mp-page">
-      <div className="mp-page-header"><h1>My Profile</h1><p>Manage your personal information and preferences</p></div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-        <div className="mp-card">
-          <h3 style={{ marginTop: 0, marginBottom: '1.25rem', fontSize: '1rem' }}>Personal Information</h3>
-          <form onSubmit={handleSave} className="mp-settings-form">
-            <div className="mp-field-group"><label className="mp-label">Full Name</label><input className="mp-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-            <div className="mp-field-group"><label className="mp-label">Email Address</label><input className="mp-input" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
-            <div className="mp-field-group"><label className="mp-label">Phone Number</label><input className="mp-input" type="tel" placeholder="+1 (555) 000-0000" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
-            <div className="mp-field-group"><label className="mp-label">Date of Birth</label><input className="mp-input" type="date" value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} /></div>
-            {saved && <p className="mp-save-success">Profile saved successfully.</p>}
-            <button className="mp-btn mp-btn-primary" type="submit">Save Changes</button>
-          </form>
-        </div>
-        <div className="mp-card">
-          <h3 style={{ marginTop: 0, marginBottom: '1.25rem', fontSize: '1rem' }}>Health Information</h3>
-          <form className="mp-settings-form">
-            <div className="mp-field-group"><label className="mp-label">Blood Type</label>
-              <select className="mp-input" value={form.bloodType} onChange={e => setForm(f => ({ ...f, bloodType: e.target.value }))}>
-                <option value="">Select blood type</option>
-                {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="mp-field-group"><label className="mp-label">Known Allergies</label><textarea className="mp-input" rows={3} placeholder="e.g. Penicillin, Peanuts…" value={form.allergies} onChange={e => setForm(f => ({ ...f, allergies: e.target.value }))} style={{ resize: 'vertical' }} /></div>
-            <div className="mp-field-group"><label className="mp-label">Emergency Contact</label><input className="mp-input" placeholder="Name · Relationship · Phone" value={form.emergencyContact} onChange={e => setForm(f => ({ ...f, emergencyContact: e.target.value }))} /></div>
-          </form>
-        </div>
+      <div className="mp-page-header"><h1>My Profile</h1><p>Manage your account, security, and preferences</p></div>
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+        {TABS.map(t => <button key={t.key} style={tabBtn(t)} onClick={() => setTab(t.key)}>{t.label}</button>)}
       </div>
+
+      {savedMsg && <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: '#15803d', fontWeight: 600 }}>✓ {savedMsg}</div>}
+
+      {/* ═══ PROFILE ═══ */}
+      {tab === 'profile' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700 }}>Personal Information</h3>
+            {[['Full Name', 'name', 'text'], ['Phone Number', 'phone', 'tel'], ['Date of Birth', 'dob', 'date']].map(([label, key, type]) => (
+              <div key={key} style={{ marginBottom: '0.75rem' }}>
+                <label style={lbl}>{label}</label>
+                <input style={inp} type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+              </div>
+            ))}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={lbl}>Email (read-only)</label>
+              <input style={{ ...inp, background: '#f8fafc', color: '#94a3b8' }} value={form.email} readOnly />
+            </div>
+            <button className="mp-btn mp-btn-primary" onClick={saveProfile} disabled={saving} style={{ marginTop: '0.5rem' }}>
+              {saving ? 'Saving…' : 'Save Profile'}
+            </button>
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700 }}>Health Information</h3>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={lbl}>Blood Type</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: 4 }}>
+                {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => (
+                  <button key={bt} type="button" onClick={() => setForm(f => ({ ...f, bloodType: bt }))}
+                    style={{ padding: '0.3rem 0.75rem', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${form.bloodType === bt ? '#2563eb' : '#e2e8f0'}`, background: form.bloodType === bt ? '#eff6ff' : '#fff', color: form.bloodType === bt ? '#2563eb' : '#64748b' }}>
+                    {bt}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={lbl}>Known Allergies</label>
+              <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={form.allergies} onChange={e => setForm(f => ({ ...f, allergies: e.target.value }))} placeholder="e.g. Penicillin, Peanuts…" />
+            </div>
+            {!showPwdForm ? (
+              <button className="mp-btn mp-btn-outline" onClick={() => setShowPwdForm(true)}>🔑 Change Password</button>
+            ) : (
+              <form onSubmit={handleChangePassword} style={{ marginTop: '0.75rem' }}>
+                <p style={{ fontWeight: 700, fontSize: '0.875rem', margin: '0 0 0.75rem' }}>Change Password</p>
+                {[['Current Password', 'current'], ['New Password', 'next'], ['Confirm New Password', 'confirm']].map(([label, key]) => (
+                  <div key={key} style={{ marginBottom: '0.6rem' }}>
+                    <label style={lbl}>{label}</label>
+                    <input style={inp} type="password" value={pwdForm[key]} onChange={e => setPwdForm(p => ({ ...p, [key]: e.target.value }))} placeholder="••••••••" />
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                  <button className="mp-btn mp-btn-primary mp-btn-sm" type="submit" disabled={changingPwd}>{changingPwd ? 'Changing…' : 'Update Password'}</button>
+                  <button className="mp-btn mp-btn-outline mp-btn-sm" type="button" onClick={() => setShowPwdForm(false)}>Cancel</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SECURITY ═══ */}
+      {tab === 'security' && (
+        <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Authentication</h3>
+            {rowItem('📱', 'Two-Factor Authentication (2FA)', 'Receive a code on your phone when signing in', <Toggle on={security.twoFAEnabled} onChange={() => toggleSecurity('twoFAEnabled')} color="#2563eb" />)}
+            {rowItem('🔏', 'Biometric Login', 'Face ID / Fingerprint on supported devices', <Toggle on={security.biometricEnabled} onChange={() => toggleSecurity('biometricEnabled')} color="#7c3aed" />)}
+            <button className="mp-btn mp-btn-outline" style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#d97706', borderColor: '#fde68a' }} onClick={() => { if (window.confirm('Sign out from all devices?')) { signOut(auth).then(() => window.location.href = '/'); } }}>
+              🚪 Sign Out All Devices
+            </button>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 700 }}>Data Sharing Permissions</h3>
+            <p style={{ margin: '0 0 0.875rem', fontSize: '0.82rem', color: '#64748b' }}>Control what your doctor can see. Turning a category off hides it from your doctor's view immediately.</p>
+            {[
+              ['📋', 'Health Records', 'records', '#059669'],
+              ['💊', 'Prescriptions', 'prescriptions', '#7c3aed'],
+              ['📅', 'Appointments', 'appointments', '#2563eb'],
+              ['🔬', 'Lab Results', 'labResults', '#d97706'],
+            ].map(([icon, label, key, color]) => rowItem(icon, label, privacy.dataSharing[key] ? 'Visible to your doctor' : 'Hidden from your doctor', <Toggle on={privacy.dataSharing[key]} onChange={() => toggleDataSharing(key)} color={color} />))}
+          </div>
+
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Your Data (GDPR)</h3>
+            {rowItem('📥', 'Download My Data', 'Export all your health data as a JSON file', <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={downloadMyData}>Download</button>)}
+          </div>
+
+          <div style={{ ...card, borderColor: '#fecaca', borderWidth: 1.5 }}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700, color: '#dc2626' }}>⚠️ Danger Zone</h3>
+            {!showDeleteForm ? (
+              <button className="mp-btn" style={{ background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setShowDeleteForm(true)}>
+                🗑 Delete My Account
+              </button>
+            ) : (
+              <form onSubmit={handleDeleteAccount} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#991b1b' }}>This is permanent. Type <strong>DELETE</strong> and enter your password.</p>
+                <div><label style={lbl}>Type DELETE</label><input style={inp} value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DELETE" /></div>
+                <div><label style={lbl}>Password</label><input style={inp} type="password" value={deletePwd} onChange={e => setDeletePwd(e.target.value)} placeholder="Your current password" /></div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="submit" disabled={deleting} style={{ padding: '0.65rem 1rem', borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', opacity: deleting ? 0.6 : 1 }}>{deleting ? 'Deleting…' : 'Delete Account'}</button>
+                  <button type="button" className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => setShowDeleteForm(false)}>Cancel</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ EMERGENCY ═══ */}
+      {tab === 'emergency' && (
+        <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '0.875rem', fontSize: '0.82rem', color: '#92400e' }}>
+            ⚠️ This information is shared with emergency responders and your doctor when emergency access is enabled.
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Emergency Medical Notes</h3>
+            <p style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', color: '#64748b' }}>Critical conditions that doctors must know immediately (e.g., Asthmatic, Epileptic, Diabetic).</p>
+            <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={emergency.medicalNotes} onChange={e => setEmergency(em => ({ ...em, medicalNotes: e.target.value }))} placeholder="e.g., Asthmatic — uses Ventolin. Epileptic — seizure protocol applies. Allergic to Penicillin." />
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Critical Status</h3>
+            {rowItem('❤️', 'Organ Donor', 'Registered as an organ donor', <Toggle on={emergency.organDonor} onChange={() => setEmergency(em => ({ ...em, organDonor: !em.organDonor }))} color="#dc2626" />)}
+            {rowItem('🛡️', 'Emergency Doctor Access', 'Allow any doctor to view your profile in life-threatening emergencies', <Toggle on={emergency.emergencyAccess} onChange={() => setEmergency(em => ({ ...em, emergencyAccess: !em.emergencyAccess }))} color="#16a34a" />)}
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Preferred Hospital</h3>
+            <input style={inp} value={emergency.preferredHospital} onChange={e => setEmergency(em => ({ ...em, preferredHospital: e.target.value }))} placeholder="e.g., St. Mary's General Hospital, Chicago, IL" />
+          </div>
+          <button className="mp-btn mp-btn-primary" onClick={saveEmergency} disabled={savingEmergency} style={{ maxWidth: 300 }}>
+            {savingEmergency ? 'Saving…' : '✓ Save Emergency Info'}
+          </button>
+        </div>
+      )}
+
+      {/* ═══ BILLING ═══ */}
+      {tab === 'billing' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Insurance on File</h3>
+            {insuranceInfo ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.875rem' }}>
+                {[['Provider', 'provider'], ['Plan', 'planType'], ['Policy #', 'policyNumber'], ['Member ID', 'memberId'], ['Expires', 'expiryDate'], ['Deductible', 'deductible'], ['Co-pay', 'copay']].map(([label, key]) => insuranceInfo[key] ? (
+                  <p key={key} style={{ margin: 0, fontSize: '0.875rem', color: '#334155' }}><strong>{label}:</strong> {insuranceInfo[key]}</p>
+                ) : null)}
+              </div>
+            ) : <p style={{ color: '#94a3b8', fontSize: '0.875rem', margin: '0 0 0.875rem' }}>No insurance on file yet.</p>}
+            <a href="/dashboard/insurance" className="mp-btn mp-btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
+              🛡️ {insuranceInfo ? 'Update Insurance' : 'Add Insurance'}
+            </a>
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Billing History</h3>
+            {billingHistory.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No billing records yet.</p>
+            ) : billingHistory.slice(-8).reverse().map((b, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', borderBottom: '1px solid #f8fafc' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{b.description || 'Consultation'}</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>{b.date || '—'}</p>
+                </div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: b.status === 'paid' ? '#16a34a' : '#dc2626' }}>${b.amount || 0}</span>
+              </div>
+            ))}
+            <a href="/dashboard/billing" className="mp-btn mp-btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none', marginTop: '0.75rem' }}>
+              💳 Full Billing Center
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ LEGAL ═══ */}
+      {tab === 'legal' && (
+        <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '0.875rem', fontSize: '0.82rem', color: '#1e40af' }}>
+            ℹ️ All consent changes are logged with a timestamp for HIPAA/GDPR compliance.
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Consent & Agreements</h3>
+            {[
+              { key: 'termsAccepted',     label: 'Terms & Conditions',              desc: 'I have read and agree to the NessaHub Terms of Service' },
+              { key: 'privacyAccepted',   label: 'Privacy Policy',                  desc: 'I agree to the NessaHub Privacy Policy regarding data handling' },
+              { key: 'hipaaAccepted',     label: 'HIPAA / GDPR Acknowledgment',     desc: 'I acknowledge my rights under HIPAA/GDPR for health data protection' },
+              { key: 'dataSharingConsent',label: 'Doctor–Patient Data Sharing',     desc: 'I consent to sharing my health data with my assigned doctor(s)' },
+            ].map(({ key, label, desc }) => (
+              <div key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.875rem', padding: '0.75rem 0', borderBottom: '1px solid #f8fafc', cursor: 'pointer' }} onClick={() => setLegal(l => ({ ...l, [key]: !l[key] }))}>
+                <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${legal[key] ? '#2563eb' : '#cbd5e1'}`, background: legal[key] ? '#2563eb' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                  {legal[key] && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{label}</p>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#64748b' }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+            <button className="mp-btn mp-btn-primary" onClick={saveLegal} disabled={savingLegal} style={{ marginTop: '0.875rem' }}>
+              {savingLegal ? 'Saving…' : '✓ Save Legal Preferences'}
+            </button>
+          </div>
+          <div style={card}>
+            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Legal Documents</h3>
+            {[['Terms & Conditions', '📄'], ['Privacy Policy', '🔒'], ['HIPAA Notice of Privacy Practices', '⚕️'], ['GDPR Data Rights Information', '🇪🇺']].map(([label, icon]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0', borderBottom: '1px solid #f8fafc' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{icon} {label}</span>
+                <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => alert(`${label} will open in a new tab. Document managed by NessaHub Legal.`)}>View</button>
+              </div>
+            ))}
+          </div>
+          {consentLogs.length > 0 && (
+            <div style={card}>
+              <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Consent Audit Log</h3>
+              {consentLogs.slice(-5).reverse().map((log, i) => (
+                <p key={i} style={{ margin: '0 0 0.35rem', fontSize: '0.75rem', color: '#64748b' }}>⏱ {log.action} — {new Date(log.timestamp).toLocaleString()}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ DISCHARGE ═══ */}
+      {tab === 'discharge' && (
+        <div style={{ maxWidth: 600 }}>
+          {alreadyDischarged ? (
+            <div style={{ ...card, textAlign: 'center', padding: '3rem' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
+              <h3 style={{ color: '#dc2626', margin: '0 0 0.75rem' }}>Discharge Request Submitted</h3>
+              <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Your request has been submitted and your doctor has been notified. You may continue using NessaHub to view your records.</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 10, padding: '0.875rem', fontSize: '0.82rem', color: '#991b1b', marginBottom: '1rem' }}>
+                ⚠️ Submitting this form will notify your doctor and update your status to "self-discharged". You can still access your records.
+              </div>
+              <div style={card}>
+                <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Self-Discharge Request</h3>
+                <div style={{ marginBottom: '0.875rem' }}>
+                  <label style={lbl}>Reason for Leaving *</label>
+                  <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={dischargeForm.reason} onChange={e => setDischargeForm(f => ({ ...f, reason: e.target.value }))} placeholder="Please describe why you wish to leave. Your honest feedback helps us improve." />
+                </div>
+                <div style={{ marginBottom: '0.875rem' }}>
+                  <label style={lbl}>Additional Message to Your Doctor (optional)</label>
+                  <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={dischargeForm.message} onChange={e => setDischargeForm(f => ({ ...f, message: e.target.value }))} placeholder="Any additional context you'd like your doctor to know…" />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', background: '#fef2f2', borderRadius: 10, marginBottom: '1rem', cursor: 'pointer' }} onClick={() => setDischargeForm(f => ({ ...f, confirmed: !f.confirmed }))}>
+                  <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${dischargeForm.confirmed ? '#dc2626' : '#cbd5e1'}`, background: dischargeForm.confirmed ? '#dc2626' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                    {dischargeForm.confirmed && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#991b1b', fontWeight: 600 }}>I understand this will notify my doctor and update my status to "self-discharged".</p>
+                </div>
+                <button
+                  onClick={submitDischarge} disabled={submittingDischarge || !dischargeForm.confirmed || !dischargeForm.reason.trim()}
+                  style={{ padding: '0.875rem 1.5rem', borderRadius: 12, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: (submittingDischarge || !dischargeForm.confirmed || !dischargeForm.reason.trim()) ? 0.5 : 1 }}>
+                  🚪 {submittingDischarge ? 'Submitting…' : 'Submit Discharge Request'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2713,6 +3478,209 @@ function MedPatSupport({ profile }) {
   );
 }
 
+// ─── E-Pharmacy Screen ────────────────────────────────────────────────────────
+const DRUG_STATUS_ICONS = {
+  pending:               { icon: '⏳', label: 'Pending',      color: '#d97706' },
+  available:             { icon: '✅', label: 'Available',    color: '#16a34a' },
+  not_available:         { icon: '❌', label: 'Not Available',color: '#dc2626' },
+  alternative_suggested: { icon: '🔁', label: 'Alt. Suggested',color: '#7c3aed' },
+  approved_replacement:  { icon: '✅', label: 'Approved Alt.',color: '#16a34a' },
+};
+
+const RX_STATUS_META = {
+  sent:                { label: 'Sent to Pharmacy', color: '#1d4ed8', bg: '#eff6ff' },
+  accepted:            { label: 'Processing',       color: '#d97706', bg: '#fffbeb' },
+  partially_fulfilled: { label: 'Partial',          color: '#d97706', bg: '#fffbeb' },
+  ready:               { label: 'Ready for Pickup', color: '#16a34a', bg: '#f0fdf4' },
+  delivered:           { label: 'Delivered',        color: '#475569', bg: '#f8fafc' },
+};
+
+function MedPatEPharmacy({ profile }) {
+  const [tab, setTab] = useState('prescriptions'); // 'prescriptions' | 'pharmacies'
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [loadingRx, setLoadingRx] = useState(true);
+  const [systemPharmacies, setSystemPharmacies] = useState([]);
+  const [loadingPh, setLoadingPh] = useState(false);
+  const [searchPh, setSearchPh] = useState('');
+  const [selectedRx, setSelectedRx] = useState(null);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    // Real-time prescription updates
+    const q = query(collection(db, 'doctorPrescriptions'), where('patientId', '==', profile.id));
+    const unsub = onSnapshot(q, snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => r.pharmacyId) // only routed prescriptions
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setPrescriptions(list);
+      setLoadingRx(false);
+    }, () => setLoadingRx(false));
+    return unsub;
+  }, [profile]);
+
+  useEffect(() => {
+    if (tab !== 'pharmacies') return;
+    setLoadingPh(true);
+    getDocs(query(collection(db, 'pharmacies'), where('status', '==', 'active')))
+      .then(snap => setSystemPharmacies(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(console.error)
+      .finally(() => setLoadingPh(false));
+  }, [tab]);
+
+  const filteredPh = systemPharmacies.filter(ph => {
+    if (!searchPh.trim()) return true;
+    const q = searchPh.toLowerCase();
+    return (ph.pharmacyName || ph.name || '').toLowerCase().includes(q) ||
+           (ph.country || '').toLowerCase().includes(q) ||
+           (ph.address || '').toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="mp-page">
+      <div style={{ marginBottom: '1.25rem' }}>
+        <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.3rem', fontWeight: 800, color: '#0f172a' }}>💊 E-Pharmacy</h2>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Track your prescription status and explore available pharmacies.</p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0' }}>
+        {[{ key: 'prescriptions', label: '📋 My Prescriptions' }, { key: 'pharmacies', label: '🏪 Browse Pharmacies' }].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'none', color: tab === t.key ? '#1e6bb8' : '#64748b', borderBottom: tab === t.key ? '3px solid #1e6bb8' : '3px solid transparent', marginBottom: '-2px', transition: 'all 0.15s' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── PRESCRIPTIONS TAB ── */}
+      {tab === 'prescriptions' && (
+        <>
+          {loadingRx ? (
+            <p style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>Loading prescriptions…</p>
+          ) : prescriptions.length === 0 ? (
+            <div className="mp-card">
+              <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>💊</div>
+                <h3 style={{ margin: '0 0 0.5rem', color: '#64748b' }}>No pharmacy prescriptions yet</h3>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>When your doctor sends a prescription to a pharmacy, it will appear here with real-time status updates.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              {prescriptions.map(rx => {
+                const pm = rx.pharmacyStatus ? (RX_STATUS_META[rx.pharmacyStatus] || null) : null;
+                const meds = rx.medications || [];
+                return (
+                  <div key={rx.id} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer' }}
+                    onClick={() => setSelectedRx(selectedRx?.id === rx.id ? null : rx)}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>Dr. {rx.doctorName || 'Doctor'}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 2 }}>{rx.diagnosis || '—'} · {rx.date || ''}</div>
+                        {rx.prescriptionRef && (
+                          <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0c4a6e', background: '#f0f9ff', padding: '2px 8px', borderRadius: 6, display: 'inline-block', marginTop: 4, fontSize: '0.82rem', border: '1px solid #bae6fd' }}>
+                            {rx.prescriptionRef}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        {pm && (
+                          <span style={{ background: pm.bg, color: pm.color, borderRadius: 20, padding: '0.2rem 0.7rem', fontSize: '0.72rem', fontWeight: 700 }}>{pm.label}</span>
+                        )}
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{rx.pharmacyName}{rx.branchName ? ` › ${rx.branchName}` : ''}</span>
+                      </div>
+                    </div>
+
+                    {/* Drug pills */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                      {meds.map((m, i) => {
+                        const ds = DRUG_STATUS_ICONS[m.drugStatus] || DRUG_STATUS_ICONS.pending;
+                        return (
+                          <span key={i} style={{ background: `${ds.color}18`, color: ds.color, border: `1px solid ${ds.color}40`, borderRadius: 20, padding: '0.2rem 0.6rem', fontSize: '0.75rem', fontWeight: 600 }}>
+                            {ds.icon} {m.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    {/* Expanded detail */}
+                    {selectedRx?.id === rx.id && (
+                      <div style={{ marginTop: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }} onClick={e => e.stopPropagation()}>
+                        {meds.map((m, i) => {
+                          const ds = DRUG_STATUS_ICONS[m.drugStatus] || DRUG_STATUS_ICONS.pending;
+                          return (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.6rem 0', borderBottom: i < meds.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                              <div>
+                                <b style={{ fontSize: '0.875rem', color: '#0f172a' }}>{m.name}</b>
+                                {m.strength && <span style={{ fontSize: '0.75rem', color: '#64748b' }}> ({m.strength})</span>}
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>{m.dosage} · {m.frequency} · {m.duration} {m.durationUnit}</div>
+                                {m.alternativeSuggested && (
+                                  <div style={{ fontSize: '0.78rem', color: '#7c3aed', marginTop: 4, background: '#fdf4ff', border: '1px solid #e9d5ff', borderRadius: 6, padding: '3px 8px', display: 'inline-block' }}>
+                                    🔁 Alternative: {m.alternativeSuggested} {m.drugStatus === 'approved_replacement' ? '(Approved ✅)' : '(Pending doctor approval)'}
+                                  </div>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ds.color, whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>{ds.icon} {ds.label}</span>
+                            </div>
+                          );
+                        })}
+
+                        {rx.pharmacyStatus === 'ready' && rx.prescriptionRef && (
+                          <div style={{ marginTop: '0.75rem', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '0.85rem', textAlign: 'center' }}>
+                            <p style={{ margin: '0 0 4px', fontSize: '0.8rem', color: '#15803d', fontWeight: 700 }}>Ready for Pickup! Show this code at the pharmacy:</p>
+                            <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 900, color: '#14532d', letterSpacing: '0.12em' }}>{rx.prescriptionRef}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', marginTop: '0.25rem' }}>
+                      {selectedRx?.id === rx.id ? 'Tap to collapse ▲' : 'Tap for details ▼'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── PHARMACIES TAB ── */}
+      {tab === 'pharmacies' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.5rem 0.85rem', marginBottom: '1rem' }}>
+            <Search size={16} color="#94a3b8" />
+            <input placeholder="Search pharmacies by name or location…" value={searchPh} onChange={e => setSearchPh(e.target.value)}
+              style={{ border: 'none', outline: 'none', fontSize: '0.875rem', flex: 1, color: '#0f172a', background: 'transparent' }} />
+          </div>
+          {loadingPh ? (
+            <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading pharmacies…</p>
+          ) : filteredPh.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🏪</div>
+              <p>{searchPh ? 'No pharmacies match your search.' : 'No active pharmacies available.'}</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {filteredPh.map(ph => (
+                <div key={ph.id} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>🏪</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{ph.pharmacyName || ph.name}</p>
+                    {ph.country && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>🌍 {ph.country}</p>}
+                    {ph.address && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>📍 {ph.address}</p>}
+                    {ph.phone && <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>📞 {ph.phone}</p>}
+                  </div>
+                  <span style={{ fontSize: '0.7rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 20, padding: '2px 8px', fontWeight: 700, whiteSpace: 'nowrap' }}>Active</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboard Shell ──────────────────────────────────────────────────────────
 export default function MedicalPatientDashboard({ profile }) {
   const location = useLocation();
@@ -2729,6 +3697,7 @@ export default function MedicalPatientDashboard({ profile }) {
     { path: '/dashboard/insurance',     icon: Shield,       label: 'Insurance' },
     { path: '/dashboard/emergency',     icon: Phone,        label: 'Emergency Contacts' },
     { path: '/dashboard/records',       icon: Download,     label: 'Health Records' },
+    { path: '/dashboard/epharmacy',     icon: Pill,         label: 'E-Pharmacy' },
     { path: '/dashboard/settings',      icon: Settings,     label: 'Settings' },
     { path: '/dashboard/support',       icon: AlertCircle,  label: 'Support & Report' },
   ];
@@ -2788,6 +3757,7 @@ export default function MedicalPatientDashboard({ profile }) {
           <Route path="/insurance"     element={<MedPatInsurance           profile={profile} />} />
           <Route path="/emergency"     element={<MedPatEmergencyContacts   profile={profile} />} />
           <Route path="/records"       element={<MedPatHealthRecords       profile={profile} />} />
+          <Route path="/epharmacy"     element={<MedPatEPharmacy           profile={profile} />} />
           <Route path="/settings"      element={<MedPatSettings            profile={profile} />} />
           <Route path="/support"       element={<MedPatSupport             profile={profile} />} />
         </Routes>

@@ -1,7 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Search, Save, Trash2, ChevronDown } from 'lucide-react';
+import { FileText, Plus, Search, Save, Trash2, ChevronDown, Layers } from 'lucide-react';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+
+const NOTE_TEMPLATES = [
+  {
+    id: 'soap',
+    name: 'General Consultation (SOAP)',
+    type: 'consultation',
+    title: 'Consultation Note',
+    content: `SUBJECTIVE:\n[Chief complaint and patient-reported symptoms]\n\nOBJECTIVE:\n[Physical exam findings, vital signs, test results]\n\nASSESSMENT:\n[Diagnosis / differential diagnosis]\n\nPLAN:\n[Treatment plan, medications, referrals, follow-up]`,
+  },
+  {
+    id: 'hypertension',
+    name: 'Hypertension',
+    type: 'consultation',
+    title: 'Hypertension Follow-up',
+    content: `BLOOD PRESSURE READING:\nSystolic: ___ mmHg  |  Diastolic: ___ mmHg\n\nCURRENT MEDICATIONS:\n[List antihypertensives and dosages]\n\nSYMPTOMS:\n[Headache, dizziness, chest pain, shortness of breath, edema]\n\nCOMPLIANCE:\n[Medication adherence, dietary compliance, exercise]\n\nASSESSMENT:\n[BP control status: controlled / uncontrolled]\n\nPLAN:\n[Medication adjustments, lifestyle advice, next visit]`,
+  },
+  {
+    id: 'diabetes',
+    name: 'Diabetes Management',
+    type: 'consultation',
+    title: 'Diabetes Management Note',
+    content: `BLOOD GLUCOSE READINGS:\nFasting: ___ mg/dL  |  Post-prandial: ___ mg/dL\nHbA1c: ___ %\n\nCURRENT MEDICATIONS:\n[Insulin type/dose, oral hypoglycemics]\n\nSYMPTOMS:\n[Polyuria, polydipsia, blurred vision, numbness/tingling]\n\nCOMPLICATION SCREENING:\n[Retinopathy, nephropathy, neuropathy, cardiovascular]\n\nASSESSMENT:\n[Diabetes control: well-controlled / poorly-controlled]\n\nPLAN:\n[Medication adjustments, dietary advice, monitoring frequency, referrals]`,
+  },
+  {
+    id: 'respiratory',
+    name: 'Respiratory Infection',
+    type: 'consultation',
+    title: 'Respiratory Infection Note',
+    content: `PRESENTING COMPLAINT:\n[Cough, fever, sore throat, runny nose, shortness of breath]\n\nDURATION: ___ days\n\nVITALS:\nTemp: ___  |  SpO2: ___  |  RR: ___\n\nEXAMINATION:\n[Throat inspection, chest auscultation findings]\n\nDIAGNOSIS:\n[ ] URTI  [ ] Pharyngitis  [ ] Bronchitis  [ ] Pneumonia  [ ] Other: ___\n\nPLAN:\n[Antibiotics if indicated, symptomatic treatment, rest, hydration, follow-up]`,
+  },
+  {
+    id: 'pediatric',
+    name: 'Pediatric Consultation',
+    type: 'consultation',
+    title: 'Pediatric Consultation',
+    content: `PATIENT AGE / WEIGHT: ___ years  |  ___ kg\n\nPRESENTING COMPLAINT:\n[Symptom description from parent/guardian]\n\nDEVELOPMENTAL HISTORY:\n[Milestones appropriate for age?]\n\nIMMUNIZATION STATUS:\n[Up to date / Overdue]\n\nEXAMINATION:\n[General appearance, growth parameters, systems review]\n\nASSESSMENT:\n[Diagnosis]\n\nPLAN:\n[Treatment, parent counseling, follow-up, referrals]`,
+  },
+];
 
 export default function DoctorNotes({ profile }) {
   const [notes, setNotes] = useState([]);
@@ -12,6 +50,7 @@ export default function DoctorNotes({ profile }) {
   const [editingNote, setEditingNote] = useState(null);
   const [form, setForm] = useState({ patientIds: [], title: '', content: '', type: 'consultation' });
   const [showPatientPicker, setShowPatientPicker] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   useEffect(() => {
     if (profile?.id) {
@@ -138,6 +177,12 @@ export default function DoctorNotes({ profile }) {
     setEditingNote(null);
     setShowForm(false);
     setShowPatientPicker(false);
+    setShowTemplates(false);
+  };
+
+  const applyTemplate = (tpl) => {
+    setForm(p => ({ ...p, type: tpl.type, title: tpl.title, content: tpl.content }));
+    setShowTemplates(false);
   };
 
   const togglePatient = (pid) => {
@@ -181,6 +226,33 @@ export default function DoctorNotes({ profile }) {
       {showForm && (
         <div className="doctor-card">
           <h3>{editingNote ? 'Edit Note' : 'New Consultation Note'}</h3>
+
+          {/* Template Selector */}
+          {!editingNote && (
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                onClick={() => setShowTemplates(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: '1.5px solid #bfdbfe', borderRadius: 8, background: '#eff6ff', color: '#1e6bb8', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                <Layers size={15} /> {showTemplates ? 'Hide Templates' : 'Use a Template'}
+              </button>
+              {showTemplates && (
+                <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.5rem', background: '#f8fafc' }}>
+                  {NOTE_TEMPLATES.map(tpl => (
+                    <button
+                      key={tpl.id}
+                      onClick={() => applyTemplate(tpl)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0.85rem', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}
+                    >
+                      <FileText size={15} color="#1e6bb8" />
+                      {tpl.name}
+                      <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: '#94a3b8' }}>Apply →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div className="doctor-form-group" style={{ marginBottom: 0 }}>

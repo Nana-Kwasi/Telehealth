@@ -13,6 +13,7 @@ import {
   Pill,
   Star,
   BarChart3,
+  LayoutDashboard,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
@@ -23,6 +24,7 @@ import '../DashboardShell.css';
 
 import DoctorHome from './DoctorHome';
 import DoctorPatients from './DoctorPatients';
+import DoctorPatientPanel from './DoctorPatientPanel';
 import DoctorAppointments from './DoctorAppointments';
 import DoctorMessages from './DoctorMessages';
 import DoctorNotes from './DoctorNotes';
@@ -50,6 +52,7 @@ export default function DoctorDashboard({ profile }) {
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: 'Home' },
     { path: '/dashboard/patients', icon: Users, label: 'Patients' },
+    { path: '/dashboard/patient-panel', icon: LayoutDashboard, label: 'Patient Panel' },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments' },
     { path: '/dashboard/video', icon: Video, label: 'Video Calls' },
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
@@ -133,6 +136,7 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/" element={<DoctorHome profile={profile} />} />
           <Route path="/patients" element={<DoctorPatients profile={profile} />} />
           <Route path="/patients/:patientId" element={<DoctorPatientDetail profile={profile} />} />
+          <Route path="/patient-panel" element={<DoctorPatientPanel profile={profile} />} />
           <Route path="/appointments" element={<DoctorAppointments profile={profile} />} />
           <Route path="/video" element={<DoctorVideoCall profile={profile} />} />
           <Route path="/messages" element={<DoctorMessages profile={profile} />} />

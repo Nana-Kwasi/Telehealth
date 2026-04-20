@@ -13,6 +13,9 @@ import ClientDashboard from './component/Dashboard/Client/ClientDashboard';
 import MedicalPatientDashboard from './component/Dashboard/MedicalPatient/MedicalPatientDashboard';
 import TherapistDashboard from './component/Dashboard/Therapist/TherapistDashboard';
 import DoctorDashboard from './component/Dashboard/Doctor/DoctorDashboard';
+import AdminDashboard from './component/Dashboard/Admin/AdminDashboard';
+import PharmacyDashboard from './component/Dashboard/Pharmacy/PharmacyDashboard';
+import BranchDashboard from './component/Dashboard/Pharmacy/BranchDashboard';
 import VideoCallPage from './component/VideoCall/VideoCallPage';
 import Terms from './component/Home/Terms';
 import Privacy from './component/Home/Privacy';
@@ -100,6 +103,10 @@ export default function App() {
   if (session.loading) return <LoadingScreen />;
 
   const dashboard =
+    session.role === 'admin'                                  ? <AdminDashboard          profile={session.profile} /> :
+    session.role === 'pharmacy'                               ? <PharmacyDashboard       profile={session.profile} /> :
+    session.role === 'branch_user'                            ? <BranchDashboard         profile={session.profile} /> :
+    session.role === 'therapist' && session.profile?.role === 'admin' ? <AdminDashboard  profile={session.profile} /> :
     session.role === 'therapist'                              ? <TherapistDashboard      profile={session.profile} /> :
     session.role === 'doctor'                                 ? <DoctorDashboard         profile={session.profile} /> :
     session.profile?.userIntent === 'medical'                 ? <MedicalPatientDashboard profile={session.profile} /> :

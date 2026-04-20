@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video,
   AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
+  UserX, UserCheck, Activity,
 } from 'lucide-react';
 import { db } from '../../Auth/firebaseConfig';
 import {
@@ -44,6 +45,16 @@ export default function DoctorPatientDetail({ profile }) {
   const [intakeData, setIntakeData] = useState(null);
   const [dailyFeelings, setDailyFeelings] = useState([]);
   const [viewingFeeling, setViewingFeeling] = useState(null);
+  const [latestVitals, setLatestVitals] = useState(null);
+  const [pharmacies, setPharmacies] = useState([]);
+  const [patientStatus, setPatientStatus] = useState('active');
+  const [changingStatus, setChangingStatus] = useState(false);
+
+  // Data sharing permissions from patient privacy settings
+  const [dataSharing, setDataSharing] = useState({});
+
+  // Self-discharge request submitted by the patient
+  const [selfDischargeRequest, setSelfDischargeRequest] = useState(null);
 
   // Note form
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -59,6 +70,13 @@ export default function DoctorPatientDetail({ profile }) {
   const [showDischarge, setShowDischarge] = useState(false);
   const [dischargeReason, setDischargeReason] = useState('');
   const [discharging, setDischarging] = useState(false);
+
+  // E-Pharmacy
+  const [sendingToPharmacy, setSendingToPharmacy] = useState(null); // pharmacyId being sent to
+  const [sentPharmacies, setSentPharmacies] = useState({}); // { pharmacyId: true }
+  const [showAddPharmacy, setShowAddPharmacy] = useState(false);
+  const [pharmacyForm, setPharmacyForm] = useState({ name: '', address: '', phone: '', email: '', notes: '' });
+  const [savingPharmacy, setSavingPharmacy] = useState(false);
 
   useEffect(() => {
     if (profile?.id && patientId) loadPatientData();
@@ -108,10 +126,17 @@ export default function DoctorPatientDetail({ profile }) {
         setNotes(noteList);
       } catch (e) { console.error('Error loading notes:', e); }
 
-      // Load extended patient profile (insurance, emergency contact, health records)
+      // Load extended patient profile (insurance, emergency contact, health records, vitals, pharmacies)
       try {
         const profSnap = await getDoc(doc(db, 'patientProfiles', patientId));
-        if (profSnap.exists()) setPatientProfile(profSnap.data());
+        if (profSnap.exists()) {
+          const pd = profSnap.data();
+          setPatientProfile(pd);
+          setLatestVitals(pd.vitals?.latest || null);
+          setPharmacies(pd.pharmacies || []);
+          setPatientStatus(pd.status || 'active');
+          setDataSharing(pd.privacy?.dataSharing || {});
+        }
       } catch (_) {}
 
       // Load prescriptions
@@ -131,6 +156,20 @@ export default function DoctorPatientDetail({ profile }) {
       try {
         const intakeSnap = await getDoc(doc(db, 'patientIntake', patientId));
         if (intakeSnap.exists()) setIntakeData(intakeSnap.data());
+      } catch (_) {}
+
+      // Self-discharge request
+      try {
+        const disSnap = await getDocs(query(
+          collection(db, 'dischargeRequests'),
+          where('patientId', '==', patientId)
+        ));
+        if (!disSnap.empty) {
+          const sorted = disSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.submittedAt?.seconds || 0) - (a.submittedAt?.seconds || 0));
+          setSelfDischargeRequest(sorted[0]);
+        }
       } catch (_) {}
 
       // Load daily feelings
@@ -248,7 +287,96 @@ export default function DoctorPatientDetail({ profile }) {
     finally { setDischarging(false); }
   };
 
+  // Change patient status
+  const changePatientStatus = async (newStatus) => {
+    const labels = { active: 'Active', inactive: 'Inactive', discharged: 'Discharged' };
+    const confirmMsg = newStatus === 'discharged'
+      ? `Discharge ${patient?.name}? Use the Discharge button below for full discharge with a reason, or confirm here for a quick status change.`
+      : `Set ${patient?.name} to ${labels[newStatus]}?`;
+    if (!window.confirm(confirmMsg)) return;
+    setChangingStatus(true);
+    try {
+      await setDoc(doc(db, 'patientProfiles', patientId), {
+        status: newStatus,
+        updatedBy: profile.id,
+        updatedByName: profile.name || 'Doctor',
+        updatedAt: serverTimestamp(),
+        ...(newStatus === 'discharged' ? { dischargedAt: serverTimestamp() } : {}),
+      }, { merge: true });
+      setPatientStatus(newStatus);
+    } catch (err) {
+      console.error('Error changing patient status:', err);
+      alert('Could not update patient status. Please try again.');
+    } finally {
+      setChangingStatus(false);
+    }
+  };
+
+  // Send prescription to pharmacy
+  const sendPrescriptionToPharmacy = async (pharmacy, pharmacyIdx) => {
+    const latestRx = prescriptions[0];
+    if (!latestRx) { alert('No prescriptions found. Please issue a prescription first.'); return; }
+    const key = pharmacyIdx;
+    setSendingToPharmacy(key);
+    try {
+      await updateDoc(doc(db, 'doctorPrescriptions', latestRx.id), {
+        pharmacy: { name: pharmacy.name, address: pharmacy.address || '', phone: pharmacy.phone || '' },
+        pharmacyStatus: 'sent',
+        sentAt: serverTimestamp(),
+      });
+      setSentPharmacies(prev => ({ ...prev, [key]: true }));
+    } catch (err) {
+      console.error('Error sending prescription:', err);
+      alert('Could not send prescription. Please try again.');
+    } finally {
+      setSendingToPharmacy(null);
+    }
+  };
+
+  // Add pharmacy on behalf of patient
+  const addPharmacyForPatient = async () => {
+    if (!pharmacyForm.name.trim()) return;
+    setSavingPharmacy(true);
+    try {
+      const newPharmacy = {
+        id: Date.now().toString(),
+        name: pharmacyForm.name.trim(),
+        address: pharmacyForm.address.trim(),
+        phone: pharmacyForm.phone.trim(),
+        email: pharmacyForm.email.trim(),
+        notes: pharmacyForm.notes.trim(),
+        addedByDoctor: true,
+        addedByDoctorId: profile.id,
+        addedByDoctorName: profile.name || 'Doctor',
+        addedAt: new Date().toISOString(),
+      };
+      const updated = [...pharmacies, newPharmacy];
+      await setDoc(doc(db, 'patientProfiles', patientId), { pharmacies: updated }, { merge: true });
+      setPharmacies(updated);
+      setPharmacyForm({ name: '', address: '', phone: '', email: '', notes: '' });
+      setShowAddPharmacy(false);
+    } catch (err) {
+      console.error('Error adding pharmacy:', err);
+      alert('Could not add pharmacy. Please try again.');
+    } finally {
+      setSavingPharmacy(false);
+    }
+  };
+
   const noteTypeColors = { consultation: '#1e6bb8', followup: '#7c3aed', prescription: '#059669', referral: '#d97706', discharge: '#dc2626', general: '#64748b' };
+
+  const RestrictedAccess = ({ section }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', textAlign: 'center' }}>
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#fef2f2', border: '1.5px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', marginBottom: '1rem' }}>
+        🔒
+      </div>
+      <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Access Restricted</h3>
+      <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b', maxWidth: 360, lineHeight: 1.6 }}>
+        This patient has restricted doctor access to their {section}.<br />
+        This data is hidden based on their privacy settings.
+      </p>
+    </div>
+  );
 
   if (loading) return <div className="doctor-page"><p style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>Loading patient records…</p></div>;
   if (!patient) return <div className="doctor-page"><p style={{ textAlign: 'center', padding: '3rem' }}>Patient not found.</p></div>;
@@ -269,8 +397,14 @@ export default function DoctorPatientDetail({ profile }) {
           <div style={{ flex: 1 }}>
             <h2 style={{ margin: '0 0 0.2rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>{patient.name}</h2>
             {patient.email && <p style={{ margin: '0 0 0.4rem', color: '#64748b', fontSize: '0.875rem' }}>{patient.email}</p>}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <StatusBadge status={isActive ? 'confirmed' : 'cancelled'} />
+              {/* Patient Panel status */}
+              {(() => {
+                const smap = { active: ['#f0fdf4','#15803d','#bbf7d0','Active'], inactive: ['#fff7ed','#c2410c','#fed7aa','Inactive'], discharged: ['#fef2f2','#b91c1c','#fecdd3','Discharged'] };
+                const [bg, color, border, label] = smap[patientStatus] || smap.active;
+                return <span style={{ background: bg, color, border: `1px solid ${border}`, padding: '0.2rem 0.65rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>{label}</span>;
+              })()}
               {lastVisit && <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Last visit: {fmtDate(lastVisit)}</span>}
             </div>
           </div>
@@ -288,6 +422,28 @@ export default function DoctorPatientDetail({ profile }) {
             <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => navigate('/dashboard/video')}>
               <Video size={14} /> Video Call
             </button>
+            {/* Status actions */}
+            {patientStatus === 'active' && (
+              <button className="doctor-btn doctor-btn-sm" disabled={changingStatus}
+                style={{ background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', fontSize: '0.78rem' }}
+                onClick={() => changePatientStatus('inactive')}>
+                <Activity size={13} /> {changingStatus ? '…' : 'Set Inactive'}
+              </button>
+            )}
+            {patientStatus === 'inactive' && (
+              <button className="doctor-btn doctor-btn-sm" disabled={changingStatus}
+                style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: '0.78rem' }}
+                onClick={() => changePatientStatus('active')}>
+                <UserCheck size={13} /> {changingStatus ? '…' : 'Set Active'}
+              </button>
+            )}
+            {patientStatus === 'discharged' && (
+              <button className="doctor-btn doctor-btn-sm" disabled={changingStatus}
+                style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: '0.78rem' }}
+                onClick={() => changePatientStatus('active')}>
+                <UserCheck size={13} /> {changingStatus ? '…' : 'Reactivate'}
+              </button>
+            )}
             <button className="doctor-btn doctor-btn-danger doctor-btn-sm" onClick={() => setShowDischarge(true)}>
               <AlertTriangle size={14} /> Discharge
             </button>
@@ -318,7 +474,7 @@ export default function DoctorPatientDetail({ profile }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', flexWrap: 'wrap' }}>
-        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['info','Patient Info'],['feelings','Daily Feeling']].map(([key, label]) => (
+        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['epharmacy','E-Pharmacy'],['info','Patient Info'],['feelings','Daily Feeling']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -376,7 +532,9 @@ export default function DoctorPatientDetail({ profile }) {
 
       {/* ── APPOINTMENTS TAB ── */}
       {activeTab === 'appointments' && (
-        <div className="doctor-card">
+        dataSharing.appointments === false
+          ? <div className="doctor-card"><RestrictedAccess section="appointment history" /></div>
+          : <div className="doctor-card">
           <h3>All Appointments ({appointments.length})</h3>
           {appointments.length === 0 ? (
             <div className="doctor-empty-state"><Calendar size={36} /><p>No appointments yet.</p></div>
@@ -481,7 +639,9 @@ export default function DoctorPatientDetail({ profile }) {
 
       {/* ── PRESCRIPTIONS TAB ── */}
       {activeTab === 'prescriptions' && (
-        <div>
+        dataSharing.prescriptions === false
+          ? <div className="doctor-card"><RestrictedAccess section="prescriptions" /></div>
+          : <div>
           <button className="doctor-btn doctor-btn-primary" style={{ marginBottom: '1rem' }} onClick={() => setShowRxForm(v => !v)}>
             <Plus size={16} /> {showRxForm ? 'Cancel' : 'New Prescription'}
           </button>
@@ -568,9 +728,154 @@ export default function DoctorPatientDetail({ profile }) {
         </div>
       )}
 
+      {/* ── E-PHARMACY TAB ── */}
+      {activeTab === 'epharmacy' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Patient Pharmacies</h3>
+              <p style={{ margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>Send prescriptions directly to the patient's preferred pharmacies</p>
+            </div>
+            <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={() => setShowAddPharmacy(v => !v)}>
+              <Plus size={14} /> {showAddPharmacy ? 'Cancel' : 'Add Pharmacy'}
+            </button>
+          </div>
+
+          {/* Add pharmacy form */}
+          {showAddPharmacy && (
+            <div className="doctor-card" style={{ marginBottom: '1rem', borderLeft: '4px solid #1e6bb8' }}>
+              <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.95rem', color: '#0f172a' }}>Add Pharmacy for Patient</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginBottom: '0.65rem' }}>
+                <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                  <label>Pharmacy Name *</label>
+                  <input className="doctor-form-input" placeholder="e.g., CVS Pharmacy" value={pharmacyForm.name} onChange={e => setPharmacyForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                  <label>Phone</label>
+                  <input className="doctor-form-input" placeholder="e.g., +1 (555) 123-4567" value={pharmacyForm.phone} onChange={e => setPharmacyForm(f => ({ ...f, phone: e.target.value }))} />
+                </div>
+                <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                  <label>Address</label>
+                  <input className="doctor-form-input" placeholder="Street address" value={pharmacyForm.address} onChange={e => setPharmacyForm(f => ({ ...f, address: e.target.value }))} />
+                </div>
+                <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                  <label>Email</label>
+                  <input className="doctor-form-input" placeholder="pharmacy@example.com" value={pharmacyForm.email} onChange={e => setPharmacyForm(f => ({ ...f, email: e.target.value }))} />
+                </div>
+              </div>
+              <div className="doctor-form-group" style={{ marginBottom: '0.75rem' }}>
+                <label>Notes</label>
+                <input className="doctor-form-input" placeholder="e.g., 24-hour pharmacy, preferred for controlled substances" value={pharmacyForm.notes} onChange={e => setPharmacyForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={addPharmacyForPatient} disabled={savingPharmacy || !pharmacyForm.name.trim()}>
+                  <Save size={13} /> {savingPharmacy ? 'Saving…' : 'Save Pharmacy'}
+                </button>
+                <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => { setShowAddPharmacy(false); setPharmacyForm({ name: '', address: '', phone: '', email: '', notes: '' }); }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Pharmacy list */}
+          {pharmacies.length === 0 ? (
+            <div className="doctor-card">
+              <div className="doctor-empty-state">
+                <span style={{ fontSize: '2rem' }}>💊</span>
+                <h3>No pharmacies on file</h3>
+                <p>This patient has not added any pharmacies yet. You can add one on their behalf.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {pharmacies.map((ph, idx) => {
+                const isSending = sendingToPharmacy === idx;
+                const alreadySent = sentPharmacies[idx];
+                return (
+                  <div key={ph.id || idx} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                    {/* Icon */}
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>
+                      💊
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{ph.name}</p>
+                        {ph.addedByDoctor && (
+                          <span style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 20, padding: '0.1rem 0.5rem', fontSize: '0.68rem', fontWeight: 700 }}>Added by Doctor</span>
+                        )}
+                      </div>
+                      {ph.address && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#64748b' }}>📍 {ph.address}</p>}
+                      {ph.phone && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#64748b' }}>📞 {ph.phone}</p>}
+                      {ph.email && <p style={{ margin: '0 0 0.15rem', fontSize: '0.8rem', color: '#64748b' }}>✉️ {ph.email}</p>}
+                      {ph.notes && <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>{ph.notes}</p>}
+                    </div>
+
+                    {/* Send prescription button */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem', flexShrink: 0 }}>
+                      {alreadySent ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '0.4rem 0.85rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700 }}>
+                          <Check size={13} /> Sent
+                        </span>
+                      ) : (
+                        <button
+                          className="doctor-btn doctor-btn-primary doctor-btn-sm"
+                          style={{ whiteSpace: 'nowrap' }}
+                          disabled={isSending || prescriptions.length === 0}
+                          onClick={() => sendPrescriptionToPharmacy(ph, idx)}
+                          title={prescriptions.length === 0 ? 'No prescriptions to send' : `Send latest prescription to ${ph.name}`}
+                        >
+                          {isSending ? 'Sending…' : '📤 Send Rx'}
+                        </button>
+                      )}
+                      {prescriptions.length > 0 && (
+                        <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8', textAlign: 'right' }}>
+                          Latest: {prescriptions[0]?.medication || prescriptions[0]?.medications?.[0]?.name || 'Rx'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Prescription send info */}
+          {prescriptions.length === 0 && pharmacies.length > 0 && (
+            <div style={{ marginTop: '1rem', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <AlertTriangle size={16} color="#d97706" />
+              <p style={{ margin: 0, fontSize: '0.825rem', color: '#92400e' }}>
+                No prescriptions issued yet. Issue a prescription first before sending to a pharmacy.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── PATIENT INFO TAB ── */}
       {activeTab === 'info' && (
         <div className="doctor-grid-2">
+          {/* Self-Discharge Request Banner */}
+          {selfDischargeRequest && (
+            <div style={{ gridColumn: '1 / -1', background: '#fff7ed', border: '1.5px solid #fed7aa', borderRadius: 14, padding: '1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: '0 0 0.25rem', fontSize: '0.95rem', fontWeight: 800, color: '#92400e' }}>Patient Self-Discharge Request</p>
+                <p style={{ margin: '0 0 0.25rem', fontSize: '0.875rem', color: '#78350f' }}>
+                  <strong>Reason:</strong> {selfDischargeRequest.reason || '—'}
+                </p>
+                {selfDischargeRequest.message && (
+                  <p style={{ margin: '0 0 0.25rem', fontSize: '0.825rem', color: '#92400e' }}>{selfDischargeRequest.message}</p>
+                )}
+                {selfDischargeRequest.submittedAt?.seconds && (
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#b45309' }}>
+                    Submitted: {new Date(selfDischargeRequest.submittedAt.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Insurance */}
           <div className="doctor-card">
             <h3 style={{ marginBottom: '1rem' }}>Insurance Details</h3>
@@ -616,7 +921,12 @@ export default function DoctorPatientDetail({ profile }) {
           {/* Health Records */}
           <div className="doctor-card" style={{ gridColumn: '1 / -1' }}>
             <h3 style={{ marginBottom: '1rem' }}>Health Records</h3>
-            {patientProfile?.healthRecords?.length > 0 ? (
+            {dataSharing.records === false ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 10, padding: '0.85rem 1.1rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>🔒</span>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#b91c1c', fontWeight: 600 }}>Health records are restricted by this patient's privacy settings.</p>
+              </div>
+            ) : patientProfile?.healthRecords?.length > 0 ? (
               <table className="doctor-table">
                 <thead>
                   <tr><th>Document</th><th>Type</th><th>Date</th><th>Notes</th><th>File</th></tr>
@@ -648,6 +958,56 @@ export default function DoctorPatientDetail({ profile }) {
               </table>
             ) : (
               <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No health records uploaded by patient.</p>
+            )}
+          </div>
+
+          {/* Latest Vitals */}
+          <div className="doctor-card" style={{ gridColumn: '1 / -1' }}>
+            <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ color: '#dc2626' }}>❤️</span> Latest Vitals
+            </h3>
+            {latestVitals ? (
+              <>
+                {latestVitals.recordedAt?.seconds && (
+                  <p style={{ margin: '0 0 0.75rem', fontSize: '0.75rem', color: '#94a3b8' }}>
+                    Recorded: {new Date(latestVitals.recordedAt.seconds * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+                  {(latestVitals.bpSystolic || latestVitals.bpDiastolic) && (
+                    <div style={{ background: '#fff0f0', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #fecaca' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Blood Pressure</p>
+                      <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>{latestVitals.bpSystolic || '—'} / {latestVitals.bpDiastolic || '—'} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>mmHg</span></p>
+                    </div>
+                  )}
+                  {latestVitals.heartRate && (
+                    <div style={{ background: '#fff0f0', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #fecaca' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Heart Rate</p>
+                      <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>{latestVitals.heartRate} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>bpm</span></p>
+                    </div>
+                  )}
+                  {latestVitals.respiratoryRate && (
+                    <div style={{ background: '#eff6ff', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #bfdbfe' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Respiratory Rate</p>
+                      <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1d4ed8' }}>{latestVitals.respiratoryRate} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>breaths/min</span></p>
+                    </div>
+                  )}
+                  {latestVitals.spo2 && (
+                    <div style={{ background: '#f0fdf4', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #bbf7d0' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>SpO2</p>
+                      <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{latestVitals.spo2}<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>%</span></p>
+                    </div>
+                  )}
+                  {latestVitals.temperature && (
+                    <div style={{ background: '#fff7ed', borderRadius: 10, padding: '0.85rem 1rem', border: '1.5px solid #fed7aa' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Temperature</p>
+                      <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>{latestVitals.temperature} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>°{latestVitals.tempUnit || 'C'}</span></p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No vitals recorded by patient yet.</p>
             )}
           </div>
 
@@ -702,7 +1062,9 @@ export default function DoctorPatientDetail({ profile }) {
 
       {/* ── DAILY FEELING TAB ── */}
       {activeTab === 'feelings' && (
-        <div>
+        dataSharing.labResults === false
+          ? <div className="doctor-card"><RestrictedAccess section="daily health check-ins" /></div>
+          : <div>
           {dailyFeelings.length === 0 ? (
             <div className="doctor-card">
               <div className="doctor-empty-state">

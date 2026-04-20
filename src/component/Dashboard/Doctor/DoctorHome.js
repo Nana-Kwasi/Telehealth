@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Calendar, Clock, CheckCircle, AlertCircle, FileText,
   Video, TrendingUp, Activity, Pill, ChevronRight, Star,
-  ChevronLeft,
+  ChevronLeft, ShoppingBag, Search, X,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const TODAY = new Date().toISOString().split('T')[0];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -45,6 +45,13 @@ export default function DoctorHome({ profile }) {
   const [recentPatients, setRecentPatients] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [allAppts, setAllAppts] = useState([]);
+
+  // E-Pharmacy modal
+  const [showEPharmacy, setShowEPharmacy] = useState(false);
+  const [ephForm, setEphForm] = useState({ name: '', address: '', phone: '' });
+  const [selectedPatientIds, setSelectedPatientIds] = useState(new Set());
+  const [ephSearch, setEphSearch] = useState('');
+  const [savingEph, setSavingEph] = useState(false);
 
   // Calendar state
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -98,6 +105,54 @@ export default function DoctorHome({ profile }) {
     } catch (err) {
       console.error('Error loading dashboard:', err);
     }
+  };
+
+  // ── E-Pharmacy helpers ─────────────────────────────────────────
+  const allPatientsList = useMemo(() => {
+    const patMap = new Map();
+    allAppts.forEach(a => {
+      if (!a.clientId) return;
+      if (!patMap.has(a.clientId)) patMap.set(a.clientId, { id: a.clientId, name: a.clientName || 'Patient' });
+    });
+    return Array.from(patMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allAppts]);
+
+  const ephPatients = useMemo(() => {
+    if (!ephSearch.trim()) return allPatientsList;
+    const q = ephSearch.toLowerCase();
+    return allPatientsList.filter(p => p.name.toLowerCase().includes(q));
+  }, [allPatientsList, ephSearch]);
+
+  const toggleEphPatient = (id) => setSelectedPatientIds(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+
+  const openEPharmacy = () => {
+    setEphForm({ name: '', address: '', phone: '' });
+    setSelectedPatientIds(new Set());
+    setEphSearch('');
+    setShowEPharmacy(true);
+  };
+
+  const saveEPharmacy = async () => {
+    if (!ephForm.name.trim()) { alert('Pharmacy name is required.'); return; }
+    if (selectedPatientIds.size === 0) { alert('Select at least one patient.'); return; }
+    setSavingEph(true);
+    try {
+      const pharmacy = { name: ephForm.name.trim(), address: ephForm.address.trim(), phone: ephForm.phone.trim(), addedByDoctor: true, addedAt: new Date().toISOString() };
+      for (const patientId of selectedPatientIds) {
+        const patRef = doc(db, 'patientProfiles', patientId);
+        const snap = await getDoc(patRef);
+        const existing = snap.exists() ? (snap.data().pharmacies || []) : [];
+        await setDoc(patRef, { pharmacies: [...existing, pharmacy] }, { merge: true });
+      }
+      setShowEPharmacy(false);
+      alert(`Pharmacy added to ${selectedPatientIds.size} patient${selectedPatientIds.size > 1 ? 's' : ''}.`);
+    } catch (err) {
+      console.error('E-Pharmacy save error:', err);
+      alert('Failed to save. Please try again.');
+    }
+    setSavingEph(false);
   };
 
   // ── Calendar helpers ─────────────────────────────────────────
@@ -361,14 +416,15 @@ export default function DoctorHome({ profile }) {
         <h3 style={{ marginBottom: '1rem' }}>Quick Actions</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '0.75rem' }}>
           {[
-            { icon: AlertCircle, label: `Pending (${stats.pending})`, path: '/dashboard/appointments', color: '#d97706', bg: '#fef9c3' },
-            { icon: Users,       label: 'All Patients',               path: '/dashboard/patients',    color: '#2563eb', bg: '#eff6ff' },
-            { icon: FileText,    label: 'Write Note',                  path: '/dashboard/notes',       color: '#7c3aed', bg: '#f3e8ff' },
-            { icon: Pill,        label: 'Prescriptions',               path: '/dashboard/prescriptions', color: '#059669', bg: '#d1fae5' },
-            { icon: Video,       label: 'Video Calls',                 path: '/dashboard/video',       color: '#0284c7', bg: '#e0f2fe' },
-            { icon: Star,        label: 'Reviews',                     path: '/dashboard/reviews',     color: '#f59e0b', bg: '#fef3c7' },
-          ].map(({ icon: Icon, label, path, color, bg }) => (
-            <button key={path} onClick={() => navigate(path)}
+            { icon: AlertCircle,  label: `Pending (${stats.pending})`, path: '/dashboard/appointments',  color: '#d97706', bg: '#fef9c3' },
+            { icon: Users,        label: 'All Patients',               path: '/dashboard/patients',      color: '#2563eb', bg: '#eff6ff' },
+            { icon: FileText,     label: 'Write Note',                 path: '/dashboard/notes',         color: '#7c3aed', bg: '#f3e8ff' },
+            { icon: Pill,         label: 'Prescriptions',              path: '/dashboard/prescriptions', color: '#059669', bg: '#d1fae5' },
+            { icon: Video,        label: 'Video Calls',                path: '/dashboard/video',         color: '#0284c7', bg: '#e0f2fe' },
+            { icon: Star,         label: 'Reviews',                    path: '/dashboard/reviews',       color: '#f59e0b', bg: '#fef3c7' },
+            { icon: ShoppingBag,  label: 'E-Pharmacy',                 onPress: openEPharmacy,           color: '#0f766e', bg: '#ccfbf1' },
+          ].map(({ icon: Icon, label, path, onPress, color, bg }) => (
+            <button key={label} onClick={() => onPress ? onPress() : navigate(path)}
               style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left' }}
               onMouseEnter={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = color + '60'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.transform = 'none'; }}
@@ -381,6 +437,84 @@ export default function DoctorHome({ profile }) {
           ))}
         </div>
       </div>
+
+      {/* ── E-Pharmacy Modal ── */}
+      {showEPharmacy && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.52)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={() => setShowEPharmacy(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ width: 42, height: 42, borderRadius: 12, background: '#ccfbf1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <ShoppingBag size={20} color="#0f766e" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>Add E-Pharmacy</h3>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Assign a pharmacy to your patients</p>
+              </div>
+              <button onClick={() => setShowEPharmacy(false)} style={{ width: 34, height: 34, borderRadius: 17, background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={16} color="#64748b" />
+              </button>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Pharmacy details */}
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>Pharmacy Details</p>
+                <input style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.65rem 0.875rem', fontSize: '0.875rem', color: '#0f172a', outline: 'none', background: '#fff' }}
+                  placeholder="Pharmacy name *" value={ephForm.name} onChange={e => setEphForm(f => ({ ...f, name: e.target.value }))} />
+                <input style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.65rem 0.875rem', fontSize: '0.875rem', color: '#0f172a', outline: 'none', background: '#fff' }}
+                  placeholder="Address (optional)" value={ephForm.address} onChange={e => setEphForm(f => ({ ...f, address: e.target.value }))} />
+                <input style={{ border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.65rem 0.875rem', fontSize: '0.875rem', color: '#0f172a', outline: 'none', background: '#fff' }}
+                  placeholder="Phone number (optional)" value={ephForm.phone} onChange={e => setEphForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+
+              {/* Patient selection */}
+              <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>Select Patients</p>
+                  {selectedPatientIds.size > 0 && (
+                    <span style={{ background: '#0f766e', color: '#fff', fontSize: '0.72rem', fontWeight: 700, padding: '2px 10px', borderRadius: 12 }}>{selectedPatientIds.size} selected</span>
+                  )}
+                </div>
+                {/* Search */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.5rem 0.75rem', marginBottom: '0.625rem' }}>
+                  <Search size={14} color="#94a3b8" />
+                  <input style={{ flex: 1, border: 'none', outline: 'none', fontSize: '0.875rem', color: '#0f172a', background: 'transparent' }}
+                    placeholder="Search patients…" value={ephSearch} onChange={e => setEphSearch(e.target.value)} />
+                </div>
+                {/* Patient list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', maxHeight: 240, overflowY: 'auto' }}>
+                  {allPatientsList.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}>No patients found</p>
+                  ) : ephPatients.map(p => {
+                    const isSel = selectedPatientIds.has(p.id);
+                    return (
+                      <button key={p.id} type="button" onClick={() => toggleEphPatient(p.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.75rem', borderRadius: 10, border: `1.5px solid ${isSel ? '#5eead4' : '#e2e8f0'}`, background: isSel ? '#f0fdfa' : '#fff', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
+                      >
+                        <div style={{ width: 34, height: 34, borderRadius: 17, background: isSel ? '#0f766e' : '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: isSel ? '#fff' : '#0284c7' }}>{(p.name || 'P')[0].toUpperCase()}</span>
+                        </div>
+                        <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 600, color: isSel ? '#0f766e' : '#334155' }}>{p.name}</span>
+                        <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${isSel ? '#0f766e' : '#cbd5e1'}`, background: isSel ? '#0f766e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {isSel && <span style={{ color: '#fff', fontSize: 12, lineHeight: 1, fontWeight: 700 }}>✓</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Save button */}
+              <button onClick={saveEPharmacy} disabled={savingEph || selectedPatientIds.size === 0}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.875rem', borderRadius: 12, border: 'none', background: selectedPatientIds.size === 0 ? '#e2e8f0' : '#0f766e', color: selectedPatientIds.size === 0 ? '#94a3b8' : '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: selectedPatientIds.size === 0 ? 'not-allowed' : 'pointer', opacity: savingEph ? 0.65 : 1, transition: 'all 0.15s' }}>
+                <ShoppingBag size={16} />
+                {savingEph ? 'Saving…' : selectedPatientIds.size > 0 ? `Add to ${selectedPatientIds.size} Patient${selectedPatientIds.size > 1 ? 's' : ''}` : 'Select patients first'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Analytics Charts ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.25rem', marginBottom: '1.25rem' }}>

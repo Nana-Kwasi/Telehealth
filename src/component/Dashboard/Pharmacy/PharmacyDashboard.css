@@ -1,0 +1,62 @@
+/* Pharmacy Dashboard — shares admin base styles, adds pharmacy-specific overrides */
+.pharmacy-dashboard { display: flex; height: 100vh; background: #f0f9ff; font-family: 'Inter', system-ui, sans-serif; }
+
+.pharmacy-sidebar { width: 240px; min-width: 240px; background: #0c4a6e; display: flex; flex-direction: column; }
+.pharmacy-sidebar-header { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.pharmacy-logo { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+.pharmacy-logo h2 { font-size: 1rem; font-weight: 800; color: #fff; margin: 0; }
+.pharmacy-logo-badge { font-size: 0.6rem; font-weight: 700; background: #0ea5e9; color: #fff; padding: 2px 6px; border-radius: 20px; text-transform: uppercase; }
+
+.pharmacy-user-name  { font-size: 0.85rem; font-weight: 700; color: #fff; margin: 0 0 2px; }
+.pharmacy-user-role  { font-size: 0.7rem; color: rgba(255,255,255,0.45); margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+.pharmacy-avatar     { width: 38px; height: 38px; border-radius: 50%; background: #0ea5e9; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 700; color: #fff; flex-shrink: 0; }
+
+.pharmacy-nav        { flex: 1; overflow-y: auto; padding: 0.75rem 0; }
+.pharmacy-nav-section h3 { font-size: 0.6rem; font-weight: 700; color: rgba(255,255,255,0.3); padding: 0.75rem 1.25rem 0.25rem; text-transform: uppercase; letter-spacing: 1px; margin: 0; }
+.pharmacy-nav-list   { list-style: none; margin: 0; padding: 0; }
+.pharmacy-nav-item   { display: flex; align-items: center; gap: 0.7rem; width: 100%; padding: 0.65rem 1.25rem; background: none; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 500; color: rgba(255,255,255,0.55); text-align: left; transition: background 0.15s, color 0.15s; }
+.pharmacy-nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.pharmacy-nav-item.active { background: rgba(14,165,233,0.2); color: #7dd3fc; }
+
+.pharmacy-sidebar-footer { padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.08); }
+.pharmacy-logout-btn { display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.6rem 0.75rem; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #fca5a5; transition: background 0.15s; }
+.pharmacy-logout-btn:hover { background: rgba(239,68,68,0.22); }
+
+.pharmacy-main { flex: 1; overflow-y: auto; }
+.pharmacy-page { padding: 2rem; max-width: 1100px; }
+.pharmacy-page-title { font-size: 1.4rem; font-weight: 800; color: #0c4a6e; margin: 0 0 4px; }
+.pharmacy-page-sub   { font-size: 0.875rem; color: #64748b; margin: 0 0 1.75rem; }
+
+/* Forced password reset overlay */
+.force-pw-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; padding: 1rem;
+}
+.force-pw-card {
+  background: #fff; border-radius: 16px; padding: 2rem; width: 100%; max-width: 440px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+}
+.force-pw-title { font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 0 0 0.5rem; }
+.force-pw-sub   { font-size: 0.875rem; color: #64748b; margin: 0 0 1.5rem; }
+
+/* Branch cards */
+.branch-grid   { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.branch-card   { background: #fff; border-radius: 12px; border: 1px solid #e0f2fe; padding: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.branch-name   { font-size: 0.95rem; font-weight: 700; color: #0c4a6e; margin: 0 0 4px; }
+.branch-addr   { font-size: 0.8rem; color: #64748b; margin: 0 0 0.75rem; }
+.branch-meta   { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.branch-cred-box { background: #f0f9ff; border-radius: 8px; padding: 0.75rem; font-size: 0.78rem; }
+.branch-cred-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.branch-cred-label { color: #64748b; }
+.branch-cred-val   { font-weight: 700; font-family: monospace; color: #0c4a6e; }
+
+/* Prescription list */
+.rx-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.rx-card  { background: #fff; border-radius: 12px; border: 1px solid #e0f2fe; padding: 1.1rem; cursor: pointer; transition: box-shadow 0.15s; }
+.rx-card:hover { box-shadow: 0 4px 16px rgba(12,74,110,0.1); }
+.rx-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.5rem; }
+.rx-patient { font-size: 0.95rem; font-weight: 700; color: #0f172a; }
+.rx-doctor  { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+.rx-meds    { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.rx-med-pill { background: #e0f2fe; color: #0369a1; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
