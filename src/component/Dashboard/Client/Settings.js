@@ -40,6 +40,7 @@ import {
   Trash2,
   Camera
 } from 'lucide-react';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function ClientSettings() {
   const [clientData, setClientData] = useState(null);
@@ -64,6 +65,7 @@ export default function ClientSettings() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   const currentUser = auth.currentUser;
 
@@ -212,6 +214,23 @@ export default function ClientSettings() {
         name: clientData.name,
         email: clientData.email,
         phone: clientData.phone || '',
+        country: clientData.country || '',
+        city: clientData.city || '',
+        area: clientData.area || '',
+        region: clientData.region || '',
+        street: clientData.street || '',
+        ghanaDigitalAddress: clientData.ghanaDigitalAddress || '',
+        latitude: Number.isFinite(Number(clientData.latitude)) ? Number(clientData.latitude) : null,
+        longitude: Number.isFinite(Number(clientData.longitude)) ? Number(clientData.longitude) : null,
+        locationMeta: {
+          country: clientData.country || '',
+          city: clientData.city || '',
+          area: clientData.area || '',
+          region: clientData.region || '',
+          street: clientData.street || '',
+          latitude: Number.isFinite(Number(clientData.latitude)) ? Number(clientData.latitude) : null,
+          longitude: Number.isFinite(Number(clientData.longitude)) ? Number(clientData.longitude) : null,
+        },
         lastModified: new Date(),
         modifiedBy: currentUser.uid
       };
@@ -518,11 +537,57 @@ export default function ClientSettings() {
                     <label>Country</label>
                     <input
                       type="text"
-                      value={clientData?.country || 'Not specified'}
-                      readOnly
-                      className="readonly"
+                      value={clientData?.country || ''}
+                      onChange={(e) => setClientData({ ...clientData, country: e.target.value })}
+                      placeholder="e.g. GH"
                     />
                   </div>
+                </div>
+                <div style={{ marginBottom: '0.75rem', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="settings-btn-secondary"
+                    onClick={() => detectAddress((loc) => {
+                      setClientData({
+                        ...clientData,
+                        country: loc.countryCode || clientData?.country || '',
+                        city: loc.city || clientData?.city || '',
+                        area: loc.area || clientData?.area || '',
+                        region: loc.region || clientData?.region || '',
+                        street: loc.street || clientData?.street || '',
+                        latitude: loc.latitude ?? clientData?.latitude ?? null,
+                        longitude: loc.longitude ?? clientData?.longitude ?? null,
+                      });
+                    })}
+                    disabled={locating}
+                  >
+                    {locating ? 'Detecting…' : 'Use current location'}
+                  </button>
+                  {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+                </div>
+                <div className="settings-form-row">
+                  <div className="settings-form-group">
+                    <label>City</label>
+                    <input type="text" value={clientData?.city || ''} onChange={(e) => setClientData({...clientData, city: e.target.value})} placeholder="e.g. Accra" />
+                  </div>
+                  <div className="settings-form-group">
+                    <label>Area / Locality</label>
+                    <input type="text" value={clientData?.area || ''} onChange={(e) => setClientData({...clientData, area: e.target.value})} placeholder="e.g. East Legon" />
+                  </div>
+                </div>
+                <div className="settings-form-row">
+                  <div className="settings-form-group">
+                    <label>Region / State</label>
+                    <input type="text" value={clientData?.region || ''} onChange={(e) => setClientData({...clientData, region: e.target.value})} placeholder="e.g. Greater Accra" />
+                  </div>
+                  <div className="settings-form-group">
+                    <label>Street</label>
+                    <input type="text" value={clientData?.street || ''} onChange={(e) => setClientData({...clientData, street: e.target.value})} placeholder="e.g. Liberation Road" />
+                  </div>
+                </div>
+                <div className="settings-form-group">
+                  <label>Ghana Digital Address (optional)</label>
+                  <input type="text" value={clientData?.ghanaDigitalAddress || ''} onChange={(e) => setClientData({...clientData, ghanaDigitalAddress: e.target.value})} placeholder="e.g. GA-123-4567" />
                 </div>
 
                 <div className="settings-form-row">

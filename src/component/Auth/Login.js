@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailOrUsername } from './authService';
+import { logAction, A } from '../../utils/auditLogger';
 import './Login.css';
 
 export default function Login() {
@@ -15,9 +16,11 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await signInWithEmailOrUsername(id, password);
+      const { role } = await signInWithEmailOrUsername(id, password);
+      await logAction(A.LOGIN_SUCCESS, { role, identifier: id }, role);
       navigate('/dashboard');
     } catch (err) {
+      await logAction(A.LOGIN_FAILED, { error: err.message, identifier: id });
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);

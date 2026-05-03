@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDown } from 'lucide-react';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
@@ -61,10 +62,11 @@ const PHARMACY_STATUS_META = {
 };
 
 export default function DoctorPrescriptions({ profile }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [prescriptions, setPrescriptions] = useState([]);
   const [patients, setPatients] = useState([]);
-  const [pharmacies, setPharmacies] = useState([]);
-  const [branches, setBranches] = useState([]);
+  const [branchDirectory, setBranchDirectory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -82,22 +84,52 @@ export default function DoctorPrescriptions({ profile }) {
   const [warnings, setWarnings] = useState([]);
   const [patientAllergies, setPatientAllergies] = useState([]);
   const [showPatientPicker, setShowPatientPicker] = useState(false);
-  const [showPharmacyPicker, setShowPharmacyPicker] = useState(false);
-  const [showBranchPicker, setShowBranchPicker] = useState(false);
-  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [showBranchDirectoryPicker, setShowBranchDirectoryPicker] = useState(false);
+  const [loadingBranchDirectory, setLoadingBranchDirectory] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
 
   // Alternative approval modal
   const [altApprovalRx, setAltApprovalRx] = useState(null); // full rx object
   const [altApprovalSaving, setAltApprovalSaving] = useState(false);
+  const [viewingRx, setViewingRx] = useState(null);
+  const [reassignRx, setReassignRx] = useState(null);
+  const [reassignBranchId, setReassignBranchId] = useState('');
+  const [reassignSaving, setReassignSaving] = useState(false);
 
   useEffect(() => {
     if (profile?.id) {
       loadPrescriptions();
       loadPatients();
-      loadPharmacies();
+      loadBranchDirectory();
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const st = location.state;
+    if (!st?.openRxForm || !st?.presetPatientId) return;
+
+    loadPatientAllergies(st.presetPatientId);
+    loadBranchDirectory();
+    setEditing(null);
+    setForm({
+      patientId: st.presetPatientId,
+      patientName: st.presetPatientName || '',
+      pharmacyId: '',
+      pharmacyName: '',
+      branchId: '',
+      branchName: '',
+      diagnosis: '',
+      instructions: '',
+      followUpDate: '',
+      status: 'active',
+      medications: [{ ...EMPTY_MED }],
+    });
+    setWarnings([]);
+    setShowForm(true);
+
+    navigate('/dashboard/prescriptions', { replace: true, state: {} });
+  }, [profile?.id, location.state?.openRxForm, location.state?.presetPatientId]);
 
   const loadPrescriptions = () => {
     // Use onSnapshot for real-time updates (alternative suggestions)
@@ -166,21 +198,35 @@ export default function DoctorPrescriptions({ profile }) {
     } catch (err) { console.error('Error loading patients:', err); }
   };
 
-  const loadPharmacies = async () => {
+  const loadBranchDirectory = async () => {
+    setLoadingBranchDirectory(true);
     try {
-      const snap = await getDocs(query(collection(db, 'pharmacies'), where('status', '==', 'active')));
-      setPharmacies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error('Error loading pharmacies:', err); }
-  };
-
-  const loadBranches = async (pharmacyId) => {
-    setLoadingBranches(true);
-    setBranches([]);
-    try {
-      const snap = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', pharmacyId), where('status', '==', 'active')));
-      setBranches(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) { console.error('Error loading branches:', err); }
-    finally { setLoadingBranches(false); }
+      const phSnap = await getDocs(query(collection(db, 'pharmacies'), where('status', '==', 'active')));
+      const rows = [];
+      for (const phDoc of phSnap.docs) {
+        const ph = { id: phDoc.id, ...phDoc.data() };
+        const parentName = ph.pharmacyName || ph.name || '';
+        const brSnap = await getDocs(query(
+          collection(db, 'pharmacyBranches'),
+          where('pharmacyId', '==', ph.id),
+          where('status', '==', 'active'),
+        ));
+        brSnap.docs.forEach(d => {
+          const br = d.data();
+          const branchName = br.branchName || br.name || d.id;
+          rows.push({
+            branchId: d.id,
+            branchName,
+            pharmacyId: ph.id,
+            pharmacyName: parentName,
+            addressLine: [br.address, br.city].filter(Boolean).join(', '),
+          });
+        });
+      }
+      rows.sort((a, b) => a.branchName.localeCompare(b.branchName));
+      setBranchDirectory(rows);
+    } catch (err) { console.error('Error loading branch directory:', err); }
+    finally { setLoadingBranchDirectory(false); }
   };
 
   const loadPatientAllergies = async (patientId) => {
@@ -212,7 +258,6 @@ export default function DoctorPrescriptions({ profile }) {
     setEditing(null);
     setForm({ patientId: '', patientName: '', pharmacyId: '', pharmacyName: '', branchId: '', branchName: '', diagnosis: '', instructions: '', followUpDate: '', status: 'active', medications: [{ ...EMPTY_MED }] });
     setWarnings([]); setPatientAllergies([]);
-    setBranches([]);
     setShowForm(true);
   };
 
@@ -231,7 +276,6 @@ export default function DoctorPrescriptions({ profile }) {
       status: rx.status || 'active',
       medications: rx.medications?.length ? rx.medications.map(m => ({ ...EMPTY_MED, ...m })) : [{ ...EMPTY_MED }],
     });
-    if (rx.pharmacyId) loadBranches(rx.pharmacyId);
     setWarnings([]);
     setShowForm(true);
   };
@@ -259,6 +303,7 @@ export default function DoctorPrescriptions({ profile }) {
     if (!form.patientId) { alert('Please select a patient.'); return; }
     if (!form.diagnosis.trim()) { alert('Diagnosis is required.'); return; }
     if (!form.medications[0]?.name?.trim()) { alert('At least one medication name is required.'); return; }
+    if (form.pharmacyId && !form.branchId) { alert('Select a pharmacy branch before routing this prescription.'); return; }
 
     if (warnings.length > 0) {
       const ok = window.confirm('Safety Warnings:\n\n' + warnings.join('\n\n') + '\n\nDo you want to proceed?');
@@ -292,12 +337,23 @@ export default function DoctorPrescriptions({ profile }) {
       if (editing) {
         await updateDoc(doc(db, 'doctorPrescriptions', editing.id), payload);
       } else {
-        await addDoc(collection(db, 'doctorPrescriptions'), {
+        const newRef = await addDoc(collection(db, 'doctorPrescriptions'), {
           ...payload, doctorId: profile.id, doctorName: profile.name || '',
           date: new Date().toISOString().split('T')[0],
           pharmacyStatus: form.pharmacyId ? 'sent' : null,
           createdAt: serverTimestamp(),
         });
+        // Write timeline event
+        addDoc(collection(db, 'patientTimeline'), {
+          patientId: form.patientId,
+          type: 'PRESCRIPTION',
+          title: `Prescription: ${payload.medications?.[0]?.name || 'Medication'}`,
+          status: 'PENDING',
+          relatedId: newRef.id,
+          actor: { role: 'DOCTOR', name: profile.name || 'Doctor' },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
       }
       setShowForm(false);
       setEditing(null);
@@ -316,7 +372,7 @@ export default function DoctorPrescriptions({ profile }) {
   const handlePrint = (rx) => {
     const meds = rx.medications?.length ? rx.medications : rx.medication ? [{ name: rx.medication, dosage: rx.dosage, frequency: rx.frequency, duration: rx.duration }] : [];
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><title>Prescription</title><style>body{font-family:Arial,sans-serif;padding:2rem;max-width:700px;margin:auto}h1{color:#1e6bb8;border-bottom:2px solid #1e6bb8;padding-bottom:0.5rem}table{width:100%;border-collapse:collapse;margin:1rem 0}th,td{border:1px solid #ddd;padding:0.5rem;text-align:left}th{background:#f0f6fc}.footer{margin-top:2rem;border-top:1px solid #ddd;padding-top:1rem;font-size:0.85rem;color:#666}.ref-box{background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;display:flex;align-items:center;gap:1rem}.ref-label{font-size:0.75rem;color:#0369a1;font-weight:700;text-transform:uppercase}.ref-code{font-size:1.5rem;font-weight:900;color:#0c4a6e;letter-spacing:0.1em}</style></head><body><h1>Medical Prescription</h1><p><strong>Doctor:</strong> Dr. ${profile.name || 'Doctor'}</p><p><strong>Patient:</strong> ${rx.patientName || 'Patient'}</p><p><strong>Date:</strong> ${rx.date || ''}</p><p><strong>Diagnosis:</strong> ${rx.diagnosis || '—'}</p>${rx.prescriptionRef ? `<div class="ref-box"><div><div class="ref-label">Prescription Reference</div><div class="ref-code">${rx.prescriptionRef}</div></div></div>` : ''}${rx.pharmacyName ? `<p><strong>Pharmacy:</strong> ${rx.pharmacyName}${rx.branchName ? ` — ${rx.branchName}` : ''}</p>` : ''}<h3>Medications</h3><table><thead><tr><th>Medication</th><th>Strength</th><th>Dosage</th><th>Frequency</th><th>Direction</th><th>Duration</th></tr></thead><tbody>${meds.map(m => `<tr><td>${m.name || ''}</td><td>${m.strength || '—'}</td><td>${m.dosage || '—'}</td><td>${m.frequency || '—'}</td><td>${m.direction || '—'}</td><td>${m.duration ? m.duration + ' ' + (m.durationUnit || '') : '—'}</td></tr>`).join('')}</tbody></table>${rx.instructions ? `<p><strong>Instructions:</strong> ${rx.instructions}</p>` : ''}${rx.followUpDate ? `<p><strong>Follow-up:</strong> ${rx.followUpDate}</p>` : ''}<div class="footer"><p>Generated via NessaHub Medical Platform.</p></div></body></html>`);
+    win.document.write(`<html><head><title>Prescription</title><style>body{font-family:Arial,sans-serif;padding:2rem;max-width:700px;margin:auto}h1{color:#1e6bb8;border-bottom:2px solid #1e6bb8;padding-bottom:0.5rem}table{width:100%;border-collapse:collapse;margin:1rem 0}th,td{border:1px solid #ddd;padding:0.5rem;text-align:left}th{background:#f0f6fc}.footer{margin-top:2rem;border-top:1px solid #ddd;padding-top:1rem;font-size:0.85rem;color:#666}.ref-box{background:#f0f9ff;border:2px solid #0ea5e9;border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;display:flex;align-items:center;gap:1rem}.ref-label{font-size:0.75rem;color:#0369a1;font-weight:700;text-transform:uppercase}.ref-code{font-size:1.5rem;font-weight:900;color:#0c4a6e;letter-spacing:0.1em}</style></head><body><h1>Medical Prescription</h1><p><strong>Doctor:</strong> Dr. ${profile.name || 'Doctor'}</p><p><strong>Patient:</strong> ${rx.patientName || 'Patient'}</p><p><strong>Date:</strong> ${rx.date || ''}</p><p><strong>Diagnosis:</strong> ${rx.diagnosis || '—'}</p>${rx.prescriptionRef ? `<div class="ref-box"><div><div class="ref-label">Prescription Reference</div><div class="ref-code">${rx.prescriptionRef}</div></div></div>` : ''}${rx.branchName ? `<p><strong>Branch:</strong> ${rx.branchName}</p>` : ''}<h3>Medications</h3><table><thead><tr><th>Medication</th><th>Strength</th><th>Dosage</th><th>Frequency</th><th>Direction</th><th>Duration</th></tr></thead><tbody>${meds.map(m => `<tr><td>${m.name || ''}</td><td>${m.strength || '—'}</td><td>${m.dosage || '—'}</td><td>${m.frequency || '—'}</td><td>${m.direction || '—'}</td><td>${m.duration ? m.duration + ' ' + (m.durationUnit || '') : '—'}</td></tr>`).join('')}</tbody></table>${rx.instructions ? `<p><strong>Instructions:</strong> ${rx.instructions}</p>` : ''}${rx.followUpDate ? `<p><strong>Follow-up:</strong> ${rx.followUpDate}</p>` : ''}<div class="footer"><p>Generated via NessaHub Medical Platform.</p></div></body></html>`);
     win.document.close();
     win.print();
   };
@@ -326,7 +382,7 @@ export default function DoctorPrescriptions({ profile }) {
     setAltApprovalSaving(true);
     try {
       const updatedMeds = rx.medications.map((m, i) =>
-        i === medIndex ? { ...m, drugStatus: 'approved_replacement' } : m
+        i === medIndex ? { ...m, drugStatus: 'approved_replacement', approvedByDoctorName: profile?.name || 'Doctor' } : m
       );
       await updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
         medications: updatedMeds,
@@ -352,6 +408,88 @@ export default function DoctorPrescriptions({ profile }) {
     finally { setAltApprovalSaving(false); }
   };
 
+  const approvePharmacyNote = async (rx, medIndex, noteIndex) => {
+    try {
+      const updatedMeds = (rx.medications || []).map((m, i) => {
+        if (i !== medIndex) return m;
+        const notes = Array.isArray(m.pharmacyNotes) ? [...m.pharmacyNotes] : [];
+        if (!notes[noteIndex]) return m;
+        notes[noteIndex] = {
+          ...notes[noteIndex],
+          approvalStatus: 'approved',
+          approvedByDoctorName: profile?.name || 'Doctor',
+          approvedAt: new Date().toISOString(),
+        };
+        return { ...m, pharmacyNotes: notes };
+      });
+      await updateDoc(doc(db, 'doctorPrescriptions', rx.id), { medications: updatedMeds, updatedAt: serverTimestamp() });
+      setPrescriptions(prev => prev.map(r => r.id === rx.id ? { ...r, medications: updatedMeds } : r));
+      setViewingRx(prev => prev && prev.id === rx.id ? { ...prev, medications: updatedMeds } : prev);
+    } catch {
+      alert('Could not approve note.');
+    }
+  };
+
+  const rejectPharmacyNote = async (rx, medIndex, noteIndex) => {
+    try {
+      const updatedMeds = (rx.medications || []).map((m, i) => {
+        if (i !== medIndex) return m;
+        const notes = Array.isArray(m.pharmacyNotes) ? [...m.pharmacyNotes] : [];
+        if (!notes[noteIndex]) return m;
+        notes[noteIndex] = {
+          ...notes[noteIndex],
+          approvalStatus: 'rejected',
+          approvedByDoctorName: profile?.name || 'Doctor',
+          approvedAt: new Date().toISOString(),
+        };
+        return { ...m, pharmacyNotes: notes };
+      });
+      await updateDoc(doc(db, 'doctorPrescriptions', rx.id), { medications: updatedMeds, updatedAt: serverTimestamp() });
+      setPrescriptions(prev => prev.map(r => r.id === rx.id ? { ...r, medications: updatedMeds } : r));
+      setViewingRx(prev => prev && prev.id === rx.id ? { ...prev, medications: updatedMeds } : prev);
+    } catch {
+      alert('Could not reject note.');
+    }
+  };
+
+  const reassignUnavailableDrugs = async () => {
+    if (!reassignRx || !reassignBranchId) return;
+    const target = branchDirectory.find(b => b.branchId === reassignBranchId && (!reassignRx.pharmacyId || b.pharmacyId === reassignRx.pharmacyId));
+    if (!target) return;
+    const hasUnavailable = (reassignRx.medications || []).some(m => m.drugStatus === 'not_available');
+    if (!hasUnavailable) {
+      alert('No unavailable drugs found on this prescription.');
+      return;
+    }
+    setReassignSaving(true);
+    try {
+      const updatedMeds = (reassignRx.medications || []).map(m =>
+        m.drugStatus === 'not_available'
+          ? {
+              ...m,
+              drugStatus: 'transferred',
+              transferFromBranchId: null,
+              transferFromBranchName: `Dr. ${profile?.name || reassignRx.doctorName || 'Doctor'}`,
+              transferBranchId: target.branchId,
+              transferBranchName: target.branchName || 'Branch',
+              transferBranchAddress: target.address || '',
+            }
+          : m
+      );
+      await updateDoc(doc(db, 'doctorPrescriptions', reassignRx.id), {
+        medications: updatedMeds,
+        updatedAt: serverTimestamp(),
+      });
+      setPrescriptions(prev => prev.map(r => r.id === reassignRx.id ? { ...r, medications: updatedMeds } : r));
+      setReassignRx(null);
+      setReassignBranchId('');
+    } catch (e) {
+      alert('Could not reassign unavailable drugs. Please try again.');
+    } finally {
+      setReassignSaving(false);
+    }
+  };
+
   // Find prescriptions with pending alternative suggestions
   const altPendingCount = prescriptions.reduce((count, rx) => {
     return count + (rx.medications || []).filter(m => m.drugStatus === 'alternative_suggested').length;
@@ -365,7 +503,7 @@ export default function DoctorPrescriptions({ profile }) {
            (rx.diagnosis || '').toLowerCase().includes(q) ||
            (rx.date || '').includes(q) ||
            (rx.prescriptionRef || '').toLowerCase().includes(q) ||
-           (rx.pharmacyName || '').toLowerCase().includes(q);
+           (rx.branchName || '').toLowerCase().includes(q);
   });
 
   return (
@@ -430,7 +568,7 @@ export default function DoctorPrescriptions({ profile }) {
             {!editing && (
               <div className="doctor-form-group" style={{ marginBottom: 0 }}>
                 <label>Patient *</label>
-                <div onClick={() => { setShowPatientPicker(v => !v); setShowPharmacyPicker(false); setShowBranchPicker(false); }}
+                <div onClick={() => { setShowPatientPicker(v => !v); setShowBranchDirectoryPicker(false); }}
                   style={{ cursor: 'pointer', padding: '0.55rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, background: 'white', fontSize: '0.875rem', color: form.patientId ? '#0f172a' : '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{form.patientId ? form.patientName : '— Select patient —'}</span>
                   <ChevronDown size={14} color="#94a3b8" />
@@ -472,65 +610,43 @@ export default function DoctorPrescriptions({ profile }) {
             </div>
           </div>
 
-          {/* ── PHARMACY ROUTING ── */}
+          {/* ── E-PHARMACY BRANCH (labels branch-only; parent id stored for routing) ── */}
           <div style={{ background: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 10, padding: '1rem', marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', fontWeight: 700, color: '#0369a1' }}>💊 Route to Pharmacy (optional)</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              {/* Pharmacy picker */}
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a', display: 'block', marginBottom: 4 }}>Pharmacy</label>
-                <div onClick={() => { setShowPharmacyPicker(v => !v); setShowPatientPicker(false); setShowBranchPicker(false); }}
-                  style={{ cursor: 'pointer', padding: '0.5rem 0.85rem', border: '1.5px solid #bae6fd', borderRadius: 8, background: 'white', fontSize: '0.875rem', color: form.pharmacyId ? '#0f172a' : '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{form.pharmacyId ? form.pharmacyName : '— Select pharmacy —'}</span>
-                  <ChevronDown size={14} color="#94a3b8" />
-                </div>
-                {showPharmacyPicker && (
-                  <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 160, overflowY: 'auto', background: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', position: 'relative', zIndex: 20 }}>
-                    <div onClick={() => { setForm(p => ({ ...p, pharmacyId: '', pharmacyName: '', branchId: '', branchName: '' })); setShowPharmacyPicker(false); setBranches([]); }}
-                      style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', borderBottom: '1px solid #f1f5f9', background: !form.pharmacyId ? '#f0f9ff' : 'transparent' }}>
-                      — None —
-                    </div>
-                    {pharmacies.length === 0 && <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No active pharmacies found.</div>}
-                    {pharmacies.map(ph => (
-                      <div key={ph.id} onClick={() => {
-                        setForm(p => ({ ...p, pharmacyId: ph.id, pharmacyName: ph.pharmacyName || ph.name || '', branchId: '', branchName: '' }));
-                        setShowPharmacyPicker(false);
-                        loadBranches(ph.id);
-                      }}
-                        style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', borderBottom: '1px solid #f1f5f9', background: form.pharmacyId === ph.id ? '#eff6ff' : 'transparent' }}>
-                        <div style={{ fontWeight: 600 }}>{ph.pharmacyName || ph.name}</div>
-                        {ph.country && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{ph.country}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', fontWeight: 700, color: '#0369a1' }}>💊 E-Pharmacy branch</p>
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a', display: 'block', marginBottom: 4 }}>Branch</label>
+              <div onClick={() => { if (!loadingBranchDirectory) { setShowBranchDirectoryPicker(v => !v); setShowPatientPicker(false); } }}
+                style={{ cursor: loadingBranchDirectory ? 'wait' : 'pointer', padding: '0.5rem 0.85rem', border: '1.5px solid #bae6fd', borderRadius: 8, background: 'white', fontSize: '0.875rem', color: form.branchId ? '#0f172a' : '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{loadingBranchDirectory ? 'Loading branches…' : form.branchId ? form.branchName : '— Select branch —'}</span>
+                <ChevronDown size={14} color="#94a3b8" />
               </div>
-
-              {/* Branch picker */}
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a', display: 'block', marginBottom: 4 }}>Branch {form.pharmacyId ? '' : '(select pharmacy first)'}</label>
-                <div onClick={() => { if (!form.pharmacyId) return; setShowBranchPicker(v => !v); setShowPatientPicker(false); setShowPharmacyPicker(false); }}
-                  style={{ cursor: form.pharmacyId ? 'pointer' : 'not-allowed', padding: '0.5rem 0.85rem', border: '1.5px solid #bae6fd', borderRadius: 8, background: form.pharmacyId ? 'white' : '#f8fafc', fontSize: '0.875rem', color: form.branchId ? '#0f172a' : '#94a3b8', display: 'flex', justifyContent: 'space-between', opacity: form.pharmacyId ? 1 : 0.6 }}>
-                  <span>{loadingBranches ? 'Loading branches…' : form.branchId ? form.branchName : '— Select branch (optional) —'}</span>
-                  <ChevronDown size={14} color="#94a3b8" />
-                </div>
-                {showBranchPicker && form.pharmacyId && (
-                  <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 160, overflowY: 'auto', background: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', position: 'relative', zIndex: 20 }}>
-                    <div onClick={() => { setForm(p => ({ ...p, branchId: '', branchName: '' })); setShowBranchPicker(false); }}
-                      style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', borderBottom: '1px solid #f1f5f9', background: !form.branchId ? '#f0f9ff' : 'transparent' }}>
-                      — None (pharmacy-level only) —
-                    </div>
-                    {branches.length === 0 && !loadingBranches && <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No active branches for this pharmacy.</div>}
-                    {branches.map(br => (
-                      <div key={br.id} onClick={() => { setForm(p => ({ ...p, branchId: br.id, branchName: br.branchName || br.name || '' })); setShowBranchPicker(false); }}
-                        style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', borderBottom: '1px solid #f1f5f9', background: form.branchId === br.id ? '#eff6ff' : 'transparent' }}>
-                        <div style={{ fontWeight: 600 }}>{br.branchName || br.name}</div>
-                        {br.address && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{br.address}</div>}
-                      </div>
-                    ))}
+              {showBranchDirectoryPicker && (
+                <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', background: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', position: 'relative', zIndex: 20 }}>
+                  <div onClick={() => { setForm(p => ({ ...p, pharmacyId: '', pharmacyName: '', branchId: '', branchName: '' })); setShowBranchDirectoryPicker(false); }}
+                    style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', borderBottom: '1px solid #f1f5f9', background: !form.branchId ? '#f0f9ff' : 'transparent' }}>
+                    — None —
                   </div>
-                )}
-              </div>
+                  {branchDirectory.length === 0 && !loadingBranchDirectory && (
+                    <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No active branches found.</div>
+                  )}
+                  {branchDirectory.map(row => (
+                    <div key={`${row.pharmacyId}-${row.branchId}`} onClick={() => {
+                      setForm(p => ({
+                        ...p,
+                        pharmacyId: row.pharmacyId,
+                        pharmacyName: row.pharmacyName,
+                        branchId: row.branchId,
+                        branchName: row.branchName,
+                      }));
+                      setShowBranchDirectoryPicker(false);
+                    }}
+                      style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', borderBottom: '1px solid #f1f5f9', background: form.branchId === row.branchId ? '#eff6ff' : 'transparent' }}>
+                      <div style={{ fontWeight: 600 }}>{row.branchName}</div>
+                      {row.addressLine && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.addressLine}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {form.pharmacyId && (
               <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#0369a1' }}>
@@ -687,7 +803,7 @@ export default function DoctorPrescriptions({ profile }) {
       {/* Search */}
       <div className="doctor-search">
         <Search size={18} color="#94a3b8" />
-        <input placeholder="Search by patient, diagnosis, date, ref code, or pharmacy..." value={searchQuery}
+        <input placeholder="Search by patient, diagnosis, date, ref code, or branch..." value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)} />
       </div>
 
@@ -704,7 +820,7 @@ export default function DoctorPrescriptions({ profile }) {
         ) : (
           <table className="doctor-table">
             <thead>
-              <tr><th>Patient</th><th>Diagnosis</th><th>Ref / Pharmacy</th><th>Rx Status</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+              <tr><th>Patient</th><th>Diagnosis</th><th>Ref / Branch</th><th>Rx Status</th><th>Status</th><th>Date</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {filtered.map(rx => {
@@ -712,16 +828,25 @@ export default function DoctorPrescriptions({ profile }) {
                 const pm = rx.pharmacyStatus ? (PHARMACY_STATUS_META[rx.pharmacyStatus] || null) : null;
                 const meds = rx.medications?.length ? rx.medications : rx.medication ? [{ name: rx.medication, dosage: rx.dosage }] : [];
                 const hasAlt = meds.some(m => m.drugStatus === 'alternative_suggested');
+                const hasTransferred = meds.some(m => m.drugStatus === 'transferred');
+                const hasUnavailable = meds.some(m => m.drugStatus === 'not_available') && !hasTransferred;
+                const altMed = meds.find(m => m.alternativeSuggested);
+                const transferredMed = meds.find(m => m.drugStatus === 'transferred' && m.transferBranchName);
+                const pendingClinicalNotes = meds.reduce(
+                  (sum, m) =>
+                    sum + (Array.isArray(m.pharmacyNotes) ? m.pharmacyNotes.filter(n => n.requiresDoctorApproval && n.approvalStatus === 'pending_doctor').length : 0),
+                  0,
+                );
                 return (
-                  <tr key={rx.id}>
+                  <tr key={rx.id} style={{ cursor: 'pointer' }} onClick={() => setViewingRx(rx)}>
                     <td style={{ fontWeight: 600 }}>{rx.patientName || 'Patient'}</td>
                     <td style={{ maxWidth: 140, fontSize: '0.85rem' }}>{rx.diagnosis || '—'}</td>
                     <td style={{ fontSize: '0.8rem' }}>
                       {rx.prescriptionRef && (
                         <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0c4a6e', background: '#f0f9ff', padding: '2px 6px', borderRadius: 6, display: 'inline-block', marginBottom: 2 }}>{rx.prescriptionRef}</div>
                       )}
-                      {rx.pharmacyName && <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{rx.pharmacyName}{rx.branchName ? ` › ${rx.branchName}` : ''}</div>}
-                      {!rx.prescriptionRef && !rx.pharmacyName && <span style={{ color: '#94a3b8' }}>—</span>}
+                      {rx.branchName && <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{rx.branchName}</div>}
+                      {!rx.prescriptionRef && !rx.branchName && <span style={{ color: '#94a3b8' }}>—</span>}
                     </td>
                     <td>
                       {pm ? (
@@ -730,9 +855,27 @@ export default function DoctorPrescriptions({ profile }) {
                       {hasAlt && (
                         <div style={{ marginTop: 2 }}>
                           <span style={{ fontSize: '0.7rem', background: '#fdf4ff', color: '#7c3aed', border: '1px solid #e9d5ff', borderRadius: 10, padding: '1px 6px', fontWeight: 700, cursor: 'pointer' }}
-                            onClick={() => setAltApprovalRx(rx)}>
+                            onClick={(e) => { e.stopPropagation(); setAltApprovalRx(rx); }}>
                             🔁 Alt. pending
                           </span>
+                        </div>
+                      )}
+                      {altMed && (
+                        <div style={{ marginTop: 4, fontSize: '0.7rem', color: altMed.drugStatus === 'approved_replacement' ? '#166534' : '#7c3aed', fontWeight: 700 }}>
+                          {altMed.alternativeSuggested} · {altMed.drugStatus === 'approved_replacement'
+                            ? `Approved · Dr. ${altMed.approvedByDoctorName || rx.doctorName || 'Doctor'}`
+                            : 'Waiting for Approval from your Doctor'}
+                          {altMed.alternativeRationale ? ` · Why: ${altMed.alternativeRationale}` : ''}
+                        </div>
+                      )}
+                      {transferredMed && (
+                        <div style={{ marginTop: 4, fontSize: '0.7rem', color: '#0369a1', fontWeight: 700 }}>
+                          This drug ({transferredMed.name || 'Drug'}) is transfered to branch ({transferredMed.transferBranchName}{transferredMed.transferBranchAddress ? `, ${transferredMed.transferBranchAddress}` : ''}).
+                        </div>
+                      )}
+                      {pendingClinicalNotes > 0 && (
+                        <div style={{ marginTop: 4, fontSize: '0.7rem', color: '#7c3aed', fontWeight: 700 }}>
+                          {pendingClinicalNotes} clinical-impact note{pendingClinicalNotes > 1 ? 's' : ''} awaiting doctor review
                         </div>
                       )}
                     </td>
@@ -744,9 +887,22 @@ export default function DoctorPrescriptions({ profile }) {
                     <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{rx.date || '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => openEdit(rx)}>Edit</button>
-                        <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => handlePrint(rx)} title="Print"><Printer size={12} /></button>
-                        <button className="doctor-btn doctor-btn-sm doctor-btn-danger" onClick={() => handleDelete(rx.id)}><Trash2 size={12} /></button>
+                        <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={(e) => { e.stopPropagation(); openEdit(rx); }}>Edit</button>
+                        {hasUnavailable && (
+                          <button
+                            className="doctor-btn doctor-btn-sm doctor-btn-outline"
+                            style={{ padding: '0.2rem 0.55rem', fontSize: '0.7rem', borderRadius: 14, color: '#1d4ed8', borderColor: '#bfdbfe', background: '#eff6ff' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReassignRx(rx);
+                              setReassignBranchId('');
+                            }}
+                          >
+                            Reassign
+                          </button>
+                        )}
+                        <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={(e) => { e.stopPropagation(); handlePrint(rx); }} title="Print"><Printer size={12} /></button>
+                        <button className="doctor-btn doctor-btn-sm doctor-btn-danger" onClick={(e) => { e.stopPropagation(); handleDelete(rx.id); }}><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>
@@ -793,6 +949,14 @@ export default function DoctorPrescriptions({ profile }) {
                   <div style={{ background: '#fdf4ff', border: '1px solid #e9d5ff', borderRadius: 8, padding: '0.65rem 0.875rem', marginBottom: '0.75rem' }}>
                     <p style={{ margin: '0 0 2px', fontSize: '0.72rem', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase' }}>Pharmacy suggests</p>
                     <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#4c1d95' }}>{med.alternativeSuggested}</p>
+                    {med.alternativeRationale ? (
+                      <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#6d28d9' }}>
+                        Rationale: {med.alternativeRationale}
+                      </p>
+                    ) : null}
+                    <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#7c3aed', fontWeight: 600 }}>
+                      Waiting for Approval from your Doctor
+                    </p>
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -814,6 +978,105 @@ export default function DoctorPrescriptions({ profile }) {
                 <p>All alternative suggestions have been reviewed.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {reassignRx && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '1rem' }}
+          onClick={() => setReassignRx(null)}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: '1.2rem', width: '100%', maxWidth: 520 }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 6px', color: '#0f172a' }}>Reassign Unavailable Drugs</h3>
+            <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#64748b' }}>
+              {reassignRx.patientName} · {reassignRx.prescriptionRef || reassignRx.id}
+            </p>
+            <p style={{ margin: '0 0 10px', fontSize: '0.82rem', color: '#475569' }}>
+              Only drugs currently marked as <b>Not Available</b> will be reassigned.
+            </p>
+            <select
+              className="doctor-form-select"
+              value={reassignBranchId}
+              onChange={e => setReassignBranchId(e.target.value)}
+            >
+              <option value="">Select destination branch</option>
+              {branchDirectory
+                .filter(row => !reassignRx.pharmacyId || row.pharmacyId === reassignRx.pharmacyId)
+                .map(row => (
+                <option key={`${row.pharmacyId}-${row.branchId}`} value={row.branchId}>
+                  {row.branchName}{row.address ? ` - ${row.address}` : ''}
+                </option>
+              ))}
+            </select>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+              <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => setReassignRx(null)}>Cancel</button>
+              <button className="doctor-btn doctor-btn-sm doctor-btn-primary" disabled={!reassignBranchId || reassignSaving} onClick={reassignUnavailableDrugs}>
+                {reassignSaving ? 'Reassigning…' : 'Reassign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {viewingRx && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.58)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 998, padding: '1rem' }}
+          onClick={() => setViewingRx(null)}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: '1.25rem', width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 22px 60px rgba(2,6,23,0.28)', border: '1px solid #e2e8f0' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #eef2f7' }}>
+              <h2 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: '#0f172a' }}>Prescription Details</h2>
+              <button onClick={() => setViewingRx(null)} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.38rem 0.78rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', color: '#475569' }}>Close</button>
+            </div>
+            <p style={{ margin: '0 0 0.3rem', color: '#0f172a', fontWeight: 700 }}>{viewingRx.patientName || 'Patient'}</p>
+            <p style={{ margin: '0 0 0.75rem', color: '#64748b', fontSize: '0.85rem' }}>{viewingRx.diagnosis || '—'} · {viewingRx.date || '—'} {viewingRx.prescriptionRef ? `· ${viewingRx.prescriptionRef}` : ''}</p>
+            {(viewingRx.medications || []).map((m, i) => (
+              <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.8rem', marginBottom: '0.55rem' }}>
+                <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>{m.name || 'Medication'}{m.strength ? ` (${m.strength})` : ''}</p>
+                <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b' }}>{[m.dosage, m.frequency, m.duration].filter(Boolean).join(' · ') || '—'}</p>
+                {m.alternativeSuggested ? (
+                  <p style={{ margin: '5px 0 0', fontSize: '0.8rem', color: m.drugStatus === 'approved_replacement' ? '#166534' : '#7c3aed', fontWeight: 700 }}>
+                    🔁 {m.alternativeSuggested} · {m.drugStatus === 'approved_replacement'
+                      ? `Approved · Dr. ${m.approvedByDoctorName || viewingRx.doctorName || 'Doctor'}`
+                      : 'Waiting for Approval from your Doctor'}
+                    {m.alternativeRationale ? ` · Why: ${m.alternativeRationale}` : ''}
+                  </p>
+                ) : null}
+                {m.drugStatus === 'transferred' && m.transferBranchName ? (
+                  <p style={{ margin: '5px 0 0', fontSize: '0.8rem', color: '#0369a1', fontWeight: 700 }}>
+                    This drug ({m.name || 'Drug'}) is transfered to branch ({m.transferBranchName}{m.transferBranchAddress ? `, ${m.transferBranchAddress}` : ''}).
+                  </p>
+                ) : null}
+                {Array.isArray(m.pharmacyNotes) && m.pharmacyNotes.length > 0 ? (
+                  <div style={{ marginTop: 6, display: 'grid', gap: 4 }}>
+                    {m.pharmacyNotes.map((n, ni) => (
+                      <div key={ni} style={{ fontSize: '0.76rem', color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px' }}>
+                        <b>{n.label || n.type}</b> · {n.note}
+                        {n.requiresDoctorApproval
+                          ? ` · ${n.approvalStatus === 'approved' ? 'Approved' : n.approvalStatus === 'rejected' ? 'Rejected' : 'Pending doctor approval'}`
+                          : ' · Operational'}
+                        {n.requiresDoctorApproval && n.approvalStatus === 'pending_doctor' && (
+                          <span style={{ marginLeft: 8 }}>
+                            <button
+                              className="doctor-btn doctor-btn-sm doctor-btn-outline"
+                              style={{ padding: '2px 7px', fontSize: '0.68rem', marginRight: 4 }}
+                              onClick={() => approvePharmacyNote(viewingRx, i, ni)}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="doctor-btn doctor-btn-sm doctor-btn-danger"
+                              style={{ padding: '2px 7px', fontSize: '0.68rem' }}
+                              onClick={() => rejectPharmacyNote(viewingRx, i, ni)}
+                            >
+                              Reject
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {viewingRx.instructions ? <p style={{ margin: '0.6rem 0 0', color: '#374151', fontSize: '0.85rem' }}><b>Instructions:</b> {viewingRx.instructions}</p> : null}
           </div>
         </div>
       )}

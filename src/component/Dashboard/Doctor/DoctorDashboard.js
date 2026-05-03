@@ -14,6 +14,8 @@ import {
   Star,
   BarChart3,
   LayoutDashboard,
+  FlaskConical,
+  ClipboardList,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
@@ -34,7 +36,11 @@ import DoctorReviews from './DoctorReviews';
 import DoctorAnalytics from './DoctorAnalytics';
 import DoctorSettings from './DoctorSettings';
 import DoctorPatientDetail from './DoctorPatientDetail';
+import DoctorPatientOverview from './DoctorPatientOverview';
+import DoctorDiagnosticOrder from './DoctorDiagnosticOrder';
+import DoctorDiagnosticResults from './DoctorDiagnosticResults';
 import NotificationBell from './NotificationBell';
+import GlobalReportForm from '../Common/GlobalReportForm';
 
 export default function DoctorDashboard({ profile }) {
   const location = useLocation();
@@ -58,8 +64,11 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/dashboard/notes', icon: FileText, label: 'Notes' },
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions' },
+    { path: '/dashboard/diagnostic-order', icon: FlaskConical, label: 'Order Lab / Scan' },
+    { path: '/dashboard/diagnostic-results', icon: ClipboardList, label: 'Lab & Scan Results' },
     { path: '/dashboard/reviews', icon: Star, label: 'Reviews' },
     { path: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
+    { path: '/dashboard/report-issue', icon: FileText, label: 'Report Issue' },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings' },
   ];
 
@@ -136,14 +145,18 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/" element={<DoctorHome profile={profile} />} />
           <Route path="/patients" element={<DoctorPatients profile={profile} />} />
           <Route path="/patients/:patientId" element={<DoctorPatientDetail profile={profile} />} />
+          <Route path="/patient-overview/:patientId" element={<DoctorPatientOverview profile={profile} />} />
           <Route path="/patient-panel" element={<DoctorPatientPanel profile={profile} />} />
           <Route path="/appointments" element={<DoctorAppointments profile={profile} />} />
           <Route path="/video" element={<DoctorVideoCall profile={profile} />} />
           <Route path="/messages" element={<DoctorMessages profile={profile} />} />
           <Route path="/notes" element={<DoctorNotes profile={profile} />} />
           <Route path="/prescriptions" element={<DoctorPrescriptions profile={profile} />} />
+          <Route path="/diagnostic-order" element={<DoctorDiagnosticOrder profile={profile} />} />
+          <Route path="/diagnostic-results" element={<DoctorDiagnosticResults profile={profile} />} />
           <Route path="/reviews" element={<DoctorReviews profile={profile} />} />
           <Route path="/analytics" element={<DoctorAnalytics profile={profile} />} />
+          <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="doctor" />} />
           <Route path="/settings" element={<DoctorSettings profile={profile} />} />
         </Routes>
       </main>

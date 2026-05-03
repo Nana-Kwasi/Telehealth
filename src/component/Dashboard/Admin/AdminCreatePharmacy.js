@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { db, auth } from '../../Auth/firebaseConfig';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
-import { SUPPORTED_COUNTRIES } from '../../../utils/featureFlags';
+import { SUPPORTED_COUNTRIES, isEnabled } from '../../../utils/featureFlags';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI",
@@ -34,7 +35,7 @@ function generatePassword() {
 }
 
 const EMPTY = {
-  pharmacyName: '', businessReg: '', email: '', phone: '', address: '', country: 'GH', licenseNote: '',
+  pharmacyName: '', businessReg: '', email: '', phone: '', address: '', country: 'GH', city: '', area: '', region: '', street: '', ghanaDigitalAddress: '', latitude: null, longitude: null, licenseNote: '',
 };
 
 export default function AdminCreatePharmacy() {
@@ -42,11 +43,16 @@ export default function AdminCreatePharmacy() {
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState(null);
   const [error, setError] = useState('');
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   const update = (field, val) => setForm(p => ({ ...p, [field]: val }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isEnabled(form.country, 'pharmacyOnboarding')) {
+      setError('Pharmacy onboarding is disabled for this country by System Config.');
+      return;
+    }
     if (!form.pharmacyName.trim() || !form.email.trim()) {
       setError('Pharmacy name and email are required.');
       return;
@@ -64,8 +70,8 @@ export default function AdminCreatePharmacy() {
       const uid = cred.user.uid;
       await fbSignOut(secAuth);
 
-      // Store pharmacy profile in Firestore
-      await addDoc(collection(db, 'pharmacies'), {
+      // Store pharmacy profile in Firestore — document ID must equal uid for resolveRole lookup
+      await setDoc(doc(db, 'pharmacies', uid), {
         uid,
         pharmacyName: form.pharmacyName.trim(),
         businessReg: form.businessReg.trim(),
@@ -73,9 +79,25 @@ export default function AdminCreatePharmacy() {
         phone: form.phone.trim(),
         address: form.address.trim(),
         country: form.country,
+        city: form.city.trim(),
+        area: form.area.trim(),
+        region: form.region.trim(),
+        street: form.street.trim(),
+        ghanaDigitalAddress: form.ghanaDigitalAddress.trim(),
+        latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+        longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        location: {
+          country: form.country,
+          city: form.city.trim(),
+          area: form.area.trim(),
+          region: form.region.trim(),
+          street: form.street.trim(),
+          latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+          longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        },
         licenseNote: form.licenseNote.trim(),
         username,
-        status: 'active',
+        status: 'pending',
         mustChangePassword: true,
         role: 'pharmacy',
         createdAt: serverTimestamp(),
@@ -109,7 +131,7 @@ export default function AdminCreatePharmacy() {
       </div>
 
       {credentials ? (
-        <div className="admin-table-card" style={{ padding: '1.5rem', maxWidth: 600 }}>
+        <div className="admin-table-card" style={{ padding: '1.5rem', maxWidth: 680 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
             <span style={{ fontSize: '1.5rem' }}>✅</span>
             <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>
@@ -117,7 +139,7 @@ export default function AdminCreatePharmacy() {
             </h2>
           </div>
           <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '0.5rem' }}>
-            Share these credentials securely with the pharmacy. They will be prompted to change their password on first login.
+            Share these credentials securely with the pharmacy. Go to <b>Account Approvals</b> to activate this account. They will be prompted to change their password on first login.
           </p>
 
           <div className="credential-box">
@@ -144,7 +166,7 @@ export default function AdminCreatePharmacy() {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
+        <form onSubmit={handleSubmit}>
           {error && (
             <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1rem' }}>
               🚨 {error}
@@ -181,6 +203,49 @@ export default function AdminCreatePharmacy() {
               <div className="admin-field" style={{ gridColumn: '1 / -1' }}>
                 <label>Address</label>
                 <input placeholder="Full physical address" value={form.address} onChange={e => update('address', e.target.value)} />
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => detectAddress((loc) => {
+                    update('address', loc.address || form.address);
+                    update('city', loc.city || form.city);
+                    update('area', loc.area || form.area);
+                    update('region', loc.region || form.region);
+                    update('street', loc.street || form.street);
+                    update('latitude', loc.latitude ?? form.latitude);
+                    update('longitude', loc.longitude ?? form.longitude);
+                    if (loc.countryCode && SUPPORTED_COUNTRIES.some(c => c.code === loc.countryCode)) update('country', loc.countryCode);
+                  })}>
+                    {locating ? 'Detecting…' : 'Use current location'}
+                  </button>
+                  {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+                </div>
+              </div>
+              <div className="admin-field">
+                <label>City</label>
+                <input placeholder="e.g. Accra" value={form.city} onChange={e => update('city', e.target.value)} />
+              </div>
+              <div className="admin-field">
+                <label>Area / Locality</label>
+                <input placeholder="e.g. East Legon" value={form.area} onChange={e => update('area', e.target.value)} />
+              </div>
+              <div className="admin-field">
+                <label>Region / State</label>
+                <input placeholder="e.g. Greater Accra" value={form.region} onChange={e => update('region', e.target.value)} />
+              </div>
+              <div className="admin-field">
+                <label>Street</label>
+                <input placeholder="e.g. Liberation Road" value={form.street} onChange={e => update('street', e.target.value)} />
+              </div>
+              <div className="admin-field">
+                <label>Latitude</label>
+                <input value={form.latitude ?? ''} onChange={e => update('latitude', e.target.value)} placeholder="Auto-detected" />
+              </div>
+              <div className="admin-field">
+                <label>Longitude</label>
+                <input value={form.longitude ?? ''} onChange={e => update('longitude', e.target.value)} placeholder="Auto-detected" />
+              </div>
+              <div className="admin-field" style={{ gridColumn: '1 / -1' }}>
+                <label>Ghana Digital Address (optional)</label>
+                <input placeholder="e.g. GA-123-4567" value={form.ghanaDigitalAddress} onChange={e => update('ghanaDigitalAddress', e.target.value)} />
               </div>
               <div className="admin-field" style={{ gridColumn: '1 / -1' }}>
                 <label>License / Notes</label>
@@ -192,8 +257,13 @@ export default function AdminCreatePharmacy() {
           <div className="admin-alert admin-alert-info" style={{ marginBottom: '1.25rem' }}>
             ℹ️ A username and temporary password will be auto-generated and displayed after submission. The pharmacy must change their password on first login.
           </div>
+          {!isEnabled(form.country, 'pharmacyOnboarding') && (
+            <div className="admin-alert admin-alert-warning" style={{ marginBottom: '1.25rem' }}>
+              ⚠️ Pharmacy onboarding is currently disabled for {form.country}. Enable it in System Config → Country Feature Flags.
+            </div>
+          )}
 
-          <button type="submit" className="btn btn-primary" disabled={saving} style={{ minWidth: 160 }}>
+          <button type="submit" className="btn btn-primary" disabled={saving || !isEnabled(form.country, 'pharmacyOnboarding')} style={{ minWidth: 160 }}>
             {saving ? 'Creating…' : '🏥 Create Pharmacy Account'}
           </button>
         </form>

@@ -4,24 +4,43 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../Auth/firebaseConfig';
 import './AdminDashboard.css';
 
-import AdminOverview from './AdminOverview';
-import AdminUserManagement from './AdminUserManagement';
-import AdminCreatePharmacy from './AdminCreatePharmacy';
+import AdminOverview          from './AdminOverview';
+import AdminUserManagement    from './AdminUserManagement';
+import AdminCreatePharmacy    from './AdminCreatePharmacy';
 import AdminPrescriptionMonitor from './AdminPrescriptionMonitor';
-import AdminSystemConfig from './AdminSystemConfig';
-import OnboardDoctor from './OnboardDoctor';
-import OnboardTherapist from './OnboardTherapist';
-import AdminWalkInVerify from './AdminWalkInVerify';
+import AdminSystemConfig      from './AdminSystemConfig';
+import OnboardDoctor          from './OnboardDoctor';
+import OnboardTherapist       from './OnboardTherapist';
+import AdminCreateLabScan     from './AdminCreateLabScan';
+import AdminAppointments      from './AdminAppointments';
+import AdminNotifications     from './AdminNotifications';
+import AdminReports           from './AdminReports';
+import AdminReportsCenter     from './AdminReportsCenter';
+import AdminSystemPdfExport   from './AdminSystemPdfExport';
+import AdminAuditLog          from './AdminAuditLog';
+import AdminApprovals         from './AdminApprovals';
+import AdminUserDetail        from './AdminUserDetail';
 
 const NAV = [
-  { path: '/dashboard',                  label: 'Overview',             icon: '📊', section: 'PLATFORM' },
-  { path: '/dashboard/users',            label: 'User Management',      icon: '👥', section: 'PLATFORM' },
-  { path: '/dashboard/prescriptions',    label: 'Prescription Monitor', icon: '💊', section: 'PLATFORM' },
-  { path: '/dashboard/walkin',           label: 'Walk-in Verify',       icon: '🔍', section: 'PLATFORM' },
-  { path: '/dashboard/create-pharmacy',  label: 'Create Pharmacy',      icon: '🏥', section: 'ONBOARDING' },
-  { path: '/dashboard/onboard-doctor',   label: 'Onboard Doctor',       icon: '🩺', section: 'ONBOARDING' },
-  { path: '/dashboard/onboard-therapist',label: 'Onboard Therapist',    icon: '🧠', section: 'ONBOARDING' },
-  { path: '/dashboard/system-config',    label: 'System Config',        icon: '⚙️', section: 'SYSTEM' },
+  // PLATFORM
+  { path: '/dashboard',                   label: 'Overview',              icon: '📊', section: 'PLATFORM' },
+  { path: '/dashboard/users',             label: 'User Management',       icon: '👥', section: 'PLATFORM' },
+  { path: '/dashboard/approvals',         label: 'Account Approvals',     icon: '✅', section: 'PLATFORM' },
+  { path: '/dashboard/appointments',      label: 'Appointments',          icon: '📅', section: 'PLATFORM' },
+  { path: '/dashboard/prescriptions',     label: 'Prescription Monitor',  icon: '💊', section: 'PLATFORM' },
+  // ONBOARDING
+  { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: '🏥', section: 'ONBOARDING' },
+  { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: '🩺', section: 'ONBOARDING' },
+  { path: '/dashboard/onboard-therapist', label: 'Onboard Therapist',     icon: '🧠', section: 'ONBOARDING' },
+  { path: '/dashboard/create-lab-scan',   label: 'Create Lab / Scan',     icon: '🧪', section: 'ONBOARDING' },
+  // ANALYTICS & COMMS
+  { path: '/dashboard/reports',           label: 'Analytics & Reports',   icon: '📈', section: 'ANALYTICS' },
+  { path: '/dashboard/system-pdf-export', label: 'System PDF export',     icon: '📄', section: 'ANALYTICS' },
+  { path: '/dashboard/reports-center',    label: 'Reports & Feedback',    icon: '📩', section: 'ANALYTICS' },
+  { path: '/dashboard/notifications',     label: 'Notifications',         icon: '📣', section: 'ANALYTICS' },
+  { path: '/dashboard/audit-log',         label: 'Audit Log',             icon: '🔍', section: 'ANALYTICS' },
+  // SYSTEM
+  { path: '/dashboard/system-config',     label: 'System Config',         icon: '⚙️', section: 'SYSTEM' },
 ];
 
 export default function AdminDashboard({ profile }) {
@@ -29,7 +48,7 @@ export default function AdminDashboard({ profile }) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    try { await signOut(auth); navigate('/'); } catch (e) {}
+    try { await signOut(auth); navigate('/'); } catch {}
   };
 
   const isActive = (path) =>
@@ -64,8 +83,7 @@ export default function AdminDashboard({ profile }) {
                   <li key={item.path}>
                     <button
                       className={`admin-nav-item ${isActive(item.path) ? 'active' : ''}`}
-                      onClick={() => navigate(item.path)}
-                    >
+                      onClick={() => navigate(item.path)}>
                       <span>{item.icon}</span>
                       <span>{item.label}</span>
                     </button>
@@ -85,14 +103,22 @@ export default function AdminDashboard({ profile }) {
 
       <main className="admin-main">
         <Routes>
-          <Route path="/"                   element={<AdminOverview />} />
-          <Route path="/users"              element={<AdminUserManagement />} />
-          <Route path="/prescriptions"      element={<AdminPrescriptionMonitor />} />
-          <Route path="/walkin"             element={<AdminWalkInVerify />} />
-          <Route path="/create-pharmacy"    element={<AdminCreatePharmacy />} />
-          <Route path="/onboard-doctor"     element={<OnboardDoctor />} />
-          <Route path="/onboard-therapist"  element={<OnboardTherapist />} />
-          <Route path="/system-config"      element={<AdminSystemConfig />} />
+          <Route path="/"                    element={<AdminOverview />} />
+          <Route path="/users"               element={<AdminUserManagement />} />
+          <Route path="/users/:col/:userId"  element={<AdminUserDetail />} />
+          <Route path="/approvals"           element={<AdminApprovals />} />
+          <Route path="/appointments"        element={<AdminAppointments />} />
+          <Route path="/prescriptions"       element={<AdminPrescriptionMonitor />} />
+          <Route path="/create-pharmacy"     element={<AdminCreatePharmacy />} />
+          <Route path="/onboard-doctor"      element={<OnboardDoctor />} />
+          <Route path="/onboard-therapist"   element={<OnboardTherapist />} />
+          <Route path="/create-lab-scan"     element={<AdminCreateLabScan />} />
+          <Route path="/reports"             element={<AdminReports />} />
+          <Route path="/system-pdf-export"   element={<AdminSystemPdfExport />} />
+          <Route path="/reports-center"      element={<AdminReportsCenter />} />
+          <Route path="/notifications"       element={<AdminNotifications />} />
+          <Route path="/audit-log"           element={<AdminAuditLog />} />
+          <Route path="/system-config"       element={<AdminSystemConfig />} />
         </Routes>
       </main>
     </div>

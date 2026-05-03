@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video,
   AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
-  UserX, UserCheck, Activity,
+  UserX, UserCheck, Activity, FlaskConical, Minus,
 } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../Auth/firebaseConfig';
 import {
   collection, query, where, getDocs, addDoc, updateDoc, deleteDoc,
   doc, setDoc, getDoc, serverTimestamp,
 } from 'firebase/firestore';
+import { hasPatientPharmacy, patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -45,6 +46,7 @@ export default function DoctorPatientDetail({ profile }) {
   const [intakeData, setIntakeData] = useState(null);
   const [dailyFeelings, setDailyFeelings] = useState([]);
   const [viewingFeeling, setViewingFeeling] = useState(null);
+  const [viewingRx, setViewingRx] = useState(null);
   const [latestVitals, setLatestVitals] = useState(null);
   const [pharmacies, setPharmacies] = useState([]);
   const [patientStatus, setPatientStatus] = useState('active');
@@ -61,15 +63,13 @@ export default function DoctorPatientDetail({ profile }) {
   const [noteForm, setNoteForm] = useState({ title: '', content: '', type: 'consultation' });
   const [savingNote, setSavingNote] = useState(false);
 
-  // Prescription form
-  const [showRxForm, setShowRxForm] = useState(false);
-  const [rxForm, setRxForm] = useState({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
-  const [savingRx, setSavingRx] = useState(false);
-
   // Discharge modal
   const [showDischarge, setShowDischarge] = useState(false);
   const [dischargeReason, setDischargeReason] = useState('');
   const [discharging, setDischarging] = useState(false);
+
+  // Timeline
+  const [timeline, setTimeline] = useState([]);
 
   // E-Pharmacy
   const [sendingToPharmacy, setSendingToPharmacy] = useState(null); // pharmacyId being sent to
@@ -77,6 +77,7 @@ export default function DoctorPatientDetail({ profile }) {
   const [showAddPharmacy, setShowAddPharmacy] = useState(false);
   const [pharmacyForm, setPharmacyForm] = useState({ name: '', address: '', phone: '', email: '', notes: '' });
   const [savingPharmacy, setSavingPharmacy] = useState(false);
+  const [removingPharmacyKey, setRemovingPharmacyKey] = useState(null);
 
   useEffect(() => {
     if (profile?.id && patientId) loadPatientData();
@@ -183,6 +184,17 @@ export default function DoctorPatientDetail({ profile }) {
         setDailyFeelings(feelings);
       } catch (_) {}
 
+      // Load patient timeline
+      try {
+        const tlSnap = await getDocs(query(
+          collection(db, 'patientTimeline'),
+          where('patientId', '==', patientId)
+        ));
+        const events = tlSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setTimeline(events);
+      } catch (_) {}
+
     } catch (err) {
       console.error('Error loading patient data:', err);
     } finally {
@@ -234,26 +246,14 @@ export default function DoctorPatientDetail({ profile }) {
     setNotes(prev => prev.filter(n => n.id !== noteId));
   };
 
-  // Save prescription
-  const saveRx = async () => {
-    if (!rxForm.medication.trim()) return;
-    setSavingRx(true);
-    try {
-      const data = {
-        doctorId: profile.id,
-        doctorName: profile.name || 'Doctor',
-        patientId,
-        patientName: patient?.name || 'Patient',
-        ...rxForm,
-        status: 'active',
-        createdAt: serverTimestamp(),
-      };
-      const ref = await addDoc(collection(db, 'doctorPrescriptions'), data);
-      setPrescriptions(prev => [{ id: ref.id, ...data }, ...prev]);
-      setRxForm({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
-      setShowRxForm(false);
-    } catch (err) { console.error(err); }
-    finally { setSavingRx(false); }
+  const openFullPrescriptionForm = () => {
+    navigate('/dashboard/prescriptions', {
+      state: {
+        openRxForm: true,
+        presetPatientId: patientId,
+        presetPatientName: patient?.name || '',
+      },
+    });
   };
 
   // Discharge patient
@@ -334,6 +334,21 @@ export default function DoctorPatientDetail({ profile }) {
   };
 
   // Add pharmacy on behalf of patient
+  const removePatientPharmacyEntry = async (ph) => {
+    const rk = patientPharmacyKey(ph) || ph.id || ph.name || '';
+    setRemovingPharmacyKey(rk);
+    try {
+      const updated = removePatientPharmacyByKey(pharmacies, ph);
+      await setDoc(doc(db, 'patientProfiles', patientId), { pharmacies: updated }, { merge: true });
+      setPharmacies(updated);
+    } catch (err) {
+      console.error(err);
+      alert('Could not remove pharmacy. Please try again.');
+    } finally {
+      setRemovingPharmacyKey(null);
+    }
+  };
+
   const addPharmacyForPatient = async () => {
     if (!pharmacyForm.name.trim()) return;
     setSavingPharmacy(true);
@@ -342,6 +357,14 @@ export default function DoctorPatientDetail({ profile }) {
         id: Date.now().toString(),
         name: pharmacyForm.name.trim(),
         address: pharmacyForm.address.trim(),
+        country: '',
+        city: '',
+        area: '',
+        region: '',
+        street: '',
+        ghanaDigitalAddress: '',
+        latitude: null,
+        longitude: null,
         phone: pharmacyForm.phone.trim(),
         email: pharmacyForm.email.trim(),
         notes: pharmacyForm.notes.trim(),
@@ -350,6 +373,11 @@ export default function DoctorPatientDetail({ profile }) {
         addedByDoctorName: profile.name || 'Doctor',
         addedAt: new Date().toISOString(),
       };
+      if (hasPatientPharmacy(pharmacies, newPharmacy)) {
+        alert('⚠️ This e-pharmacy is already added for this patient.');
+        setSavingPharmacy(false);
+        return;
+      }
       const updated = [...pharmacies, newPharmacy];
       await setDoc(doc(db, 'patientProfiles', patientId), { pharmacies: updated }, { merge: true });
       setPharmacies(updated);
@@ -413,8 +441,18 @@ export default function DoctorPatientDetail({ profile }) {
             <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={() => { setActiveTab('notes'); setShowNoteForm(true); }}>
               <Plus size={14} /> Add Note
             </button>
-            <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => { setActiveTab('prescriptions'); setShowRxForm(true); }}>
+            <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={openFullPrescriptionForm}>
               <Pill size={14} /> Prescribe
+            </button>
+            <button className="doctor-btn doctor-btn-sm"
+              style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}
+              onClick={() => navigate('/dashboard/diagnostic-order', { state: { patientId, patientName: patient?.name } })}>
+              <FlaskConical size={14} /> Order Lab/Scan
+            </button>
+            <button className="doctor-btn doctor-btn-sm"
+              style={{ background: '#ede9fe', color: '#4c1d95', border: '1px solid #c4b5fd' }}
+              onClick={() => setActiveTab('timeline')}>
+              <Clock size={14} /> Timeline
             </button>
             <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => navigate('/dashboard/messages')}>
               <MessageSquare size={14} /> Message
@@ -474,7 +512,7 @@ export default function DoctorPatientDetail({ profile }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', flexWrap: 'wrap' }}>
-        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['epharmacy','E-Pharmacy'],['info','Patient Info'],['feelings','Daily Feeling']].map(([key, label]) => (
+        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['epharmacy','E-Pharmacy'],['info','Patient Info'],['feelings','Daily Feeling'],['timeline','Health Timeline']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -642,33 +680,9 @@ export default function DoctorPatientDetail({ profile }) {
         dataSharing.prescriptions === false
           ? <div className="doctor-card"><RestrictedAccess section="prescriptions" /></div>
           : <div>
-          <button className="doctor-btn doctor-btn-primary" style={{ marginBottom: '1rem' }} onClick={() => setShowRxForm(v => !v)}>
-            <Plus size={16} /> {showRxForm ? 'Cancel' : 'New Prescription'}
+          <button className="doctor-btn doctor-btn-primary" style={{ marginBottom: '1rem' }} onClick={openFullPrescriptionForm}>
+            <Plus size={16} /> New prescription (full form)
           </button>
-
-          {showRxForm && (
-            <div className="doctor-card" style={{ marginBottom: '1rem' }}>
-              <h3>New Prescription for {patient.name}</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                {[['medication','Medication / Drug Name','e.g., Amoxicillin 500mg'],['dosage','Dosage','e.g., 500mg'],['frequency','Frequency','e.g., Twice daily'],['duration','Duration','e.g., 7 days']].map(([key, label, ph]) => (
-                  <div key={key} className="doctor-form-group" style={{ marginBottom: 0 }}>
-                    <label>{label}</label>
-                    <input className="doctor-form-input" placeholder={ph} value={rxForm[key]} onChange={e => setRxForm(f => ({ ...f, [key]: e.target.value }))} />
-                  </div>
-                ))}
-              </div>
-              <div className="doctor-form-group">
-                <label>Special Instructions</label>
-                <textarea className="doctor-form-textarea" rows={3} placeholder="e.g., Take with food. Avoid alcohol." value={rxForm.instructions} onChange={e => setRxForm(f => ({ ...f, instructions: e.target.value }))} />
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="doctor-btn doctor-btn-primary" onClick={saveRx} disabled={savingRx || !rxForm.medication.trim()}>
-                  <Save size={15} /> {savingRx ? 'Saving…' : 'Issue Prescription'}
-                </button>
-                <button className="doctor-btn doctor-btn-outline" onClick={() => setShowRxForm(false)}>Cancel</button>
-              </div>
-            </div>
-          )}
 
           <div className="doctor-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -689,13 +703,15 @@ export default function DoctorPatientDetail({ profile }) {
                 {prescriptions.map(rx => {
                   const isDone = rx.status === 'completed';
                   const medName = rx.medication || rx.medications?.[0]?.name || 'Medication';
+                  const altMed = (rx.medications || []).find(m => m.alternativeSuggested);
+                  const transferredMed = (rx.medications || []).find(m => m.drugStatus === 'transferred' && m.transferBranchName);
                   const metaLine = [
                     rx.dosage || rx.medications?.[0]?.dosage,
                     rx.frequency || rx.medications?.[0]?.frequency,
                     rx.duration || rx.medications?.[0]?.duration,
                   ].filter(Boolean).join(' • ');
                   return (
-                    <div key={rx.id} style={{ padding: '1rem', background: isDone ? '#f0fdf4' : '#f8fafc', borderRadius: 10, border: `1.5px solid ${isDone ? '#bbf7d0' : '#e2e8f0'}`, borderLeft: isDone ? '4px solid #22c55e' : '1.5px solid #e2e8f0' }}>
+                    <div key={rx.id} onClick={() => setViewingRx(rx)} style={{ padding: '1rem', background: isDone ? '#f0fdf4' : '#f8fafc', borderRadius: 10, border: `1.5px solid ${isDone ? '#bbf7d0' : '#e2e8f0'}`, borderLeft: isDone ? '4px solid #22c55e' : '1.5px solid #e2e8f0', cursor: 'pointer' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                         <div style={{ flex: 1 }}>
                           <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{medName}</p>
@@ -719,6 +735,20 @@ export default function DoctorPatientDetail({ profile }) {
                           {rx.instructions}
                         </p>
                       )}
+                      {altMed && (
+                        <p style={{ margin: '0.45rem 0 0', fontSize: '0.78rem', color: altMed.drugStatus === 'approved_replacement' ? '#166534' : '#7c3aed', background: '#fdf4ff', padding: '0.45rem 0.65rem', borderRadius: 6, border: '1px solid #e9d5ff' }}>
+                          🔁 {altMed.name || 'Original'} → {altMed.alternativeSuggested} · {altMed.drugStatus === 'approved_replacement'
+                            ? `Approved · Dr. ${altMed.approvedByDoctorName || rx.doctorName || 'Doctor'}`
+                            : 'Waiting for Approval from your Doctor'}
+                          {altMed.alternativeRationale ? ` · Why: ${altMed.alternativeRationale}` : ''}
+                        </p>
+                      )}
+                      {transferredMed && (
+                        <p style={{ margin: '0.45rem 0 0', fontSize: '0.78rem', color: '#0369a1', background: '#eff6ff', padding: '0.45rem 0.65rem', borderRadius: 6, border: '1px solid #bfdbfe' }}>
+                          This drug ({transferredMed.name || 'Drug'}) is transfered to branch ({transferredMed.transferBranchName}{transferredMed.transferBranchAddress ? `, ${transferredMed.transferBranchAddress}` : ''}).
+                        </p>
+                      )}
+                      <p style={{ margin: '0.4rem 0 0', fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right' }}>Tap card for full details</p>
                     </div>
                   );
                 })}
@@ -790,8 +820,9 @@ export default function DoctorPatientDetail({ profile }) {
               {pharmacies.map((ph, idx) => {
                 const isSending = sendingToPharmacy === idx;
                 const alreadySent = sentPharmacies[idx];
+                const phRowKey = patientPharmacyKey(ph) || ph.id || String(idx);
                 return (
-                  <div key={ph.id || idx} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                  <div key={phRowKey} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                     {/* Icon */}
                     <div style={{ width: 44, height: 44, borderRadius: 12, background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>
                       💊
@@ -811,28 +842,51 @@ export default function DoctorPatientDetail({ profile }) {
                       {ph.notes && <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>{ph.notes}</p>}
                     </div>
 
-                    {/* Send prescription button */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem', flexShrink: 0 }}>
-                      {alreadySent ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '0.4rem 0.85rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700 }}>
-                          <Check size={13} /> Sent
-                        </span>
-                      ) : (
-                        <button
-                          className="doctor-btn doctor-btn-primary doctor-btn-sm"
-                          style={{ whiteSpace: 'nowrap' }}
-                          disabled={isSending || prescriptions.length === 0}
-                          onClick={() => sendPrescriptionToPharmacy(ph, idx)}
-                          title={prescriptions.length === 0 ? 'No prescriptions to send' : `Send latest prescription to ${ph.name}`}
-                        >
-                          {isSending ? 'Sending…' : '📤 Send Rx'}
-                        </button>
-                      )}
-                      {prescriptions.length > 0 && (
-                        <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8', textAlign: 'right' }}>
-                          Latest: {prescriptions[0]?.medication || prescriptions[0]?.medications?.[0]?.name || 'Rx'}
-                        </p>
-                      )}
+                    {/* Remove + send */}
+                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '0.45rem', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        title="Remove pharmacy from patient"
+                        disabled={removingPharmacyKey === phRowKey}
+                        onClick={(e) => { e.stopPropagation(); removePatientPharmacyEntry(ph); }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 8,
+                          border: '1.5px solid #fecaca',
+                          background: '#fef2f2',
+                          color: '#dc2626',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: removingPharmacyKey === phRowKey ? 'wait' : 'pointer',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Minus size={18} strokeWidth={2.5} />
+                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                        {alreadySent ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '0.4rem 0.85rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700 }}>
+                            <Check size={13} /> Sent
+                          </span>
+                        ) : (
+                          <button
+                            className="doctor-btn doctor-btn-primary doctor-btn-sm"
+                            style={{ whiteSpace: 'nowrap' }}
+                            disabled={isSending || prescriptions.length === 0}
+                            onClick={() => sendPrescriptionToPharmacy(ph, idx)}
+                            title={prescriptions.length === 0 ? 'No prescriptions to send' : `Send latest prescription to ${ph.name}`}
+                          >
+                            {isSending ? 'Sending…' : '📤 Send Rx'}
+                          </button>
+                        )}
+                        {prescriptions.length > 0 && (
+                          <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8', textAlign: 'right' }}>
+                            Latest: {prescriptions[0]?.medication || prescriptions[0]?.medications?.[0]?.name || 'Rx'}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1136,6 +1190,33 @@ export default function DoctorPatientDetail({ profile }) {
         </div>
       )}
 
+      {viewingRx && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.58)', backdropFilter: 'blur(3px)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          onClick={() => setViewingRx(null)}>
+          <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 620, maxHeight: '88vh', overflowY: 'auto', padding: '1.25rem', boxShadow: '0 22px 60px rgba(2,6,23,0.28)', border: '1px solid #e2e8f0' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #eef2f7' }}>
+              <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: '#0f172a' }}>Prescription Details</h3>
+              <button className="doctor-btn doctor-btn-sm doctor-btn-outline" style={{ borderRadius: 10 }} onClick={() => setViewingRx(null)}>Close</button>
+            </div>
+            <p style={{ margin: '0 0 0.3rem', color: '#0f172a', fontWeight: 700 }}>{viewingRx.patientName || patient?.name || 'Patient'}</p>
+            <p style={{ margin: '0 0 0.75rem', color: '#64748b', fontSize: '0.85rem' }}>{viewingRx.diagnosis || '—'} · {viewingRx.date || '—'} {viewingRx.prescriptionRef ? `· ${viewingRx.prescriptionRef}` : ''}</p>
+            {(viewingRx.medications || []).map((m, i) => (
+              <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.75rem', marginBottom: '0.5rem' }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{m.name || 'Medication'}{m.strength ? ` (${m.strength})` : ''}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#64748b' }}>{[m.dosage, m.frequency, m.duration].filter(Boolean).join(' · ') || '—'}</p>
+                {m.drugStatus === 'transferred' && m.transferBranchName ? (
+                  <p style={{ margin: '5px 0 0', fontSize: '0.8rem', color: '#0369a1', fontWeight: 700 }}>
+                    This drug ({m.name || 'Drug'}) is transfered to branch ({m.transferBranchName}{m.transferBranchAddress ? `, ${m.transferBranchAddress}` : ''}).
+                  </p>
+                ) : null}
+              </div>
+            ))}
+            {viewingRx.instructions ? <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: '#374151' }}><b>Instructions:</b> {viewingRx.instructions}</p> : null}
+          </div>
+        </div>
+      )}
+
       {/* Daily Feeling Detail Modal */}
       {viewingFeeling && (() => {
         const MOOD_META = {
@@ -1214,6 +1295,71 @@ export default function DoctorPatientDetail({ profile }) {
                 <button className="doctor-btn doctor-btn-primary" style={{ width: '100%', background: meta.color }} onClick={() => setViewingFeeling(null)}>Close</button>
               </div>
             </div>
+          </div>
+        );
+      })()}
+
+      {/* ── HEALTH TIMELINE TAB ── */}
+      {activeTab === 'timeline' && (() => {
+        const EVENT_CFG = {
+          APPOINTMENT:     { emoji: '📅', color: '#1e6bb8', bg: '#e8f1fb', label: 'Appointment' },
+          PRESCRIPTION:    { emoji: '💊', color: '#7c3aed', bg: '#f3e8ff', label: 'Prescription' },
+          LAB_ORDER:       { emoji: '🧪', color: '#065f46', bg: '#d1fae5', label: 'Lab Order' },
+          LAB_RESULT:      { emoji: '📋', color: '#059669', bg: '#d1fae5', label: 'Lab Result' },
+          SCAN_ORDER:      { emoji: '🩻', color: '#4c1d95', bg: '#ede9fe', label: 'Scan Order' },
+          SCAN_RESULT:     { emoji: '📄', color: '#6d28d9', bg: '#ede9fe', label: 'Scan Report' },
+          PHARMACY_UPDATE: { emoji: '🏪', color: '#0c4a6e', bg: '#e0f2fe', label: 'Pharmacy' },
+        };
+        const STATUS_COL = {
+          PENDING:     { bg: '#fef3c7', color: '#92400e' },
+          IN_PROGRESS: { bg: '#dbeafe', color: '#1e40af' },
+          COMPLETED:   { bg: '#dcfce7', color: '#14532d' },
+        };
+        const fmtTs = (ts) => ts?.seconds ? new Date(ts.seconds * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+        return (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Health Timeline</h3>
+                <p style={{ margin: '0.1rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>{timeline.length} event{timeline.length !== 1 ? 's' : ''} on record</p>
+              </div>
+              <button className="doctor-btn doctor-btn-sm" style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}
+                onClick={() => navigate('/dashboard/diagnostic-order', { state: { patientId, patientName: patient?.name } })}>
+                <FlaskConical size={13} /> New Order
+              </button>
+            </div>
+            {timeline.length === 0 ? (
+              <div className="doctor-card">
+                <div className="doctor-empty-state">
+                  <Clock size={36} />
+                  <h3>No timeline events yet</h3>
+                  <p>Events appear here as the patient receives care — prescriptions, lab orders, scan orders, and results.</p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {timeline.map(evt => {
+                  const cfg = EVENT_CFG[evt.type] || EVENT_CFG.APPOINTMENT;
+                  const sc = STATUS_COL[evt.status] || STATUS_COL.COMPLETED;
+                  return (
+                    <div key={evt.id} style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.85rem', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', background: cfg.bg, color: cfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', flexShrink: 0 }}>
+                        {cfg.emoji}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{cfg.label}</span>
+                          <span style={{ background: sc.bg, color: sc.color, borderRadius: 20, padding: '0.1rem 0.5rem', fontSize: '0.68rem', fontWeight: 700 }}>{evt.status}</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a' }}>{evt.title}</p>
+                        {evt.actor?.name && <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: '#64748b' }}>by {evt.actor.name}</p>}
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', flexShrink: 0, whiteSpace: 'nowrap' }}>{fmtTs(evt.createdAt)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })()}

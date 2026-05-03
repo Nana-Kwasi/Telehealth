@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Save, Plus, Trash2, Clock } from 'lucide-react';
 import { db } from '../../Auth/firebaseConfig';
 import { doc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function DoctorSettings({ profile }) {
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   // Profile state
   const [profileForm, setProfileForm] = useState({
@@ -14,6 +16,7 @@ export default function DoctorSettings({ profile }) {
     consultationFee: '', phone: '', location: '',
     consultationTypes: { video: true, chat: false, inPerson: false },
     languages: '', photoURL: '',
+    country: '', city: '', area: '', region: '', street: '', ghanaDigitalAddress: '', latitude: null, longitude: null,
   });
 
   // Availability state
@@ -34,6 +37,14 @@ export default function DoctorSettings({ profile }) {
         consultationTypes: profile.consultationTypes || { video: true, chat: false, inPerson: false },
         languages: Array.isArray(profile.languages) ? profile.languages.join(', ') : (profile.languages || ''),
         photoURL: profile.photoURL || '',
+        country: profile.country || profile.locationMeta?.country || '',
+        city: profile.city || profile.locationMeta?.city || '',
+        area: profile.area || profile.locationMeta?.area || '',
+        region: profile.region || profile.locationMeta?.region || '',
+        street: profile.street || profile.locationMeta?.street || '',
+        ghanaDigitalAddress: profile.ghanaDigitalAddress || '',
+        latitude: profile.latitude ?? profile.locationMeta?.latitude ?? null,
+        longitude: profile.longitude ?? profile.locationMeta?.longitude ?? null,
       });
       loadAvailability();
     }
@@ -74,6 +85,23 @@ export default function DoctorSettings({ profile }) {
         consultationFee: profileForm.consultationFee ? Number(profileForm.consultationFee) : 0,
         phone: profileForm.phone.trim(),
         location: profileForm.location.trim(),
+        country: profileForm.country || null,
+        city: profileForm.city || null,
+        area: profileForm.area || null,
+        region: profileForm.region || null,
+        street: profileForm.street || null,
+        ghanaDigitalAddress: profileForm.ghanaDigitalAddress || null,
+        latitude: Number.isFinite(Number(profileForm.latitude)) ? Number(profileForm.latitude) : null,
+        longitude: Number.isFinite(Number(profileForm.longitude)) ? Number(profileForm.longitude) : null,
+        locationMeta: {
+          country: profileForm.country || null,
+          city: profileForm.city || null,
+          area: profileForm.area || null,
+          region: profileForm.region || null,
+          street: profileForm.street || null,
+          latitude: Number.isFinite(Number(profileForm.latitude)) ? Number(profileForm.latitude) : null,
+          longitude: Number.isFinite(Number(profileForm.longitude)) ? Number(profileForm.longitude) : null,
+        },
         consultationTypes: profileForm.consultationTypes,
         languages: profileForm.languages.split(',').map(l => l.trim()).filter(Boolean),
         photoURL: profileForm.photoURL.trim(),
@@ -222,6 +250,53 @@ export default function DoctorSettings({ profile }) {
               <label>Location</label>
               <input className="doctor-form-input" placeholder="City, State" value={profileForm.location}
                 onChange={e => setProfileForm(prev => ({ ...prev, location: e.target.value }))} />
+              <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => detectAddress((loc) => {
+                    setProfileForm(prev => ({
+                      ...prev,
+                      location: loc.address || [loc.city, loc.country].filter(Boolean).join(', '),
+                      country: loc.countryCode || prev.country,
+                      city: loc.city || prev.city,
+                      area: loc.area || prev.area,
+                      region: loc.region || prev.region,
+                      street: loc.street || prev.street,
+                      latitude: loc.latitude ?? prev.latitude,
+                      longitude: loc.longitude ?? prev.longitude,
+                    }));
+                  })}
+                >
+                  {locating ? 'Detecting…' : 'Use current location'}
+                </button>
+                {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+              </div>
+            </div>
+            <div className="doctor-form-group">
+              <label>City</label>
+              <input className="doctor-form-input" placeholder="e.g. Accra" value={profileForm.city || ''}
+                onChange={e => setProfileForm(prev => ({ ...prev, city: e.target.value }))} />
+            </div>
+            <div className="doctor-form-group">
+              <label>Area / Locality</label>
+              <input className="doctor-form-input" placeholder="e.g. East Legon" value={profileForm.area || ''}
+                onChange={e => setProfileForm(prev => ({ ...prev, area: e.target.value }))} />
+            </div>
+            <div className="doctor-form-group">
+              <label>Region / State</label>
+              <input className="doctor-form-input" placeholder="e.g. Greater Accra" value={profileForm.region || ''}
+                onChange={e => setProfileForm(prev => ({ ...prev, region: e.target.value }))} />
+            </div>
+            <div className="doctor-form-group">
+              <label>Street</label>
+              <input className="doctor-form-input" placeholder="e.g. Liberation Road" value={profileForm.street || ''}
+                onChange={e => setProfileForm(prev => ({ ...prev, street: e.target.value }))} />
+            </div>
+            <div className="doctor-form-group">
+              <label>Ghana Digital Address (optional)</label>
+              <input className="doctor-form-input" placeholder="e.g. GA-123-4567" value={profileForm.ghanaDigitalAddress || ''}
+                onChange={e => setProfileForm(prev => ({ ...prev, ghanaDigitalAddress: e.target.value }))} />
             </div>
             <div className="doctor-form-group">
               <label>Languages (comma-separated)</label>

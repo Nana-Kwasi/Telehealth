@@ -1,0 +1,10 @@
+rules_version = '2';
+// Lab/scan branch uploads: diagnostic-results/{orderDocId}/{filename}
+// Deploy: firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /diagnostic-results/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -87,7 +87,7 @@ export default function Questionnaire() {
         ...data,
         phq9: phq9Data, // Add the combined PHQ-9 data
         completedAt: new Date().toISOString(),
-        status: 'active', // Set to active so client can login
+        status: 'pending', // Set to active so client can login
         displayName: data.name || data.firstName + ' ' + data.lastName || 'Client',
         clientName: data.name || data.firstName + ' ' + data.lastName || 'Client'
       };

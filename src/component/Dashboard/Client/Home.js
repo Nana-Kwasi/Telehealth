@@ -30,6 +30,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
+import LocationSummaryCard from '../../Common/LocationSummaryCard';
 
 // Register Chart.js components
 ChartJS.register(
@@ -1752,6 +1753,7 @@ export default function ClientHome({ profile }) {
 
   return (
     <div className="dashboard-home">
+      <LocationSummaryCard profile={profile || clientData} onEdit={() => navigate('/dashboard/settings')} />
       {/* Clean Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

@@ -5,6 +5,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 // Secondary Firebase app — creates accounts WITHOUT signing out the current admin session
 const _firebaseConfig = {
@@ -24,11 +25,12 @@ export default function OnboardDoctor({ profile }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '', password: '',
     specialization: '', licenseNumber: '', licensingAuthority: '',
-    experience: '', consultationFee: '', location: '',
+    experience: '', consultationFee: '', location: '', country: '', city: '', area: '', region: '', street: '', latitude: null, longitude: null, ghanaDigitalAddress: '',
     bio: '', gender: '', languages: '',
     consultationTypes: { video: true, chat: false, inPerson: false },
     education: '', qualifications: '',
@@ -93,6 +95,23 @@ export default function OnboardDoctor({ profile }) {
         experience: form.experience ? Number(form.experience) : 0,
         consultationFee: form.consultationFee ? Number(form.consultationFee) : 0,
         location: form.location.trim(),
+        country: form.country || null,
+        city: form.city || null,
+        area: form.area || null,
+        region: form.region || null,
+        street: form.street || null,
+        ghanaDigitalAddress: form.ghanaDigitalAddress || null,
+        latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+        longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        geo: {
+          country: form.country || null,
+          city: form.city || null,
+          area: form.area || null,
+          region: form.region || null,
+          street: form.street || null,
+          latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+          longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        },
         bio: form.bio.trim(),
         gender: form.gender,
         languages: form.languages.split(',').map(l => l.trim()).filter(Boolean),
@@ -115,7 +134,7 @@ export default function OnboardDoctor({ profile }) {
       setForm({
         name: '', email: '', phone: '', password: '',
         specialization: '', licenseNumber: '', licensingAuthority: '',
-        experience: '', consultationFee: '', location: '',
+        experience: '', consultationFee: '', location: '', country: '', city: '', area: '', region: '', street: '', latitude: null, longitude: null, ghanaDigitalAddress: '',
         bio: '', gender: '', languages: '',
         consultationTypes: { video: true, chat: false, inPerson: false },
         education: '', qualifications: '',
@@ -200,6 +219,54 @@ export default function OnboardDoctor({ profile }) {
             <label>Location</label>
             <input className="doctor-form-input" placeholder="City, State" value={form.location}
               onChange={e => handleChange('location', e.target.value)} />
+            <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => detectAddress((loc) => {
+                handleChange('location', loc.address || [loc.city, loc.country].filter(Boolean).join(', '));
+                handleChange('country', loc.countryCode || form.country);
+                handleChange('city', loc.city || form.city);
+                handleChange('area', loc.area || form.area);
+                handleChange('region', loc.region || form.region);
+                handleChange('street', loc.street || form.street);
+                handleChange('latitude', loc.latitude ?? form.latitude);
+                handleChange('longitude', loc.longitude ?? form.longitude);
+              })}>{locating ? 'Detecting…' : 'Use current location'}</button>
+              {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+            </div>
+          </div>
+          <div className="doctor-form-group">
+            <label>City</label>
+            <input className="doctor-form-input" placeholder="e.g. Accra" value={form.city}
+              onChange={e => handleChange('city', e.target.value)} />
+          </div>
+          <div className="doctor-form-group">
+            <label>Area / Locality</label>
+            <input className="doctor-form-input" placeholder="e.g. East Legon" value={form.area}
+              onChange={e => handleChange('area', e.target.value)} />
+          </div>
+          <div className="doctor-form-group">
+            <label>Region / State</label>
+            <input className="doctor-form-input" placeholder="e.g. Greater Accra" value={form.region}
+              onChange={e => handleChange('region', e.target.value)} />
+          </div>
+          <div className="doctor-form-group">
+            <label>Street</label>
+            <input className="doctor-form-input" placeholder="e.g. Liberation Road" value={form.street}
+              onChange={e => handleChange('street', e.target.value)} />
+          </div>
+          <div className="doctor-form-group">
+            <label>Latitude</label>
+            <input className="doctor-form-input" placeholder="Auto-detected" value={form.latitude ?? ''}
+              onChange={e => handleChange('latitude', e.target.value)} />
+          </div>
+          <div className="doctor-form-group">
+            <label>Longitude</label>
+            <input className="doctor-form-input" placeholder="Auto-detected" value={form.longitude ?? ''}
+              onChange={e => handleChange('longitude', e.target.value)} />
+          </div>
+          <div className="doctor-form-group">
+            <label>Ghana Digital Address (optional)</label>
+            <input className="doctor-form-input" placeholder="e.g. GA-123-4567" value={form.ghanaDigitalAddress}
+              onChange={e => handleChange('ghanaDigitalAddress', e.target.value)} />
           </div>
         </div>
       </div>

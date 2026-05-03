@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, MessageSquare, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, AlertTriangle, Clock, CheckCircle, Activity } from 'lucide-react';
 import { auth, db } from '../../Auth/firebaseConfig';
 import {
@@ -8,8 +9,10 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import './Home.css';
+import LocationSummaryCard from '../../Common/LocationSummaryCard';
 
 export default function TherapistHome({ profile }) {
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [therapistProfile, setTherapistProfile] = useState(null);
   const [kpis, setKpis] = useState({ activeClients: 0, todaySessions: 0, pendingNotes: 0, completionRate: 0, totalSessions: 0, totalNotes: 0 });
@@ -402,6 +405,7 @@ export default function TherapistHome({ profile }) {
 
   return (
     <div className="dashboard-home">
+      <LocationSummaryCard profile={therapistProfile || profile} onEdit={() => navigate('/dashboard/settings')} />
 
       {/* ── Welcome Banner ── */}
       <div className="enhanced-header">

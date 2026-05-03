@@ -27,6 +27,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function ClientProfile() {
   const [profile, setProfile] = useState(null);
@@ -45,6 +46,7 @@ export default function ClientProfile() {
   const [passwordError, setPasswordError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   const currentUser = auth.currentUser;
 
@@ -69,6 +71,14 @@ export default function ClientProfile() {
             name: profileData.name || profileData.displayName || currentUser.displayName || '',
             phone: profileData.phone || '',
             address: profileData.address || '',
+            country: profileData.country || profileData.locationMeta?.country || '',
+            city: profileData.city || profileData.locationMeta?.city || '',
+            area: profileData.area || profileData.locationMeta?.area || '',
+            region: profileData.region || profileData.locationMeta?.region || '',
+            street: profileData.street || profileData.locationMeta?.street || '',
+            ghanaDigitalAddress: profileData.ghanaDigitalAddress || '',
+            latitude: profileData.latitude ?? profileData.locationMeta?.latitude ?? null,
+            longitude: profileData.longitude ?? profileData.locationMeta?.longitude ?? null,
             dateOfBirth: profileData.dateOfBirth || '',
             emergencyContact: profileData.emergencyContact || '',
             preferences: profileData.preferences || {}
@@ -81,6 +91,14 @@ export default function ClientProfile() {
             name: currentUser.displayName || '',
             phone: '',
             address: '',
+            country: '',
+            city: '',
+            area: '',
+            region: '',
+            street: '',
+            ghanaDigitalAddress: '',
+            latitude: null,
+            longitude: null,
             dateOfBirth: '',
             emergencyContact: '',
             preferences: {
@@ -121,6 +139,23 @@ export default function ClientProfile() {
         name: profile.name,
         phone: profile.phone,
         address: profile.address,
+        country: profile.country || null,
+        city: profile.city || null,
+        area: profile.area || null,
+        region: profile.region || null,
+        street: profile.street || null,
+        ghanaDigitalAddress: profile.ghanaDigitalAddress || null,
+        latitude: Number.isFinite(Number(profile.latitude)) ? Number(profile.latitude) : null,
+        longitude: Number.isFinite(Number(profile.longitude)) ? Number(profile.longitude) : null,
+        locationMeta: {
+          country: profile.country || null,
+          city: profile.city || null,
+          area: profile.area || null,
+          region: profile.region || null,
+          street: profile.street || null,
+          latitude: Number.isFinite(Number(profile.latitude)) ? Number(profile.latitude) : null,
+          longitude: Number.isFinite(Number(profile.longitude)) ? Number(profile.longitude) : null,
+        },
         dateOfBirth: profile.dateOfBirth,
         emergencyContact: profile.emergencyContact,
         preferences: profile.preferences,
@@ -320,6 +355,59 @@ export default function ClientProfile() {
                 placeholder="Enter your address"
                 rows={3}
               />
+              <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => detectAddress((loc) => {
+                    setProfile(prev => ({
+                      ...prev,
+                      address: loc.address || prev.address || '',
+                      country: loc.countryCode || prev.country || '',
+                      city: loc.city || prev.city || '',
+                      area: loc.area || prev.area || '',
+                      region: loc.region || prev.region || '',
+                      street: loc.street || prev.street || '',
+                      latitude: loc.latitude ?? prev.latitude ?? null,
+                      longitude: loc.longitude ?? prev.longitude ?? null,
+                    }));
+                  })}
+                  disabled={locating}
+                >
+                  {locating ? 'Detecting…' : 'Use current location'}
+                </button>
+                {locationMsg ? <small>{locationMsg}</small> : null}
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Country</label>
+                <input type="text" value={profile.country || ''} onChange={(e) => handleInputChange('country', e.target.value)} placeholder="e.g. GH" />
+              </div>
+              <div className="form-group">
+                <label>City</label>
+                <input type="text" value={profile.city || ''} onChange={(e) => handleInputChange('city', e.target.value)} placeholder="e.g. Accra" />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Area / Locality</label>
+                <input type="text" value={profile.area || ''} onChange={(e) => handleInputChange('area', e.target.value)} placeholder="e.g. East Legon" />
+              </div>
+              <div className="form-group">
+                <label>Region / State</label>
+                <input type="text" value={profile.region || ''} onChange={(e) => handleInputChange('region', e.target.value)} placeholder="e.g. Greater Accra" />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Street</label>
+                <input type="text" value={profile.street || ''} onChange={(e) => handleInputChange('street', e.target.value)} placeholder="e.g. Liberation Road" />
+              </div>
+              <div className="form-group">
+                <label>Ghana Digital Address (optional)</label>
+                <input type="text" value={profile.ghanaDigitalAddress || ''} onChange={(e) => handleInputChange('ghanaDigitalAddress', e.target.value)} placeholder="e.g. GA-123-4567" />
+              </div>
             </div>
             
             <div className="form-group">

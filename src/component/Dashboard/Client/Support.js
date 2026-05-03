@@ -332,6 +332,26 @@ export default function ClientSupport() {
         status: 'open',
         createdAt: serverTimestamp()
       });
+      await addDoc(collection(db, 'globalReports'), {
+        category: issueForm.severity === 'critical' ? 'emergency' : issueForm.severity === 'high' ? 'complaint' : 'feedback',
+        subject: issueForm.title,
+        message: issueForm.description,
+        severity: issueForm.severity,
+        status: 'open',
+        source: 'client_support',
+        sourceCollection: 'supportTickets',
+        reporterId: currentUser.uid,
+        reporterName: clientData?.name || 'Client',
+        reporterEmail: currentUser.email || '',
+        reporterType: 'client',
+        metadata: {
+          relatedSession: issueForm.relatedSession || null,
+          consentToShare: !!issueForm.consentToShare,
+        },
+        adminReplies: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
       alert('Support ticket created successfully! We will get back to you soon.');
       setShowIssueModal(false);

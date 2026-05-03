@@ -1,112 +1,367 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read/write their own data
-    match /auth/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Allow therapists to read/write their own data
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isReporterOwner(data) {
+      return isSignedIn() && (data.reporterId == request.auth.uid || data.reporterUid == request.auth.uid);
+    }
+    function canReadDiagnosticOrder(data) {
+      return isSignedIn() && (
+        isAdmin() ||
+        data.doctorId == request.auth.uid ||
+        data.patientId == request.auth.uid ||
+        data.clientId == request.auth.uid ||
+        data.createdBy == request.auth.uid ||
+        data.centerId == request.auth.uid ||
+        data.branchId == request.auth.uid ||
+        data.assignedBranchId == request.auth.uid ||
+        data.labId == request.auth.uid ||
+        data.scanId == request.auth.uid
+      );
+    }
+    function canUpdateDiagnosticOrder(data) {
+      return isSignedIn() && (
+        isAdmin() ||
+        data.centerId == request.auth.uid ||
+        data.branchId == request.auth.uid ||
+        data.assignedBranchId == request.auth.uid ||
+        data.labId == request.auth.uid ||
+        data.scanId == request.auth.uid ||
+        data.doctorId == request.auth.uid
+      );
+    }
+    function isNonEmptyString(v) {
+      return v is string && v.size() > 0;
+    }
+    function hasCoordinates(data) {
+      return data.latitude is number && data.longitude is number;
+    }
+    function hasLocationMetaMap(data) {
+      return data.locationMeta is map;
+    }
+    function hasStructuredLocation(data) {
+      return isNonEmptyString(data.country) ||
+        isNonEmptyString(data.city) ||
+        isNonEmptyString(data.area) ||
+        isNonEmptyString(data.region) ||
+        isNonEmptyString(data.street) ||
+        (hasLocationMetaMap(data) && (
+          isNonEmptyString(data.locationMeta.country) ||
+          isNonEmptyString(data.locationMeta.city) ||
+          isNonEmptyString(data.locationMeta.area) ||
+          isNonEmptyString(data.locationMeta.region) ||
+          isNonEmptyString(data.locationMeta.street)
+        ));
+    }
+    function hasCompleteLocation(data) {
+      return hasCoordinates(data) && hasStructuredLocation(data);
+    }
+    function canBypassLocationForOnboarding(data) {
+      return data.status is string && (data.status == 'pending' || data.status == 'draft' || data.status == 'invited');
+    }
+    function passesLocationPolicyOnUpdate(newData, oldData) {
+      return hasCompleteLocation(newData) || hasCompleteLocation(oldData) || canBypassLocationForOnboarding(newData);
+    }
+    function passesLocationPolicyOnCreate(newData) {
+      return hasCompleteLocation(newData) || canBypassLocationForOnboarding(newData);
+    }
+
+    // ── Login lookup collections ─────────────────────────────────────────────
+    // These need to be readable before authentication so username/email login works.
+
+    match /pharmacies/{pharmacyId} {
+      allow read: if true;  // needed for login username/email lookup
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /pharmacyBranches/{branchId} {
+      allow read: if true;
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /admins/{adminId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /doctors/{doctorId} {
+      allow read: if true;  // public: doctor profiles are visible to patients
+      allow create: if request.auth != null && request.auth.uid == doctorId && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == doctorId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null && request.auth.uid == doctorId;
+
+      match /patients/{patientId} {
+        allow read, write: if request.auth != null && request.auth.uid == doctorId;
+      }
+
+      match /diagnosticDrafts/{draftId} {
+        allow read, create, update, delete: if request.auth != null && request.auth.uid == doctorId;
+      }
+    }
+
     match /therapists/{therapistId} {
-      allow read, write: if request.auth != null && request.auth.uid == therapistId;
-      
-      // Allow therapists to read/write their assigned clients
+      allow read: if true;  // needed for login lookup
+      allow create: if request.auth != null && request.auth.uid == therapistId && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == therapistId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null && request.auth.uid == therapistId;
+
       match /clients/{clientId} {
         allow read, write: if request.auth != null && request.auth.uid == therapistId;
       }
     }
-    
-    // Allow clients to read/write their own data
-    match /clients/{clientId} {
-      allow read, write: if request.auth != null && request.auth.uid == clientId;
+
+    // ── Patient / Client auth records ────────────────────────────────────────
+    match /auth/{userId} {
+      allow read: if true;  // needed for login lookup by email/username
+      allow create: if request.auth != null && request.auth.uid == userId && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == userId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
-    
-    // Allow users to read/write scheduled calls they're involved in
+
+    match /clients/{clientId} {
+      allow read: if true;  // needed for login lookup
+      allow create: if request.auth != null && request.auth.uid == clientId && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == clientId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null && request.auth.uid == clientId;
+    }
+
+    // ── Scheduled calls / video calls ────────────────────────────────────────
     match /scheduledCalls/{callId} {
-      allow read, write: if request.auth != null && 
-        (resource.data.therapistId == request.auth.uid || 
+      allow read, write: if request.auth != null &&
+        (resource.data.therapistId == request.auth.uid ||
          resource.data.clientId == request.auth.uid ||
          resource.data.createdBy == request.auth.uid);
+      allow create: if request.auth != null;
     }
-    
-    // Allow users to read/write video call logs
+
     match /videoCalls/{callId} {
       allow read, write: if request.auth != null &&
         (resource.data.therapistId == request.auth.uid ||
          resource.data.clientId == request.auth.uid);
     }
 
-    // ── Medical Doctor Collections ──
-
-    // Allow doctors to read/write their own profile
-    match /doctors/{doctorId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == doctorId;
-
-      // Allow doctors to manage their assigned patients
-      match /patients/{patientId} {
-        allow read, write: if request.auth != null && request.auth.uid == doctorId;
-      }
+    // ── Doctor appointments & prescriptions ──────────────────────────────────
+    match /doctorAppointments/{appointmentId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null &&
+        (resource.data.doctorId == request.auth.uid ||
+         resource.data.clientId == request.auth.uid);
     }
 
-    // Doctor availability — doctors write their own, clients can read any
+    match /doctorPrescriptions/{rxId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null &&
+        (resource.data.doctorId == request.auth.uid ||
+         resource.data.patientId == request.auth.uid ||
+         resource.data.clientId == request.auth.uid);
+      allow update, delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
+    }
+
     match /doctorAvailability/{slotId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.doctorId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
     }
 
-    // Doctor appointments — accessible by the doctor or the client involved
-    match /doctorAppointments/{appointmentId} {
-      allow read, write: if request.auth != null &&
-        (resource.data.doctorId == request.auth.uid ||
-         resource.data.clientId == request.auth.uid);
-      allow create: if request.auth != null;
-    }
-
-    // Doctor reviews — clients can create, anyone authenticated can read
     match /doctorReviews/{reviewId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && resource.data.clientId == request.auth.uid;
+      allow update: if request.auth != null &&
+        (resource.data.clientId == request.auth.uid || resource.data.doctorId == request.auth.uid);
+      allow delete: if request.auth != null && resource.data.clientId == request.auth.uid;
     }
 
-    // Doctor-patient chat messages
+    match /doctorNotes/{noteId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
+    }
+
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+    match /labs/{labId} {
+      allow read: if true;
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /labBranches/{branchId} {
+      allow read: if true;
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /scanCenters/{centerId} {
+      allow read: if true;
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /scanBranches/{branchId} {
+      allow read: if true;
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /diagnosticOrders/{orderId} {
+      allow create: if isSignedIn();
+      allow read: if canReadDiagnosticOrder(resource.data);
+      allow update: if canUpdateDiagnosticOrder(resource.data);
+    }
+
+    match /diagnosticResults/{resultId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.doctorId == request.auth.uid ||
+        resource.data.patientId == request.auth.uid ||
+        resource.data.clientId == request.auth.uid ||
+        resource.data.centerId == request.auth.uid ||
+        resource.data.uploadedBy == request.auth.uid
+      );
+      allow update: if isSignedIn() && (isAdmin() || resource.data.centerId == request.auth.uid || resource.data.uploadedBy == request.auth.uid);
+    }
+
+    match /diagnosticBranchEvents/{eventId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.branchId == request.auth.uid ||
+        resource.data.parentId == request.auth.uid
+      );
+      allow update, delete: if false;
+    }
+
+    // ── Messaging ────────────────────────────────────────────────────────────
     match /doctor_chats/{chatId}/messages/{messageId} {
       allow read, write: if request.auth != null;
     }
 
-    // Doctor consultation notes — doctor manages their own notes
-    match /doctorNotes/{noteId} {
-      allow read, write: if request.auth != null &&
-        resource.data.doctorId == request.auth.uid;
-      allow create: if request.auth != null;
+    match /client_chats/{chatId}/messages/{messageId} {
+      allow read, write: if request.auth != null;
     }
 
-    // Doctor prescriptions — doctor writes, patient reads
-    match /prescriptions/{prescriptionId} {
-      allow read: if request.auth != null &&
-        (resource.data.doctorId == request.auth.uid ||
-         resource.data.clientId == request.auth.uid);
-      allow create, update: if request.auth != null && request.resource.data.doctorId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
+    match /therapist_chats/{chatId}/messages/{messageId} {
+      allow read, write: if request.auth != null;
     }
 
-    // Notifications — users can read/update their own, system can create
+    // ── Notifications ────────────────────────────────────────────────────────
     match /notifications/{notifId} {
-      allow read, update: if request.auth != null && resource.data.targetId == request.auth.uid;
       allow create: if request.auth != null;
+      allow read, update: if request.auth != null && resource.data.targetId == request.auth.uid;
     }
 
-    // Call notifications — for video call signaling
     match /callNotifications/{callId} {
       allow read, write: if request.auth != null;
     }
 
-    // Doctor reviews — allow doctor to reply (update) to their own reviews
-    match /doctorReviews/{reviewId} {
-      allow update: if request.auth != null && resource.data.doctorId == request.auth.uid;
+    // ── System / Admin ───────────────────────────────────────────────────────
+    match /systemConfig/{docId} {
+      allow read: if true;   // all clients read config (maintenance mode, limits, flags)
+      allow write: if request.auth != null;
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    match /userReports/{reportId} {
+      allow create: if request.auth != null;
+      allow read, update: if request.auth != null;
+    }
+
+    match /globalReports/{reportId} {
+      allow create: if isSignedIn() && (
+        request.resource.data.reporterId == request.auth.uid ||
+        request.resource.data.reporterUid == request.auth.uid ||
+        !(request.resource.data.keys().hasAny(['reporterId'])) ||
+        request.resource.data.reporterId == null
+      );
+      allow read: if isAdmin() || isReporterOwner(resource.data);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /adminReplies/{replyId} {
+      allow create, read, update: if request.auth != null;
+    }
+
+    // ── Legacy log collections ───────────────────────────────────────────────
+    match /loginLogs/{logId} {
+      allow create: if true;  // written before auth completes
+      allow read: if request.auth != null;
+    }
+
+    match /userLoginLogs/{logId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    match /userLogoutLogs/{logId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    match /adminAuditLog/{logId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    // ── Other collections ────────────────────────────────────────────────────
+    match /clinicalNotes/{noteId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    match /patientTimeline/{eventId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    match /presence/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /patientProfiles/{profileId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && passesLocationPolicyOnCreate(request.resource.data);
+      allow update: if request.auth != null && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    match /patientIntake/{intakeId} {
+      allow create: if true;
+      allow read, update: if request.auth != null;
+    }
+
+    match /therapistReports/{reportId} {
+      allow create, read, update: if request.auth != null;
+    }
+
+    match /therapistResources/{resourceId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    match /therapistSettings/{settingId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /patientDailyFeelings/{feelingId} {
+      allow create: if request.auth != null;
+      allow read, update: if request.auth != null;
     }
   }
 }
-

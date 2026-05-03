@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Home from './component/Home/Home';
 import Questionnaire from './component/Questionnaire/Questionnaire';
 import Payment from './component/Payment/Payment';
 import Navbar from './component/Layout/Navbar';
 import { resolveRole, logUserLogout } from './component/Auth/authService';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './component/Auth/firebaseConfig';
+import useSystemConfig, { cfg, useFeatureFlagsConfig } from './hooks/useSystemConfig';
+import { logAction, A } from './utils/auditLogger';
 import Login from './component/Auth/Login';
 import SignUp from './component/Auth/SignUp';
 import ClientDashboard from './component/Dashboard/Client/ClientDashboard';
@@ -16,12 +18,17 @@ import DoctorDashboard from './component/Dashboard/Doctor/DoctorDashboard';
 import AdminDashboard from './component/Dashboard/Admin/AdminDashboard';
 import PharmacyDashboard from './component/Dashboard/Pharmacy/PharmacyDashboard';
 import BranchDashboard from './component/Dashboard/Pharmacy/BranchDashboard';
+import LabDashboard from './component/Dashboard/Lab/LabDashboard';
+import ScanDashboard from './component/Dashboard/Scan/ScanDashboard';
+import LabBranchDashboard from './component/Dashboard/Lab/LabBranchDashboard';
+import ScanBranchDashboard from './component/Dashboard/Scan/ScanBranchDashboard';
 import VideoCallPage from './component/VideoCall/VideoCallPage';
 import Terms from './component/Home/Terms';
 import Privacy from './component/Home/Privacy';
 import DoctorSearch from './component/Doctors/DoctorSearch';
 import DoctorProfilePage from './component/Doctors/DoctorProfilePage';
 import MedicalIntake from './component/Doctors/MedicalIntake';
+import DashboardLocationGate from './component/Common/DashboardLocationGate';
 
 function Placeholder({ title }) {
   return (
@@ -71,7 +78,35 @@ function PrivateRoute({ children, session }) {
 }
 
 export default function App() {
+  const location = useLocation();
   const [session, setSession] = useState({ loading: true, role: null, profile: null });
+  const sysConfig             = useSystemConfig();
+  useFeatureFlagsConfig();
+  const inactivityTimer       = useRef(null);
+
+  // ── Session timeout (driven by systemConfig) ──────────────────────────────
+  const resetInactivityTimer = useCallback(() => {
+    const minutes = cfg(sysConfig, 'security', 'sessionTimeoutMinutes', 60);
+    const ms = minutes * 60 * 1000;
+    clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = setTimeout(async () => {
+      if (auth.currentUser) {
+        await logAction(A.LOGOUT, { reason: 'session_timeout', timeoutMinutes: minutes });
+        signOut(auth).catch(() => {});
+      }
+    }, ms);
+  }, [sysConfig]);
+
+  useEffect(() => {
+    if (!session.role) return;
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }));
+    resetInactivityTimer();
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetInactivityTimer));
+      clearTimeout(inactivityTimer.current);
+    };
+  }, [session.role, resetInactivityTimer]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -92,7 +127,6 @@ export default function App() {
         sessionStorage.setItem('previousSession', JSON.stringify({ userId: u.uid, role, profile }));
         setSession({ loading: false, role, profile });
       } catch (err) {
-        // Suspended / deactivated account — sign out silently
         auth.signOut().catch(() => {});
         setSession({ loading: false, role: null, profile: null });
       }
@@ -102,10 +136,32 @@ export default function App() {
 
   if (session.loading) return <LoadingScreen />;
 
+  // Maintenance mode — block non-admins
+  const maintenanceMode = cfg(sysConfig, 'general', 'maintenanceMode', false);
+  if (maintenanceMode && session.role && session.role !== 'admin') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0f172a', padding: '2rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔧</div>
+        <h1 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800, margin: '0 0 0.5rem' }}>Platform Under Maintenance</h1>
+        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.95rem', margin: '0 0 1.5rem', maxWidth: 400 }}>
+          NessaHub is currently undergoing scheduled maintenance. Please check back shortly.
+        </p>
+        <button style={{ padding: '0.6rem 1.5rem', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
+          onClick={() => { import('firebase/auth').then(({ signOut }) => signOut(auth).catch(() => {})); }}>
+          Sign Out
+        </button>
+      </div>
+    );
+  }
+
   const dashboard =
     session.role === 'admin'                                  ? <AdminDashboard          profile={session.profile} /> :
     session.role === 'pharmacy'                               ? <PharmacyDashboard       profile={session.profile} /> :
     session.role === 'branch_user'                            ? <BranchDashboard         profile={session.profile} /> :
+    session.role === 'lab'                                    ? <LabDashboard            profile={session.profile} /> :
+    session.role === 'scan'                                   ? <ScanDashboard           profile={session.profile} /> :
+    session.role === 'lab_branch'                             ? <LabBranchDashboard      profile={session.profile} /> :
+    session.role === 'scan_branch'                            ? <ScanBranchDashboard     profile={session.profile} /> :
     session.role === 'therapist' && session.profile?.role === 'admin' ? <AdminDashboard  profile={session.profile} /> :
     session.role === 'therapist'                              ? <TherapistDashboard      profile={session.profile} /> :
     session.role === 'doctor'                                 ? <DoctorDashboard         profile={session.profile} /> :
@@ -116,6 +172,7 @@ export default function App() {
     <div>
       <Navbar />
       <div className="container">
+        <DashboardLocationGate role={session.role} profile={session.profile} activePath={location.pathname} />
         <Routes>
           {/* ── Public ── */}
           <Route path="/"              element={<Home />} />

@@ -30,6 +30,7 @@ import ClientSupport from './Support';
 import TherapistDetails from './TherapistDetails';
 import WorksheetView from './WorksheetView';
 import NoteView from './NoteView';
+import GlobalReportForm from '../Common/GlobalReportForm';
 
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
@@ -47,7 +48,8 @@ export default function ClientDashboard({ profile }) {
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: ClientResources },
     { path: '/dashboard/billing', icon: CreditCard, label: 'Billing', component: ClientBilling },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: ClientSettings },
-    { path: '/dashboard/support', icon: HelpCircle, label: 'Support', component: ClientSupport }
+    { path: '/dashboard/support', icon: HelpCircle, label: 'Support', component: ClientSupport },
+    { path: '/dashboard/report-issue', icon: User, label: 'Report Issue', component: GlobalReportForm }
   ];
 
   const handleLogout = async () => {
@@ -161,6 +163,7 @@ export default function ClientDashboard({ profile }) {
           <Route path="/billing" element={<ClientBilling />} />
           <Route path="/settings" element={<ClientSettings />} />
           <Route path="/support" element={<ClientSupport />} />
+          <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="client" />} />
           <Route path="/therapist/:therapistId" element={<TherapistDetails />} />
           <Route path="/resources/worksheet/:worksheetId" element={<WorksheetView />} />
           <Route path="/resources/note/:noteId" element={<NoteView />} />

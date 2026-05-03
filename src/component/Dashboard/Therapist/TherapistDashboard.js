@@ -41,6 +41,7 @@ import ClientDetails from './ClientDetails';
 import ViewNote from './ViewNote';
 import ReportDetails from './ReportDetails';
 import Notifications from './Notifications';
+import GlobalReportForm from '../Common/GlobalReportForm';
 
 export default function TherapistDashboard({ profile }) {
   const location = useLocation();
@@ -58,6 +59,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: TherapistResources },
     { path: '/dashboard/mood', icon: Heart, label: 'Client Moods', component: MoodDashboard },
     { path: '/dashboard/reports', icon: Flag, label: 'Reports', component: TherapistReports },
+    { path: '/dashboard/report-issue', icon: FileText, label: 'Report Issue', component: GlobalReportForm },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: TherapistSettings }
   ];
 
@@ -190,6 +192,7 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/resources" element={<TherapistResources />} />
           <Route path="/mood" element={<MoodDashboard />} />
           <Route path="/reports" element={<TherapistReports />} />
+          <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="therapist" />} />
           <Route path="/settings" element={<TherapistSettings />} />
           <Route path="/clients/:clientId" element={<ClientDetails />} />
           <Route path="/notes/:noteId" element={<ViewNote />} />

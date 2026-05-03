@@ -60,6 +60,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import './Settings.css';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function TherapistSettings() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -73,6 +74,7 @@ export default function TherapistSettings() {
   const [imagePreview, setImagePreview] = useState('');
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showComplianceModal, setShowComplianceModal] = useState(false);
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   const currentUser = auth.currentUser;
 
@@ -86,7 +88,15 @@ export default function TherapistSettings() {
     licenseNumber: '',
     yearsExperience: '',
     location: '',
-    photoURL: ''
+    photoURL: '',
+    country: '',
+    city: '',
+    area: '',
+    region: '',
+    street: '',
+    ghanaDigitalAddress: '',
+    latitude: null,
+    longitude: null,
   });
 
   const [clinicalForm, setClinicalForm] = useState({
@@ -142,7 +152,15 @@ export default function TherapistSettings() {
             licenseNumber: profileData.licenseNumber || '',
             yearsExperience: profileData.yearsExperience || '',
             location: profileData.location || '',
-            photoURL: profileData.photoURL || ''
+            photoURL: profileData.photoURL || '',
+            country: profileData.country || profileData.locationMeta?.country || '',
+            city: profileData.city || profileData.locationMeta?.city || '',
+            area: profileData.area || profileData.locationMeta?.area || '',
+            region: profileData.region || profileData.locationMeta?.region || '',
+            street: profileData.street || profileData.locationMeta?.street || '',
+            ghanaDigitalAddress: profileData.ghanaDigitalAddress || '',
+            latitude: profileData.latitude ?? profileData.locationMeta?.latitude ?? null,
+            longitude: profileData.longitude ?? profileData.locationMeta?.longitude ?? null,
           });
         }
       } catch (error) {
@@ -221,6 +239,17 @@ export default function TherapistSettings() {
 
       const profileData = {
         ...profileForm,
+        latitude: Number.isFinite(Number(profileForm.latitude)) ? Number(profileForm.latitude) : null,
+        longitude: Number.isFinite(Number(profileForm.longitude)) ? Number(profileForm.longitude) : null,
+        locationMeta: {
+          country: profileForm.country || null,
+          city: profileForm.city || null,
+          area: profileForm.area || null,
+          region: profileForm.region || null,
+          street: profileForm.street || null,
+          latitude: Number.isFinite(Number(profileForm.latitude)) ? Number(profileForm.latitude) : null,
+          longitude: Number.isFinite(Number(profileForm.longitude)) ? Number(profileForm.longitude) : null,
+        },
         photoURL,
         updatedAt: serverTimestamp()
       };
@@ -421,6 +450,48 @@ export default function TherapistSettings() {
                     onChange={(e) => setProfileForm(prev => ({ ...prev, location: e.target.value }))}
                     placeholder="City, State"
                   />
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => detectAddress((loc) => {
+                        setProfileForm(prev => ({
+                          ...prev,
+                          location: loc.address || [loc.city, loc.country].filter(Boolean).join(', '),
+                          country: loc.countryCode || prev.country,
+                          city: loc.city || prev.city,
+                          area: loc.area || prev.area,
+                          region: loc.region || prev.region,
+                          street: loc.street || prev.street,
+                          latitude: loc.latitude ?? prev.latitude,
+                          longitude: loc.longitude ?? prev.longitude,
+                        }));
+                      })}
+                    >
+                      {locating ? 'Detecting…' : 'Use current location'}
+                    </button>
+                    {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+                  </div>
+          </div>
+          <div className="form-group">
+            <label>City</label>
+            <input type="text" value={profileForm.city || ''} onChange={(e) => setProfileForm(prev => ({ ...prev, city: e.target.value }))} placeholder="e.g. Accra" />
+          </div>
+          <div className="form-group">
+            <label>Area / Locality</label>
+            <input type="text" value={profileForm.area || ''} onChange={(e) => setProfileForm(prev => ({ ...prev, area: e.target.value }))} placeholder="e.g. East Legon" />
+          </div>
+          <div className="form-group">
+            <label>Region / State</label>
+            <input type="text" value={profileForm.region || ''} onChange={(e) => setProfileForm(prev => ({ ...prev, region: e.target.value }))} placeholder="e.g. Greater Accra" />
+          </div>
+          <div className="form-group">
+            <label>Street</label>
+            <input type="text" value={profileForm.street || ''} onChange={(e) => setProfileForm(prev => ({ ...prev, street: e.target.value }))} placeholder="e.g. Liberation Road" />
+          </div>
+          <div className="form-group">
+            <label>Ghana Digital Address (optional)</label>
+            <input type="text" value={profileForm.ghanaDigitalAddress || ''} onChange={(e) => setProfileForm(prev => ({ ...prev, ghanaDigitalAddress: e.target.value }))} placeholder="e.g. GA-123-4567" />
           </div>
           <div className="form-group">
                   <label>License Number</label>

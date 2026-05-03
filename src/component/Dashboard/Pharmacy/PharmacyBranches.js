@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, getDocs, addDoc, query, where, serverTimestamp } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI",
@@ -29,23 +31,29 @@ function genPassword() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-const EMPTY = { branchName: '', address: '', lat: '', lng: '', contactNumber: '', email: '' };
+const EMPTY = {
+  branchName: '', address: '', contactNumber: '', email: '', tempPassword: '',
+  country: '', city: '', area: '', region: '', street: '', ghanaDigitalAddress: '', latitude: null, longitude: null,
+};
 
 export default function PharmacyBranches({ profile }) {
+  const navigate = useNavigate();
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
-  const [newCreds, setNewCreds] = useState(null);
   const [error, setError] = useState('');
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   useEffect(() => { loadBranches(); }, []);
 
   const loadBranches = async () => {
     try {
       const snap = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', profile.id)));
-      setBranches(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (a.branchName || '').localeCompare(b.branchName || ''));
+      setBranches(list);
     } catch (e) {
       console.error('Branches load error:', e);
     } finally {
@@ -65,7 +73,7 @@ export default function PharmacyBranches({ profile }) {
     setSaving(true);
 
     const username = genUsername(form.branchName, profile.pharmacyName || 'pharm');
-    const tempPassword = genPassword();
+    const tempPassword = form.tempPassword.trim() || genPassword();
 
     try {
       const secAuth = getSecondaryAuth();
@@ -79,8 +87,23 @@ export default function PharmacyBranches({ profile }) {
         pharmacyName: profile.pharmacyName || '',
         branchName: form.branchName.trim(),
         address: form.address.trim(),
-        lat: parseFloat(form.lat) || null,
-        lng: parseFloat(form.lng) || null,
+        country: (form.country || profile.country || '').trim(),
+        city: form.city.trim(),
+        area: form.area.trim(),
+        region: form.region.trim(),
+        street: form.street.trim(),
+        ghanaDigitalAddress: form.ghanaDigitalAddress.trim(),
+        latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+        longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        location: {
+          country: (form.country || profile.country || '').trim(),
+          city: form.city.trim(),
+          area: form.area.trim(),
+          region: form.region.trim(),
+          street: form.street.trim(),
+          latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+          longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        },
         contactNumber: form.contactNumber.trim(),
         email: form.email.trim(),
         username,
@@ -92,10 +115,19 @@ export default function PharmacyBranches({ profile }) {
 
       const docRef = await addDoc(collection(db, 'pharmacyBranches'), branchData);
       const newBranch = { id: docRef.id, ...branchData };
-      setBranches(prev => [newBranch, ...prev]);
-      setNewCreds({ username, tempPassword, email: form.email.trim(), branchName: form.branchName.trim() });
+      setBranches(prev => [...prev, newBranch].sort((a, b) => (a.branchName || '').localeCompare(b.branchName || '')));
       setForm({ ...EMPTY });
       setShowForm(false);
+      navigate(`/dashboard/branches/${docRef.id}`, {
+        state: {
+          newCreds: {
+            username,
+            tempPassword,
+            email: form.email.trim(),
+            branchName: form.branchName.trim(),
+          },
+        },
+      });
     } catch (err) {
       console.error('Create branch error:', err);
       setError(err.code === 'auth/email-already-in-use'
@@ -106,127 +138,155 @@ export default function PharmacyBranches({ profile }) {
     }
   };
 
-  const copyAll = (c) => navigator.clipboard.writeText(
-    `Branch: ${c.branchName}\nUsername: ${c.username}\nPassword: ${c.tempPassword}\nEmail: ${c.email}`
-  ).catch(() => {});
-
   return (
-    <div className="pharmacy-page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-        <h1 className="pharmacy-page-title">Manage Branches</h1>
-        <button style={{ padding: '0.55rem 1.1rem', borderRadius: 8, background: '#0ea5e9', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}
-          onClick={() => { setShowForm(v => !v); setError(''); setNewCreds(null); }}>
+    <div className="pharmacy-page pharmacy-branches-page">
+      <div className="pharmacy-branches-toolbar">
+        <div>
+          <h1 className="pharmacy-page-title">Manage Branches</h1>
+          <p className="pharmacy-page-sub pharmacy-branches-sub">Each branch has its own login and sees only prescriptions assigned to that branch. Click a row to manage.</p>
+        </div>
+        <button
+          type="button"
+          className="pharmacy-branches-new-btn"
+          onClick={() => { setShowForm(v => !v); setError(''); }}
+        >
           {showForm ? '✕ Cancel' : '+ New Branch'}
         </button>
       </div>
-      <p className="pharmacy-page-sub">Each branch gets its own login credentials and sees only its assigned prescriptions.</p>
 
-      {/* New branch form */}
+      {error && <div className="branch-detail-alert branch-detail-alert--error pharmacy-branches-banner">{error}</div>}
+
       {showForm && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #bae6fd', padding: '1.5rem', marginBottom: '1.5rem' }}>
-          <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: 700, color: '#0c4a6e' }}>New Branch Details</h3>
-          {error && <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: '0.75rem', color: '#be123c', fontSize: '0.85rem', marginBottom: '1rem' }}>🚨 {error}</div>}
+        <div className="pharmacy-branches-form-card">
+          <h3 className="pharmacy-branches-form-title">New branch details</h3>
           <form onSubmit={handleCreateBranch}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>Branch Name *</label>
-                <input placeholder="e.g. Accra Central Branch" value={form.branchName} onChange={e => update('branchName', e.target.value)}
-                  required style={{ padding: '0.6rem 0.875rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>Branch Email * (used for login)</label>
-                <input type="email" placeholder="branch@pharmacy.com" value={form.email} onChange={e => update('email', e.target.value)}
-                  required style={{ padding: '0.6rem 0.875rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>Address</label>
-                <input placeholder="Full street address" value={form.address} onChange={e => update('address', e.target.value)}
-                  style={{ padding: '0.6rem 0.875rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>Latitude (GPS)</label>
-                <input type="number" step="any" placeholder="e.g. 5.6037" value={form.lat} onChange={e => update('lat', e.target.value)}
-                  style={{ padding: '0.6rem 0.875rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>Longitude (GPS)</label>
-                <input type="number" step="any" placeholder="e.g. -0.1870" value={form.lng} onChange={e => update('lng', e.target.value)}
-                  style={{ padding: '0.6rem 0.875rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.875rem' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151' }}>Contact Number</label>
-                <input placeholder="+233 XX XXX XXXX" value={form.contactNumber} onChange={e => update('contactNumber', e.target.value)}
-                  style={{ padding: '0.6rem 0.875rem', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.875rem' }} />
-              </div>
+            <div className="pharmacy-branches-form-grid">
+              <label className="branch-detail-field">
+                <span>Branch name *</span>
+                <input placeholder="e.g. Accra Central Branch" value={form.branchName} onChange={e => update('branchName', e.target.value)} required />
+              </label>
+              <label className="branch-detail-field">
+                <span>Branch email * (login)</span>
+                <input type="email" placeholder="branch@pharmacy.com" value={form.email} onChange={e => update('email', e.target.value)} required />
+              </label>
+              <label className="branch-detail-field pharmacy-branches-field-full">
+                <span>Address</span>
+                <input placeholder="Full street address" value={form.address} onChange={e => update('address', e.target.value)} />
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => detectAddress((loc) => {
+                    update('address', loc.address || form.address);
+                    update('city', loc.city || form.city);
+                    update('area', loc.area || form.area);
+                    update('region', loc.region || form.region);
+                    update('street', loc.street || form.street);
+                    update('latitude', loc.latitude ?? form.latitude);
+                    update('longitude', loc.longitude ?? form.longitude);
+                    update('country', loc.countryCode || form.country);
+                  })}>
+                    {locating ? 'Detecting…' : 'Use current location'}
+                  </button>
+                  {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+                </div>
+              </label>
+              <label className="branch-detail-field">
+                <span>City</span>
+                <input placeholder="e.g. Accra" value={form.city} onChange={e => update('city', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Area / Locality</span>
+                <input placeholder="e.g. East Legon" value={form.area} onChange={e => update('area', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Region / State</span>
+                <input placeholder="e.g. Greater Accra" value={form.region} onChange={e => update('region', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Street</span>
+                <input placeholder="e.g. Liberation Road" value={form.street} onChange={e => update('street', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Latitude</span>
+                <input placeholder="Auto-detected" value={form.latitude ?? ''} onChange={e => update('latitude', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Longitude</span>
+                <input placeholder="Auto-detected" value={form.longitude ?? ''} onChange={e => update('longitude', e.target.value)} />
+              </label>
+              <label className="branch-detail-field pharmacy-branches-field-full">
+                <span>Ghana Digital Address (optional)</span>
+                <input placeholder="e.g. GA-123-4567" value={form.ghanaDigitalAddress} onChange={e => update('ghanaDigitalAddress', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Temporary password</span>
+                <input type="text" placeholder="Leave blank to auto-generate" value={form.tempPassword} onChange={e => update('tempPassword', e.target.value)} />
+              </label>
+              <label className="branch-detail-field">
+                <span>Contact number</span>
+                <input placeholder="+233 XX XXX XXXX" value={form.contactNumber} onChange={e => update('contactNumber', e.target.value)} />
+              </label>
             </div>
-            <div style={{ background: '#f0f9ff', borderRadius: 8, padding: '0.75rem', fontSize: '0.8rem', color: '#0369a1', marginBottom: '1rem' }}>
-              ℹ️ A username and temporary password will be generated automatically. The branch operator must change it on first login.
-            </div>
-            <button type="submit" disabled={saving}
-              style={{ padding: '0.6rem 1.5rem', borderRadius: 8, background: '#0c4a6e', color: '#fff', border: 'none', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '0.875rem', opacity: saving ? 0.6 : 1 }}>
-              {saving ? 'Creating…' : '🏪 Create Branch'}
+            <p className="pharmacy-branches-form-hint">
+              Username is auto-generated. Optional password or auto-generated. Branch operator must change password on first login.
+            </p>
+            <button type="submit" disabled={saving} className="branch-detail-btn branch-detail-btn--primary pharmacy-branches-submit">
+              {saving ? 'Creating…' : 'Create branch'}
             </button>
           </form>
         </div>
       )}
 
-      {/* New credentials display */}
-      {newCreds && (
-        <div style={{ background: '#0f172a', borderRadius: 12, padding: '1.25rem', marginBottom: '1.5rem' }}>
-          <div style={{ color: '#7dd3fc', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-            ✅ Branch created: {newCreds.branchName}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            {[['Email', newCreds.email], ['Username', newCreds.username], ['Temp Password', newCreds.tempPassword]].map(([l, v]) => (
-              <div key={l} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '0.6rem 0.875rem' }}>
-                <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{l}</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', fontFamily: 'monospace' }}>{v}</div>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => copyAll(newCreds)}
-            style={{ padding: '0.45rem 1rem', borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem' }}>
-            📋 Copy All
-          </button>
-        </div>
-      )}
-
-      {/* Branch list */}
       {loading ? (
-        <div style={{ color: '#64748b', padding: '1rem' }}>Loading branches…</div>
+        <p className="branch-detail-muted">Loading branches…</p>
       ) : branches.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8', background: '#fff', borderRadius: 12, border: '1px solid #e0f2fe' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏪</div>
-          <p style={{ margin: 0 }}>No branches yet. Click "+ New Branch" to add your first one.</p>
+        <div className="pharmacy-branches-empty">
+          <div className="pharmacy-branches-empty-icon">🏪</div>
+          <p>No branches yet. Use &quot;+ New Branch&quot; to add one.</p>
         </div>
       ) : (
-        <div className="branch-grid">
-          {branches.map(b => (
-            <div key={b.id} className="branch-card">
-              <p className="branch-name">{b.branchName}</p>
-              <p className="branch-addr">{b.address || 'No address provided'}</p>
-              <div className="branch-meta">
-                {b.lat && b.lng && (
-                  <span style={{ fontSize: '0.72rem', background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>
-                    📍 GPS set
-                  </span>
-                )}
-                <span style={{ fontSize: '0.72rem', background: b.status === 'active' ? '#dcfce7' : '#f1f5f9', color: b.status === 'active' ? '#16a34a' : '#64748b', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>
-                  {b.status || 'active'}
-                </span>
-              </div>
-              {b.contactNumber && <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.5rem' }}>📞 {b.contactNumber}</div>}
-              <div className="branch-cred-box">
-                <div className="branch-cred-row"><span className="branch-cred-label">Username</span><span className="branch-cred-val">{b.username}</span></div>
-                <div className="branch-cred-row"><span className="branch-cred-label">Email</span><span className="branch-cred-val" style={{ fontSize: '0.72rem' }}>{b.email}</span></div>
-                <div className="branch-cred-row"><span className="branch-cred-label">Pw Reset</span>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: b.mustChangePassword ? '#dc2626' : '#16a34a' }}>
-                    {b.mustChangePassword ? 'Required' : 'Done'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="pharmacy-card diagnostic-branches-card" style={{ padding: '1rem', borderRadius: 12, border: '1px solid #e2e8f0', background: '#fff' }}>
+        <div className="diagnostic-branches-table-wrap parent-branches-table-wrap">
+          <table className="diagnostic-branches-table parent-branches-table">
+            <thead>
+              <tr>
+                <th>Branch</th>
+                <th>Email</th>
+                <th>Username</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Pw reset</th>
+                <th className="parent-branches-chevron-col" aria-hidden />
+              </tr>
+            </thead>
+            <tbody>
+              {branches.map(b => (
+                <tr
+                  key={b.id}
+                  className="diagnostic-branches-row"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/dashboard/branches/${b.id}`)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/dashboard/branches/${b.id}`); } }}
+                >
+                  <td><strong>{b.branchName}</strong></td>
+                  <td style={{ color: '#64748b' }}>{b.email}</td>
+                  <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem' }}>{b.username}</td>
+                  <td>{b.contactNumber || '—'}</td>
+                  <td>
+                    <span className={`diagnostic-branch-status diagnostic-branch-status--${(b.status || 'active') === 'active' ? 'ok' : 'off'}`}>
+                      {b.status || 'active'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={b.mustChangePassword ? 'pharmacy-table-warn' : 'pharmacy-table-ok'} style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                      {b.mustChangePassword ? 'Required' : 'Done'}
+                    </span>
+                  </td>
+                  <td className="parent-branches-chevron-col" style={{ color: '#94a3b8', fontWeight: 700 }}>→</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         </div>
       )}
     </div>

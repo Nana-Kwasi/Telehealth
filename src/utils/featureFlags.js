@@ -22,12 +22,21 @@ const REGION_FLAGS = {
   },
 };
 
+let RUNTIME_OVERRIDES = {};
+
+export function setFeatureFlagOverrides(overrides = {}) {
+  RUNTIME_OVERRIDES = overrides && typeof overrides === 'object' ? overrides : {};
+}
+
 /**
  * Get feature flags for a country code.
  * @param {string} countryCode - ISO 3166-1 alpha-2 code (e.g. 'GH', 'US')
  */
 export function getFlags(countryCode) {
-  return REGION_FLAGS[countryCode?.toUpperCase()] || REGION_FLAGS.DEFAULT;
+  const code = countryCode?.toUpperCase();
+  const base = REGION_FLAGS[code] || REGION_FLAGS.DEFAULT;
+  const override = code ? (RUNTIME_OVERRIDES?.[code] || null) : null;
+  return override ? { ...base, ...override } : base;
 }
 
 /**

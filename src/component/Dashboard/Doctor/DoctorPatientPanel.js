@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Users, Calendar, MessageSquare, ChevronRight, UserX, UserCheck, Activity } from 'lucide-react';
+import { Search, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, getDoc, doc, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore';
 
 const PANEL_TABS = ['All', 'Active', 'Inactive', 'Discharged'];
 
@@ -18,7 +18,6 @@ export default function DoctorPatientPanel({ profile }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('All');
-  const [changingStatus, setChangingStatus] = useState(null);
 
   useEffect(() => {
     if (profile?.id) loadPatients();
@@ -78,31 +77,6 @@ export default function DoctorPatientPanel({ profile }) {
     }
   };
 
-  const changeStatus = async (e, patientId, newStatus) => {
-    e.stopPropagation();
-    const confirmMsg = newStatus === 'discharged'
-      ? `Discharge this patient? Their status will be marked as Discharged.`
-      : `Set this patient as ${newStatus}?`;
-    if (!window.confirm(confirmMsg)) return;
-
-    setChangingStatus(patientId);
-    try {
-      await setDoc(doc(db, 'patientProfiles', patientId), {
-        status: newStatus,
-        updatedBy: profile.id,
-        updatedByName: profile.name || 'Doctor',
-        updatedAt: serverTimestamp(),
-        ...(newStatus === 'discharged' ? { dischargedAt: serverTimestamp() } : {}),
-      }, { merge: true });
-      setPatients(prev => prev.map(p => p.id === patientId ? { ...p, patientStatus: newStatus } : p));
-    } catch (err) {
-      console.error('Error changing status:', err);
-      alert('Could not update patient status. Please try again.');
-    } finally {
-      setChangingStatus(null);
-    }
-  };
-
   const fmtDate = (dateStr) => {
     if (!dateStr) return '—';
     const d = new Date(dateStr + 'T00:00:00');
@@ -131,7 +105,7 @@ export default function DoctorPatientPanel({ profile }) {
     <div className="doctor-page">
       <div className="doctor-page-header">
         <h1>Patient Panel</h1>
-        <p>Manage all patients — view status, set active/inactive, or discharge</p>
+        <p>Tap a patient name for a full overview (visits, labs, Rx, notes). Change status from that screen.</p>
       </div>
 
       {/* Status Summary Cards */}
@@ -193,9 +167,9 @@ export default function DoctorPatientPanel({ profile }) {
       {/* Tab context help */}
       {activeTab !== 'All' && (
         <div style={{ marginBottom: '1rem', padding: '0.6rem 1rem', background: activeTab === 'Active' ? '#f0fdf4' : activeTab === 'Inactive' ? '#fff7ed' : '#fef2f2', borderRadius: 10, fontSize: '0.8rem', color: activeTab === 'Active' ? '#15803d' : activeTab === 'Inactive' ? '#c2410c' : '#b91c1c', fontWeight: 600 }}>
-          {activeTab === 'Active' && 'Active patients are currently under your care. You can set them to Inactive or Discharge from here.'}
-          {activeTab === 'Inactive' && 'Inactive patients are temporarily paused. You can reactivate them or discharge.'}
-          {activeTab === 'Discharged' && 'Discharged patients are no longer under active care. You can reactivate if needed.'}
+          {activeTab === 'Active' && 'Active patients under your care. Open overview to manage status or orders.'}
+          {activeTab === 'Inactive' && 'Inactive patients. Open overview to reactivate or discharge.'}
+          {activeTab === 'Discharged' && 'Discharged patients. Open overview to reactivate.'}
         </div>
       )}
 
@@ -217,16 +191,14 @@ export default function DoctorPatientPanel({ profile }) {
                 <th>Appointments</th>
                 <th>Last Visit</th>
                 <th>Status</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(patient => {
                 const ss = STATUS_STYLE[patient.patientStatus] || STATUS_STYLE.active;
-                const isUpdating = changingStatus === patient.id;
                 return (
                   <tr key={patient.id} style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/dashboard/patients/${patient.id}`)}
+                    onClick={() => navigate(`/dashboard/patient-overview/${patient.id}`)}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = ''}>
                     <td>
@@ -249,46 +221,6 @@ export default function DoctorPatientPanel({ profile }) {
                       <span style={{ background: ss.bg, color: ss.color, border: `1px solid ${ss.border}`, padding: '0.2rem 0.65rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
                         {ss.label}
                       </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
-                        <button className="doctor-btn doctor-btn-outline doctor-btn-sm" title="Appointments"
-                          onClick={() => navigate('/dashboard/appointments')}><Calendar size={13} /></button>
-                        <button className="doctor-btn doctor-btn-outline doctor-btn-sm" title="Message"
-                          onClick={() => navigate('/dashboard/messages')}><MessageSquare size={13} /></button>
-                        <button className="doctor-btn doctor-btn-primary doctor-btn-sm" title="View Profile"
-                          onClick={() => navigate(`/dashboard/patients/${patient.id}`)}><ChevronRight size={13} /></button>
-
-                        {/* Status management — core feature of Patient Panel */}
-                        {patient.patientStatus === 'active' && (
-                          <button className="doctor-btn doctor-btn-sm" disabled={isUpdating}
-                            style={{ background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', fontSize: '0.72rem' }}
-                            title="Set Inactive" onClick={(e) => changeStatus(e, patient.id, 'inactive')}>
-                            <Activity size={11} /> {isUpdating ? '…' : 'Inactive'}
-                          </button>
-                        )}
-                        {patient.patientStatus === 'inactive' && (
-                          <button className="doctor-btn doctor-btn-sm" disabled={isUpdating}
-                            style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: '0.72rem' }}
-                            title="Set Active" onClick={(e) => changeStatus(e, patient.id, 'active')}>
-                            <UserCheck size={11} /> {isUpdating ? '…' : 'Activate'}
-                          </button>
-                        )}
-                        {patient.patientStatus !== 'discharged' && (
-                          <button className="doctor-btn doctor-btn-sm" disabled={isUpdating}
-                            style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecdd3', fontSize: '0.72rem' }}
-                            title="Discharge patient" onClick={(e) => changeStatus(e, patient.id, 'discharged')}>
-                            <UserX size={11} /> {isUpdating ? '…' : 'Discharge'}
-                          </button>
-                        )}
-                        {patient.patientStatus === 'discharged' && (
-                          <button className="doctor-btn doctor-btn-sm" disabled={isUpdating}
-                            style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: '0.72rem' }}
-                            title="Reactivate patient" onClick={(e) => changeStatus(e, patient.id, 'active')}>
-                            <UserCheck size={11} /> {isUpdating ? '…' : 'Reactivate'}
-                          </button>
-                        )}
-                      </div>
                     </td>
                   </tr>
                 );

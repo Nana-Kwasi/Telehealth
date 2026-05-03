@@ -10,6 +10,8 @@ import {
   collection, query, where, getDocs, doc, getDoc, updateDoc,
   setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
+import { logAction, A } from '../../../utils/auditLogger';
+import { getConfigOnce } from '../../../hooks/useSystemConfig';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -140,6 +142,19 @@ export default function DoctorAppointments({ profile }) {
     if (!sForm.time) { setSError('Please enter a time.'); return; }
     setSSaving(true); setSError('');
     try {
+      // Enforce system config limit
+      const cfg = await getConfigOnce();
+      const maxPerDay = cfg?.appointments?.maxApptPerDoctorPerDay ?? 20;
+      const todaySnap = await getDocs(
+        query(collection(db, 'doctorAppointments'),
+          where('doctorId', '==', profile.id),
+          where('date', '==', scheduleDay))
+      );
+      if (todaySnap.size >= maxPerDay) {
+        setSError(`Appointment limit reached for this day (max ${maxPerDay} per day).`);
+        return;
+      }
+
       const newAppt = {
         doctorId: profile.id,
         doctorName: profile.name,
@@ -155,6 +170,13 @@ export default function DoctorAppointments({ profile }) {
         createdAt: serverTimestamp(),
       };
       const ref = await addDoc(collection(db, 'doctorAppointments'), newAppt);
+      await logAction(A.APPOINTMENT_BOOKED, {
+        appointmentId: ref.id,
+        patientId: sForm.patientId,
+        patientName: sForm.patientName,
+        date: scheduleDay,
+        type: sForm.type,
+      }, 'doctor');
       const created = { id: ref.id, ...newAppt };
       setAppointments(prev => [...prev, created].sort((a, b) => (a.date || '').localeCompare(b.date || '')));
       setScheduleDay(null);

@@ -5,6 +5,7 @@ import { collection, doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { UserPlus, Upload, X,Plus } from 'lucide-react';
 import './OnboardTherapist.css';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function OnboardTherapist() {
   const [form, setForm] = useState({
@@ -26,6 +27,14 @@ export default function OnboardTherapist() {
     ageGroupsServed: [],
     practiceName: '',
     practiceAddress: '',
+    country: '',
+    city: '',
+    area: '',
+    region: '',
+    street: '',
+    ghanaDigitalAddress: '',
+    latitude: null,
+    longitude: null,
     consultationMode: '',
     availability: '',
     sessionDuration: '',
@@ -42,6 +51,7 @@ export default function OnboardTherapist() {
   const [educationCertificates, setEducationCertificates] = useState([]);
   const [cvFile, setCvFile] = useState(null);
   const [cvPreview, setCvPreview] = useState('');
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
   const fileInputRef = useRef(null);
   const educationFileInputRef = useRef(null);
   const cvFileInputRef = useRef(null);
@@ -190,6 +200,23 @@ export default function OnboardTherapist() {
         ageGroupsServed: form.ageGroupsServed,
         practiceName: form.practiceName,
         practiceAddress: form.practiceAddress,
+        country: form.country || null,
+        city: form.city || null,
+        area: form.area || null,
+        region: form.region || null,
+        street: form.street || null,
+        ghanaDigitalAddress: form.ghanaDigitalAddress || null,
+        latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+        longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        locationMeta: {
+          country: form.country || null,
+          city: form.city || null,
+          area: form.area || null,
+          region: form.region || null,
+          street: form.street || null,
+          latitude: Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null,
+          longitude: Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null,
+        },
         consultationMode: form.consultationMode,
         availability: form.availability,
         sessionDuration: Number(form.sessionDuration || 60),
@@ -214,7 +241,7 @@ export default function OnboardTherapist() {
         role: 'user', specialties: '', licenseNumber: '', licensingAuthority: '',
         licenseIssueDate: '', licenseExpiryDate: '', licenseFile: null,
         yearsExperience: '', languagesSpoken: '', ageGroupsServed: [],
-        practiceName: '', practiceAddress: '', consultationMode: '',
+        practiceName: '', practiceAddress: '', country: '', city: '', area: '', region: '', street: '', ghanaDigitalAddress: '', latitude: null, longitude: null, consultationMode: '',
         availability: '', sessionDuration: '', consultationFee: '',
         bio: '', education: '', workExperience: '', therapyApproaches: '', photoURL: '' 
       });
@@ -491,6 +518,45 @@ export default function OnboardTherapist() {
                   placeholder="Enter practice address"
                   rows={3}
                 />
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => detectAddress((loc) => {
+                      onChange('practiceAddress', loc.address || form.practiceAddress);
+                      onChange('country', loc.countryCode || form.country);
+                      onChange('city', loc.city || form.city);
+                      onChange('area', loc.area || form.area);
+                      onChange('region', loc.region || form.region);
+                      onChange('street', loc.street || form.street);
+                      onChange('latitude', loc.latitude ?? form.latitude);
+                      onChange('longitude', loc.longitude ?? form.longitude);
+                    })}
+                  >
+                    {locating ? 'Detecting…' : 'Use current location'}
+                  </button>
+                  {locationMsg ? <span style={{ fontSize: '0.74rem', color: '#64748b' }}>{locationMsg}</span> : null}
+                </div>
+              </div>
+              <div className="form-group">
+                <label htmlFor="city">City</label>
+                <input id="city" type="text" className="form-input" value={form.city} onChange={(e) => onChange('city', e.target.value)} placeholder="e.g. Accra" />
+              </div>
+              <div className="form-group">
+                <label htmlFor="area">Area / Locality</label>
+                <input id="area" type="text" className="form-input" value={form.area} onChange={(e) => onChange('area', e.target.value)} placeholder="e.g. East Legon" />
+              </div>
+              <div className="form-group">
+                <label htmlFor="region">Region / State</label>
+                <input id="region" type="text" className="form-input" value={form.region} onChange={(e) => onChange('region', e.target.value)} placeholder="e.g. Greater Accra" />
+              </div>
+              <div className="form-group">
+                <label htmlFor="street">Street</label>
+                <input id="street" type="text" className="form-input" value={form.street} onChange={(e) => onChange('street', e.target.value)} placeholder="e.g. Liberation Road" />
+              </div>
+              <div className="form-group">
+                <label htmlFor="ghanaDigitalAddress">Ghana Digital Address (optional)</label>
+                <input id="ghanaDigitalAddress" type="text" className="form-input" value={form.ghanaDigitalAddress} onChange={(e) => onChange('ghanaDigitalAddress', e.target.value)} placeholder="e.g. GA-123-4567" />
               </div>
               
               <div className="form-group">

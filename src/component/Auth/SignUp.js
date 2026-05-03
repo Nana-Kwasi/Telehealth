@@ -43,7 +43,7 @@ export default function SignUp() {
         role: 'client',
         userIntent,
         clientId: clientId,
-        status: 'active',
+        status: 'pending',
         createdAt: new Date().toISOString()
       };
 
@@ -55,7 +55,7 @@ export default function SignUp() {
           authUid: uid,
           displayName: form.name,
           clientName: form.name,
-          status: 'active',
+          status: 'pending',
           updatedAt: new Date().toISOString()
         }, { merge: true });
       }

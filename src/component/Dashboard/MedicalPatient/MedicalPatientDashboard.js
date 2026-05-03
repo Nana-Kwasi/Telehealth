@@ -6,7 +6,7 @@ import {
   CheckCircle, Video, Phone, MessageCircle, Pill,
   Bell, CreditCard, AlertCircle, TrendingUp, User,
   BarChart2, Heart, Star, Shield, Download, Plus, Smile, AlertTriangle, Search,
-  Mic, MicOff, Paperclip,
+  Mic, MicOff, Paperclip, Microscope, Minus,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { signOut } from 'firebase/auth';
@@ -17,6 +17,11 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import './MedicalPatientDashboard.css';
+import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import { patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
+import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
+import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
 
 function getInitials(name) {
   if (!name) return 'P';
@@ -205,6 +210,7 @@ function MedPatHome({ profile }) {
 
   return (
     <div className="mp-page">
+      <LocationSummaryCard profile={profile} onEdit={() => navigate('/dashboard/settings')} />
       {/* Welcome Banner */}
       <div className="mp-welcome-banner">
         <div className="mp-welcome-left">
@@ -2853,9 +2859,25 @@ function MedPatSettings({ profile }) {
   const [loading, setLoading] = useState(true);
 
   // Profile
-  const [form, setForm] = useState({ name: profile?.name || '', email: profile?.email || '', phone: '', dob: '', bloodType: '', allergies: '' });
+  const [form, setForm] = useState({
+    name: profile?.name || '',
+    email: profile?.email || '',
+    phone: '',
+    dob: '',
+    bloodType: '',
+    allergies: '',
+    country: '',
+    city: '',
+    area: '',
+    region: '',
+    street: '',
+    ghanaDigitalAddress: '',
+    latitude: null,
+    longitude: null,
+  });
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
   // Security
   const [security, setSecurity] = useState(DEF_SECURITY);
@@ -2896,10 +2918,37 @@ function MedPatSettings({ profile }) {
         ]);
         if (authSnap.exists()) {
           const d = authSnap.data();
-          setForm(f => ({ ...f, name: d.name || profile.name || '', email: d.email || profile.email || '', phone: d.phone || '', dob: d.dob || '', bloodType: d.bloodType || '', allergies: d.allergies || '' }));
+          setForm(f => ({
+            ...f,
+            name: d.name || profile.name || '',
+            email: d.email || profile.email || '',
+            phone: d.phone || '',
+            dob: d.dob || '',
+            bloodType: d.bloodType || '',
+            allergies: d.allergies || '',
+            country: d.country || d.locationMeta?.country || '',
+            city: d.city || d.locationMeta?.city || '',
+            area: d.area || d.locationMeta?.area || '',
+            region: d.region || d.locationMeta?.region || '',
+            street: d.street || d.locationMeta?.street || '',
+            ghanaDigitalAddress: d.ghanaDigitalAddress || '',
+            latitude: d.latitude ?? d.locationMeta?.latitude ?? null,
+            longitude: d.longitude ?? d.locationMeta?.longitude ?? null,
+          }));
         }
         if (profileSnap.exists()) {
           const d = profileSnap.data();
+          setForm(f => ({
+            ...f,
+            country: f.country || d.country || d.locationMeta?.country || '',
+            city: f.city || d.city || d.locationMeta?.city || '',
+            area: f.area || d.area || d.locationMeta?.area || '',
+            region: f.region || d.region || d.locationMeta?.region || '',
+            street: f.street || d.street || d.locationMeta?.street || '',
+            ghanaDigitalAddress: f.ghanaDigitalAddress || d.ghanaDigitalAddress || '',
+            latitude: f.latitude ?? d.latitude ?? d.locationMeta?.latitude ?? null,
+            longitude: f.longitude ?? d.longitude ?? d.locationMeta?.longitude ?? null,
+          }));
           if (d.security) setSecurity(s => ({ ...s, ...d.security }));
           if (d.privacy) setPrivacy(p => ({ ...DEF_PRIVACY, ...d.privacy, dataSharing: { ...DEF_PRIVACY.dataSharing, ...(d.privacy.dataSharing || {}) } }));
           if (d.emergency) setEmergency(e => ({ ...DEF_EMERGENCY, ...d.emergency }));
@@ -2918,7 +2967,52 @@ function MedPatSettings({ profile }) {
   const saveProfile = async () => {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'auth', profile.id), { name: form.name, phone: form.phone, dob: form.dob, bloodType: form.bloodType, allergies: form.allergies }, { merge: true });
+      const latitude = Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null;
+      const longitude = Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null;
+      await setDoc(doc(db, 'auth', profile.id), {
+        name: form.name,
+        phone: form.phone,
+        dob: form.dob,
+        bloodType: form.bloodType,
+        allergies: form.allergies,
+        country: form.country || null,
+        city: form.city || null,
+        area: form.area || null,
+        region: form.region || null,
+        street: form.street || null,
+        ghanaDigitalAddress: form.ghanaDigitalAddress || null,
+        latitude,
+        longitude,
+        locationMeta: {
+          country: form.country || null,
+          city: form.city || null,
+          area: form.area || null,
+          region: form.region || null,
+          street: form.street || null,
+          latitude,
+          longitude,
+        },
+      }, { merge: true });
+      await setDoc(doc(db, 'patientProfiles', profile.id), {
+        country: form.country || null,
+        city: form.city || null,
+        area: form.area || null,
+        region: form.region || null,
+        street: form.street || null,
+        ghanaDigitalAddress: form.ghanaDigitalAddress || null,
+        latitude,
+        longitude,
+        locationMeta: {
+          country: form.country || null,
+          city: form.city || null,
+          area: form.area || null,
+          region: form.region || null,
+          street: form.street || null,
+          latitude,
+          longitude,
+        },
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
       flash('Profile saved successfully.');
     } catch { flash('Failed to save. Please try again.'); }
     finally { setSaving(false); }
@@ -3101,6 +3195,40 @@ function MedPatSettings({ profile }) {
               <label style={lbl}>Email (read-only)</label>
               <input style={{ ...inp, background: '#f8fafc', color: '#94a3b8' }} value={form.email} readOnly />
             </div>
+            <button
+              type="button"
+              className="mp-btn mp-btn-outline mp-btn-sm"
+              onClick={() => detectAddress((loc) => {
+                setForm(f => ({
+                  ...f,
+                  country: loc.countryCode || f.country || '',
+                  city: loc.city || f.city || '',
+                  area: loc.area || f.area || '',
+                  region: loc.region || f.region || '',
+                  street: loc.street || f.street || '',
+                  latitude: loc.latitude ?? f.latitude ?? null,
+                  longitude: loc.longitude ?? f.longitude ?? null,
+                }));
+              })}
+              disabled={locating}
+              style={{ marginBottom: '0.5rem' }}
+            >
+              {locating ? 'Detecting location…' : 'Use current location'}
+            </button>
+            {locationMsg ? <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: '#64748b' }}>{locationMsg}</p> : null}
+            {[
+              ['Country', 'country', 'text', 'e.g. GH'],
+              ['City', 'city', 'text', 'e.g. Accra'],
+              ['Area / Locality', 'area', 'text', 'e.g. East Legon'],
+              ['Region / State', 'region', 'text', 'e.g. Greater Accra'],
+              ['Street', 'street', 'text', 'e.g. Liberation Road'],
+              ['Ghana Digital Address (optional)', 'ghanaDigitalAddress', 'text', 'e.g. GA-123-4567'],
+            ].map(([label, key, type, placeholder]) => (
+              <div key={key} style={{ marginBottom: '0.75rem' }}>
+                <label style={lbl}>{label}</label>
+                <input style={inp} type={type} value={form[key] || ''} placeholder={placeholder} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+              </div>
+            ))}
             <button className="mp-btn mp-btn-primary" onClick={saveProfile} disabled={saving} style={{ marginTop: '0.5rem' }}>
               {saving ? 'Saving…' : 'Save Profile'}
             </button>
@@ -3383,6 +3511,23 @@ function MedPatSupport({ profile }) {
         platform: 'web',
         createdAt: serverTimestamp(),
       });
+      await addDoc(collection(db, 'globalReports'), {
+        category: issueType === 'billing' ? 'billing' : issueType === 'app_bug' ? 'technical' : 'complaint',
+        subject: subject.trim(),
+        message: description.trim(),
+        severity: issueType === 'doctor_report' ? 'high' : 'medium',
+        status: 'open',
+        source: 'medical_patient_support',
+        sourceCollection: 'supportTickets',
+        reporterId: profile?.id || '',
+        reporterName: profile?.name || '',
+        reporterEmail: profile?.email || '',
+        reporterType: 'patient',
+        metadata: { issueType, platform: 'web' },
+        adminReplies: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       setSuccess(true);
     } catch (err) {
       setError('Failed to submit ticket. Please try again.');
@@ -3495,26 +3640,60 @@ const RX_STATUS_META = {
   delivered:           { label: 'Delivered',        color: '#475569', bg: '#f8fafc' },
 };
 
+const DEFAULT_TRANSFER_APPROVAL_TTL_HOURS = 6;
+
 function MedPatEPharmacy({ profile }) {
-  const [tab, setTab] = useState('prescriptions'); // 'prescriptions' | 'pharmacies'
+  const [tab, setTab] = useState('prescriptions'); // 'prescriptions' | 'myPharmacies' | 'pharmacies'
   const [prescriptions, setPrescriptions] = useState([]);
   const [loadingRx, setLoadingRx] = useState(true);
+  const [myPharmacies, setMyPharmacies] = useState([]);
+  const [loadingMyPh, setLoadingMyPh] = useState(true);
+  const [removingPhKey, setRemovingPhKey] = useState(null);
   const [systemPharmacies, setSystemPharmacies] = useState([]);
   const [loadingPh, setLoadingPh] = useState(false);
   const [searchPh, setSearchPh] = useState('');
   const [selectedRx, setSelectedRx] = useState(null);
+  const [transferActionKey, setTransferActionKey] = useState('');
 
   useEffect(() => {
     if (!profile?.id) return;
     // Real-time prescription updates
     const q = query(collection(db, 'doctorPrescriptions'), where('patientId', '==', profile.id));
-    const unsub = onSnapshot(q, snap => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const unsub = onSnapshot(q, async snap => {
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const expiries = [];
+      rows.forEach((rx) => {
+        const meds = Array.isArray(rx.medications) ? rx.medications : [];
+        if (meds.some(isTransferRequestExpired)) {
+          const nextMeds = meds.map(m => (isTransferRequestExpired(m) ? expirePendingTransferRequest(m) : m));
+          expiries.push(
+            updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
+              medications: nextMeds,
+              pharmacyStatus: deriveRxStockStatus(nextMeds),
+              updatedAt: serverTimestamp(),
+            }).catch(() => {})
+          );
+        }
+      });
+      if (expiries.length) {
+        await Promise.all(expiries);
+        return;
+      }
+      const list = rows
         .filter(r => r.pharmacyId) // only routed prescriptions
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setPrescriptions(list);
       setLoadingRx(false);
     }, () => setLoadingRx(false));
+    return unsub;
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const unsub = onSnapshot(doc(db, 'patientProfiles', profile.id), (snap) => {
+      setMyPharmacies(snap.exists() ? (snap.data().pharmacies || []) : []);
+      setLoadingMyPh(false);
+    }, () => setLoadingMyPh(false));
     return unsub;
   }, [profile]);
 
@@ -3535,6 +3714,86 @@ function MedPatEPharmacy({ profile }) {
            (ph.address || '').toLowerCase().includes(q);
   });
 
+  const isTransferRequestExpired = (med) => {
+    if (!med || med.drugStatus !== 'transfer_requested' || med.transferRequestStatus !== 'pending_patient') return false;
+    const requestedAt = med.transferRequestedAt ? new Date(med.transferRequestedAt).getTime() : NaN;
+    if (!Number.isFinite(requestedAt)) return false;
+    const ttlHours = Math.max(1, Number(med.transferApprovalTtlHours) || DEFAULT_TRANSFER_APPROVAL_TTL_HOURS);
+    const ttlMs = ttlHours * 60 * 60 * 1000;
+    return Date.now() - requestedAt > ttlMs;
+  };
+
+  const expirePendingTransferRequest = (med) => ({
+    ...med,
+    drugStatus: 'not_available',
+    transferRequestStatus: 'expired',
+    transferRequestExpiredAt: new Date().toISOString(),
+    transferBranchId: null,
+    transferBranchName: null,
+    transferBranchAddress: null,
+    transferRequestBranchId: null,
+    transferRequestBranchName: null,
+    transferRequestBranchAddress: null,
+  });
+
+  const removeSavedPharmacy = async (ph) => {
+    const rk = patientPharmacyKey(ph) || ph.id || ph.name || '';
+    setRemovingPhKey(rk);
+    try {
+      const updated = removePatientPharmacyByKey(myPharmacies, ph);
+      await setDoc(doc(db, 'patientProfiles', profile.id), { pharmacies: updated }, { merge: true });
+    } catch {
+      alert('Could not remove pharmacy. Please try again.');
+    } finally {
+      setRemovingPhKey(null);
+    }
+  };
+
+  const resolveTransferRequest = async (rx, medIndex, approve) => {
+    const meds = Array.isArray(rx?.medications) ? rx.medications : [];
+    const med = meds[medIndex];
+    if (!med || med.drugStatus !== 'transfer_requested' || med.transferRequestStatus !== 'pending_patient') return;
+    const key = `${rx.id}:${medIndex}:${approve ? 'approve' : 'reject'}`;
+    setTransferActionKey(key);
+    try {
+      const nextMeds = meds.map((m, i) => {
+        if (i !== medIndex) return m;
+        if (approve) {
+          return {
+            ...m,
+            drugStatus: 'transferred',
+            transferRequestStatus: 'approved_by_patient',
+            transferApprovedByPatientAt: new Date().toISOString(),
+            transferBranchId: m.transferRequestBranchId || null,
+            transferBranchName: m.transferRequestBranchName || null,
+            transferBranchAddress: m.transferRequestBranchAddress || null,
+          };
+        }
+        return {
+          ...m,
+          drugStatus: 'not_available',
+          transferRequestStatus: 'rejected_by_patient',
+          transferRejectedByPatientAt: new Date().toISOString(),
+          transferBranchId: null,
+          transferBranchName: null,
+          transferBranchAddress: null,
+          transferRequestBranchId: null,
+          transferRequestBranchName: null,
+          transferRequestBranchAddress: null,
+        };
+      });
+      await updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
+        medications: nextMeds,
+        pharmacyStatus: deriveRxStockStatus(nextMeds),
+        updatedAt: serverTimestamp(),
+      });
+    } catch {
+      alert('Failed to process transfer decision. Please try again.');
+    } finally {
+      setTransferActionKey('');
+    }
+  };
+
   return (
     <div className="mp-page">
       <div style={{ marginBottom: '1.25rem' }}>
@@ -3543,9 +3802,9 @@ function MedPatEPharmacy({ profile }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0' }}>
-        {[{ key: 'prescriptions', label: '📋 My Prescriptions' }, { key: 'pharmacies', label: '🏪 Browse Pharmacies' }].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0', flexWrap: 'wrap' }}>
+        {[{ key: 'prescriptions', label: '📋 My Prescriptions' }, { key: 'myPharmacies', label: '⭐ My Pharmacies' }, { key: 'pharmacies', label: '🏪 Browse Pharmacies' }].map(t => (
+          <button key={t.key} type="button" onClick={() => setTab(t.key)}
             style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: 'none', color: tab === t.key ? '#1e6bb8' : '#64748b', borderBottom: tab === t.key ? '3px solid #1e6bb8' : '3px solid transparent', marginBottom: '-2px', transition: 'all 0.15s' }}>
             {t.label}
           </button>
@@ -3570,9 +3829,10 @@ function MedPatEPharmacy({ profile }) {
               {prescriptions.map(rx => {
                 const pm = rx.pharmacyStatus ? (RX_STATUS_META[rx.pharmacyStatus] || null) : null;
                 const meds = rx.medications || [];
+                const transferredMed = meds.find(m => m.drugStatus === 'transferred' && m.transferBranchName);
                 return (
                   <div key={rx.id} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer' }}
-                    onClick={() => setSelectedRx(selectedRx?.id === rx.id ? null : rx)}>
+                    onClick={() => setSelectedRx(rx)}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>Dr. {rx.doctorName || 'Doctor'}</div>
@@ -3602,40 +3862,146 @@ function MedPatEPharmacy({ profile }) {
                         );
                       })}
                     </div>
+                    {meds
+                      .map((m, i) => ({ m, i }))
+                      .filter(({ m }) => m.drugStatus === 'transfer_requested' && m.transferRequestStatus === 'pending_patient')
+                      .map(({ m, i }) => (
+                      <div
+                        key={`${rx.id}-transfer-pending-${i}`}
+                        style={{ marginTop: '0.35rem', border: '1px solid #99f6e4', background: '#f0fdfa', borderRadius: 10, padding: '0.55rem 0.65rem' }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f766e' }}>
+                          Transfer request: {m.name || 'Drug'} to {m.transferRequestBranchName || 'another branch'}{m.transferRequestBranchAddress ? ` (${m.transferRequestBranchAddress})` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                          <button
+                            className="doctor-btn doctor-btn-sm doctor-btn-outline"
+                            disabled={transferActionKey === `${rx.id}:${i}:approve` || transferActionKey === `${rx.id}:${i}:reject`}
+                            onClick={() => resolveTransferRequest(rx, i, true)}
+                            style={{ borderColor: '#14b8a6', color: '#0f766e' }}
+                          >
+                            I Agree
+                          </button>
+                          <button
+                            className="doctor-btn doctor-btn-sm doctor-btn-outline"
+                            disabled={transferActionKey === `${rx.id}:${i}:approve` || transferActionKey === `${rx.id}:${i}:reject`}
+                            onClick={() => resolveTransferRequest(rx, i, false)}
+                            style={{ borderColor: '#fda4af', color: '#be123c' }}
+                          >
+                            I Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
 
-                    {/* Expanded detail */}
-                    {selectedRx?.id === rx.id && (
-                      <div style={{ marginTop: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }} onClick={e => e.stopPropagation()}>
-                        {meds.map((m, i) => {
-                          const ds = DRUG_STATUS_ICONS[m.drugStatus] || DRUG_STATUS_ICONS.pending;
-                          return (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.6rem 0', borderBottom: i < meds.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                              <div>
-                                <b style={{ fontSize: '0.875rem', color: '#0f172a' }}>{m.name}</b>
-                                {m.strength && <span style={{ fontSize: '0.75rem', color: '#64748b' }}> ({m.strength})</span>}
-                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>{m.dosage} · {m.frequency} · {m.duration} {m.durationUnit}</div>
-                                {m.alternativeSuggested && (
-                                  <div style={{ fontSize: '0.78rem', color: '#7c3aed', marginTop: 4, background: '#fdf4ff', border: '1px solid #e9d5ff', borderRadius: 6, padding: '3px 8px', display: 'inline-block' }}>
-                                    🔁 Alternative: {m.alternativeSuggested} {m.drugStatus === 'approved_replacement' ? '(Approved ✅)' : '(Pending doctor approval)'}
-                                  </div>
-                                )}
-                              </div>
-                              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ds.color, whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>{ds.icon} {ds.label}</span>
-                            </div>
-                          );
-                        })}
-
-                        {rx.pharmacyStatus === 'ready' && rx.prescriptionRef && (
-                          <div style={{ marginTop: '0.75rem', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '0.85rem', textAlign: 'center' }}>
-                            <p style={{ margin: '0 0 4px', fontSize: '0.8rem', color: '#15803d', fontWeight: 700 }}>Ready for Pickup! Show this code at the pharmacy:</p>
-                            <div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 900, color: '#14532d', letterSpacing: '0.12em' }}>{rx.prescriptionRef}</div>
-                          </div>
-                        )}
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', marginTop: '0.25rem' }}>
+                      Tap for full details
+                    </div>
+                    {transferredMed && (
+                      <div style={{ marginTop: '0.35rem', fontSize: '0.74rem', color: '#0369a1', fontWeight: 700 }}>
+                        This drug ({transferredMed.name || 'Drug'}) is transfered to branch ({transferredMed.transferBranchName}{transferredMed.transferBranchAddress ? `, ${transferredMed.transferBranchAddress}` : ''}).
                       </div>
                     )}
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', marginTop: '0.25rem' }}>
-                      {selectedRx?.id === rx.id ? 'Tap to collapse ▲' : 'Tap for details ▼'}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {selectedRx && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.58)', backdropFilter: 'blur(3px)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          onClick={() => setSelectedRx(null)}>
+          <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', padding: '1.25rem', boxShadow: '0 22px 60px rgba(2,6,23,0.28)', border: '1px solid #e2e8f0' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #eef2f7' }}>
+              <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: '#0f172a' }}>Prescription Details</h3>
+              <button className="doctor-btn doctor-btn-sm doctor-btn-outline" style={{ borderRadius: 10 }} onClick={() => setSelectedRx(null)}>Close</button>
+            </div>
+            <p style={{ margin: '0 0 0.35rem', color: '#0f172a', fontWeight: 700 }}>Dr. {selectedRx.doctorName || 'Doctor'}</p>
+            <p style={{ margin: '0 0 0.85rem', color: '#64748b', fontSize: '0.85rem' }}>{selectedRx.diagnosis || '—'} · {selectedRx.date || ''}</p>
+            {(selectedRx.medications || []).map((m, i) => {
+              const ds = DRUG_STATUS_ICONS[m.drugStatus] || DRUG_STATUS_ICONS.pending;
+              return (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.6rem 0', borderBottom: i < (selectedRx.medications || []).length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                  <div>
+                    <b style={{ fontSize: '0.875rem', color: '#0f172a' }}>{m.name}</b>
+                    {m.strength && <span style={{ fontSize: '0.75rem', color: '#64748b' }}> ({m.strength})</span>}
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>{m.dosage} · {m.frequency} · {m.duration} {m.durationUnit}</div>
+                    {m.alternativeSuggested && (
+                      <div style={{ fontSize: '0.78rem', color: '#7c3aed', marginTop: 4, background: '#fdf4ff', border: '1px solid #e9d5ff', borderRadius: 6, padding: '3px 8px', display: 'inline-block' }}>
+                        🔁 Alternative: {m.alternativeSuggested} {m.drugStatus === 'approved_replacement'
+                          ? `(Approved · Dr. ${m.approvedByDoctorName || selectedRx.doctorName || 'Doctor'})`
+                          : '(Waiting for Approval from your Doctor)'}
+                        {m.alternativeRationale ? ` · Why: ${m.alternativeRationale}` : ''}
+                      </div>
+                    )}
+                    {m.drugStatus === 'transferred' && m.transferBranchName && (
+                      <div style={{ fontSize: '0.78rem', color: '#0369a1', marginTop: 4, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '3px 8px', display: 'inline-block' }}>
+                        This drug ({m.name || 'Drug'}) is transfered to branch ({m.transferBranchName}{m.transferBranchAddress ? `, ${m.transferBranchAddress}` : ''}).
+                      </div>
+                    )}
+                    {m.drugStatus === 'transfer_requested' && m.transferRequestStatus === 'pending_patient' && (
+                      <div style={{ fontSize: '0.78rem', color: '#0f766e', marginTop: 4, background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 6, padding: '3px 8px', display: 'inline-block' }}>
+                        Awaiting your approval to transfer this drug to {m.transferRequestBranchName || 'another branch'}{m.transferRequestBranchAddress ? ` (${m.transferRequestBranchAddress})` : ''}.
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ds.color, whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>{ds.icon} {ds.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── MY PHARMACIES (saved on profile) ── */}
+      {tab === 'myPharmacies' && (
+        <>
+          {loadingMyPh ? (
+            <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading your pharmacies…</p>
+          ) : myPharmacies.length === 0 ? (
+            <div className="mp-card">
+              <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⭐</div>
+                <h3 style={{ margin: '0 0 0.35rem', color: '#64748b' }}>No saved pharmacies</h3>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>When you or your doctor add a pharmacy branch, it will appear here. Tap − to remove.</p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {myPharmacies.map((ph, idx) => {
+                const rowKey = patientPharmacyKey(ph) || ph.id || String(idx);
+                return (
+                  <div key={rowKey} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1rem 1.1rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '0.92rem', color: '#0f172a' }}>{ph.name}</p>
+                      {ph.address ? <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>📍 {ph.address}</p> : null}
+                      {ph.phone ? <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>📞 {ph.phone}</p> : null}
                     </div>
+                    <button
+                      type="button"
+                      title="Remove pharmacy"
+                      disabled={removingPhKey === rowKey}
+                      onClick={() => removeSavedPharmacy(ph)}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        border: '1.5px solid #fecaca',
+                        background: '#fef2f2',
+                        color: '#dc2626',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: removingPhKey === rowKey ? 'wait' : 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Minus size={18} strokeWidth={2.5} />
+                    </button>
                   </div>
                 );
               })}
@@ -3681,6 +4047,359 @@ function MedPatEPharmacy({ profile }) {
   );
 }
 
+// ─── Health Timeline ──────────────────────────────────────────────────────────
+function MedPatTimeline({ profile }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const EVENT_CFG = {
+    APPOINTMENT:     { emoji: '📅', color: '#1e6bb8', bg: '#e8f1fb', label: 'Appointment' },
+    PRESCRIPTION:    { emoji: '💊', color: '#7c3aed', bg: '#f3e8ff', label: 'Prescription' },
+    LAB_ORDER:       { emoji: '🧪', color: '#065f46', bg: '#d1fae5', label: 'Lab Order' },
+    LAB_RESULT:      { emoji: '📋', color: '#059669', bg: '#d1fae5', label: 'Lab Result' },
+    SCAN_ORDER:      { emoji: '🩻', color: '#4c1d95', bg: '#ede9fe', label: 'Scan Order' },
+    SCAN_RESULT:     { emoji: '📄', color: '#6d28d9', bg: '#ede9fe', label: 'Scan Report' },
+    PHARMACY_UPDATE: { emoji: '🏪', color: '#0c4a6e', bg: '#e0f2fe', label: 'Pharmacy' },
+  };
+
+  const STATUS_COL = {
+    PENDING:     { bg: '#fef3c7', color: '#92400e' },
+    IN_PROGRESS: { bg: '#dbeafe', color: '#1e40af' },
+    COMPLETED:   { bg: '#dcfce7', color: '#14532d' },
+  };
+
+  const FILTERS = [
+    { key: 'all',  label: 'All' },
+    { key: 'lab',  label: '🧪 Lab', types: ['LAB_ORDER', 'LAB_RESULT'] },
+    { key: 'scan', label: '🩻 Scan', types: ['SCAN_ORDER', 'SCAN_RESULT'] },
+    { key: 'rx',   label: '💊 Rx', types: ['PRESCRIPTION'] },
+    { key: 'appt', label: '📅 Appt', types: ['APPOINTMENT'] },
+  ];
+
+  const load = async () => {
+    try {
+      const snap = await getDocs(query(collection(db, 'patientTimeline'), where('patientId', '==', profile.id)));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setEvents(list);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setRefreshing(false); }
+  };
+
+  useEffect(() => { if (profile?.id) load(); }, [profile]);
+
+  const fmtTs = (ts) => {
+    if (!ts?.seconds) return '—';
+    const d = new Date(ts.seconds * 1000);
+    return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const activeFilter = FILTERS.find(f => f.key === filter);
+  const filtered = events.filter(e => {
+    if (filter === 'all') return true;
+    return activeFilter?.types?.includes(e.type);
+  });
+
+  // Group by date
+  const groups = [];
+  const seen = new Map();
+  filtered.forEach(evt => {
+    const dateKey = evt.createdAt?.seconds
+      ? new Date(evt.createdAt.seconds * 1000).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      : 'Unknown Date';
+    if (!seen.has(dateKey)) { seen.set(dateKey, []); groups.push({ date: dateKey, events: seen.get(dateKey) }); }
+    seen.get(dateKey).push(evt);
+  });
+
+  return (
+    <div className="mp-page">
+      <div className="mp-page-header">
+        <h1 className="mp-page-title">Health Timeline</h1>
+        <p className="mp-page-sub">A chronological record of all your healthcare events</p>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        {FILTERS.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            style={{
+              padding: '0.4rem 1rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: '1.5px solid', transition: 'all 0.15s',
+              ...(filter === f.key
+                ? { background: '#1e6bb8', color: '#fff', borderColor: '#1e6bb8' }
+                : { background: '#fff', color: '#64748b', borderColor: '#e2e8f0' }),
+            }}>
+            {f.label}
+            <span style={{ marginLeft: '0.3rem', background: 'rgba(0,0,0,0.1)', borderRadius: 10, padding: '0 0.35rem', fontSize: '0.7rem' }}>
+              {f.key === 'all' ? events.length : events.filter(e => f.types?.includes(e.type)).length}
+            </span>
+          </button>
+        ))}
+        <button className="mp-btn mp-btn-outline" style={{ marginLeft: 'auto', fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
+          onClick={() => { setRefreshing(true); load(); }} disabled={refreshing}>
+          {refreshing ? '…' : '↻ Refresh'}
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>Loading timeline…</div>
+      ) : filtered.length === 0 ? (
+        <div className="mp-card" style={{ textAlign: 'center', padding: '4rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🕐</div>
+          <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No events yet</h3>
+          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Your health events will appear here as you receive care.</p>
+        </div>
+      ) : (
+        <div>
+          {groups.map(group => (
+            <div key={group.date} style={{ marginBottom: '1.5rem' }}>
+              <p style={{ margin: '0 0 0.65rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {group.date}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {group.events.map(evt => {
+                  const cfg = EVENT_CFG[evt.type] || EVENT_CFG.APPOINTMENT;
+                  const sc = STATUS_COL[evt.status] || STATUS_COL.COMPLETED;
+                  return (
+                    <div key={evt.id} style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.85rem', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: '50%', background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>
+                        {cfg.emoji}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{cfg.label}</span>
+                          <span style={{ background: sc.bg, color: sc.color, borderRadius: 20, padding: '0.1rem 0.5rem', fontSize: '0.68rem', fontWeight: 700 }}>{evt.status}</span>
+                        </div>
+                        <p style={{ margin: '0 0 0.1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>{evt.title}</p>
+                        {evt.actor?.name && <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>by {evt.actor.name}</p>}
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {evt.createdAt?.seconds ? new Date(evt.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Diagnostic Orders ────────────────────────────────────────────────────────
+function MedPatDiagnostics({ profile }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [viewing, setViewing] = useState(null);
+
+  const statusMetaFor = (raw) => {
+    const n = normalizeDiagnosticOrderStatus(raw);
+    if (n === 'COMPLETED') return { bg: '#dcfce7', color: '#14532d', label: 'Completed — Results are with your doctor' };
+    if (n === 'IN_PROGRESS') return { bg: '#dbeafe', color: '#1e40af', label: 'Test in progress' };
+    if (n === 'REJECTED') return { bg: '#fee2e2', color: '#991b1b', label: 'Could not complete — contact your doctor' };
+    return { bg: '#fef3c7', color: '#92400e', label: 'Pending — Visit the center' };
+  };
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    (async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'diagnosticOrders'), where('patientId', '==', profile.id)));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setOrders(list);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [profile]);
+
+  const fmtDate = (ts) => ts?.seconds ? new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+  const filtered = typeFilter === 'all' ? orders : orders.filter(o => o.centerType === typeFilter);
+
+  return (
+    <div className="mp-page">
+      <div className="mp-page-header">
+        <h1 className="mp-page-title">Lab &amp; Scan Orders</h1>
+        <p className="mp-page-sub">Diagnostic tests ordered by your doctor — visit the center with your National ID</p>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+        {[
+          { label: 'All Orders', count: orders.length, color: '#1e6bb8', bg: '#eff6ff' },
+          { label: 'Lab Tests', count: orders.filter(o => o.centerType === 'lab').length, color: '#065f46', bg: '#d1fae5' },
+          { label: 'Scan Orders', count: orders.filter(o => o.centerType === 'scan').length, color: '#4c1d95', bg: '#ede9fe' },
+          { label: 'Pending', count: orders.filter(o => normalizeDiagnosticOrderStatus(o.status) === 'PENDING').length, color: '#92400e', bg: '#fef3c7' },
+        ].map(({ label, count, color, bg }) => (
+          <div key={label} style={{ background: 'white', borderRadius: 12, padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', gap: '0.65rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1.5px solid #f1f5f9' }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
+              {count}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b', lineHeight: 1.3 }}>{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        {[['all','All Orders'],['lab','🧪 Lab'],['scan','🩻 Scan']].map(([key, label]) => (
+          <button key={key} onClick={() => setTypeFilter(key)}
+            style={{
+              padding: '0.4rem 1rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: '1.5px solid', transition: 'all 0.15s',
+              ...(typeFilter === key
+                ? { background: '#1e6bb8', color: '#fff', borderColor: '#1e6bb8' }
+                : { background: '#fff', color: '#64748b', borderColor: '#e2e8f0' }),
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* National ID reminder */}
+      {orders.some(o => normalizeDiagnosticOrderStatus(o.status) === 'PENDING') && (
+        <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'flex-start', gap: '0.65rem', marginBottom: '1.25rem' }}>
+          <span style={{ fontSize: '1.3rem', lineHeight: 1, flexShrink: 0 }}>🪪</span>
+          <div>
+            <p style={{ margin: '0 0 0.2rem', fontWeight: 800, fontSize: '0.875rem', color: '#92400e' }}>Bring Your National ID</p>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#b45309', lineHeight: 1.5 }}>
+              You must present your National ID at the lab or imaging center to collect your diagnostic order.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>Loading orders…</div>
+      ) : filtered.length === 0 ? (
+        <div className="mp-card" style={{ textAlign: 'center', padding: '4rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔬</div>
+          <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No orders yet</h3>
+          <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Diagnostic orders from your doctor will appear here.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {filtered.map(order => {
+            const isLab = order.centerType === 'lab';
+            const smt = statusMetaFor(order.status);
+            const norm = normalizeDiagnosticOrderStatus(order.status);
+            return (
+              <div key={order.id} style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div style={{ width: 46, height: 46, borderRadius: 12, background: isLab ? '#d1fae5' : '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>
+                    {isLab ? '🧪' : '🩻'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: isLab ? '#065f46' : '#4c1d95', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {isLab ? 'Lab Test' : 'Scan Order'}
+                      </span>
+                      <span style={{ background: smt.bg, color: smt.color, borderRadius: 20, padding: '0.15rem 0.55rem', fontSize: '0.7rem', fontWeight: 700 }}>
+                        {norm === 'COMPLETED' ? 'Completed' : norm === 'IN_PROGRESS' ? 'In progress' : norm === 'REJECTED' ? 'Cancelled' : 'Pending'}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 0.2rem', fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{order.testType}</p>
+                    <p style={{ margin: '0 0 0.1rem', fontSize: '0.8rem', color: '#64748b' }}>📍 {order.centerName}</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Ordered by Dr. {order.doctorName} · {fmtDate(order.createdAt)}</p>
+                  </div>
+                  <button className="mp-btn mp-btn-primary" style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem', flexShrink: 0 }}
+                    onClick={() => setViewing(order)}>
+                    Details
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {viewing && (() => {
+        const isLab = viewing.centerType === 'lab';
+        const smt = statusMetaFor(viewing.status);
+        const vnorm = normalizeDiagnosticOrderStatus(viewing.status);
+        const fmtFull = (ts) => ts?.seconds ? new Date(ts.seconds * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}>
+            <div style={{ background: 'white', borderRadius: 20, maxWidth: 520, width: '100%', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              {/* Header */}
+              <div style={{ background: isLab ? '#d1fae5' : '#ede9fe', borderBottom: `1.5px solid ${isLab ? '#6ee7b7' : '#c4b5fd'}`, padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                    <span style={{ fontSize: '1.3rem' }}>{isLab ? '🧪' : '🩻'}</span>
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: isLab ? '#065f46' : '#4c1d95' }}>{isLab ? 'Laboratory Order' : 'Imaging Order'}</h3>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a' }}>{viewing.testType}</p>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.25rem', flexShrink: 0, fontSize: '1.2rem' }} onClick={() => setViewing(null)}>✕</button>
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {/* Status */}
+                <div style={{ background: smt.bg, borderRadius: 10, padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1rem' }}>{vnorm === 'PENDING' ? '⏳' : vnorm === 'IN_PROGRESS' ? '🔬' : vnorm === 'REJECTED' ? '⚠️' : '✅'}</span>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: smt.color }}>{smt.label}</p>
+                </div>
+
+                {/* Details grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                  {[
+                    ['Ordered By', `Dr. ${viewing.doctorName}`],
+                    ['Order Ref', viewing.orderId],
+                    ['Center', viewing.centerName],
+                    ['Date Ordered', fmtFull(viewing.createdAt)],
+                  ].map(([label, val]) => val ? (
+                    <div key={label} style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem' }}>
+                      <p style={{ margin: '0 0 0.2rem', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{label}</p>
+                      <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{val}</p>
+                    </div>
+                  ) : null)}
+                </div>
+
+                {/* Doctor notes */}
+                {viewing.notes && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Doctor's Instructions</p>
+                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '1rem', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a', lineHeight: 1.6 }}>
+                      {viewing.notes}
+                    </div>
+                  </div>
+                )}
+
+                {/* National ID reminder */}
+                {['PENDING', 'IN_PROGRESS'].includes(vnorm) && (
+                  <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                    <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🪪</span>
+                    <div>
+                      <p style={{ margin: '0 0 0.2rem', fontWeight: 800, color: '#92400e', fontSize: '0.875rem' }}>Present Your National ID</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#b45309', lineHeight: 1.5 }}>
+                        Staff will check that the name on your ID matches this order before your {isLab ? 'lab test' : 'scan'} at <strong>{viewing.centerName}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {vnorm === 'COMPLETED' && (
+                  <div style={{ background: '#ecfdf5', border: '1.5px solid #86efac', borderRadius: 12, padding: '1rem' }}>
+                    <p style={{ margin: '0 0 0.35rem', fontWeight: 800, color: '#166534', fontSize: '0.875rem' }}>Results are with your doctor</p>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803d', lineHeight: 1.5 }}>
+                      The facility has completed your order. Your doctor receives the results — book a follow-up or message them if you have questions.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // ─── Dashboard Shell ──────────────────────────────────────────────────────────
 export default function MedicalPatientDashboard({ profile }) {
   const location = useLocation();
@@ -3688,10 +4407,12 @@ export default function MedicalPatientDashboard({ profile }) {
 
   const NAV = [
     { path: '/dashboard',               icon: Home,         label: 'Home' },
+    { path: '/dashboard/timeline',      icon: Clock,        label: 'Health Timeline' },
     { path: '/dashboard/appointments',  icon: Calendar,     label: 'Appointments' },
     { path: '/dashboard/video',         icon: Video,        label: 'Video Calls' },
     { path: '/dashboard/messages',      icon: MessageSquare,label: 'Messages' },
     { path: '/dashboard/prescriptions', icon: Pill,         label: 'Prescriptions' },
+    { path: '/dashboard/diagnostics',   icon: Microscope,   label: 'Lab & Scan Orders' },
     { path: '/dashboard/history',       icon: FileText,     label: 'Medical History' },
     { path: '/dashboard/billing',       icon: CreditCard,   label: 'Billing' },
     { path: '/dashboard/insurance',     icon: Shield,       label: 'Insurance' },
@@ -3752,6 +4473,8 @@ export default function MedicalPatientDashboard({ profile }) {
           <Route path="/video"         element={<MedPatVideoCalls    profile={profile} />} />
           <Route path="/messages"      element={<MedPatMessages      profile={profile} />} />
           <Route path="/prescriptions" element={<MedPatPrescriptions profile={profile} />} />
+          <Route path="/timeline"      element={<MedPatTimeline      profile={profile} />} />
+          <Route path="/diagnostics"   element={<MedPatDiagnostics   profile={profile} />} />
           <Route path="/history"       element={<MedPatHistory       profile={profile} />} />
           <Route path="/billing"       element={<MedPatBilling             profile={profile} />} />
           <Route path="/insurance"     element={<MedPatInsurance           profile={profile} />} />

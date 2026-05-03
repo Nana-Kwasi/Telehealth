@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
+import {
+  branchCanMarkLinePickup,
+  allPickupsSatisfied,
+  pickupResponsibleBranchId,
+} from '../../../utils/pharmacyRxStatus';
 
 const DRUG_STATUS_META = {
   pending:               { icon: '⏳', label: 'Pending',       color: '#d97706' },
@@ -18,7 +24,8 @@ const RX_STATUS_META = {
   delivered:           { label: 'Delivered',          bg: '#f8fafc', color: '#475569' },
 };
 
-export default function PharmacyWalkIn({ profile }) {
+/** Walk-in RX lookup + mark delivered — used on branch prescriptions or standalone */
+export function PharmacyWalkInVerifyPanel({ profile, embedded = false }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [rx, setRx] = useState(null);
@@ -29,7 +36,9 @@ export default function PharmacyWalkIn({ profile }) {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    const val = input.trim().toUpperCase();
+    const valRaw = input.trim();
+    const val = valRaw.toUpperCase();
+    const normalized = valRaw.replace(/\s+/g, '').toUpperCase();
     if (!val) return;
     setLoading(true);
     setRx(null);
@@ -38,14 +47,25 @@ export default function PharmacyWalkIn({ profile }) {
     setMarked(false);
 
     try {
-      const q = query(
-        collection(db, 'doctorPrescriptions'),
-        where('prescriptionRef', '==', val),
-        where('pharmacyId', '==', profile.id)
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        setRx({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      const isBranchUser = (profile?.role || '').toLowerCase() === 'branch_user' || !!profile?.branchName;
+      const scopeQ = isBranchUser
+        ? query(collection(db, 'doctorPrescriptions'), where('branchId', '==', profile.id))
+        : query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile.id));
+      const snap = await getDocs(scopeQ);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const rxMatches = list.filter(item => {
+        const ref = (item.prescriptionRef || '').replace(/\s+/g, '').toUpperCase();
+        const patientName = (item.patientName || '').trim().toLowerCase();
+        const nameQuery = valRaw.toLowerCase();
+        const nameMatch = !!nameQuery && (patientName === nameQuery || patientName.includes(nameQuery));
+        return ref === normalized || item.id === valRaw || item.id === val || nameMatch;
+      });
+      const found = rxMatches.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))[0];
+      if (found) {
+        setRx(found);
+        if (rxMatches.length > 1) {
+          setError(`Found ${rxMatches.length} matches for "${valRaw}". Showing the most recent prescription.`);
+        }
       } else {
         setNotFound(true);
       }
@@ -59,14 +79,62 @@ export default function PharmacyWalkIn({ profile }) {
 
   const markDelivered = async () => {
     if (!rx) return;
+    const meds = rx.medications || [];
+    const now = new Date().toISOString();
+    const actorId = profile?.id || null;
+    const actorName = profile?.branchName || profile?.pharmacyName || 'Pharmacy';
+    const isBranchStaff = (profile?.role || '').toLowerCase() === 'branch_user' || !!profile?.branchName;
+    const canStampLine = (m) => {
+      if (branchCanMarkLinePickup(actorId, m, rx)) return true;
+      if (isBranchStaff) return false;
+      const ds = m.drugStatus || 'pending';
+      if (!['available', 'approved_replacement'].includes(ds) || m.pickupDeliveredAt) return false;
+      return (rx.pharmacyId || '') === (profile?.id || '')
+        && pickupResponsibleBranchId(m, rx) === (rx.branchId || '');
+    };
+    const nextMeds = meds.map((m) => {
+      if (!canStampLine(m)) return m;
+      return {
+        ...m,
+        pickupDeliveredAt: now,
+        pickupDeliveredByBranchId: actorId,
+        pickupDeliveredByBranchName: actorName,
+      };
+    });
+    if (!allPickupsSatisfied(nextMeds)) {
+      alert('Another branch still needs to confirm pickup for transferred items, or dispensing is incomplete.');
+      return;
+    }
     setMarking(true);
     try {
+      const prevStatus = rx.pharmacyStatus || 'sent';
       await updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
+        medications: nextMeds,
         pharmacyStatus: 'delivered',
         deliveredAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      setRx(prev => ({ ...prev, pharmacyStatus: 'delivered' }));
+      await logPharmacyRxEvent({
+        rxId: rx.id,
+        patientId: rx.patientId,
+        pharmacyId: rx.pharmacyId || profile?.id || null,
+        branchId: rx.branchId || null,
+        actorId: profile?.id || null,
+        actorName: profile?.branchName || profile?.pharmacyName || 'Pharmacy',
+        actorRole: 'PHARMACY_WALKIN',
+        action: 'PRESCRIPTION_DELIVERED_WALKIN',
+        fromStatus: prevStatus,
+        toStatus: 'delivered',
+      }).catch(() => {});
+      await queuePatientRxNotification({
+        patientId: rx.patientId,
+        rxId: rx.id,
+        prescriptionRef: rx.prescriptionRef,
+        pharmacyStatus: 'delivered',
+        branchName: rx.branchName || '',
+        pharmacyName: profile?.pharmacyName || rx.pharmacyName || '',
+      }).catch(() => {});
+      setRx(prev => ({ ...prev, pharmacyStatus: 'delivered', medications: nextMeds }));
       setMarked(true);
     } catch (err) {
       alert('Failed to mark as delivered. Please try again.');
@@ -76,51 +144,60 @@ export default function PharmacyWalkIn({ profile }) {
   };
 
   const pm = rx?.pharmacyStatus ? (RX_STATUS_META[rx.pharmacyStatus] || null) : null;
+  const cardMax = embedded ? '100%' : 640;
 
   return (
-    <div className="pharmacy-page">
-      <h1 className="pharmacy-page-title">Walk-in Verification</h1>
-      <p className="pharmacy-page-sub">Scan or enter a prescription reference code to verify a walk-in patient</p>
+    <div className={embedded ? 'branch-walkin-embed' : ''} id={embedded ? 'branch-walkin-verify' : undefined}>
+      {embedded ? (
+        <div className="branch-walkin-embed-head">
+          <h2 className="branch-walkin-embed-title">Walk-in verification</h2>
+          <p className="branch-walkin-embed-sub">Enter RX reference, document ID, or patient name — same as the former Walk-in screen</p>
+        </div>
+      ) : (
+        <>
+          <h1 className="pharmacy-page-title">Walk-in Verification</h1>
+          <p className="pharmacy-page-sub">Scan or enter RX code, prescription ID, or patient name to verify a walk-in patient</p>
+        </>
+      )}
 
-      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e0f2fe', padding: '1.5rem', maxWidth: 640, marginBottom: '1.5rem' }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.75rem' }}>
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e0f2fe', padding: '1.5rem', maxWidth: cardMax, marginBottom: '1.5rem' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <input
             value={input}
-            onChange={e => setInput(e.target.value.toUpperCase())}
-            placeholder="RX-XXXXXXXX"
+            onChange={e => setInput(e.target.value)}
+            placeholder="RX-XXXXXXXX or patient name"
             style={{
-              flex: 1, padding: '0.7rem 1rem', border: '1.5px solid #bae6fd',
-              borderRadius: 10, fontSize: '1.1rem', fontFamily: 'monospace',
-              fontWeight: 700, letterSpacing: '0.08em', outline: 'none', color: '#0c4a6e',
+              flex: 1, minWidth: 200, padding: '0.7rem 1rem', border: '1.5px solid #bae6fd',
+              borderRadius: 10, fontSize: '1.05rem',
+              fontWeight: 600, letterSpacing: '0.04em', outline: 'none', color: '#0c4a6e',
               background: '#f0f9ff',
             }}
           />
           <button type="submit" disabled={loading || !input.trim()}
             style={{ padding: '0.7rem 1.5rem', borderRadius: 10, background: '#0c4a6e', color: '#fff', border: 'none', fontWeight: 700, fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Searching…' : '🔍 Look Up'}
+            {loading ? 'Searching…' : '🔍 Look up'}
           </button>
         </form>
       </div>
 
       {error && (
-        <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, padding: '0.75rem 1rem', color: '#be123c', fontSize: '0.875rem', maxWidth: 640, marginBottom: '1rem' }}>
+        <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, padding: '0.75rem 1rem', color: '#be123c', fontSize: '0.875rem', maxWidth: cardMax, marginBottom: '1rem' }}>
           🚨 {error}
         </div>
       )}
 
       {notFound && (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: '2.5rem', textAlign: 'center', maxWidth: 640 }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: '2.5rem', textAlign: 'center', maxWidth: cardMax }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
           <p style={{ fontWeight: 700, color: '#374151', marginBottom: '0.5rem' }}>Prescription not found</p>
           <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-            No prescription with code <b style={{ fontFamily: 'monospace', color: '#0c4a6e' }}>{input}</b> is routed to this pharmacy.
+            No prescription matching <b style={{ fontFamily: 'monospace', color: '#0c4a6e' }}>{input.trim() || '…'}</b> for this branch scope.
           </p>
         </div>
       )}
 
       {rx && (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e0f2fe', padding: '1.5rem', maxWidth: 640 }}>
-          {/* Status banner */}
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e0f2fe', padding: '1.5rem', maxWidth: cardMax }}>
           {pm && (
             <div style={{ background: pm.bg, border: `1.5px solid ${pm.color}40`, borderRadius: 10, padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
               <div>
@@ -132,14 +209,12 @@ export default function PharmacyWalkIn({ profile }) {
             </div>
           )}
 
-          {/* Ref */}
           <div style={{ background: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 10, padding: '0.85rem 1rem', marginBottom: '1.25rem' }}>
             <p style={{ margin: '0 0 2px', fontSize: '0.7rem', color: '#0369a1', fontWeight: 700, textTransform: 'uppercase' }}>Prescription Reference</p>
             <p style={{ margin: 0, fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 900, color: '#0c4a6e', letterSpacing: '0.12em' }}>{rx.prescriptionRef}</p>
           </div>
 
-          {/* Patient / Doctor info */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             {[
               { label: 'Patient', value: rx.patientName || '—' },
               { label: 'Doctor', value: rx.doctorName ? `Dr. ${rx.doctorName}` : '—' },
@@ -153,7 +228,6 @@ export default function PharmacyWalkIn({ profile }) {
             ))}
           </div>
 
-          {/* Medications */}
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0c4a6e', marginBottom: '0.75rem' }}>Medications</h3>
           {(rx.medications || []).map((med, i) => {
             const ds = DRUG_STATUS_META[med.drugStatus] || DRUG_STATUS_META.pending;
@@ -185,9 +259,8 @@ export default function PharmacyWalkIn({ profile }) {
             </div>
           )}
 
-          {/* Mark as delivered button */}
           {rx.pharmacyStatus === 'ready' && !marked && (
-            <button onClick={markDelivered} disabled={marking}
+            <button type="button" onClick={markDelivered} disabled={marking}
               style={{ width: '100%', marginTop: '1.25rem', padding: '0.75rem', borderRadius: 10, background: '#0c4a6e', color: '#fff', border: 'none', fontWeight: 700, fontSize: '0.95rem', cursor: marking ? 'not-allowed' : 'pointer', opacity: marking ? 0.7 : 1 }}>
               {marking ? 'Marking…' : '📦 Mark as Delivered'}
             </button>
@@ -199,6 +272,14 @@ export default function PharmacyWalkIn({ profile }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+export default function PharmacyWalkIn({ profile }) {
+  return (
+    <div className="pharmacy-page">
+      <PharmacyWalkInVerifyPanel profile={profile} embedded={false} />
     </div>
   );
 }

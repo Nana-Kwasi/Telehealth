@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { signOut, updatePassword } from 'firebase/auth';
 import { auth, db } from '../../Auth/firebaseConfig';
 import { doc, updateDoc } from 'firebase/firestore';
 import './PharmacyDashboard.css';
 
 import PharmacyOverview from './PharmacyOverview';
 import PharmacyBranches from './PharmacyBranches';
+import PharmacyBranchDetail from './PharmacyBranchDetail';
 import PharmacyPrescriptions from './PharmacyPrescriptions';
-import PharmacyWalkIn from './PharmacyWalkIn';
+import PharmacyReports from './PharmacyReports';
+import PharmacySettings from './PharmacySettings';
+import GlobalReportForm from '../Common/GlobalReportForm';
 
 const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
-  { path: '/dashboard/branches',     label: 'Branches',      icon: '🏪' },
+  { path: '/dashboard/branches',     label: 'Manage Branches', icon: '🏪' },
   { path: '/dashboard/prescriptions',label: 'Prescriptions', icon: '💊' },
-  { path: '/dashboard/walkin',       label: 'Walk-in',       icon: '🔍' },
+  { path: '/dashboard/reports',      label: 'Reports',       icon: '📈' },
+  { path: '/dashboard/report-issue', label: 'Report Issue',  icon: '📩' },
+  { path: '/dashboard/settings',     label: 'Settings',      icon: '⚙️' },
 ];
 
 export default function PharmacyDashboard({ profile }) {
@@ -23,11 +28,12 @@ export default function PharmacyDashboard({ profile }) {
 
   // Forced password reset state
   const [mustChange, setMustChange] = useState(profile?.mustChangePassword === true);
-  const [oldPw, setOldPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwSaving, setPwSaving] = useState(false);
+  const mfaRequired = profile?.mfaRequired === true;
+  const hasMfaFactor = (auth.currentUser?.multiFactor?.enrolledFactors || []).length > 0;
 
   const handleLogout = async () => { try { await signOut(auth); navigate('/'); } catch (_) {} };
 
@@ -39,22 +45,16 @@ export default function PharmacyDashboard({ profile }) {
     setPwError('');
     if (newPw.length < 8) { setPwError('Password must be at least 8 characters.'); return; }
     if (newPw !== confirmPw) { setPwError('Passwords do not match.'); return; }
-    if (newPw === oldPw) { setPwError('New password must be different from your current password.'); return; }
-
     setPwSaving(true);
     try {
       const user = auth.currentUser;
-      // Re-authenticate first
-      const credential = EmailAuthProvider.credential(user.email, oldPw);
-      await reauthenticateWithCredential(user, credential);
-      // Update password
       await updatePassword(user, newPw);
       // Clear the flag in Firestore
       await updateDoc(doc(db, 'pharmacies', profile.id), { mustChangePassword: false });
       setMustChange(false);
     } catch (err) {
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setPwError('Current password is incorrect.');
+      if (err.code === 'auth/requires-recent-login') {
+        setPwError('Please log out, sign in with your temporary password again, then set a new password.');
       } else {
         setPwError('Failed to update password. Please try again.');
       }
@@ -105,6 +105,11 @@ export default function PharmacyDashboard({ profile }) {
       </aside>
 
       <main className="pharmacy-main">
+        {mfaRequired && !hasMfaFactor && (
+          <div style={{ margin: '1rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '0.85rem 1rem', color: '#9a3412', fontSize: '0.86rem', fontWeight: 600 }}>
+            Multi-factor authentication is required for this parent pharmacy account. Please enroll MFA in your account settings flow before production rollout.
+          </div>
+        )}
         {/* Forced password reset overlay — blocks ALL content */}
         {mustChange && (
           <div className="force-pw-overlay">
@@ -123,7 +128,6 @@ export default function PharmacyDashboard({ profile }) {
 
               <form onSubmit={handleChangePassword}>
                 {[
-                  { label: 'Current (Temporary) Password', key: 'old',     val: oldPw,     set: setOldPw },
                   { label: 'New Password',                 key: 'new',     val: newPw,     set: setNewPw },
                   { label: 'Confirm New Password',         key: 'confirm', val: confirmPw, set: setConfirmPw },
                 ].map(f => (
@@ -149,9 +153,12 @@ export default function PharmacyDashboard({ profile }) {
 
         <Routes>
           <Route path="/"              element={<PharmacyOverview      profile={profile} />} />
+          <Route path="/branches/:branchId" element={<PharmacyBranchDetail profile={profile} />} />
           <Route path="/branches"      element={<PharmacyBranches      profile={profile} />} />
           <Route path="/prescriptions" element={<PharmacyPrescriptions profile={profile} />} />
-          <Route path="/walkin"        element={<PharmacyWalkIn        profile={profile} />} />
+          <Route path="/reports"       element={<PharmacyReports       profile={profile} />} />
+          <Route path="/report-issue"  element={<GlobalReportForm profile={profile} reporterType="pharmacy_parent" />} />
+          <Route path="/settings"      element={<PharmacySettings      profile={profile} />} />
         </Routes>
       </main>
     </div>

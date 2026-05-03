@@ -556,6 +556,28 @@ const ClientVideoCall = ({ profile }) => {
       };
 
       await addDoc(collection(db, 'therapistReports'), reportData);
+      await addDoc(collection(db, 'globalReports'), {
+        category: 'complaint',
+        subject: `Therapist incident report (${reportForm.incidentType || 'general'})`,
+        message: reportForm.description,
+        severity: reportForm.severity || 'medium',
+        status: 'open',
+        source: 'client_therapist_report',
+        sourceCollection: 'therapistReports',
+        reporterId: clientProfile.id,
+        reporterName: clientProfile.name || 'Client',
+        reporterEmail: clientProfile.email || auth.currentUser?.email || '',
+        reporterType: 'client',
+        metadata: {
+          incidentId,
+          incidentType: reportForm.incidentType || '',
+          assignedTherapistId: therapistData.id || '',
+          assignedTherapistName: therapistData.name || '',
+        },
+        adminReplies: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       
       setMessage({ type: 'success', text: `Report submitted successfully! Your incident ID is: ${incidentId}. Status: Submitted. Admin will review and update the status (Submitted → Seen → Processing → Completed).` });
       setShowReportTherapistModal(false);

@@ -392,27 +392,101 @@ export async function signInWithEmailOrUsername(identifier, password) {
 export async function resolveRole(uid) {
   console.log('Resolving role for UID:', uid);
 
-  // Check pharmacies collection (parent pharmacy accounts)
-  const pharmacyRef = doc(db, 'pharmacies', uid);
-  const pharmacySnap = await getDoc(pharmacyRef);
-  if (pharmacySnap.exists()) {
-    const data = pharmacySnap.data();
-    return {
-      role: 'pharmacy',
-      profile: { id: pharmacySnap.id, ...data, role: 'pharmacy' },
-    };
-  }
+  // Check pharmacies — by doc ID first (new: setDoc uses uid as ID), then by uid field (legacy addDoc)
+  try {
+    const pharmacySnap = await getDoc(doc(db, 'pharmacies', uid));
+    if (pharmacySnap.exists()) {
+      const data = pharmacySnap.data();
+      return { role: 'pharmacy', profile: { id: pharmacySnap.id, ...data, role: 'pharmacy' } };
+    }
+  } catch (_) {}
+  try {
+    const phFallback = await getDocs(query(collection(db, 'pharmacies'), where('uid', '==', uid)));
+    if (!phFallback.empty) {
+      const d = phFallback.docs[0].data();
+      return { role: 'pharmacy', profile: { id: phFallback.docs[0].id, ...d, role: 'pharmacy' } };
+    }
+  } catch (_) {}
 
   // Check pharmacy branches
-  const branchRef = doc(db, 'pharmacyBranches', uid);
-  const branchSnap = await getDoc(branchRef);
-  if (branchSnap.exists()) {
-    const data = branchSnap.data();
-    return {
-      role: 'branch_user',
-      profile: { id: branchSnap.id, ...data, role: 'branch_user' },
-    };
-  }
+  try {
+    const branchSnap = await getDoc(doc(db, 'pharmacyBranches', uid));
+    if (branchSnap.exists()) {
+      const data = branchSnap.data();
+      return { role: 'branch_user', profile: { id: branchSnap.id, ...data, role: 'branch_user' } };
+    }
+  } catch (_) {}
+  try {
+    const brFallback = await getDocs(query(collection(db, 'pharmacyBranches'), where('uid', '==', uid)));
+    if (!brFallback.empty) {
+      const d = brFallback.docs[0].data();
+      return { role: 'branch_user', profile: { id: brFallback.docs[0].id, ...d, role: 'branch_user' } };
+    }
+  } catch (_) {}
+
+  // Check lab parent accounts
+  try {
+    const labSnap = await getDoc(doc(db, 'labs', uid));
+    if (labSnap.exists()) {
+      const data = labSnap.data();
+      return { role: 'lab', profile: { id: labSnap.id, ...data, role: 'lab' } };
+    }
+  } catch (_) {}
+  try {
+    const labFallback = await getDocs(query(collection(db, 'labs'), where('uid', '==', uid)));
+    if (!labFallback.empty) {
+      const d = labFallback.docs[0].data();
+      return { role: 'lab', profile: { id: labFallback.docs[0].id, ...d, role: 'lab' } };
+    }
+  } catch (_) {}
+
+  // Check scan parent accounts
+  try {
+    const scanSnap = await getDoc(doc(db, 'scanCenters', uid));
+    if (scanSnap.exists()) {
+      const data = scanSnap.data();
+      return { role: 'scan', profile: { id: scanSnap.id, ...data, role: 'scan' } };
+    }
+  } catch (_) {}
+  try {
+    const scanFallback = await getDocs(query(collection(db, 'scanCenters'), where('uid', '==', uid)));
+    if (!scanFallback.empty) {
+      const d = scanFallback.docs[0].data();
+      return { role: 'scan', profile: { id: scanFallback.docs[0].id, ...d, role: 'scan' } };
+    }
+  } catch (_) {}
+
+  // Check lab branches
+  try {
+    const labBranchSnap = await getDoc(doc(db, 'labBranches', uid));
+    if (labBranchSnap.exists()) {
+      const data = labBranchSnap.data();
+      return { role: 'lab_branch', profile: { id: labBranchSnap.id, ...data, role: 'lab_branch' } };
+    }
+  } catch (_) {}
+  try {
+    const lbFallback = await getDocs(query(collection(db, 'labBranches'), where('uid', '==', uid)));
+    if (!lbFallback.empty) {
+      const d = lbFallback.docs[0].data();
+      return { role: 'lab_branch', profile: { id: lbFallback.docs[0].id, ...d, role: 'lab_branch' } };
+    }
+  } catch (_) {}
+
+  // Check scan branches
+  try {
+    const scanBranchSnap = await getDoc(doc(db, 'scanBranches', uid));
+    if (scanBranchSnap.exists()) {
+      const data = scanBranchSnap.data();
+      return { role: 'scan_branch', profile: { id: scanBranchSnap.id, ...data, role: 'scan_branch' } };
+    }
+  } catch (_) {}
+  try {
+    const sbFallback = await getDocs(query(collection(db, 'scanBranches'), where('uid', '==', uid)));
+    if (!sbFallback.empty) {
+      const d = sbFallback.docs[0].data();
+      return { role: 'scan_branch', profile: { id: sbFallback.docs[0].id, ...d, role: 'scan_branch' } };
+    }
+  } catch (_) {}
 
   // Check admin collection (standalone admins separate from therapists)
   const adminRef = doc(db, 'admins', uid);
@@ -536,15 +610,57 @@ export async function resolveRole(uid) {
 }
 
 export async function findUserByUsernameOrEmail(identifier) {
-  // Check pharmacies
+  // Check pharmacies by username
   const phQ = query(collection(db, 'pharmacies'), where('username', '==', identifier));
   const phR = await getDocs(phQ);
   if (!phR.empty) return { id: phR.docs[0].id, ...phR.docs[0].data() };
 
-  // Check pharmacy branches
+  // Check pharmacies by email
+  const phQE = query(collection(db, 'pharmacies'), where('email', '==', identifier));
+  const phRE = await getDocs(phQE);
+  if (!phRE.empty) return { id: phRE.docs[0].id, ...phRE.docs[0].data() };
+
+  // Check pharmacy branches by username
   const brQ = query(collection(db, 'pharmacyBranches'), where('username', '==', identifier));
   const brR = await getDocs(brQ);
   if (!brR.empty) return { id: brR.docs[0].id, ...brR.docs[0].data() };
+
+  // Check pharmacy branches by email
+  const brQE = query(collection(db, 'pharmacyBranches'), where('email', '==', identifier));
+  const brRE = await getDocs(brQE);
+  if (!brRE.empty) return { id: brRE.docs[0].id, ...brRE.docs[0].data() };
+
+  // Check labs by username/email
+  const lQ = query(collection(db, 'labs'), where('username', '==', identifier));
+  const lR = await getDocs(lQ);
+  if (!lR.empty) return { id: lR.docs[0].id, ...lR.docs[0].data() };
+  const lQE = query(collection(db, 'labs'), where('email', '==', identifier));
+  const lRE = await getDocs(lQE);
+  if (!lRE.empty) return { id: lRE.docs[0].id, ...lRE.docs[0].data() };
+
+  // Check scan centers by username/email
+  const sQ = query(collection(db, 'scanCenters'), where('username', '==', identifier));
+  const sR = await getDocs(sQ);
+  if (!sR.empty) return { id: sR.docs[0].id, ...sR.docs[0].data() };
+  const sQE = query(collection(db, 'scanCenters'), where('email', '==', identifier));
+  const sRE = await getDocs(sQE);
+  if (!sRE.empty) return { id: sRE.docs[0].id, ...sRE.docs[0].data() };
+
+  // Check lab branches by username/email
+  const lbQ = query(collection(db, 'labBranches'), where('username', '==', identifier));
+  const lbR = await getDocs(lbQ);
+  if (!lbR.empty) return { id: lbR.docs[0].id, ...lbR.docs[0].data() };
+  const lbQE = query(collection(db, 'labBranches'), where('email', '==', identifier));
+  const lbRE = await getDocs(lbQE);
+  if (!lbRE.empty) return { id: lbRE.docs[0].id, ...lbRE.docs[0].data() };
+
+  // Check scan branches by username/email
+  const sbQ = query(collection(db, 'scanBranches'), where('username', '==', identifier));
+  const sbR = await getDocs(sbQ);
+  if (!sbR.empty) return { id: sbR.docs[0].id, ...sbR.docs[0].data() };
+  const sbQE = query(collection(db, 'scanBranches'), where('email', '==', identifier));
+  const sbRE = await getDocs(sbQE);
+  if (!sbRE.empty) return { id: sbRE.docs[0].id, ...sbRE.docs[0].data() };
 
   // Check admins
   const adQ = query(collection(db, 'admins'), where('username', '==', identifier));

@@ -1,6 +1,55 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
+import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
+
+const MS_48H = 48 * 3600000;
+
+function toMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  return 0;
+}
+
+function rxMatchesFilter(rx, filter, branchId) {
+  if (branchId && rx.branchId !== branchId) return false;
+  const st = rx.pharmacyStatus || 'sent';
+  const updated = toMillis(rx.updatedAt);
+  const created = toMillis(rx.createdAt);
+  const last = Math.max(updated, created);
+
+  switch (filter) {
+    case 'incoming':
+      return st === 'sent' || !rx.pharmacyStatus;
+    case 'active':
+      return ['accepted', 'partially_fulfilled'].includes(st);
+    case 'ready':
+      return st === 'ready';
+    case 'overdue':
+      return st === 'ready' && (Date.now() - updated > MS_48H);
+    case 'review':
+      if (st !== 'partially_fulfilled') return false;
+      return (rx.medications || []).some(m =>
+        ['not_available', 'alternative_suggested', 'pending'].includes(m.drugStatus));
+    case 'stuck':
+      return st === 'accepted' && (Date.now() - last > MS_48H);
+    default:
+      return true;
+  }
+}
+
+const FILTER_OPTIONS = [
+  { id: 'all', label: 'All' },
+  { id: 'incoming', label: 'Incoming' },
+  { id: 'active', label: 'Active' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'overdue', label: 'Pickup overdue' },
+  { id: 'review', label: 'Needs review' },
+  { id: 'stuck', label: 'Stuck >48h' },
+];
 
 const STATUS_META = {
   sent:                { label: 'Sent',               badge: 'badge-blue'   },
@@ -16,9 +65,11 @@ const DRUG_STATUS_META = {
   not_available:        { label: 'Not Available',     icon: '❌', color: '#dc2626' },
   alternative_suggested:{ label: 'Alt. Suggested',   icon: '🔁', color: '#7c3aed' },
   approved_replacement: { label: 'Approved',          icon: '✅', color: '#16a34a' },
+  transferred:          { label: 'Transferred',       icon: '↔️', color: '#0369a1' },
 };
 
 export default function PharmacyPrescriptions({ profile }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -26,9 +77,23 @@ export default function PharmacyPrescriptions({ profile }) {
   const [altModal, setAltModal] = useState(null); // { rxId, medIndex }
   const [altText, setAltText] = useState('');
 
-  useEffect(() => { loadData(); }, []);
+  const validFilter = useMemo(() => {
+    const raw = searchParams.get('filter') || 'all';
+    const ok = FILTER_OPTIONS.some(f => f.id === raw);
+    return ok ? raw : 'all';
+  }, [searchParams]);
+  const branchFilter = searchParams.get('branchId') || '';
+  const rxFromUrl = searchParams.get('rx') || '';
+
+  const filtered = useMemo(
+    () => prescriptions.filter(rx => rxMatchesFilter(rx, validFilter, branchFilter)),
+    [prescriptions, validFilter, branchFilter]
+  );
+
+  useEffect(() => { loadData(); }, [profile?.id]);
 
   const loadData = async () => {
+    if (!profile?.id) return;
     try {
       const snap = await getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile.id)));
       const list = snap.docs.map(d => {
@@ -46,25 +111,78 @@ export default function PharmacyPrescriptions({ profile }) {
     }
   };
 
+  useEffect(() => {
+    if (!rxFromUrl || !prescriptions.length) return;
+    const r = prescriptions.find(p => p.id === rxFromUrl);
+    if (r) setSelected(r);
+  }, [rxFromUrl, prescriptions]);
+
+  const closeDetail = useCallback(() => {
+    setSelected(null);
+    if (searchParams.get('rx')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('rx');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const openRx = useCallback((rx) => {
+    setSelected(rx);
+    const next = new URLSearchParams(searchParams);
+    next.set('rx', rx.id);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const setFilter = useCallback((id) => {
+    const next = new URLSearchParams(searchParams);
+    if (id === 'all') next.delete('filter');
+    else next.set('filter', id);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const clearFilters = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('filter');
+    next.delete('branchId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const updateDrugStatus = async (rx, medIndex, newStatus) => {
     setSaving(true);
     try {
+      const prevStatus = rx.pharmacyStatus || 'sent';
       const updatedMeds = rx.medications.map((m, i) => i === medIndex ? { ...m, drugStatus: newStatus } : m);
 
-      // Compute prescription-level status from drug statuses
-      const statuses = updatedMeds.map(m => m.drugStatus);
-      let rxStatus = 'accepted';
-      if (statuses.every(s => s === 'available' || s === 'approved_replacement')) {
-        rxStatus = 'ready';
-      } else if (statuses.some(s => s === 'not_available' || s === 'alternative_suggested')) {
-        rxStatus = 'partially_fulfilled';
-      }
+      const rxStatus = deriveRxStockStatus(updatedMeds);
 
       await updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
         medications: updatedMeds,
         pharmacyStatus: rxStatus,
         updatedAt: serverTimestamp(),
       });
+      await logPharmacyRxEvent({
+        rxId: rx.id,
+        patientId: rx.patientId,
+        pharmacyId: rx.pharmacyId || profile?.id,
+        branchId: rx.branchId || null,
+        actorId: profile?.id || null,
+        actorName: profile?.pharmacyName || 'Pharmacy',
+        actorRole: 'PHARMACY_PARENT',
+        action: 'DRUG_STATUS_UPDATED',
+        fromStatus: prevStatus,
+        toStatus: rxStatus,
+        metadata: { medIndex, drugStatus: newStatus },
+      }).catch(() => {});
+      if (prevStatus !== rxStatus) {
+        await queuePatientRxNotification({
+          patientId: rx.patientId,
+          rxId: rx.id,
+          prescriptionRef: rx.prescriptionRef,
+          pharmacyStatus: rxStatus,
+          branchName: rx.branchName || '',
+          pharmacyName: profile?.pharmacyName || rx.pharmacyName || '',
+        }).catch(() => {});
+      }
 
       const updated = { ...rx, medications: updatedMeds, pharmacyStatus: rxStatus };
       setPrescriptions(prev => prev.map(r => r.id === rx.id ? updated : r));
@@ -83,6 +201,7 @@ export default function PharmacyPrescriptions({ profile }) {
     if (!rx) return;
     setSaving(true);
     try {
+      const prevStatus = rx.pharmacyStatus || 'sent';
       const updatedMeds = rx.medications.map((m, i) =>
         i === medIndex ? { ...m, drugStatus: 'alternative_suggested', alternativeSuggested: altText.trim() } : m
       );
@@ -91,6 +210,20 @@ export default function PharmacyPrescriptions({ profile }) {
         pharmacyStatus: 'partially_fulfilled',
         updatedAt: serverTimestamp(),
       });
+      await logPharmacyRxEvent({
+        rxId: rx.id,
+        patientId: rx.patientId,
+        pharmacyId: rx.pharmacyId || profile?.id,
+        branchId: rx.branchId || null,
+        actorId: profile?.id || null,
+        actorName: profile?.pharmacyName || 'Pharmacy',
+        actorRole: 'PHARMACY_PARENT',
+        action: 'ALTERNATIVE_SUGGESTED',
+        fromStatus: prevStatus,
+        toStatus: 'partially_fulfilled',
+        note: altText.trim(),
+        metadata: { medIndex },
+      }).catch(() => {});
       const updated = { ...rx, medications: updatedMeds, pharmacyStatus: 'partially_fulfilled' };
       setPrescriptions(prev => prev.map(r => r.id === rx.id ? updated : r));
       if (selected?.id === rx.id) setSelected(updated);
@@ -105,10 +238,37 @@ export default function PharmacyPrescriptions({ profile }) {
 
   const sm = (rx) => STATUS_META[rx.pharmacyStatus] || STATUS_META.sent;
 
+  const filterLabel = FILTER_OPTIONS.find(f => f.id === validFilter)?.label || 'All';
+
   return (
     <div className="pharmacy-page">
       <h1 className="pharmacy-page-title">Prescriptions</h1>
-      <p className="pharmacy-page-sub">All prescriptions routed to {profile?.pharmacyName || 'your pharmacy'}.</p>
+      <p className="pharmacy-page-sub">All prescriptions routed to {profile?.pharmacyName || 'your pharmacy'} (across all branches).</p>
+
+      {!loading && prescriptions.length > 0 && (
+        <div className="pharmacy-rx-filters" role="toolbar" aria-label="Filter prescriptions">
+          {FILTER_OPTIONS.map(f => (
+            <button
+              key={f.id}
+              type="button"
+              className={`pharmacy-rx-filter-chip ${validFilter === f.id ? 'pharmacy-rx-filter-chip--active' : ''}`}
+              onClick={() => setFilter(f.id)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!loading && prescriptions.length > 0 && (validFilter !== 'all' || branchFilter) && (
+        <div className="pharmacy-rx-filter-banner">
+          Showing <strong>{filterLabel}</strong>
+          {branchFilter ? ` · Branch filter active` : ''} · {filtered.length} of {prescriptions.length}
+          <button type="button" className="pharmacy-rx-filter-clear" onClick={clearFilters}>
+            Clear filters
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ color: '#64748b' }}>Loading prescriptions…</div>
@@ -117,14 +277,22 @@ export default function PharmacyPrescriptions({ profile }) {
           <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💊</div>
           <p>No prescriptions routed to this pharmacy yet.</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="pharmacy-rx-empty-filter">
+          <p>No prescriptions match this filter.</p>
+          <button type="button" className="pharmacy-rx-filter-clear" onClick={clearFilters}>Show all</button>
+        </div>
       ) : (
         <div className="rx-list">
-          {prescriptions.map(rx => (
-            <div key={rx.id} className="rx-card" onClick={() => setSelected(rx)}>
+          {filtered.map(rx => (
+            <div key={rx.id} className="rx-card" onClick={() => openRx(rx)}>
               <div className="rx-card-header">
                 <div>
                   <div className="rx-patient">{rx.patientName || 'Patient'}</div>
                   <div className="rx-doctor">Dr. {rx.doctorName || 'Doctor'} · {rx.diagnosis || '—'}</div>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 2 }}>
+                    Branch: {rx.branchName || 'Unassigned'}
+                  </div>
                 </div>
                 <span className={`badge ${sm(rx).badge}`}>{sm(rx).label}</span>
               </div>
@@ -147,15 +315,15 @@ export default function PharmacyPrescriptions({ profile }) {
       {/* Detail panel */}
       {selected && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '1rem' }}
-          onClick={() => setSelected(null)}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '1.75rem', width: '100%', maxWidth: 620, maxHeight: '90vh', overflowY: 'auto' }}
+          onClick={closeDetail}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '1.75rem', width: '100%', maxWidth: 'min(96vw, 900px)', maxHeight: '90vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
               <div>
                 <h2 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 800, color: '#0c4a6e' }}>{selected.patientName}</h2>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Dr. {selected.doctorName} · {selected.diagnosis}</p>
               </div>
-              <button onClick={() => setSelected(null)} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0.35rem 0.75rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem', color: '#64748b' }}>✕ Close</button>
+              <button type="button" onClick={closeDetail} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0.35rem 0.75rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem', color: '#64748b' }}>✕ Close</button>
             </div>
 
             <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.75rem' }}>
@@ -184,6 +352,11 @@ export default function PharmacyPrescriptions({ profile }) {
                       🔁 Alternative suggested: <b>{med.alternativeSuggested}</b>
                     </div>
                   )}
+                  {med.drugStatus === 'transferred' && med.transferBranchName && (
+                    <div style={{ background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 8, padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: '#0369a1', marginBottom: '0.5rem' }}>
+                      ↔️ Transferred to <b>{med.transferBranchName}</b>{med.transferBranchAddress ? ` · ${med.transferBranchAddress}` : ''}
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
                     <button disabled={saving || med.drugStatus === 'available'} onClick={() => updateDrugStatus(selected, i, 'available')}
@@ -209,7 +382,7 @@ export default function PharmacyPrescriptions({ profile }) {
       {/* Alternative suggestion modal */}
       {altModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '1.75rem', width: '100%', maxWidth: 400 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '1.75rem', width: '100%', maxWidth: 'min(96vw, 480px)' }}>
             <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Suggest Alternative Drug</h3>
             <p style={{ margin: '0 0 1rem', fontSize: '0.875rem', color: '#64748b' }}>
               Enter the name of the alternative drug you recommend. This will be sent to the doctor for approval.
