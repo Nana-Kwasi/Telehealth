@@ -1,20 +1,36 @@
 import React, { useState, useRef } from 'react';
 import { db, auth, storage } from '../../Auth/firebaseConfig';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { UserPlus, Upload, X,Plus } from 'lucide-react';
+import { UserPlus, Upload, X, Plus, RefreshCw } from 'lucide-react';
 import './OnboardTherapist.css';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import { generateTemporaryPassword } from '../../../utils/temporaryPassword';
 
-export default function OnboardTherapist() {
-  const [form, setForm] = useState({
+const firebaseConfig = {
+  apiKey: 'AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI',
+  authDomain: 'teleehealth.firebaseapp.com',
+  projectId: 'teleehealth',
+  storageBucket: 'teleehealth.firebasestorage.app',
+  messagingSenderId: '304333934237',
+  appId: '1:304333934237:web:c0a08969be0671d72d0e74',
+};
+
+function getTherapistCreatorAuth() {
+  const existing = getApps().find((a) => a.name === 'therapist-creator');
+  const app = existing || initializeApp(firebaseConfig, 'therapist-creator');
+  return getAuth(app);
+}
+
+const emptyForm = () => ({
     name: '',
     type: '',
     username: '',
     email: '',
     phone: '',
-    password: '',
+    password: generateTemporaryPassword(),
     role: 'user',
     specialties: '',
     licenseNumber: '',
@@ -43,8 +59,13 @@ export default function OnboardTherapist() {
     education: '',
     workExperience: '',
     therapyApproaches: '',
-    photoURL: ''
-  });
+    photoURL: '',
+});
+
+export default function OnboardTherapist() {
+  const [form, setForm] = useState(emptyForm);
+  const [credentials, setCredentials] = useState(null);
+  const [submitError, setSubmitError] = useState('');
   const [saving, setSaving] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
@@ -57,6 +78,12 @@ export default function OnboardTherapist() {
   const cvFileInputRef = useRef(null);
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const regeneratePassword = () => onChange('password', generateTemporaryPassword());
+
+  const copyCredentials = (text) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+  };
 
   const isFormValid = () => {
     const requiredFields = [
@@ -168,12 +195,17 @@ export default function OnboardTherapist() {
 
   const submit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
     setSaving(true);
-    
+
+    const tempPassword = form.password?.trim() || generateTemporaryPassword();
+
     try {
-      // Create user account
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      // Secondary Auth app so the onboarding admin stays signed in
+      const secAuth = getTherapistCreatorAuth();
+      const cred = await createUserWithEmailAndPassword(secAuth, form.email.trim(), tempPassword);
       const uid = cred.user.uid;
+      await fbSignOut(secAuth);
       
       let photoURL = '';
       
@@ -226,43 +258,38 @@ export default function OnboardTherapist() {
         workExperience: form.workExperience,
         therapyApproaches: form.therapyApproaches.split(',').map((s) => s.trim()).filter(Boolean),
         photoURL: photoURL,
-        createdAt: new Date().toISOString()
+        mustChangePassword: true,
+        passwordResetIssuedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        createdBy: auth.currentUser?.uid || null,
       };
-      
-      // Save to Firestore
+
       await setDoc(doc(db, 'therapists', uid), payload);
       await setDoc(doc(collection(db, 'therapists_usernames'), form.username), { uid });
-      
-      alert('Therapist onboarded successfully!');
-      
-      // Reset form
-      setForm({ 
-        name: '', type: '', username: '', email: '', phone: '', password: '', 
-        role: 'user', specialties: '', licenseNumber: '', licensingAuthority: '',
-        licenseIssueDate: '', licenseExpiryDate: '', licenseFile: null,
-        yearsExperience: '', languagesSpoken: '', ageGroupsServed: [],
-        practiceName: '', practiceAddress: '', country: '', city: '', area: '', region: '', street: '', ghanaDigitalAddress: '', latitude: null, longitude: null, consultationMode: '',
-        availability: '', sessionDuration: '', consultationFee: '',
-        bio: '', education: '', workExperience: '', therapyApproaches: '', photoURL: '' 
+
+      setCredentials({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        username: form.username.trim(),
+        tempPassword,
+        role: form.role,
       });
+      setForm(emptyForm());
       setSelectedImage(null);
       setImagePreview('');
       setEducationCertificates([]);
       setCvFile(null);
       setCvPreview('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (educationFileInputRef.current) {
-        educationFileInputRef.current.value = '';
-      }
-      if (cvFileInputRef.current) {
-        cvFileInputRef.current.value = '';
-      }
-      
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (educationFileInputRef.current) educationFileInputRef.current.value = '';
+      if (cvFileInputRef.current) cvFileInputRef.current.value = '';
     } catch (error) {
       console.error('Error onboarding therapist:', error);
-      alert(`Error: ${error.message}`);
+      if (error.code === 'auth/email-already-in-use') {
+        setSubmitError('An account with this email already exists.');
+      } else {
+        setSubmitError(error.message || 'Failed to onboard therapist. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -272,10 +299,56 @@ export default function OnboardTherapist() {
     <div className="onboard-therapist">
       <div className="onboard-header">
         <h1 className="page-title">Onboard New Therapist</h1>
-        <p className="subtitle">Add a new therapist to the platform</p>
+        <p className="subtitle">
+          A temporary password is generated automatically. The therapist must change it on first login.
+        </p>
       </div>
 
+      {credentials ? (
+        <div className="onboard-credentials-card">
+          <h2 className="onboard-credentials-title">Therapist created: {credentials.name}</h2>
+          <p className="onboard-credentials-hint">
+            Share these credentials securely. They will be prompted to set a new password when they sign in.
+          </p>
+          <div className="onboard-credential-box">
+            <p>Login credentials</p>
+            <div className="onboard-credential-row">
+              <span>Email</span>
+              <strong>{credentials.email}</strong>
+            </div>
+            <div className="onboard-credential-row">
+              <span>Username</span>
+              <strong>{credentials.username}</strong>
+            </div>
+            <div className="onboard-credential-row">
+              <span>Temporary password</span>
+              <strong>{credentials.tempPassword}</strong>
+            </div>
+            <div className="onboard-credential-row">
+              <span>Role</span>
+              <strong>{credentials.role === 'admin' ? 'Admin therapist' : 'Therapist'}</strong>
+            </div>
+          </div>
+          <div className="onboard-credentials-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() =>
+                copyCredentials(
+                  `Email: ${credentials.email}\nUsername: ${credentials.username}\nTemporary password: ${credentials.tempPassword}`,
+                )
+              }
+            >
+              Copy all
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setCredentials(null)}>
+              Onboard another
+            </button>
+          </div>
+        </div>
+      ) : (
       <form className="onboard-form" onSubmit={submit}>
+        {submitError ? <div className="onboard-error-banner">{submitError}</div> : null}
         <div className="form-sections">
           {/* Basic Information */}
           <div className="form-section">
@@ -347,16 +420,27 @@ export default function OnboardTherapist() {
               </div>
               
               <div className="form-group">
-                <label htmlFor="password">Password *</label>
-                <input
-                  id="password"
-                  type="password"
-                  className="form-input"
-                  value={form.password}
-                  onChange={(e) => onChange('password', e.target.value)}
-                  required
-                  placeholder="Create a password"
-                />
+                <label htmlFor="password">Temporary password (auto-generated)</label>
+                <div className="onboard-password-row">
+                  <input
+                    id="password"
+                    type="text"
+                    className="form-input onboard-password-input"
+                    value={form.password}
+                    readOnly
+                    aria-readonly="true"
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary onboard-regen-btn"
+                    onClick={regeneratePassword}
+                    title="Generate new temporary password"
+                  >
+                    <RefreshCw size={16} />
+                    Regenerate
+                  </button>
+                </div>
+                <p className="onboard-field-hint">Therapist must change this password on first login.</p>
               </div>
               
               <div className="form-group">
@@ -367,8 +451,8 @@ export default function OnboardTherapist() {
                   value={form.role}
                   onChange={(e) => onChange('role', e.target.value)}
                 >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                  <option value="user">Therapist</option>
+                  <option value="admin">Admin therapist</option>
                 </select>
               </div>
             </div>
@@ -792,6 +876,7 @@ export default function OnboardTherapist() {
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 }

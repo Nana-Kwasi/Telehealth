@@ -70,7 +70,7 @@ export default function ForcedPasswordChangeOverlay({ profile, firestoreCollecti
         <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🔐</div>
         <h2 className="force-pw-title">Password Reset Required</h2>
         <p className="force-pw-sub">
-          Your account was created with a temporary password. You must set a new password before accessing your dashboard.
+          Your account must use a new password before accessing your dashboard. This applies to new accounts with a temporary password or when an administrator has reset your password.
         </p>
 
         {pwError ? (

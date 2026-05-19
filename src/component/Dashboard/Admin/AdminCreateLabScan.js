@@ -134,7 +134,7 @@ export default function AdminCreateLabScan() {
       </div>
 
       {credentials ? (
-        <div className="admin-table-card" style={{ padding: '1.5rem', maxWidth: 600 }}>
+        <div className="admin-table-card" style={{ padding: '1.5rem', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
             <span style={{ fontSize: '1.5rem' }}>{credentials.type === 'lab' ? '🧪' : '🩻'}</span>
             <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>
@@ -167,16 +167,16 @@ export default function AdminCreateLabScan() {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
+        <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '100%' }}>
           {error && (
             <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1rem' }}>
               🚨 {error}
             </div>
           )}
 
-          <div className="admin-table-card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
+          <div className="admin-table-card" style={{ padding: '1.5rem', marginBottom: '1rem', width: '100%', boxSizing: 'border-box' }}>
             <h3 style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Center Details</h3>
-            <div className="admin-form-grid">
+            <div className="admin-form-grid cols-3">
               <div className="admin-field">
                 <label>Center Type *</label>
                 <select value={form.type} onChange={e => update('type', e.target.value)} required>

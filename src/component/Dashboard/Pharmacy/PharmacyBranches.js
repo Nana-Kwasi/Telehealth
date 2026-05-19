@@ -5,6 +5,7 @@ import { collection, getDocs, addDoc, query, where, serverTimestamp } from 'fire
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import { formatDashboardLocationLine } from '../../Common/LocationSummaryCard';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI",
@@ -250,6 +251,7 @@ export default function PharmacyBranches({ profile }) {
               <tr>
                 <th>Branch</th>
                 <th>Email</th>
+                <th>Location</th>
                 <th>Username</th>
                 <th>Phone</th>
                 <th>Status</th>
@@ -269,6 +271,9 @@ export default function PharmacyBranches({ profile }) {
                 >
                   <td><strong>{b.branchName}</strong></td>
                   <td style={{ color: '#64748b' }}>{b.email}</td>
+                  <td style={{ color: '#475569', fontSize: '0.78rem', maxWidth: 220 }} title={formatDashboardLocationLine(b) || undefined}>
+                    {formatDashboardLocationLine(b) || '—'}
+                  </td>
                   <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem' }}>{b.username}</td>
                   <td>{b.contactNumber || '—'}</td>
                   <td>

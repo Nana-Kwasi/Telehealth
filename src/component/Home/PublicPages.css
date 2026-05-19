@@ -1,0 +1,311 @@
+/* Shared marketing / info pages (About, Contact, FAQs, etc.) */
+.public-page {
+  min-height: calc(100vh - var(--navbar-height, 70px));
+  background: var(--surface-page, #f5f7fa);
+}
+
+.public-page-hero {
+  background: linear-gradient(160deg, #0f172a 0%, #1e293b 55%, #0f2d4a 100%);
+  color: #fff;
+  padding: 2.5rem 1.5rem 3rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.public-page-hero::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(30, 107, 184, 0.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.public-page-hero-inner {
+  max-width: var(--max-width, 960px);
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.public-page-eyebrow {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #93c5fd;
+  margin-bottom: 0.75rem;
+}
+
+.public-page-title {
+  margin: 0 0 0.65rem;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.public-page-lead {
+  margin: 0;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.6;
+  max-width: 42rem;
+}
+
+.public-page-body {
+  max-width: var(--max-width, 960px);
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3.5rem;
+}
+
+.public-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.public-back-link:hover {
+  text-decoration: underline;
+}
+
+.public-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.35rem 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.public-card h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.public-card p,
+.public-card li {
+  margin: 0 0 0.65rem;
+  font-size: 0.92rem;
+  color: #475569;
+  line-height: 1.65;
+}
+
+.public-card ul {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+.public-card li {
+  margin-bottom: 0.4rem;
+}
+
+.public-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 720px) {
+  .public-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.public-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.public-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.15rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.public-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.public-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.public-btn-primary:hover:not(:disabled) {
+  opacity: 0.95;
+}
+
+.public-btn-ghost {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.public-form label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.public-form input,
+.public-form textarea,
+.public-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  font-family: inherit;
+}
+
+.public-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.public-form-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: -0.5rem 0 1rem;
+}
+
+.faq-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.faq-q {
+  width: 100%;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.faq-q:hover {
+  background: #f8fafc;
+}
+
+.faq-a {
+  padding: 0 1.1rem 1rem;
+  font-size: 0.88rem;
+  color: #475569;
+  line-height: 1.6;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.75rem;
+}
+
+.resource-tile {
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.resource-tile h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.resource-tile p {
+  margin: 0;
+  flex: 1;
+  font-size: 0.86rem;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.crisis-banner {
+  background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #fecaca;
+}
+
+.crisis-banner h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.crisis-banner p {
+  margin: 0;
+  font-size: 0.88rem;
+  opacity: 0.95;
+  line-height: 1.55;
+}
+
+.hotline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.65rem;
+}
+
+.hotline-card strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.hotline-card a {
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-decoration: none;
+}
+
+.hotline-card a:hover {
+  text-decoration: underline;
+}

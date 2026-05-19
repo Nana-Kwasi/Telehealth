@@ -13,13 +13,16 @@ export default function AdminReports() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [pats, docs, thers, pharmas, rxs, appts, labs, scans, diagOrders] = await Promise.all([
+      const [pats, docs, thers, pharmas, rxs, appts, therapyCalls, hcNurses, hcBookings, labs, scans, diagOrders] = await Promise.all([
         getDocs(collection(db, 'auth')),
         getDocs(collection(db, 'doctors')),
         getDocs(collection(db, 'therapists')),
         getDocs(collection(db, 'pharmacies')),
         getDocs(collection(db, 'doctorPrescriptions')),
         getDocs(collection(db, 'doctorAppointments')),
+        getDocs(collection(db, 'scheduledCalls')),
+        getDocs(collection(db, 'homeCareNurses')),
+        getDocs(collection(db, 'homeCareBookings')),
         getDocs(collection(db, 'labs')),
         getDocs(collection(db, 'scanCenters')),
         getDocs(collection(db, 'diagnosticOrders')),
@@ -27,8 +30,42 @@ export default function AdminReports() {
 
       const allRx    = rxs.docs.map(d => ({ id: d.id, ...d.data() }));
       const allAppts = appts.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allScheduledCalls = therapyCalls.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const allHcBookings = hcBookings.docs.map((d) => ({ id: d.id, ...d.data() }));
       const allDiag  = diagOrders.docs.map(d => ({ id: d.id, ...d.data() }));
       const allPats  = pats.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const bumpDoctorOrTherapyStatus = (apptStatus, rawStatus) => {
+        const s = (rawStatus || 'upcoming').toLowerCase();
+        if (s === 'completed') apptStatus.completed += 1;
+        else if (s === 'cancelled') apptStatus.cancelled += 1;
+        else if (s === 'no-show') apptStatus['no-show'] += 1;
+        else if (['upcoming', 'pending', 'confirmed', 'scheduled'].includes(s)) apptStatus.upcoming += 1;
+        else apptStatus.upcoming += 1;
+      };
+
+      const apptStatus = { upcoming: 0, completed: 0, cancelled: 0, 'no-show': 0 };
+      allAppts.forEach((a) => bumpDoctorOrTherapyStatus(apptStatus, a.status));
+      allScheduledCalls.forEach((sc) => bumpDoctorOrTherapyStatus(apptStatus, sc.status));
+      const hcActive = new Set(['pending', 'accepted', 'en_route', 'arrived', 'in_progress', 'ongoing']);
+      allHcBookings.forEach((b) => {
+        const s = (b.status || 'pending').toLowerCase();
+        if (s === 'completed') apptStatus.completed += 1;
+        else if (s === 'cancelled' || s === 'declined') apptStatus.cancelled += 1;
+        else if (s === 'no-show') apptStatus['no-show'] += 1;
+        else if (hcActive.has(s)) apptStatus.upcoming += 1;
+        else apptStatus.upcoming += 1;
+      });
+
+      const hcBookingStatus = { pending: 0, active: 0, completed: 0, cancelled: 0, other: 0 };
+      allHcBookings.forEach((b) => {
+        const s = (b.status || 'pending').toLowerCase();
+        if (s === 'pending') hcBookingStatus.pending += 1;
+        else if (s === 'completed') hcBookingStatus.completed += 1;
+        else if (s === 'cancelled' || s === 'declined') hcBookingStatus.cancelled += 1;
+        else if (hcActive.has(s) && s !== 'pending') hcBookingStatus.active += 1;
+        else hcBookingStatus.other += 1;
+      });
 
       // Monthly registration counts (last 6 months)
       const now = new Date();
@@ -48,10 +85,6 @@ export default function AdminReports() {
       // Prescription status breakdown
       const rxStatus = { active: 0, completed: 0, cancelled: 0, expired: 0 };
       allRx.forEach(rx => { const s = rx.status || 'active'; if (s in rxStatus) rxStatus[s]++; });
-
-      // Appointment status breakdown
-      const apptStatus = { upcoming: 0, completed: 0, cancelled: 0, 'no-show': 0 };
-      allAppts.forEach(a => { const s = a.status || 'upcoming'; if (s in apptStatus) apptStatus[s]++; });
 
       // Diagnostic order breakdown
       const diagByType = { lab: 0, scan: 0 };
@@ -80,23 +113,35 @@ export default function AdminReports() {
         suspended: pharmas.docs.filter(d => d.data().status === 'suspended').length,
       };
 
+      const docApptCompleted = allAppts.filter((a) => (a.status || '').toLowerCase() === 'completed').length;
+      const therapyCompleted = allScheduledCalls.filter((c) => (c.status || '').toLowerCase() === 'completed').length;
+      const hcCompleted = allHcBookings.filter((b) => (b.status || '').toLowerCase() === 'completed').length;
+      const apptDenom = allAppts.length + allScheduledCalls.length + allHcBookings.length;
+
       setData({
-        raw: { allRx, allAppts, allDiag, allPats },
+        raw: { allRx, allAppts, allScheduledCalls, allHcBookings, allDiag, allPats },
         totals: {
           patients: pats.size, doctors: docs.size, therapists: thers.size,
           pharmacies: pharmas.size, labs: labs.size, scans: scans.size,
-          prescriptions: rxs.size, appointments: appts.size, diagnosticOrders: allDiag.length,
+          prescriptions: rxs.size,
+          appointments: appts.size + therapyCalls.size + hcBookings.size,
+          doctorAppointments: appts.size,
+          therapyScheduledCalls: therapyCalls.size,
+          homeCareBookings: hcBookings.size,
+          homeCareNurses: hcNurses.size,
+          diagnosticOrders: allDiag.length,
         },
         months: months.map(m => m.label),
         patsByMonth,
         rxStatus,
         apptStatus,
+        hcBookingStatus,
         diagByType,
         topDocs,
         flaggedRx,
         pharmStats,
-        completionRate: allAppts.length
-          ? Math.round((apptStatus.completed / allAppts.length) * 100)
+        completionRate: apptDenom
+          ? Math.round(((docApptCompleted + therapyCompleted + hcCompleted) / apptDenom) * 100)
           : 0,
         flagRate: allRx.length ? Math.round((flaggedRx / allRx.length) * 100) : 0,
       });
@@ -122,8 +167,16 @@ export default function AdminReports() {
     if (!cutoffMs) return true;
     return ms >= cutoffMs;
   };
+  const inWindowScheduledCall = (row) => {
+    let ms = row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
+    if (!ms && row?.scheduledTime?.seconds) ms = row.scheduledTime.seconds * 1000;
+    if (!cutoffMs) return true;
+    return ms >= cutoffMs;
+  };
   const fRx = (data.raw?.allRx || []).filter(r => inWindow(r, 'createdAt'));
   const fAppts = (data.raw?.allAppts || []).filter(a => inWindow(a, 'createdAt'));
+  const fScheduledCalls = (data.raw?.allScheduledCalls || []).filter(inWindowScheduledCall);
+  const fHcBookings = (data.raw?.allHcBookings || []).filter((b) => inWindow(b, 'createdAt'));
   const fDiag = (data.raw?.allDiag || []).filter(o => inWindow(o, 'createdAt'));
   const fPats = (data.raw?.allPats || []).filter(p => inWindow(p, 'createdAt'));
   const maxBar = Math.max(...data.patsByMonth, 1);
@@ -133,16 +186,17 @@ export default function AdminReports() {
       { label: 'Total Patients', val: cutoffMs ? fPats.length : data.totals.patients, icon: '👥', color: '#1d4ed8', bg: '#eff6ff' },
       { label: 'Total Doctors', val: data.totals.doctors, icon: '🩺', color: '#16a34a', bg: '#f0fdf4' },
       { label: 'Total Therapists', val: data.totals.therapists, icon: '🧠', color: '#9333ea', bg: '#fdf4ff' },
+      { label: 'Home Care Nurses', val: data.totals.homeCareNurses ?? 0, icon: '🏠', color: '#0d9488', bg: '#f0fdfa' },
     ],
     activity: [
       { label: 'Prescriptions', val: cutoffMs ? fRx.length : data.totals.prescriptions, icon: '📋', color: '#9333ea', bg: '#fdf4ff' },
-      { label: 'Appointments', val: cutoffMs ? fAppts.length : data.totals.appointments, icon: '📅', color: '#d97706', bg: '#fffbeb' },
+      { label: 'Appts + therapy + HC', val: cutoffMs ? fAppts.length + fScheduledCalls.length + fHcBookings.length : data.totals.appointments, icon: '📅', color: '#d97706', bg: '#fffbeb' },
       { label: 'Diagnostic Orders', val: cutoffMs ? fDiag.length : data.totals.diagnosticOrders, icon: '🔬', color: '#0891b2', bg: '#ecfeff' },
     ],
     transactions: [
-      { label: 'Appt Completion', val: `${data.completionRate}%`, icon: '✅', color: '#059669', bg: '#f0fdf4' },
+      { label: 'Visit / appt completion', val: `${data.completionRate}%`, icon: '✅', color: '#059669', bg: '#f0fdf4' },
       { label: 'Flagged Rx Rate', val: `${data.flagRate}%`, icon: '⚠️', color: data.flagRate > 10 ? '#dc2626' : '#d97706', bg: '#fffbeb' },
-      { label: 'Platform Providers', val: data.totals.doctors + data.totals.therapists + data.totals.pharmacies + data.totals.labs + data.totals.scans, icon: '🏥', color: '#6d28d9', bg: '#faf5ff' },
+      { label: 'Platform Providers', val: data.totals.doctors + data.totals.therapists + data.totals.pharmacies + data.totals.labs + data.totals.scans + (data.totals.homeCareNurses || 0), icon: '🏥', color: '#6d28d9', bg: '#faf5ff' },
     ],
   };
   const cards = focus === 'users' ? focusCards.users : focus === 'activity' ? focusCards.activity : focus === 'transactions' ? focusCards.transactions : [...focusCards.users, ...focusCards.activity, ...focusCards.transactions];
@@ -234,12 +288,15 @@ export default function AdminReports() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1.5rem' }}>
         {/* Appointment breakdown */}
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            📅 Appointment Outcomes
+            📅 Appointment outcomes (doctor + therapy + home care)
           </h3>
+          <p style={{ margin: '0 0 0.75rem', fontSize: '0.72rem', color: '#64748b' }}>
+            Doctor + therapy (scheduledCalls) statuses merged with home care bookings (active pipeline → Upcoming).
+          </p>
           {[
             { label: 'Upcoming',  val: data.apptStatus.upcoming,   color: '#d97706' },
             { label: 'Completed', val: data.apptStatus.completed,  color: '#16a34a' },
@@ -251,6 +308,27 @@ export default function AdminReports() {
               <span style={{ fontWeight: 700, color: row.color, fontSize: '0.9rem' }}>{row.val}</span>
             </div>
           ))}
+        </div>
+
+        <div className="admin-table-card" style={{ padding: '1.25rem' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
+            🏠 Home care bookings (status)
+          </h3>
+          {[
+            { label: 'Pending', val: data.hcBookingStatus.pending, color: '#d97706' },
+            { label: 'Active visit', val: data.hcBookingStatus.active, color: '#0d9488' },
+            { label: 'Completed', val: data.hcBookingStatus.completed, color: '#16a34a' },
+            { label: 'Cancelled / declined', val: data.hcBookingStatus.cancelled, color: '#dc2626' },
+            { label: 'Other', val: data.hcBookingStatus.other, color: '#64748b' },
+          ].map((row) => (
+            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: '0.82rem', color: '#475569' }}>{row.label}</span>
+              <span style={{ fontWeight: 700, color: row.color, fontSize: '0.9rem' }}>{row.val}</span>
+            </div>
+          ))}
+          <p style={{ margin: '0.75rem 0 0', fontSize: '0.72rem', color: '#64748b' }}>
+            Nurses on file: <strong>{data.totals.homeCareNurses}</strong> · Bookings: <strong>{data.totals.homeCareBookings}</strong>
+          </p>
         </div>
 
         {/* Diagnostic orders */}

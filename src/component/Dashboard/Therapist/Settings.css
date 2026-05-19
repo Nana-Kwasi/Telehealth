@@ -747,6 +747,54 @@ input:checked + .slider:before { transform: translateX(22px); }
 .metric-value { font-size: 1.375rem; font-weight: 700; color: var(--text-primary); }
 
 /* ── Responsive ────────────────────────────────────────────── */
+.form-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.input-readonly {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.security-email-block {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.security-email-block h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.security-email-form {
+  max-width: 420px;
+  margin-top: 1rem;
+}
+
+.settings-alert {
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin: 0.75rem 0;
+}
+
+.settings-alert--err {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.settings-alert--ok {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
 @media (max-width: 768px) {
   .settings-dashboard { padding: 1rem; }
   .settings-container { grid-template-columns: 1fr; gap: 1rem; }

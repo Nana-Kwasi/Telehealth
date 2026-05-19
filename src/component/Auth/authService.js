@@ -1,5 +1,5 @@
 import { auth, db } from './firebaseConfig';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, query, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { ensureVanessaAdmin } from './adminSeed';
 
@@ -285,9 +285,15 @@ async function logLoginAttempt(userId, userRole, success, errorMessage = null) {
   return logUserLoginData(userId, userRole, null, success, errorMessage);
 }
 
-// Log user logout
+// Log user logout (must run while Firebase Auth session is still active)
 export async function logUserLogout(userId, userRole, profile) {
   try {
+    if (!auth.currentUser) {
+      sessionStorage.removeItem('sessionId');
+      sessionStorage.removeItem('loginTime');
+      return;
+    }
+
     const sessionId = sessionStorage.getItem('sessionId');
     const loginTime = sessionStorage.getItem('loginTime');
     
@@ -320,6 +326,22 @@ export async function logUserLogout(userId, userRole, profile) {
   } catch (error) {
     console.error('Error logging user logout:', error);
   }
+}
+
+/** Log logout then sign out — call this instead of signOut() directly. */
+export async function performLogout({ userId, role, profile, clearCoupleKeys = false } = {}) {
+  const uid = userId || auth.currentUser?.uid;
+  if (uid && auth.currentUser) {
+    await logUserLogout(uid, role, profile);
+  }
+  sessionStorage.removeItem('previousSession');
+  if (clearCoupleKeys && typeof localStorage !== 'undefined') {
+    localStorage.removeItem('th.coupleId');
+    localStorage.removeItem('th.couplePartnerRole');
+    localStorage.removeItem('th.coupleInviteToken');
+    localStorage.removeItem('th.coupleMyIntakeComplete');
+  }
+  await signOut(auth);
 }
 
 // Sign-in that accepts email OR username
@@ -472,6 +494,15 @@ export async function resolveRole(uid) {
     }
   } catch (_) {}
 
+  // Home-care nurses
+  try {
+    const nurseSnap = await getDoc(doc(db, 'homeCareNurses', uid));
+    if (nurseSnap.exists()) {
+      const data = nurseSnap.data();
+      return { role: 'homecare_nurse', profile: { id: nurseSnap.id, ...data, role: 'homecare_nurse' } };
+    }
+  } catch (_) {}
+
   // Check scan branches
   try {
     const scanBranchSnap = await getDoc(doc(db, 'scanBranches', uid));
@@ -525,26 +556,18 @@ export async function resolveRole(uid) {
     const therapistData = therapistSnap.data();
     console.log('Found therapist data:', therapistData);
 
-    // Check if this is an admin user
-    if (therapistData.role === 'admin') {
-      return {
-        role: 'therapist', // Admin users get therapist dashboard
-        profile: {
-          id: therapistSnap.id,
-          ...therapistData,
-          role: 'admin'
-        }
-      };
-    }
+    // Admin therapist: therapist portal shell + extra admin tools (not platform super admin).
+    const isAdminTherapist =
+      therapistData.role === 'admin' || therapistData.type === 'Administrator';
 
-    // Regular therapist
     return {
       role: 'therapist',
       profile: {
         id: therapistSnap.id,
         ...therapistData,
-        role: therapistData.role || 'therapist'
-      }
+        role: isAdminTherapist ? 'admin' : therapistData.role || 'user',
+        isAdminTherapist,
+      },
     };
   }
 
@@ -559,38 +582,34 @@ export async function resolveRole(uid) {
     // Check client status in both auth and clients collections
     let clientStatus = authData.status || 'active';
 
-    // Also check clients collection for status
-    if (authData.clientId) {
-      try {
-        const clientRef = doc(db, 'clients', authData.clientId);
-        const clientSnap = await getDoc(clientRef);
-        if (clientSnap.exists()) {
-          const clientData = clientSnap.data();
+    let clientData = null;
+    const clientDocId = authData.clientId || uid;
+    try {
+      const clientSnap = await getDoc(doc(db, 'clients', clientDocId));
+      if (clientSnap.exists()) {
+        clientData = clientSnap.data();
+        clientStatus = clientData.status || clientStatus;
+      } else if (clientDocId !== uid) {
+        const altSnap = await getDoc(doc(db, 'clients', uid));
+        if (altSnap.exists()) {
+          clientData = altSnap.data();
           clientStatus = clientData.status || clientStatus;
         }
-      } catch (error) {
-        console.log('Error checking clients collection:', error);
       }
+    } catch (error) {
+      console.log('Error checking clients collection:', error);
     }
 
-    // Check if client is not active
-    if (clientStatus !== 'active') {
-      let errorMessage = 'Your account is not active. Please contact your therapist or administrator for assistance.';
-
-      switch (clientStatus) {
-        case 'inactive':
-          errorMessage = 'Your account has been deactivated. Please contact your therapist or administrator for assistance.';
-          break;
-        case 'discharged':
-          errorMessage = 'Your account has been discharged. Please contact your therapist or administrator for assistance.';
-          break;
-        case 'on_hold':
-          errorMessage = 'Your account is currently on hold. Please contact your therapist or administrator for assistance.';
-          break;
-        default:
-          errorMessage = 'Your account is not active. Please contact your therapist or administrator for assistance.';
+    const blocked = ['inactive', 'discharged', 'on_hold', 'suspended', 'disabled'];
+    if (blocked.includes(String(clientStatus).toLowerCase())) {
+      let errorMessage = 'Your account is not active. Please contact support for assistance.';
+      if (clientStatus === 'inactive') {
+        errorMessage = 'Your account has been deactivated. Please contact support for assistance.';
+      } else if (clientStatus === 'discharged') {
+        errorMessage = 'Your account has been discharged. Please contact support for assistance.';
+      } else if (clientStatus === 'on_hold') {
+        errorMessage = 'Your account is currently on hold. Please contact support for assistance.';
       }
-
       throw new Error(errorMessage);
     }
 
@@ -599,9 +618,12 @@ export async function resolveRole(uid) {
       profile: {
         id: authSnap.id,
         ...authData,
+        ...(clientData || {}),
+        userIntent: authData.userIntent || clientData?.userIntent,
+        name: authData.name || clientData?.clientName || clientData?.displayName,
         status: clientStatus,
-        role: 'client'
-      }
+        role: 'client',
+      },
     };
   }
 
@@ -661,6 +683,13 @@ export async function findUserByUsernameOrEmail(identifier) {
   const sbQE = query(collection(db, 'scanBranches'), where('email', '==', identifier));
   const sbRE = await getDocs(sbQE);
   if (!sbRE.empty) return { id: sbRE.docs[0].id, ...sbRE.docs[0].data() };
+
+  const hnQ = query(collection(db, 'homeCareNurses'), where('username', '==', identifier));
+  const hnR = await getDocs(hnQ);
+  if (!hnR.empty) return { id: hnR.docs[0].id, ...hnR.docs[0].data() };
+  const hnQE = query(collection(db, 'homeCareNurses'), where('email', '==', identifier));
+  const hnRE = await getDocs(hnQE);
+  if (!hnRE.empty) return { id: hnRE.docs[0].id, ...hnRE.docs[0].data() };
 
   // Check admins
   const adQ = query(collection(db, 'admins'), where('username', '==', identifier));

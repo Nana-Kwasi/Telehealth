@@ -4,7 +4,7 @@ import Home from './component/Home/Home';
 import Questionnaire from './component/Questionnaire/Questionnaire';
 import Payment from './component/Payment/Payment';
 import Navbar from './component/Layout/Navbar';
-import { resolveRole, logUserLogout } from './component/Auth/authService';
+import { resolveRole } from './component/Auth/authService';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './component/Auth/firebaseConfig';
 import useSystemConfig, { cfg, useFeatureFlagsConfig } from './hooks/useSystemConfig';
@@ -25,19 +25,42 @@ import ScanBranchDashboard from './component/Dashboard/Scan/ScanBranchDashboard'
 import VideoCallPage from './component/VideoCall/VideoCallPage';
 import Terms from './component/Home/Terms';
 import Privacy from './component/Home/Privacy';
+import AboutPage from './component/Home/AboutPage';
+import ContactPage from './component/Home/ContactPage';
+import FaqsPage from './component/Home/FaqsPage';
+import ResourcesPage from './component/Home/ResourcesPage';
+import HelpCenterPage from './component/Home/HelpCenterPage';
+import CrisisSupportPage from './component/Home/CrisisSupportPage';
 import DoctorSearch from './component/Doctors/DoctorSearch';
 import DoctorProfilePage from './component/Doctors/DoctorProfilePage';
 import MedicalIntake from './component/Doctors/MedicalIntake';
+import HomeCarePatientDashboard from './component/HomeCare/HomeCarePatientDashboard';
+import HomeCarePatientShell from './component/HomeCare/HomeCarePatientShell';
+import HomeCareHome from './component/HomeCare/HomeCareHome';
+import HomeCareSearch from './component/HomeCare/HomeCareSearch';
+import HomeCareNurseProfile from './component/HomeCare/HomeCareNurseProfile';
+import HomeCareBook from './component/HomeCare/HomeCareBook';
+import HomeCareBookingStatus from './component/HomeCare/HomeCareBookingStatus';
+import HomeCareHistory from './component/HomeCare/HomeCareHistory';
+import HomeCareOngoingCare from './component/HomeCare/HomeCareOngoingCare';
+import HomeCareEmergency from './component/HomeCare/HomeCareEmergency';
+import HomeCareFeedback from './component/HomeCare/HomeCareFeedback';
+import HomeCareReport from './component/HomeCare/HomeCareReport';
+import HomeCareVisitSummary from './component/HomeCare/HomeCareVisitSummary';
+import HomeCareSignUp from './component/HomeCare/HomeCareSignUp';
+import ParentGuardianInfo from './component/TeenTherapy/ParentGuardianInfo';
+import ChildInfo from './component/TeenTherapy/ChildInfo';
+import ParentConsent from './component/TeenTherapy/ParentConsent';
+import CoupleInitiation from './component/CoupleTherapy/CoupleInitiation';
+import CoupleInviteEntry from './component/CoupleTherapy/CoupleInviteEntry';
+import CouplePartnerBWelcome from './component/CoupleTherapy/CouplePartnerBWelcome';
+import CoupleIntake from './component/CoupleTherapy/CoupleIntake';
+import CoupleWaitingPartner from './component/CoupleTherapy/CoupleWaitingPartner';
+import CoupleDashboard from './component/CoupleTherapy/CoupleDashboard';
+import MatchTherapist from './component/Match/MatchTherapist';
+import HomeCareNurseDashboard from './component/Dashboard/HomeCare/HomeCareNurseDashboard';
 import DashboardLocationGate from './component/Common/DashboardLocationGate';
-
-function Placeholder({ title }) {
-  return (
-    <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-      <h1 style={{ fontSize: '2rem', fontWeight: 700, color: '#1e293b' }}>{title}</h1>
-      <p style={{ color: '#64748b' }}>Coming soon.</p>
-    </div>
-  );
-}
+import AuthenticatedLandingRedirect from './component/Common/AuthenticatedLandingRedirect';
 
 function LoadingScreen() {
   return (
@@ -66,7 +89,9 @@ function LoadingScreen() {
 // Redirects authenticated users away from login / signup
 function PublicRoute({ children, session }) {
   if (session.loading) return <LoadingScreen />;
-  if (session.role) return <Navigate to="/dashboard" replace />;
+  if (session.role) {
+    return <AuthenticatedLandingRedirect session={session} />;
+  }
   return children;
 }
 
@@ -113,17 +138,19 @@ export default function App() {
       if (!u) {
         const prev = sessionStorage.getItem('previousSession');
         if (prev) {
-          try {
-            const s = JSON.parse(prev);
-            await logUserLogout(s.userId, s.role, s.profile);
-          } catch (_) {}
           sessionStorage.removeItem('previousSession');
         }
         return setSession({ loading: false, role: null, profile: null });
       }
 
       try {
-        const { role, profile } = await resolveRole(u.uid);
+        let { role, profile } = await resolveRole(u.uid);
+        if (role === 'guest') {
+          await new Promise((r) => setTimeout(r, 600));
+          const retry = await resolveRole(u.uid);
+          role = retry.role;
+          profile = retry.profile;
+        }
         sessionStorage.setItem('previousSession', JSON.stringify({ userId: u.uid, role, profile }));
         setSession({ loading: false, role, profile });
       } catch (err) {
@@ -162,33 +189,65 @@ export default function App() {
     session.role === 'scan'                                   ? <ScanDashboard           profile={session.profile} /> :
     session.role === 'lab_branch'                             ? <LabBranchDashboard      profile={session.profile} /> :
     session.role === 'scan_branch'                            ? <ScanBranchDashboard     profile={session.profile} /> :
-    session.role === 'therapist' && session.profile?.role === 'admin' ? <AdminDashboard  profile={session.profile} /> :
     session.role === 'therapist'                              ? <TherapistDashboard      profile={session.profile} /> :
     session.role === 'doctor'                                 ? <DoctorDashboard         profile={session.profile} /> :
+    session.role === 'homecare_nurse'                         ? <HomeCareNurseDashboard  profile={session.profile} /> :
     session.profile?.userIntent === 'medical'                 ? <MedicalPatientDashboard profile={session.profile} /> :
                                                                 <ClientDashboard         profile={session.profile} />;
 
+  const hideNavbar =
+    location.pathname.startsWith('/home-care') && location.pathname !== '/home-care/sign-up';
+
   return (
     <div>
-      <Navbar />
-      <div className="container">
+      <Navbar session={session} />
+      <div className={hideNavbar ? 'hcp-app-root' : 'container'}>
         <DashboardLocationGate role={session.role} profile={session.profile} activePath={location.pathname} />
         <Routes>
           {/* ── Public ── */}
           <Route path="/"              element={<Home />} />
+          <Route path="/teen/parent-guardian" element={<ParentGuardianInfo />} />
+          <Route path="/teen/child" element={<ChildInfo />} />
+          <Route path="/teen/consent" element={<ParentConsent />} />
+          <Route path="/couple/initiation" element={<CoupleInitiation />} />
+          <Route path="/couple/join" element={<CoupleInviteEntry />} />
+          <Route path="/couple/welcome" element={<CouplePartnerBWelcome />} />
+          <Route path="/couple/intake" element={<CoupleIntake />} />
+          <Route path="/couple/waiting" element={<CoupleWaitingPartner />} />
+          <Route path="/couple/dashboard" element={<CoupleDashboard />} />
           <Route path="/questionnaire" element={<Questionnaire />} />
           <Route path="/payment"       element={<Payment />} />
+          <Route path="/match-therapist" element={<MatchTherapist />} />
           <Route path="/terms"         element={<Terms />} />
           <Route path="/privacy"       element={<Privacy />} />
-          <Route path="/about"         element={<Placeholder title="About" />} />
-          <Route path="/contact"       element={<Placeholder title="Contact" />} />
-          <Route path="/faqs"          element={<Placeholder title="FAQs" />} />
-          <Route path="/advice"        element={<Placeholder title="Advice" />} />
+          <Route path="/about"         element={<AboutPage />} />
+          <Route path="/contact"       element={<ContactPage />} />
+          <Route path="/faqs"          element={<FaqsPage />} />
+          <Route path="/advice"        element={<ResourcesPage />} />
+          <Route path="/help"          element={<HelpCenterPage />} />
+          <Route path="/crisis-support" element={<CrisisSupportPage />} />
 
           {/* ── Doctor Discovery (public) ── */}
           <Route path="/medical"           element={<MedicalIntake />} />
           <Route path="/doctors"           element={<DoctorSearch session={session} />} />
           <Route path="/doctors/:doctorId" element={<DoctorProfilePage session={session} />} />
+
+          {/* ── Home Care (sidebar shell on web; sign-up stays full-page) ── */}
+          <Route path="/home-care" element={<HomeCarePatientShell />}>
+            <Route index element={<HomeCarePatientDashboard />} />
+            <Route path="browse" element={<HomeCareHome />} />
+            <Route path="search" element={<HomeCareSearch />} />
+            <Route path="nurse/:nurseId" element={<HomeCareNurseProfile />} />
+            <Route path="book/:nurseId" element={<HomeCareBook />} />
+            <Route path="booking/:bookingId" element={<HomeCareBookingStatus />} />
+            <Route path="history" element={<HomeCareHistory />} />
+            <Route path="ongoing" element={<HomeCareOngoingCare />} />
+            <Route path="emergency" element={<HomeCareEmergency />} />
+            <Route path="feedback/:bookingId" element={<HomeCareFeedback />} />
+            <Route path="report/:bookingId" element={<HomeCareReport />} />
+            <Route path="visit-summary/:bookingId" element={<HomeCareVisitSummary />} />
+          </Route>
+          <Route path="/home-care/sign-up" element={<HomeCareSignUp />} />
 
           {/* ── Auth (redirect if already logged in) ── */}
           <Route path="/login"  element={<PublicRoute session={session}><Login  /></PublicRoute>} />

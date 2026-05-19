@@ -1,13 +1,30 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { auth, db } from './firebaseConfig';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import './SignUp.css';
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
+import {
+  createPartnerClientRecord,
+  linkCouplePartnerAuth,
+} from '../../services/coupleTherapyService';
 
 export default function SignUp() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const location = useLocation();
+  const clientData = location.state?.clientData;
+  const lockEmail = clientData?.lockEmail;
+  const coupleInviteSubtitle =
+    clientData?.therapyType === 'couples' && clientData?.couplePartnerRole === 'partnerB'
+      ? `${clientData?.invitePartnerName || 'Your partner'} invited you to couples therapy. Create your own login — your intake answers stay private.`
+      : null;
+
+  const [form, setForm] = useState({
+    name: clientData?.name || clientData?.displayName || '',
+    email: clientData?.email || '',
+    password: '',
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -27,13 +44,34 @@ export default function SignUp() {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const uid = cred.user.uid;
 
-      // Get the client ID from localStorage (set during questionnaire completion)
-      const clientId = localStorage.getItem('th.clientId');
+      let clientId = localStorage.getItem('th.clientId');
+      const coupleId = clientData?.coupleId || localStorage.getItem(COUPLE_STORAGE_KEYS.coupleId);
+      const couplePartnerRole =
+        clientData?.couplePartnerRole || localStorage.getItem(COUPLE_STORAGE_KEYS.partnerRole) || 'partnerA';
+      const isCouple = clientData?.therapyType === 'couples' || !!coupleId;
+
+      if (isCouple && !clientId && coupleId) {
+        clientId = await createPartnerClientRecord(
+          coupleId,
+          couplePartnerRole,
+          form.email.toLowerCase(),
+          form.name,
+          uid,
+        );
+        localStorage.setItem('th.clientId', clientId);
+      }
 
       // Determine user intent — medical if they came through doctor booking flow or skipped intake
       const pendingBookingRaw = localStorage.getItem('th.pendingBooking');
       const medicalSkip = localStorage.getItem('th.medicalSkip');
-      const userIntent = (pendingBookingRaw || medicalSkip) ? 'medical' : 'therapy';
+      const homecareIntent = localStorage.getItem('userIntent') === 'homecare';
+      const userIntent = isCouple
+        ? 'therapy'
+        : homecareIntent
+          ? 'homecare'
+          : pendingBookingRaw || medicalSkip
+            ? 'medical'
+            : 'therapy';
 
       // Create user profile in auth collection
       const userProfile = {
@@ -43,7 +81,10 @@ export default function SignUp() {
         role: 'client',
         userIntent,
         clientId: clientId,
-        status: 'pending',
+        coupleId: isCouple ? coupleId : undefined,
+        couplePartnerRole: isCouple ? couplePartnerRole : undefined,
+        therapyType: isCouple ? 'couples' : undefined,
+        status: 'active',
         createdAt: new Date().toISOString()
       };
 
@@ -55,9 +96,35 @@ export default function SignUp() {
           authUid: uid,
           displayName: form.name,
           clientName: form.name,
-          status: 'pending',
+          name: form.name,
+          email: form.email,
+          therapyType: isCouple ? 'couples' : undefined,
+          coupleId: isCouple ? coupleId : undefined,
+          couplePartnerRole: isCouple ? couplePartnerRole : undefined,
+          status: 'active',
           updatedAt: new Date().toISOString()
         }, { merge: true });
+      }
+
+      if (isCouple && coupleId) {
+        await linkCouplePartnerAuth(coupleId, couplePartnerRole, {
+          authUid: uid,
+          clientId: clientId || uid,
+          name: form.name,
+        });
+        localStorage.setItem(COUPLE_STORAGE_KEYS.coupleId, coupleId);
+        localStorage.setItem(COUPLE_STORAGE_KEYS.partnerRole, couplePartnerRole);
+        localStorage.setItem(COUPLE_STORAGE_KEYS.myPartnerName, form.name.trim());
+        localStorage.setItem('th.clientId', clientId || uid);
+        localStorage.setItem(
+          'th.onboard',
+          JSON.stringify({ therapyType: 'couples', coupleId, startedAt: new Date().toISOString() }),
+        );
+        navigate('/couple/intake', {
+          replace: true,
+          state: { coupleId, partnerRole: couplePartnerRole },
+        });
+        return;
       }
       
       // If there's a pending doctor booking, create it now and go straight to dashboard
@@ -98,6 +165,8 @@ export default function SignUp() {
       } else if (medicalSkip) {
         localStorage.removeItem('th.medicalSkip');
         navigate('/dashboard');
+      } else if (homecareIntent) {
+        navigate('/home-care');
       } else {
         navigate('/payment');
       }
@@ -157,7 +226,9 @@ export default function SignUp() {
             </div>
 
             <h1 className="signup-title">Create your account</h1>
-            <p className="signup-subtitle">Complete your profile to get matched with a therapist</p>
+            <p className="signup-subtitle">
+              {coupleInviteSubtitle || 'Complete your profile to get matched with a therapist'}
+            </p>
 
             <form onSubmit={submit}>
               <div className="form-group">
@@ -168,7 +239,7 @@ export default function SignUp() {
               <div className="form-group">
                 <label className="form-label" htmlFor="su-email">Email</label>
                 <input id="su-email" className="form-input" type="email" placeholder="you@example.com"
-                  value={form.email} onChange={e => onChange('email', e.target.value)} required />
+                  value={form.email} onChange={e => onChange('email', e.target.value)} required readOnly={lockEmail} />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="su-password">Password</label>

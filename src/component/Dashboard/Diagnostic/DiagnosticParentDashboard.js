@@ -8,6 +8,9 @@ import { auth, db } from '../../Auth/firebaseConfig';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import { formatDashboardLocationLine } from '../../Common/LocationSummaryCard';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI',
@@ -76,6 +79,10 @@ function ParentOverview({ type, profile }) {
     <div className="pharmacy-page">
       <h1 className="pharmacy-page-title">{type === 'lab' ? 'Lab Parent Overview' : 'Scan Parent Overview'}</h1>
       <p className="pharmacy-page-sub">Manage your network and monitor branch operations.</p>
+      <LocationSummaryCard
+        profile={profile}
+        title={type === 'lab' ? 'Lab / HQ location' : 'Scan center location'}
+      />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px, 1fr))', gap: 12 }}>
         {[
           ['Branches', stats.branches, '#1d4ed8'],
@@ -322,7 +329,7 @@ function ParentBranches({ type, profile }) {
                   >
                     <td><strong>{b.branchName || 'Branch'}</strong></td>
                     <td>{b.email || '—'}</td>
-                    <td>{b.city || b.address || '—'}</td>
+                    <td>{formatDashboardLocationLine(b) || '—'}</td>
                     <td>
                       <span className={`diagnostic-branch-status diagnostic-branch-status--${(b.status || 'active') === 'active' ? 'ok' : 'off'}`}>
                         {b.status || 'active'}
@@ -502,7 +509,7 @@ function ParentBranchDetail({ type, profile }) {
     );
   }
 
-  const locLine = [branch.area || branch.street, branch.city, branch.country].filter(Boolean).join(', ') || branch.address || '—';
+  const locLine = formatDashboardLocationLine(branch) || '—';
 
   return (
     <div className="pharmacy-page diagnostic-branch-detail-page">
@@ -672,6 +679,7 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
             <div>
               <p className="pharmacy-user-name">{profile?.labName || profile?.centerName || profile?.name || title}</p>
               <p className="pharmacy-user-role">Parent Account</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>

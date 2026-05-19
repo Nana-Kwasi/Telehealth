@@ -289,3 +289,26 @@
     display: none;
   }
 }
+
+/* ── Onboarding (logged-in intake — no marketing chrome) ── */
+.navbar--onboarding {
+  background: #fff;
+}
+
+.navbar--onboarding .navbar-container {
+  justify-content: space-between;
+}
+
+.navbar-onboarding-hint {
+  flex: 1;
+  margin: 0 1rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .navbar-onboarding-hint {
+    display: none;
+  }
+}

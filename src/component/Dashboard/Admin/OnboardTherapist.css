@@ -205,6 +205,106 @@
   cursor: not-allowed;
 }
 
+.onboard-password-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.onboard-password-input {
+  flex: 1;
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.03em;
+}
+
+.onboard-regen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.onboard-field-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.onboard-error-banner {
+  margin: 0 2rem;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.onboard-credentials-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.onboard-credentials-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  color: #16a34a;
+}
+
+.onboard-credentials-hint {
+  margin: 0 0 1rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.onboard-credential-box {
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.onboard-credential-box > p {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.78rem;
+  margin: 0 0 0.75rem;
+}
+
+.onboard-credential-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0;
+}
+
+.onboard-credential-row span {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.onboard-credential-row strong {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #93c5fd;
+  font-family: ui-monospace, monospace;
+  text-align: right;
+  word-break: break-all;
+}
+
+.onboard-credentials-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .onboard-therapist {

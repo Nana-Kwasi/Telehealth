@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import {
+  isMedicalPatientAuthDoc,
+  buildTherapyLinkedAuthUidSet,
+  buildHomeCareNurseUidSet,
+} from '../../../utils/authUserFilters';
 
 const QUICK_ACTIONS = [
   { icon: '🩺', label: 'Onboard Doctor',    path: '/dashboard/onboard-doctor' },
@@ -17,8 +22,9 @@ const QUICK_ACTIONS = [
 export default function AdminOverview() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
-    patients: 0, doctors: 0, therapists: 0, pharmacies: 0,
+    patients: 0, doctors: 0, therapists: 0, nurses: 0, pharmacies: 0,
     labs: 0, scanCenters: 0, prescriptions: 0, appointments: 0,
+    doctorAppointments: 0, therapyScheduledCalls: 0, homeCareBookings: 0,
     labOrders: 0, scanOrders: 0,
   });
   const [alerts, setAlerts]             = useState([]);
@@ -29,7 +35,9 @@ export default function AdminOverview() {
   const [analyticsPeriod, setAnalyticsPeriod] = useState('30d');
   const [analyticsRaw, setAnalyticsRaw] = useState({
     allRx: [],
-    providerBase: { doctors: 0, therapists: 0, pharmacies: 0, labs: 0, scans: 0 },
+    allHcBookings: [],
+    allScheduledCalls: [],
+    providerBase: { doctors: 0, therapists: 0, pharmacies: 0, labs: 0, scans: 0, homeCareNurses: 0 },
   });
   const [analytics, setAnalytics]       = useState({
     line: [],
@@ -65,8 +73,21 @@ export default function AdminOverview() {
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => {
-    if (analyticsRaw.allRx.length || Object.values(analyticsRaw.providerBase).some(Boolean)) {
-      setAnalytics(buildAnalytics(analyticsRaw.allRx, analyticsRaw.providerBase, analyticsPeriod));
+    if (
+      analyticsRaw.allRx.length ||
+      analyticsRaw.allHcBookings?.length ||
+      analyticsRaw.allScheduledCalls?.length ||
+      Object.values(analyticsRaw.providerBase).some(Boolean)
+    ) {
+      setAnalytics(
+        buildAnalytics(
+          analyticsRaw.allRx,
+          analyticsRaw.allHcBookings || [],
+          analyticsRaw.allScheduledCalls || [],
+          analyticsRaw.providerBase,
+          analyticsPeriod
+        )
+      );
     }
   }, [analyticsPeriod, analyticsRaw]);
 
@@ -78,7 +99,13 @@ export default function AdminOverview() {
     return 0;
   };
 
-  const buildAnalytics = (allRx = [], providerBase = {}, period = '30d') => {
+  const therapyActivityMs = (c = {}) => {
+    if (c?.createdAt?.seconds) return c.createdAt.seconds * 1000;
+    if (c?.scheduledTime?.seconds) return c.scheduledTime.seconds * 1000;
+    return 0;
+  };
+
+  const buildAnalytics = (allRx = [], allHcBookings = [], allScheduledCalls = [], providerBase = {}, period = '30d') => {
     const windowStartMs = getWindowStartMs(period);
     const filteredRx = !windowStartMs
       ? allRx
@@ -86,6 +113,15 @@ export default function AdminOverview() {
           const ms = rx?.createdAt?.seconds ? rx.createdAt.seconds * 1000 : 0;
           return ms >= windowStartMs;
         });
+    const filteredHc = !windowStartMs
+      ? allHcBookings
+      : allHcBookings.filter((b) => {
+          const ms = b?.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
+          return ms >= windowStartMs;
+        });
+    const filteredTh = !windowStartMs
+      ? allScheduledCalls
+      : allScheduledCalls.filter((c) => therapyActivityMs(c) >= windowStartMs);
 
     const dayCount = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 14;
     const tick = period === '7d' ? 1 : period === '30d' ? 5 : period === '90d' ? 15 : 1;
@@ -96,10 +132,19 @@ export default function AdminOverview() {
       dt.setDate(dt.getDate() - (dayCount - 1 - i));
       const dayStart = dt.getTime();
       const dayEnd = dayStart + (24 * 60 * 60 * 1000);
-      const value = filteredRx.filter((rx) => {
+      const rxCount = filteredRx.filter((rx) => {
         const ms = rx?.createdAt?.seconds ? rx.createdAt.seconds * 1000 : 0;
         return ms >= dayStart && ms < dayEnd;
       }).length;
+      const hcCount = filteredHc.filter((b) => {
+        const ms = b?.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
+        return ms >= dayStart && ms < dayEnd;
+      }).length;
+      const thCount = filteredTh.filter((c) => {
+        const ms = therapyActivityMs(c);
+        return ms >= dayStart && ms < dayEnd;
+      }).length;
+      const value = rxCount + hcCount + thCount;
       const label = (i % tick === 0 || i === dayCount - 1) ? weekDays[dt.getDay()] : '';
       return { label, value };
     });
@@ -148,26 +193,44 @@ export default function AdminOverview() {
 
   const loadData = async () => {
     try {
-      const [pats, docs, thers, pharmas, rxs, appts, labs, scans, labOrders, scanOrders] = await Promise.all([
+      const [pats, docs, thers, nurses, pharmas, rxs, appts, therapyCalls, hcBookings, labs, scans, labOrders, scanOrders, clientsSnap] = await Promise.all([
         getDocs(collection(db, 'auth')),
         getDocs(collection(db, 'doctors')),
         getDocs(collection(db, 'therapists')),
+        getDocs(collection(db, 'homeCareNurses')),
         getDocs(collection(db, 'pharmacies')),
         getDocs(collection(db, 'doctorPrescriptions')),
         getDocs(collection(db, 'doctorAppointments')),
+        getDocs(collection(db, 'scheduledCalls')),
+        getDocs(collection(db, 'homeCareBookings')),
         getDocs(collection(db, 'labs')),
         getDocs(collection(db, 'scanCenters')),
         getDocs(query(collection(db, 'diagnosticOrders'), where('centerType', '==', 'lab'))),
         getDocs(query(collection(db, 'diagnosticOrders'), where('centerType', '==', 'scan'))),
+        getDocs(collection(db, 'clients')),
       ]);
 
+      const therapyUids = buildTherapyLinkedAuthUidSet(clientsSnap);
+      const nurseUids = buildHomeCareNurseUidSet(nurses);
+
+      const medicalAuthDocs = pats.docs.filter((d) =>
+        isMedicalPatientAuthDoc({ id: d.id, ...d.data() }, therapyUids, nurseUids)
+      );
+
+      const hcBookingCount = hcBookings.size;
+      const drApptCount = appts.size;
+      const therapyCount = therapyCalls.size;
       setStats({
-        patients:      pats.size,
+        patients:      medicalAuthDocs.length,
         doctors:       docs.size,
         therapists:    thers.docs.filter(d => (d.data()?.role || '') !== 'admin').length,
+        nurses:        nurses.size,
         pharmacies:    pharmas.size,
         prescriptions: rxs.size,
-        appointments:  appts.size,
+        appointments:  drApptCount + therapyCount + hcBookingCount,
+        doctorAppointments: drApptCount,
+        therapyScheduledCalls: therapyCount,
+        homeCareBookings: hcBookingCount,
         labs:          labs.size,
         scanCenters:   scans.size,
         labOrders:     labOrders.size,
@@ -188,6 +251,9 @@ export default function AdminOverview() {
       const pendingOrders = [...labOrders.docs, ...scanOrders.docs].filter(d => d.data().status === 'PENDING');
       if (pendingOrders.length)
         alertList.push({ type: 'warn', icon: '🔬', text: `${pendingOrders.length} diagnostic order(s) awaiting lab/scan center action` });
+      const pendingHcNurses = nurses.docs.filter((d) => (d.data().accountStatus || 'pending') === 'pending').length;
+      if (pendingHcNurses)
+        alertList.push({ type: 'info', icon: '🏠', text: `${pendingHcNurses} home care nurse account(s) pending approval` });
       setAlerts(alertList);
 
       // Recent prescriptions
@@ -195,18 +261,38 @@ export default function AdminOverview() {
         .map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
         .slice(0, 8);
-      setRecentActivity(rxList);
+      const hcFeed = hcBookings.docs
+        .map((d) => ({ id: d.id, _feedType: 'hc', ...d.data() }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+        .slice(0, 8);
+      const therapyFeed = therapyCalls.docs
+        .map((d) => ({ id: d.id, _feedType: 'therapy', ...d.data() }))
+        .sort((a, b) => {
+          const as = a.createdAt?.seconds || a.scheduledTime?.seconds || 0;
+          const bs = b.createdAt?.seconds || b.scheduledTime?.seconds || 0;
+          return bs - as;
+        })
+        .slice(0, 8);
+      const feedSortSec = (row) =>
+        row.createdAt?.seconds || row.scheduledTime?.seconds || 0;
+      const mergedFeed = [...rxList.map((r) => ({ ...r, _feedType: 'rx' })), ...hcFeed, ...therapyFeed]
+        .sort((a, b) => feedSortSec(b) - feedSortSec(a))
+        .slice(0, 8);
+      setRecentActivity(mergedFeed);
 
       const allRx = rxs.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allHcBookings = hcBookings.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const allScheduledCalls = therapyCalls.docs.map((d) => ({ id: d.id, ...d.data() }));
       const providerBase = {
         doctors: docs.size,
         therapists: thers.docs.filter(d => (d.data()?.role || '') !== 'admin').length,
         pharmacies: pharmas.size,
         labs: labs.size,
         scans: scans.size,
+        homeCareNurses: nurses.size,
       };
-      setAnalyticsRaw({ allRx, providerBase });
-      setAnalytics(buildAnalytics(allRx, providerBase, analyticsPeriod));
+      setAnalyticsRaw({ allRx, allHcBookings, allScheduledCalls, providerBase });
+      setAnalytics(buildAnalytics(allRx, allHcBookings, allScheduledCalls, providerBase, analyticsPeriod));
 
       const hasLocation = (row = {}) => {
         const lat = Number(row?.latitude ?? row?.locationMeta?.latitude ?? row?.location?.latitude);
@@ -214,16 +300,18 @@ export default function AdminOverview() {
         const structured = !!(row?.country || row?.city || row?.area || row?.region || row?.street || row?.locationMeta?.country || row?.locationMeta?.city);
         return Number.isFinite(lat) && Number.isFinite(lng) && structured;
       };
-      const authRows = pats.docs.map(d => d.data());
+      const authRows = medicalAuthDocs.map((d) => d.data());
       const doctorRows = docs.docs.map(d => d.data());
       const therapistRows = thers.docs.map(d => d.data()).filter(d => (d?.role || '') !== 'admin');
       const pharmacyRows = pharmas.docs.map(d => d.data());
       const labRows = labs.docs.map(d => d.data());
       const scanRows = scans.docs.map(d => d.data());
+      const nurseRows = nurses.docs.map((d) => d.data());
       const rows = [
         { label: 'Patients', items: authRows },
         { label: 'Doctors', items: doctorRows },
         { label: 'Therapists', items: therapistRows },
+        { label: 'Home care nurses', items: nurseRows },
         { label: 'Pharmacies', items: pharmacyRows },
         { label: 'Labs', items: labRows },
         { label: 'Scans', items: scanRows },
@@ -242,14 +330,15 @@ export default function AdminOverview() {
   };
 
   const STAT_CARDS = [
-    { key: 'patients',      label: 'Total Patients',       icon: '👥', bg: '#eff6ff', color: '#1d4ed8' },
+    { key: 'patients',      label: 'Medical Patients',     icon: '👥', bg: '#eff6ff', color: '#1d4ed8' },
     { key: 'doctors',       label: 'Doctors',              icon: '🩺', bg: '#f0fdf4', color: '#16a34a' },
     { key: 'therapists',    label: 'Therapists',           icon: '🧠', bg: '#fdf4ff', color: '#9333ea' },
+    { key: 'nurses',        label: 'Home Care Nurses',     icon: '🏠', bg: '#f0fdfa', color: '#0d9488' },
     { key: 'pharmacies',    label: 'Pharmacies',           icon: '💊', bg: '#fff7ed', color: '#ea580c' },
     { key: 'labs',          label: 'Lab Centers',          icon: '🧪', bg: '#f0fdf4', color: '#065f46' },
     { key: 'scanCenters',   label: 'Imaging Centers',      icon: '🩻', bg: '#faf5ff', color: '#7c3aed' },
     { key: 'prescriptions', label: 'Prescriptions',        icon: '📋', bg: '#f0fdf4', color: '#16a34a' },
-    { key: 'appointments',  label: 'Appointments',         icon: '📅', bg: '#fefce8', color: '#ca8a04' },
+    { key: 'appointments',  label: 'Appts + therapy + HC',   icon: '📅', bg: '#fefce8', color: '#ca8a04' },
     { key: 'labOrders',     label: 'Lab Orders',           icon: '🔬', bg: '#f0fdf4', color: '#059669' },
     { key: 'scanOrders',    label: 'Scan Orders',          icon: '📡', bg: '#faf5ff', color: '#6d28d9' },
   ];
@@ -364,7 +453,7 @@ export default function AdminOverview() {
         <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
           <div className="admin-table-card" style={{ padding: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <p className="admin-table-title" style={{ margin: 0 }}>Line Graph: Rx Created ({analyticsPeriod === 'all' ? 'All' : analyticsPeriod})</p>
+              <p className="admin-table-title" style={{ margin: 0 }}>Line Graph: Rx + therapy + home care ({analyticsPeriod === 'all' ? 'All' : analyticsPeriod})</p>
               <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)}>Open Report</button>
             </div>
             <svg viewBox="0 0 560 220" style={{ width: '100%', height: 220, display: 'block' }}>
@@ -514,12 +603,16 @@ export default function AdminOverview() {
           </div>
           <div style={{ padding: '0.75rem 1.1rem' }}>
             {[
-              { label: 'Patient Accounts', val: stats.patients, color: '#1d4ed8', max: Math.max(stats.patients, 1) },
-              { label: 'Doctors', val: stats.doctors, color: '#16a34a', max: Math.max(stats.patients, 1) },
-              { label: 'Therapists', val: stats.therapists, color: '#9333ea', max: Math.max(stats.patients, 1) },
-              { label: 'Pharmacies', val: stats.pharmacies, color: '#ea580c', max: Math.max(stats.patients, 1) },
-              { label: 'Lab Centers', val: stats.labs, color: '#065f46', max: Math.max(stats.patients, 1) },
-              { label: 'Imaging Centers', val: stats.scanCenters, color: '#7c3aed', max: Math.max(stats.patients, 1) },
+              { label: 'Medical Patients', val: stats.patients, color: '#1d4ed8', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Home Care Nurses', val: stats.nurses, color: '#0d9488', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Doctors', val: stats.doctors, color: '#16a34a', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Therapists', val: stats.therapists, color: '#9333ea', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Pharmacies', val: stats.pharmacies, color: '#ea580c', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Lab Centers', val: stats.labs, color: '#065f46', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Imaging Centers', val: stats.scanCenters, color: '#7c3aed', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Therapy sessions', val: stats.therapyScheduledCalls, color: '#a855f7', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Doctor appointments', val: stats.doctorAppointments, color: '#ca8a04', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
+              { label: 'Home care bookings', val: stats.homeCareBookings, color: '#0f766e', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
             ].map(row => (
               <div key={row.label} style={{ marginBottom: '0.85rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
@@ -537,25 +630,65 @@ export default function AdminOverview() {
         {/* Recent prescriptions */}
         <div className="admin-table-card">
           <div className="admin-table-header">
-            <p className="admin-table-title">Recent Prescriptions</p>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/prescriptions')}>View All</button>
+            <p className="admin-table-title">Recent activity</p>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/prescriptions')}>Prescriptions</button>
           </div>
           {recentActivity.length === 0 ? (
-            <div className="admin-empty"><p>No prescriptions yet.</p></div>
-          ) : recentActivity.map((rx, i) => (
-            <div key={rx.id || i} className="admin-feed-item">
-              <div className="admin-feed-dot" style={{ background: rx.status === 'active' ? '#16a34a' : rx.status === 'completed' ? '#1d4ed8' : '#94a3b8' }} />
+            <div className="admin-empty"><p>No recent prescriptions, therapy sessions, or home care bookings.</p></div>
+          ) : recentActivity.map((row, i) => (
+            <div key={`${row._feedType}-${row.id || i}`} className="admin-feed-item">
+              <div
+                className="admin-feed-dot"
+                style={{
+                  background:
+                    row._feedType === 'hc'
+                      ? '#0d9488'
+                      : row._feedType === 'therapy'
+                        ? '#a855f7'
+                        : row.status === 'active'
+                          ? '#16a34a'
+                          : row.status === 'completed'
+                            ? '#1d4ed8'
+                            : '#94a3b8',
+                }}
+              />
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>
-                  {rx.medications?.[0]?.name || rx.medication || 'Prescription'}
+                  {row._feedType === 'hc'
+                    ? `${row.bookingType === 'emergency' ? 'Emergency' : 'Home care'} · ${row.careType || 'visit'}`
+                    : row._feedType === 'therapy'
+                      ? `Therapy · ${row.sessionType || 'session'}`
+                      : (row.medications?.[0]?.name || row.medication || 'Prescription')}
                 </p>
                 <p style={{ margin: '1px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
-                  {rx.patientName || '—'} · Dr. {rx.doctorName || '—'}
+                  {row._feedType === 'hc'
+                    ? `${row.patientName || 'Patient'} · ${row.nurseName || 'Nurse TBD'}`
+                    : row._feedType === 'therapy'
+                      ? `${row.clientName || row.patientName || 'Client'} · ${row.therapistName || '—'}`
+                      : `${row.patientName || '—'} · Dr. ${row.doctorName || '—'}`}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <span className={`badge badge-${rx.status === 'active' ? 'green' : rx.status === 'completed' ? 'blue' : 'gray'}`}>{rx.status || 'active'}</span>
-                <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#94a3b8' }}>{fmtTs(rx.createdAt)}</p>
+                <span
+                  className={`badge badge-${
+                    row._feedType === 'hc'
+                      ? 'green'
+                      : row._feedType === 'therapy'
+                        ? 'purple'
+                        : row.status === 'active'
+                          ? 'green'
+                          : row.status === 'completed'
+                            ? 'blue'
+                            : 'gray'
+                  }`}
+                >
+                  {row._feedType === 'hc' || row._feedType === 'therapy'
+                    ? (row.status || 'pending')
+                    : (row.status || 'active')}
+                </span>
+                <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#94a3b8' }}>
+                  {fmtTs(row.createdAt?.seconds ? row.createdAt : row.scheduledTime)}
+                </p>
               </div>
             </div>
           ))}

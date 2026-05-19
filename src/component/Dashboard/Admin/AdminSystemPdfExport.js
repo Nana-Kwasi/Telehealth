@@ -38,7 +38,7 @@ export default function AdminSystemPdfExport() {
     try {
       const [
         authSnap, doctorsSnap, therapistsSnap, pharmSnap, branchesSnap,
-        rxSnap, apptSnap, labsSnap, scansSnap, diagSnap, eventsSnap,
+        rxSnap, apptSnap, therapySnap, hcNursesSnap, hcBookingsSnap, labsSnap, scansSnap, diagSnap, eventsSnap,
       ] = await Promise.all([
         getDocs(collection(db, 'auth')),
         getDocs(collection(db, 'doctors')),
@@ -47,6 +47,9 @@ export default function AdminSystemPdfExport() {
         getDocs(collection(db, 'pharmacyBranches')),
         getDocs(collection(db, 'doctorPrescriptions')),
         getDocs(collection(db, 'doctorAppointments')),
+        getDocs(collection(db, 'scheduledCalls')),
+        getDocs(collection(db, 'homeCareNurses')),
+        getDocs(collection(db, 'homeCareBookings')),
         getDocs(collection(db, 'labs')),
         getDocs(collection(db, 'scanCenters')),
         getDocs(collection(db, 'diagnosticOrders')),
@@ -56,6 +59,12 @@ export default function AdminSystemPdfExport() {
       const allRx = rxSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const rxIn = allRx.filter(r => inCreatedRange(r, startMs, endMs));
       const appts = apptSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(a => inCreatedRange(a, startMs, endMs));
+      const therapyCalls = therapySnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => {
+        let t = toMillis(c.createdAt);
+        if (!t) t = toMillis(c.scheduledTime);
+        return t >= startMs && t <= endMs;
+      });
+      const hcBookings = hcBookingsSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((b) => inCreatedRange(b, startMs, endMs));
       const diag = diagSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => inCreatedRange(o, startMs, endMs));
       const events = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => inCreatedRange(e, startMs, endMs));
 
@@ -78,10 +87,21 @@ export default function AdminSystemPdfExport() {
       });
 
       const apptBy = { upcoming: 0, completed: 0, cancelled: 0, 'no-show': 0, other: 0 };
-      appts.forEach(a => {
+      [...appts, ...therapyCalls].forEach((a) => {
         const s = (a.status || 'upcoming').toLowerCase();
         if (s in apptBy) apptBy[s] += 1;
         else apptBy.other += 1;
+      });
+
+      const hcBy = { pending: 0, active: 0, completed: 0, cancelled: 0, other: 0 };
+      const hcActive = new Set(['accepted', 'en_route', 'arrived', 'in_progress', 'ongoing']);
+      hcBookings.forEach((b) => {
+        const s = (b.status || 'pending').toLowerCase();
+        if (s === 'pending') hcBy.pending += 1;
+        else if (s === 'completed') hcBy.completed += 1;
+        else if (s === 'cancelled' || s === 'declined') hcBy.cancelled += 1;
+        else if (hcActive.has(s)) hcBy.active += 1;
+        else hcBy.other += 1;
       });
 
       const diagBy = { lab: 0, scan: 0, other: 0 };
@@ -99,6 +119,9 @@ export default function AdminSystemPdfExport() {
             ['Patient / auth records (auth collection)', String(authSnap.size)],
             ['Doctors', String(doctorsSnap.size)],
             ['Therapists', String(therapistsSnap.size)],
+            ['Home care nurses', String(hcNursesSnap.size)],
+            ['Therapy sessions (scheduledCalls, all time)', String(therapySnap.size)],
+            ['Home care bookings (all time)', String(hcBookingsSnap.size)],
             ['Parent pharmacies', String(pharmSnap.size)],
             ['Pharmacy branches', String(branchesSnap.size)],
             ['Labs', String(labsSnap.size)],
@@ -125,8 +148,22 @@ export default function AdminSystemPdfExport() {
             : [['No routed Rx in range', '0']],
         },
         {
-          heading: `Appointments created in period (${appts.length})`,
-          rows: Object.entries(apptBy).map(([k, v]) => [k, String(v)]),
+          heading: `Doctor + therapy appointments in period (${appts.length + therapyCalls.length})`,
+          rows: [
+            ['Doctor rows in range', String(appts.length)],
+            ['Therapy (scheduledCalls) rows in range', String(therapyCalls.length)],
+            ...Object.entries(apptBy).map(([k, v]) => [`Combined status: ${k}`, String(v)]),
+          ],
+        },
+        {
+          heading: `Home care bookings in period (${hcBookings.length})`,
+          rows: [
+            ['Pending', String(hcBy.pending)],
+            ['Active visit pipeline', String(hcBy.active)],
+            ['Completed', String(hcBy.completed)],
+            ['Cancelled / declined', String(hcBy.cancelled)],
+            ['Other', String(hcBy.other)],
+          ],
         },
         {
           heading: `Diagnostic orders created in period (${diag.length})`,
@@ -165,6 +202,8 @@ export default function AdminSystemPdfExport() {
         rxIn: rxIn.length,
         events: events.length,
         appts: appts.length,
+        therapyCalls: therapyCalls.length,
+        hcBookings: hcBookings.length,
         diag: diag.length,
       });
     } catch (e) {
@@ -179,7 +218,7 @@ export default function AdminSystemPdfExport() {
     <div className="admin-page" style={{ maxWidth: 900 }}>
       <h1 className="admin-page-title">System PDF export</h1>
       <p className="admin-page-sub" style={{ marginBottom: '0.5rem' }}>
-        Super-admin snapshot: aggregates across users, providers, pharmacies, prescriptions, appointments, diagnostics, and pharmacy activity logs.
+        Super-admin snapshot: aggregates across users, providers, therapy sessions (scheduledCalls), home care nurses & bookings, pharmacies, prescriptions, appointments, diagnostics, and pharmacy activity logs.
         Large tenants may take a few seconds.
       </p>
 
@@ -213,7 +252,7 @@ export default function AdminSystemPdfExport() {
         {err && <p style={{ color: '#b91c1c', marginTop: '0.85rem', fontSize: '0.88rem' }}>{err}</p>}
         {lastSummary && !err && (
           <p style={{ marginTop: '0.85rem', color: '#475569', fontSize: '0.86rem' }}>
-            Last file included ~{lastSummary.rxIn} prescriptions, {lastSummary.appts} appointments, {lastSummary.diag} diagnostic orders, {lastSummary.events} pharmacy events in range.
+            Last file included ~{lastSummary.rxIn} prescriptions, {lastSummary.appts} doctor appointments, {lastSummary.therapyCalls} therapy sessions, {lastSummary.hcBookings} home care bookings, {lastSummary.diag} diagnostic orders, {lastSummary.events} pharmacy events in range.
           </p>
         )}
       </div>

@@ -4,8 +4,46 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+    // Platform super admin — document in admins/{auth.uid} (not admin therapist).
+    function isPlatformSuperAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isTherapistSuperAdmin() {
+      return exists(/databases/$(database)/documents/therapists/$(request.auth.uid))
+        && (
+          get(/databases/$(database)/documents/therapists/$(request.auth.uid)).data.role == 'admin'
+          || get(/databases/$(database)/documents/therapists/$(request.auth.uid)).data.type == 'Administrator'
+        );
+    }
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isPlatformSuperAdmin() || isTherapistSuperAdmin();
+    }
+    function canReadDoctorAppointment(data) {
+      return isSignedIn() && (
+        isAdmin()
+        || data.doctorId == request.auth.uid
+        || data.clientId == request.auth.uid
+        || data.patientId == request.auth.uid
+      );
+    }
+    function canReadDoctorPrescription(data) {
+      return isSignedIn() && (
+        isAdmin()
+        || data.doctorId == request.auth.uid
+        || data.patientId == request.auth.uid
+        || data.clientId == request.auth.uid
+        || data.pharmacyId == request.auth.uid
+        || data.branchId == request.auth.uid
+      );
+    }
+    function canReadScheduledCall(data) {
+      return isSignedIn() && (
+        isAdmin()
+        || data.therapistId == request.auth.uid
+        || data.clientId == request.auth.uid
+        || data.createdBy == request.auth.uid
+      );
     }
     function isReporterOwner(data) {
       return isSignedIn() && (data.reporterId == request.auth.uid || data.reporterUid == request.auth.uid);
@@ -70,6 +108,22 @@ service cloud.firestore {
     function passesLocationPolicyOnCreate(newData) {
       return hasCompleteLocation(newData) || canBypassLocationForOnboarding(newData);
     }
+    // Patients signing up (therapy, medical, home care) may not have GPS/address yet.
+    function isClientSelfRegistration(data) {
+      return data.role == 'client';
+    }
+    function passesAuthCreatePolicy(newData) {
+      return passesLocationPolicyOnCreate(newData) || isClientSelfRegistration(newData);
+    }
+    function passesAuthUpdatePolicy(newData, oldData) {
+      return passesLocationPolicyOnUpdate(newData, oldData) || isClientSelfRegistration(newData);
+    }
+    function passesClientCreatePolicy(newData) {
+      return passesLocationPolicyOnCreate(newData) || isClientSelfRegistration(newData);
+    }
+    function passesClientUpdatePolicy(newData, oldData) {
+      return passesLocationPolicyOnUpdate(newData, oldData) || isClientSelfRegistration(newData);
+    }
 
     // ── Login lookup collections ─────────────────────────────────────────────
     // These need to be readable before authentication so username/email login works.
@@ -90,14 +144,20 @@ service cloud.firestore {
 
     match /admins/{adminId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create, update, delete: if isPlatformSuperAdmin();
     }
 
     match /doctors/{doctorId} {
       allow read: if true;  // public: doctor profiles are visible to patients
-      allow create: if request.auth != null && request.auth.uid == doctorId && passesLocationPolicyOnCreate(request.resource.data);
-      allow update: if request.auth != null && request.auth.uid == doctorId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
-      allow delete: if request.auth != null && request.auth.uid == doctorId;
+      allow create: if request.auth != null && (
+        isAdmin()
+        || (request.auth.uid == doctorId && passesLocationPolicyOnCreate(request.resource.data))
+      );
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (request.auth.uid == doctorId && passesLocationPolicyOnUpdate(request.resource.data, resource.data))
+      );
+      allow delete: if request.auth != null && (isAdmin() || request.auth.uid == doctorId);
 
       match /patients/{patientId} {
         allow read, write: if request.auth != null && request.auth.uid == doctorId;
@@ -108,39 +168,93 @@ service cloud.firestore {
       }
     }
 
+    match /therapists_usernames/{username} {
+      allow read: if true;  // username login lookup
+      allow create, update, delete: if isAdmin();
+    }
+
     match /therapists/{therapistId} {
       allow read: if true;  // needed for login lookup
-      allow create: if request.auth != null && request.auth.uid == therapistId && passesLocationPolicyOnCreate(request.resource.data);
-      allow update: if request.auth != null && request.auth.uid == therapistId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
-      allow delete: if request.auth != null && request.auth.uid == therapistId;
+      allow create: if request.auth != null && (
+        isAdmin()
+        || (request.auth.uid == therapistId && passesLocationPolicyOnCreate(request.resource.data))
+      );
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (request.auth.uid == therapistId && passesLocationPolicyOnUpdate(request.resource.data, resource.data))
+      );
+      allow delete: if request.auth != null && (isAdmin() || request.auth.uid == therapistId);
 
       match /clients/{clientId} {
-        allow read, write: if request.auth != null && request.auth.uid == therapistId;
+        allow read, write: if request.auth != null && (request.auth.uid == therapistId || isAdmin());
       }
     }
 
     // ── Patient / Client auth records ────────────────────────────────────────
     match /auth/{userId} {
       allow read: if true;  // needed for login lookup by email/username
-      allow create: if request.auth != null && request.auth.uid == userId && passesLocationPolicyOnCreate(request.resource.data);
-      allow update: if request.auth != null && request.auth.uid == userId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && passesAuthCreatePolicy(request.resource.data);
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (request.auth.uid == userId && passesAuthUpdatePolicy(request.resource.data, resource.data))
+      );
+      allow delete: if request.auth != null && (isAdmin() || request.auth.uid == userId);
+    }
+
+    function ownsClientDoc() {
+      return request.auth != null && (
+        request.auth.uid == clientId
+        || resource.data.authUid == request.auth.uid
+        || request.resource.data.authUid == request.auth.uid
+      );
+    }
+
+    function ownsMoodClientId(moodClientId) {
+      return isSignedIn() && (
+        moodClientId == request.auth.uid
+        || (
+          exists(/databases/$(database)/documents/clients/$(moodClientId))
+          && get(/databases/$(database)/documents/clients/$(moodClientId)).data.authUid == request.auth.uid
+        )
+      );
+    }
+
+    function canReadClientDailyMood(data) {
+      return isSignedIn() && (
+        isAdmin()
+        || ownsMoodClientId(data.clientId)
+        || data.assignedTherapistId == request.auth.uid
+      );
+    }
+
+    function canCreateClientDailyMood() {
+      return isSignedIn()
+        && ownsMoodClientId(request.resource.data.clientId)
+        && request.resource.data.clientId is string;
     }
 
     match /clients/{clientId} {
       allow read: if true;  // needed for login lookup
-      allow create: if request.auth != null && request.auth.uid == clientId && passesLocationPolicyOnCreate(request.resource.data);
-      allow update: if request.auth != null && request.auth.uid == clientId && passesLocationPolicyOnUpdate(request.resource.data, resource.data);
-      allow delete: if request.auth != null && request.auth.uid == clientId;
+      allow create: if request.auth != null && (
+        (request.auth.uid == clientId && passesClientCreatePolicy(request.resource.data))
+        || (request.resource.data.authUid == request.auth.uid && passesClientCreatePolicy(request.resource.data))
+      );
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (ownsClientDoc() && passesClientUpdatePolicy(request.resource.data, resource.data))
+      );
+      allow delete: if request.auth != null && (isAdmin() || request.auth.uid == clientId);
+
+      match /therapyNotes/{noteId} {
+        allow read, write: if request.auth != null;
+      }
     }
 
     // ── Scheduled calls / video calls ────────────────────────────────────────
     match /scheduledCalls/{callId} {
-      allow read, write: if request.auth != null &&
-        (resource.data.therapistId == request.auth.uid ||
-         resource.data.clientId == request.auth.uid ||
-         resource.data.createdBy == request.auth.uid);
       allow create: if request.auth != null;
+      allow read: if canReadScheduledCall(resource.data);
+      allow update, delete: if canReadScheduledCall(resource.data);
     }
 
     match /videoCalls/{callId} {
@@ -152,18 +266,16 @@ service cloud.firestore {
     // ── Doctor appointments & prescriptions ──────────────────────────────────
     match /doctorAppointments/{appointmentId} {
       allow create: if request.auth != null;
-      allow read, update, delete: if request.auth != null &&
-        (resource.data.doctorId == request.auth.uid ||
-         resource.data.clientId == request.auth.uid);
+      allow read: if canReadDoctorAppointment(resource.data);
+      allow update, delete: if canReadDoctorAppointment(resource.data);
     }
 
     match /doctorPrescriptions/{rxId} {
       allow create: if request.auth != null;
-      allow read: if request.auth != null &&
-        (resource.data.doctorId == request.auth.uid ||
-         resource.data.patientId == request.auth.uid ||
-         resource.data.clientId == request.auth.uid);
-      allow update, delete: if request.auth != null && resource.data.doctorId == request.auth.uid;
+      allow read: if canReadDoctorPrescription(resource.data);
+      allow update, delete: if isAdmin()
+        || (request.auth != null && resource.data.doctorId == request.auth.uid)
+        || (request.auth != null && resource.data.pharmacyId == request.auth.uid);
     }
 
     match /doctorAvailability/{slotId} {
@@ -252,14 +364,18 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
-    match /therapist_chats/{chatId}/messages/{messageId} {
+    match /therapist_chats/{chatId} {
       allow read, write: if request.auth != null;
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
     }
 
     // ── Notifications ────────────────────────────────────────────────────────
     match /notifications/{notifId} {
       allow create: if request.auth != null;
-      allow read, update: if request.auth != null && resource.data.targetId == request.auth.uid;
+      allow read, update: if isAdmin()
+        || (request.auth != null && resource.data.targetId == request.auth.uid);
     }
 
     match /callNotifications/{callId} {
@@ -310,7 +426,10 @@ service cloud.firestore {
     }
 
     match /userLogoutLogs/{logId} {
-      allow create: if request.auth != null;
+      // Logged before signOut while auth is active; fallback allows write right after session ends
+      allow create: if request.auth != null
+        || (request.resource.data.userId is string
+            && request.resource.data.logoutTime is string);
       allow read: if request.auth != null;
     }
 
@@ -341,6 +460,130 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    match /pharmacyRxEvents/{eventId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin()
+        || (isSignedIn() && (
+          resource.data.pharmacyId == request.auth.uid
+          || resource.data.branchId == request.auth.uid
+        ));
+    }
+
+    match /supportTickets/{ticketId} {
+      allow create: if isSignedIn();
+      allow read, update: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || (isSignedIn() && resource.data.patientId == request.auth.uid)
+        || (isSignedIn() && resource.data.clientId == request.auth.uid);
+    }
+
+    match /dischargeRequests/{requestId} {
+      allow create: if isSignedIn();
+      allow read, update: if isAdmin()
+        || (isSignedIn() && resource.data.patientId == request.auth.uid)
+        || (isSignedIn() && resource.data.clientId == request.auth.uid);
+    }
+
+    match /patientNotifications/{notifId} {
+      allow create: if isSignedIn();
+      allow read, update: if isAdmin()
+        || (isSignedIn() && resource.data.patientId == request.auth.uid)
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /worksheets/{worksheetId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /callLogs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin() || isSignedIn();
+    }
+
+    match /adminNotifications/{notifId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Home Care ────────────────────────────────────────────────────────────
+    match /homeCareNurses/{nurseId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (request.auth.uid == nurseId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    function isHomeCareNurse() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/homeCareNurses/$(request.auth.uid));
+    }
+
+    function isOpenEmergencyBooking() {
+      return resource.data.bookingType == 'emergency'
+        && resource.data.status == 'pending'
+        && (!('nurseId' in resource.data) || resource.data.nurseId == null);
+    }
+
+    match /homeCareBookings/{bookingId} {
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid;
+      allow read: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid
+        || resource.data.nurseId == request.auth.uid
+        || isAdmin()
+        || (isHomeCareNurse() && isOpenEmergencyBooking())
+      );
+      allow update: if isSignedIn() && (
+        resource.data.patientId == request.auth.uid
+        || resource.data.nurseId == request.auth.uid
+        || isAdmin()
+        || (isHomeCareNurse()
+          && isOpenEmergencyBooking()
+          && request.resource.data.nurseId == request.auth.uid)
+      );
+
+      match /visitLogs/{logId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/homeCareBookings/$(bookingId)).data.patientId == request.auth.uid
+          || get(/databases/$(database)/documents/homeCareBookings/$(bookingId)).data.nurseId == request.auth.uid
+          || isAdmin()
+        );
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/homeCareBookings/$(bookingId)).data.nurseId == request.auth.uid;
+      }
+    }
+
+    match /homeCareNurseEarnings/{earningId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.nurseId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.nurseId == request.auth.uid;
+    }
+
+    match /homeCareComplaints/{complaintId} {
+      allow create: if isSignedIn()
+        && request.resource.data.patientId == request.auth.uid;
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.patientId == request.auth.uid);
+      allow update: if isAdmin();
+    }
+
+    match /notifications/{notifId} {
+      allow read, update: if isSignedIn() && resource.data.targetId == request.auth.uid;
+      allow create: if false;
+    }
+
+    // Mobile / web intro privacy acceptance (device log before sign-in)
+    match /appPrivacyConsents/{consentId} {
+      allow create: if request.resource.data.deviceId == consentId
+        && request.resource.data.accepted == true
+        && request.resource.data.policyUrl is string;
+      allow update: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && (!('userId' in resource.data) || resource.data.userId == null);
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
     match /patientIntake/{intakeId} {
       allow create: if true;
       allow read, update: if request.auth != null;
@@ -362,6 +605,64 @@ service cloud.firestore {
     match /patientDailyFeelings/{feelingId} {
       allow create: if request.auth != null;
       allow read, update: if request.auth != null;
+    }
+
+    function isCouplePartner(coupleId) {
+      let c = get(/databases/$(database)/documents/couples/$(coupleId)).data;
+      return request.auth.uid == c.partnerA.authUid || request.auth.uid == c.partnerB.authUid;
+    }
+
+    function isAssignedCoupleTherapist(coupleId) {
+      let c = get(/databases/$(database)/documents/couples/$(coupleId)).data;
+      return request.auth.uid == c.therapistId;
+    }
+
+    match /couples/{coupleId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.partnerA.authUid == request.auth.uid ||
+        resource.data.partnerB.authUid == request.auth.uid ||
+        resource.data.therapistId == request.auth.uid
+      );
+      allow create: if false;
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.partnerA.authUid == request.auth.uid ||
+        resource.data.partnerB.authUid == request.auth.uid
+      );
+
+      match /private/{partnerKey} {
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          isAssignedCoupleTherapist(coupleId) ||
+          (partnerKey == 'partnerA' && get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerA.authUid == request.auth.uid) ||
+          (partnerKey == 'partnerB' && get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerB.authUid == request.auth.uid)
+        );
+        allow write: if false;
+      }
+    }
+
+    match /coupleInvites/{token} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /emailQueue/{id} {
+      allow read, write: if false;
+    }
+
+    match /{moodCollection}/{entryId} {
+      allow create: if moodCollection == 'Client daily mood tracking' && canCreateClientDailyMood();
+      allow read: if moodCollection == 'Client daily mood tracking' && canReadClientDailyMood(resource.data);
+      allow update, delete: if moodCollection == 'Client daily mood tracking' && (
+        isAdmin()
+        || (isSignedIn() && resource.data.assignedTherapistId == request.auth.uid)
+      );
+    }
+
+    // Platform super admin: full read/write on every collection and subcollection.
+    match /{document=**} {
+      allow read, write: if isPlatformSuperAdmin();
     }
   }
 }

@@ -46,6 +46,13 @@ import {
   Brain,
   Activity
 } from 'lucide-react';
+import {
+  updateEmail,
+  verifyBeforeUpdateEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  fetchSignInMethodsForEmail,
+} from 'firebase/auth';
 import { auth, db, storage } from '../../Auth/firebaseConfig';
 import { 
   collection, 
@@ -72,11 +79,16 @@ export default function TherapistSettings() {
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [showComplianceModal, setShowComplianceModal] = useState(false);
   const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
+  const [newEmail, setNewEmail] = useState('');
+  const [emailPw, setEmailPw] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState('');
+  const [emailErr, setEmailErr] = useState('');
+
   const currentUser = auth.currentUser;
+  const loginEmail = currentUser?.email || '';
 
   // Form states
   const [profileForm, setProfileForm] = useState({
@@ -187,6 +199,10 @@ export default function TherapistSettings() {
     fetchSettings();
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!['profile', 'notifications', 'security'].includes(activeTab)) setActiveTab('profile');
+  }, [activeTab]);
+
   // Handle image upload
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
@@ -225,6 +241,123 @@ export default function TherapistSettings() {
     }
   };
 
+  const mapEmailChangeError = (err) => {
+    const code = err?.code || '';
+    console.error('saveLoginEmail:', code, err?.message, err);
+    if (
+      code === 'auth/wrong-password' ||
+      code === 'auth/invalid-credential' ||
+      code === 'auth/invalid-login-credentials'
+    ) {
+      return 'Current password is incorrect.';
+    }
+    if (code === 'auth/email-already-in-use') {
+      return 'That email is already registered to another account. Pick a different email, or sign in with that account instead.';
+    }
+    if (code === 'auth/invalid-email') {
+      return 'Enter a valid email address.';
+    }
+    if (code === 'auth/requires-recent-login') {
+      return 'Session expired. Sign out, sign in again, then retry.';
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return 'Email change is not allowed for this account. Contact support.';
+    }
+    if (code === 'auth/too-many-requests') {
+      return 'Too many attempts. Wait a few minutes and try again.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Network error. Check your connection and try again.';
+    }
+    if (err?.message) {
+      return err.message;
+    }
+    return 'Could not update email. Check your password and try again.';
+  };
+
+  const saveLoginEmail = async (e) => {
+    e.preventDefault();
+    setEmailErr('');
+    setEmailMsg('');
+    const next = newEmail.trim().toLowerCase();
+    const cur = loginEmail?.trim().toLowerCase();
+    if (!next || next === cur) {
+      setEmailErr('Enter a new email address.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+      setEmailErr('Enter a valid email address.');
+      return;
+    }
+    if (!emailPw) {
+      setEmailErr('Enter your current password to confirm.');
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      setEmailErr('You are not signed in. Please sign in again.');
+      return;
+    }
+
+    const authEmail = (user.email || loginEmail || '').trim();
+    if (!authEmail) {
+      setEmailErr('This account has no login email in Authentication. Contact support.');
+      return;
+    }
+
+    setEmailSaving(true);
+    try {
+      try {
+        const existingMethods = await fetchSignInMethodsForEmail(auth, next);
+        if (existingMethods?.length > 0) {
+          setEmailErr(
+            'That email is already registered to another account. Use a different email, or sign in with that account.',
+          );
+          return;
+        }
+      } catch (preflightErr) {
+        console.warn('fetchSignInMethodsForEmail:', preflightErr);
+      }
+
+      const credential = EmailAuthProvider.credential(authEmail, emailPw);
+      await reauthenticateWithCredential(user, credential);
+
+      try {
+        await updateEmail(user, next);
+      } catch (updateErr) {
+        if (
+          updateErr?.code === 'auth/operation-not-allowed' ||
+          updateErr?.code === 'auth/unverified-email'
+        ) {
+          await verifyBeforeUpdateEmail(user, next);
+          setEmailMsg(
+            `Verification link sent to ${next}. Open that email and confirm the change, then sign in again.`,
+          );
+          setEmailPw('');
+          setNewEmail('');
+          return;
+        }
+        throw updateErr;
+      }
+
+      await updateDoc(doc(db, 'therapists', user.uid), {
+        email: next,
+        updatedAt: serverTimestamp(),
+      });
+      setProfileForm((prev) => ({ ...prev, email: next }));
+      setProfile((prev) => ({ ...prev, email: next }));
+      setEmailMsg('Login email updated. Refreshing…');
+      setEmailPw('');
+      setNewEmail('');
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      setEmailErr(mapEmailChangeError(err));
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
   // Save profile
   const handleSaveProfile = async () => {
     setIsLoading(true);
@@ -239,6 +372,7 @@ export default function TherapistSettings() {
 
       const profileData = {
         ...profileForm,
+        email: loginEmail || profileForm.email,
         latitude: Number.isFinite(Number(profileForm.latitude)) ? Number(profileForm.latitude) : null,
         longitude: Number.isFinite(Number(profileForm.longitude)) ? Number(profileForm.longitude) : null,
         locationMeta: {
@@ -280,9 +414,7 @@ export default function TherapistSettings() {
     try {
       const settingsData = {
         ...settings,
-        [type]: type === 'clinical' ? clinicalForm : 
-                type === 'notifications' ? notificationForm : 
-                systemForm,
+        [type]: type === 'clinical' ? clinicalForm : notificationForm,
         updatedAt: serverTimestamp()
       };
 
@@ -341,16 +473,14 @@ export default function TherapistSettings() {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'system', label: 'System', icon: SettingsIcon },
     { id: 'security', label: 'Security', icon: Shield },
-    { id: 'compliance', label: 'Compliance', icon: CheckCircle }
   ];
 
   return (
     <div className="settings-dashboard">
       <div className="settings-header">
         <h1 className="page-title">Settings & Configuration</h1>
-        <p className="subtitle">Manage your profile, clinical settings, and system preferences</p>
+        <p className="subtitle">Manage your profile, notifications, and security</p>
       </div>
 
       {/* Save Message */}
@@ -425,13 +555,15 @@ export default function TherapistSettings() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Email</label>
+                  <label>Login email</label>
                   <input
                     type="email"
-                    value={profileForm.email}
-                    onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="Enter your email"
+                    value={loginEmail || profileForm.email}
+                    readOnly
+                    aria-readonly="true"
+                    className="input-readonly"
                   />
+                  <p className="form-hint">To change your sign-in email, use Security → Login email.</p>
                 </div>
                 <div className="form-group">
                   <label>Phone Number</label>
@@ -664,116 +796,45 @@ export default function TherapistSettings() {
             </div>
           )}
 
-          {/* System Tab */}
-          {activeTab === 'system' && (
-        <div className="settings-section">
-              <h2>System Configuration</h2>
-              
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Theme</label>
-                  <select
-                    value={systemForm.theme}
-                    onChange={(e) => setSystemForm(prev => ({ ...prev, theme: e.target.value }))}
-                  >
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                    <option value="auto">Auto</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Language</label>
-                  <select
-                    value={systemForm.language}
-                    onChange={(e) => setSystemForm(prev => ({ ...prev, language: e.target.value }))}
-                  >
-                    <option value="en">English</option>
-                    <option value="es">Spanish</option>
-                    <option value="fr">French</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Timezone</label>
-                  <select
-                    value={systemForm.timezone}
-                    onChange={(e) => setSystemForm(prev => ({ ...prev, timezone: e.target.value }))}
-                  >
-                    <option value="America/New_York">Eastern Time</option>
-                    <option value="America/Chicago">Central Time</option>
-                    <option value="America/Denver">Mountain Time</option>
-                    <option value="America/Los_Angeles">Pacific Time</option>
-                  </select>
-                </div>
-          <div className="form-group">
-                  <label>Date Format</label>
-                  <select
-                    value={systemForm.dateFormat}
-                    onChange={(e) => setSystemForm(prev => ({ ...prev, dateFormat: e.target.value }))}
-                  >
-                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="system-options">
-                <div className="system-item">
-                  <div className="system-info">
-                    <Database size={20} />
-                    <div>
-                      <h4>Auto-save</h4>
-                      <p>Automatically save changes</p>
-                    </div>
-                  </div>
-                  <label className="toggle">
-                    <input
-                      type="checkbox"
-                      checked={systemForm.autoSave}
-                      onChange={(e) => setSystemForm(prev => ({ ...prev, autoSave: e.target.checked }))}
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-
-                <div className="system-item">
-                  <div className="system-info">
-                    <Cloud size={20} />
-                    <div>
-                      <h4>Cloud Backup</h4>
-                      <p>Automatic data backup</p>
-                    </div>
-                  </div>
-                  <label className="toggle">
-                    <input
-                      type="checkbox"
-                      checked={systemForm.backupFrequency !== 'never'}
-                      onChange={(e) => setSystemForm(prev => ({ 
-                        ...prev, 
-                        backupFrequency: e.target.checked ? 'daily' : 'never'
-                      }))}
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-              </div>
-
-              <button 
-                className="btn-primary"
-                onClick={() => handleSaveSettings('system')}
-                disabled={isLoading}
-              >
-                <Save size={16} />
-                {isLoading ? 'Saving...' : 'Save System Settings'}
-              </button>
-            </div>
-          )}
-
           {/* Security Tab */}
           {activeTab === 'security' && (
             <div className="settings-section">
               <h2>Security Settings</h2>
-              
+
+              <div className="security-email-block">
+                <h3>Login email</h3>
+                <p className="form-hint">
+                  Current: <strong>{loginEmail || '—'}</strong>. Changing this updates Firebase Authentication and your therapist profile.
+                </p>
+                {emailErr ? <div className="settings-alert settings-alert--err">{emailErr}</div> : null}
+                {emailMsg ? <div className="settings-alert settings-alert--ok">{emailMsg}</div> : null}
+                <form onSubmit={saveLoginEmail} className="security-email-form">
+                  <div className="form-group">
+                    <label>New login email</label>
+                    <input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      autoComplete="email"
+                      placeholder="new.email@example.com"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Current password</label>
+                    <input
+                      type="password"
+                      value={emailPw}
+                      onChange={(e) => setEmailPw(e.target.value)}
+                      autoComplete="current-password"
+                      placeholder="Confirm with your password"
+                    />
+                  </div>
+                  <button type="submit" className="btn-primary" disabled={emailSaving}>
+                    {emailSaving ? 'Updating…' : 'Update login email'}
+                  </button>
+                </form>
+              </div>
+
               <div className="security-options">
                 <div className="security-item">
                   <div className="security-info">
@@ -824,229 +885,9 @@ export default function TherapistSettings() {
             </div>
           )}
 
-          {/* Compliance Tab */}
-          {activeTab === 'compliance' && (
-            <div className="settings-section">
-              <h2>Compliance & Privacy</h2>
-              
-              <div className="compliance-options">
-                <div className="compliance-item">
-                  <div className="compliance-info">
-                    <Shield size={20} />
-                    <div>
-                      <h4>HIPAA Compliance</h4>
-                      <p>Ensure all data handling meets HIPAA requirements</p>
-                    </div>
-                  </div>
-                  <label className="toggle">
-                    <input
-                      type="checkbox"
-                      checked={systemForm.hipaaCompliance}
-                      onChange={(e) => setSystemForm(prev => ({ ...prev, hipaaCompliance: e.target.checked }))}
-                    />
-                    <span className="slider"></span>
-                  </label>
-                </div>
-
-                <div className="compliance-item">
-                  <div className="compliance-info">
-                    <FileCheck size={20} />
-                    <div>
-                      <h4>Data Retention</h4>
-                      <p>How long to keep client records</p>
-                    </div>
-                  </div>
-                  <select
-                    value={systemForm.dataRetention}
-                    onChange={(e) => setSystemForm(prev => ({ ...prev, dataRetention: e.target.value }))}
-                  >
-                    <option value="3years">3 years</option>
-                    <option value="5years">5 years</option>
-                    <option value="7years">7 years</option>
-                    <option value="indefinite">Indefinite</option>
-            </select>
-          </div>
-              </div>
-
-              <div className="compliance-actions">
-                <button 
-                  className="btn-secondary"
-                  onClick={() => setShowPrivacyModal(true)}
-                >
-                  <FileText size={16} />
-                  View Privacy Policy
-                </button>
-                <button 
-                  className="btn-secondary"
-                  onClick={() => setShowComplianceModal(true)}
-                >
-                  <CheckCircle size={16} />
-                  Compliance Report
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Privacy Policy Modal */}
-      {showPrivacyModal && (
-        <div className="modal-overlay" onClick={() => setShowPrivacyModal(false)}>
-          <div className="compliance-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Privacy Policy</h2>
-              <button className="close-button" onClick={() => setShowPrivacyModal(false)}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-content">
-              <div className="privacy-policy-content">
-                <h3>Data Protection & Privacy</h3>
-                <p>This telehealth platform is designed with HIPAA compliance and patient privacy as our top priorities.</p>
-                
-                <h4>Information We Collect</h4>
-                <ul>
-                  <li>Personal health information (PHI) as provided by clients</li>
-                  <li>Session notes and treatment records</li>
-                  <li>Communication logs between therapists and clients</li>
-                  <li>Appointment scheduling and attendance records</li>
-                </ul>
-
-                <h4>How We Protect Your Data</h4>
-                <ul>
-                  <li>End-to-end encryption for all communications</li>
-                  <li>Secure cloud storage with HIPAA-compliant infrastructure</li>
-                  <li>Regular security audits and penetration testing</li>
-                  <li>Access controls and audit logging</li>
-                  <li>Data backup and disaster recovery procedures</li>
-                </ul>
-
-                <h4>Your Rights</h4>
-                <ul>
-                  <li>Access to your personal health information</li>
-                  <li>Request corrections to your records</li>
-                  <li>Request data portability</li>
-                  <li>Request deletion of your data (subject to legal requirements)</li>
-                  <li>File complaints regarding data handling</li>
-                </ul>
-
-                <h4>Compliance Standards</h4>
-                <p>We maintain compliance with:</p>
-                <ul>
-                  <li>HIPAA (Health Insurance Portability and Accountability Act)</li>
-                  <li>HITECH Act requirements</li>
-                  <li>State privacy laws and regulations</li>
-                  <li>Professional ethics standards for mental health providers</li>
-                </ul>
-
-                <div className="compliance-footer">
-                  <p><strong>Last Updated:</strong> {new Date().toLocaleDateString()}</p>
-                  <p><strong>Contact:</strong> privacy@telehealthplatform.com</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Compliance Report Modal */}
-      {showComplianceModal && (
-        <div className="modal-overlay" onClick={() => setShowComplianceModal(false)}>
-          <div className="compliance-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Compliance Report</h2>
-              <button className="close-button" onClick={() => setShowComplianceModal(false)}>
-                <X size={24} />
-              </button>
-            </div>
-            <div className="modal-content">
-              <div className="compliance-report-content">
-                <h3>System Compliance Status</h3>
-                
-                <div className="compliance-status">
-                  <div className="status-item">
-                    <CheckCircle size={20} className="status-icon success" />
-                    <div>
-                      <h4>HIPAA Compliance</h4>
-                      <p>All systems meet HIPAA requirements for healthcare data protection</p>
-                      <span className="status-badge success">Compliant</span>
-                    </div>
-                  </div>
-
-                  <div className="status-item">
-                    <CheckCircle size={20} className="status-icon success" />
-                    <div>
-                      <h4>Data Encryption</h4>
-                      <p>All data is encrypted in transit and at rest using industry-standard protocols</p>
-                      <span className="status-badge success">Active</span>
-                    </div>
-                  </div>
-
-                  <div className="status-item">
-                    <CheckCircle size={20} className="status-icon success" />
-                    <div>
-                      <h4>Access Controls</h4>
-                      <p>Multi-factor authentication and role-based access controls are implemented</p>
-                      <span className="status-badge success">Enabled</span>
-                    </div>
-                  </div>
-
-                  <div className="status-item">
-                    <CheckCircle size={20} className="status-icon success" />
-                    <div>
-                      <h4>Audit Logging</h4>
-                      <p>All system activities are logged and monitored for security compliance</p>
-                      <span className="status-badge success">Active</span>
-                    </div>
-                  </div>
-
-                  <div className="status-item">
-                    <CheckCircle size={20} className="status-icon success" />
-                    <div>
-                      <h4>Data Backup</h4>
-                      <p>Regular automated backups ensure data availability and recovery</p>
-                      <span className="status-badge success">Scheduled</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="compliance-metrics">
-                  <h4>Security Metrics</h4>
-                  <div className="metrics-grid">
-                    <div className="metric-item">
-                      <span className="metric-label">Security Score</span>
-                      <span className="metric-value">98%</span>
-                    </div>
-                    <div className="metric-item">
-                      <span className="metric-label">Uptime</span>
-                      <span className="metric-value">99.9%</span>
-                    </div>
-                    <div className="metric-item">
-                      <span className="metric-label">Last Audit</span>
-                      <span className="metric-value">{new Date().toLocaleDateString()}</span>
-                    </div>
-                    <div className="metric-item">
-                      <span className="metric-label">Next Review</span>
-                      <span className="metric-value">{new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="compliance-actions">
-                  <button className="btn-primary">
-                    <Download size={16} />
-                    Download Full Report
-                  </button>
-                  <button className="btn-secondary">
-                    <FileText size={16} />
-                    View Audit Logs
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -8,10 +8,247 @@ import {
 import {
   ArrowLeft, User, Mail, Phone, Calendar, FileText,
   MessageSquare, Edit, UserX, UserCheck, TrendingUp,
-  Activity, Clock, Heart, AlertTriangle, Target, CheckCircle, BookOpen
+  Activity, Clock, Heart, AlertTriangle, Target, CheckCircle, BookOpen, Eye
 } from 'lucide-react';
 import ChatModal from './ChatModal';
 import './ClientDetails.css';
+import {
+  getClientDisplayName,
+  getClientPhone,
+  getClientRelationshipStatus,
+  fetchClientSessions,
+  getLastSessionRecord,
+  resolveTherapistIdForClient,
+  fetchAuthProfileForClient,
+  getQuestionnaireGroupedSections,
+  PHQ9_SCALE,
+  formatFieldValue,
+  formatSessionDateLabel,
+  formatSessionTimeLabel,
+  sessionTimestamp,
+  toFirestoreDate,
+} from '../../../utils/clientTherapyMetrics';
+import { getNoteSections, getNotePreview, getNoteTitle } from '../../../utils/noteDisplayUtils';
+
+const noteCardStyle = {
+  padding: '1.2rem',
+  margin: '0.75rem 0',
+  background: '#f8fafc',
+  borderRadius: 12,
+  border: '1px solid #e2e8f0',
+  cursor: 'pointer',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
+};
+
+const cardStyle = {
+  background: '#fff',
+  borderRadius: 14,
+  border: '1px solid #e2e8f0',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+};
+
+/* ─────────────────────────────────────────────
+   Note detail modal (therapy + clinical)
+───────────────────────────────────────────── */
+function NoteDetailModal({ note, kind, onClose }) {
+  const sections = getNoteSections(note);
+  const title = getNoteTitle(note, kind);
+  const overlay = {
+    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000, backdropFilter: 'blur(2px)', padding: '1rem',
+  };
+  const modal = {
+    background: '#fff', borderRadius: 18, padding: '1.75rem',
+    width: '100%', maxWidth: 640, maxHeight: '85vh', overflow: 'auto',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+  };
+
+  return (
+    <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem' }}>
+          <div>
+            <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>{title}</h3>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600 }}>
+              {fmtDate(note.createdAt || note.sessionDate)}
+              {note.therapistName ? ` · ${note.therapistName}` : ''}
+              {note.isDraft === true ? ' · Draft' : note.isDraft === false ? ' · Final' : ''}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }} aria-label="Close">×</button>
+        </div>
+
+        {sections.length === 0 ? (
+          <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>This note has no stored content.</p>
+        ) : (
+          sections.map((section) => (
+            <div key={section.key} style={{ marginBottom: '1.1rem', paddingBottom: '1.1rem', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                {section.label}
+              </div>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#0f172a', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{section.value}</p>
+            </div>
+          ))
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#4f46e5,#6366f1)', color: '#fff', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoteListCard({ note, kind, onOpen }) {
+  const preview = getNotePreview(note);
+  const title = getNoteTitle(note, kind);
+  const sections = getNoteSections(note);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(note, kind)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(note, kind); } }}
+      style={noteCardStyle}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = '#c7d2fe';
+        e.currentTarget.style.boxShadow = '0 4px 14px rgba(79,70,229,0.12)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = '#e2e8f0';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div>
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>{title}</div>
+          <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600 }}>{fmtDate(note.createdAt || note.sessionDate)}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+          {note.mood != null && note.mood !== '' && (
+            <span style={{ padding: '0.2rem 0.65rem', borderRadius: 20, background: '#eff6ff', color: '#4f46e5', fontSize: '0.72rem', fontWeight: 700 }}>
+              Mood {note.mood}{typeof note.mood === 'number' || /^\d+$/.test(String(note.mood)) ? '/10' : ''}
+            </span>
+          )}
+          {note.moodRating != null && note.moodRating !== '' && (
+            <span style={{ padding: '0.2rem 0.65rem', borderRadius: 20, background: '#ecfdf5', color: '#059669', fontSize: '0.72rem', fontWeight: 700 }}>
+              Mood {note.moodRating}
+            </span>
+          )}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: '#4f46e5', fontWeight: 600 }}>
+            <Eye size={13} /> Read
+          </span>
+        </div>
+      </div>
+
+      {sections.length > 0 ? (
+        <>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', color: '#475569', lineHeight: 1.55 }}>{preview}</p>
+          {sections.length > 1 && (
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+              {sections.slice(0, 2).map((s) => (
+                <span key={s.key} style={{ marginRight: '0.75rem' }}>
+                  <strong style={{ color: '#64748b' }}>{s.label}:</strong> {s.value.length > 60 ? `${s.value.slice(0, 60)}…` : s.value}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8', fontStyle: 'italic' }}>Click to view note details</p>
+      )}
+      <div style={{ marginTop: '0.65rem', fontSize: '0.72rem', color: '#4f46e5', fontWeight: 600 }}>Click to read full note →</div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Questionnaire responses (grouped, readable)
+───────────────────────────────────────────── */
+function QuestionnaireResponsesPanel({ client }) {
+  const sections = getQuestionnaireGroupedSections(client);
+  const totalFields = sections.reduce((sum, s) => sum + s.rows.length, 0);
+
+  return (
+    <div style={{ ...cardStyle, padding: '1.5rem', gridColumn: '1 / -1' }} className="questionnaire-panel">
+      <div className="questionnaire-panel__header">
+        <h3 className="questionnaire-panel__title">
+          <BookOpen size={15} aria-hidden />
+          Full questionnaire responses
+        </h3>
+        {totalFields > 0 && (
+          <span className="questionnaire-panel__count">
+            {sections.length} section{sections.length !== 1 ? 's' : ''} · {totalFields} answers
+          </span>
+        )}
+      </div>
+
+      {sections.length === 0 ? (
+        <p className="questionnaire-empty">No questionnaire responses on file.</p>
+      ) : (
+        <div className="questionnaire-panel__body">
+          {sections.map((section) => (
+            <section
+              key={section.id}
+              className={`questionnaire-section${section.id === 'phq9' ? ' questionnaire-section--phq9' : ''}`}
+              aria-labelledby={`q-section-${section.id}`}
+            >
+              <header className="questionnaire-section__head">
+                <h4 id={`q-section-${section.id}`} className="questionnaire-section__title">
+                  {section.title}
+                </h4>
+                {section.phq9Summary ? (
+                  <>
+                    <p className="questionnaire-section__meta">
+                      Past 2 weeks · {section.rows.length} questions
+                    </p>
+                    <div className="questionnaire-phq9-summary">
+                      <span className="questionnaire-phq9-summary__score">
+                        Total score: <strong>{section.phq9Summary.total}</strong> / {section.phq9Summary.maxScore}
+                      </span>
+                      {section.phq9Summary.severity && (
+                        <span className={`questionnaire-phq9-summary__severity severity-${section.phq9Summary.severity.key}`}>
+                          {section.phq9Summary.severity.label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="questionnaire-phq9-legend">
+                      {PHQ9_SCALE.map((o) => `${o.value} = ${o.label}`).join(' · ')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="questionnaire-section__meta">
+                    {section.rows.length} response{section.rows.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </header>
+              <div className={`questionnaire-fields${section.id !== 'phq9' ? ' questionnaire-fields--two-col' : ''}`}>
+                {section.rows.map((row) => (
+                  <div key={row.fieldKey} className="questionnaire-field">
+                    <span className="questionnaire-field__label">{row.label}</span>
+                    {row.phq9Score != null ? (
+                      <p className="questionnaire-phq9-answer__label">{row.value}</p>
+                    ) : (
+                      <p className="questionnaire-field__value">{row.value}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─────────────────────────────────────────────
    Inline TherapyNoteModal
@@ -136,15 +373,9 @@ function sessionStatusColor(status) {
 }
 
 function fmtDate(ts) {
-  if (!ts) return 'N/A';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const d = toFirestoreDate(ts);
+  if (!d) return '—';
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function fmtTime(ts) {
-  if (!ts) return '';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 function Avatar({ name, size = 72 }) {
@@ -170,6 +401,8 @@ export default function ClientDetails() {
   const navigate = useNavigate();
 
   const [client, setClient] = useState(null);
+  const [authProfile, setAuthProfile] = useState(null);
+  const [resolvedTherapistId, setResolvedTherapistId] = useState(null);
   const [therapistName, setTherapistName] = useState('');
   const [sessions, setSessions] = useState([]);
   const [therapyNotes, setTherapyNotes] = useState([]);
@@ -180,6 +413,7 @@ export default function ClientDetails() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [viewingNote, setViewingNote] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showDischargeConfirm, setShowDischargeConfirm] = useState(false);
@@ -201,17 +435,27 @@ export default function ClientDetails() {
         const cSnap = await getDoc(doc(db, 'clients', clientId));
         if (!cSnap.exists()) { setLoading(false); return; }
         const cData = { id: cSnap.id, ...cSnap.data() };
-        setClient(cData);
+        const auth = await fetchAuthProfileForClient(cData);
+        setAuthProfile(auth);
 
-        /* therapist name */
-        if (cData.therapistId) {
+        const therapistId = await resolveTherapistIdForClient(clientId, cData);
+        setResolvedTherapistId(therapistId);
+
+        if (therapistId) {
           try {
-            const tSnap = await getDoc(doc(db, 'therapists', cData.therapistId));
-            if (tSnap.exists()) setTherapistName(tSnap.data().displayName || tSnap.data().name || '');
+            const tSnap = await getDoc(doc(db, 'therapists', therapistId));
+            if (tSnap.exists()) {
+              setTherapistName(tSnap.data().displayName || tSnap.data().name || '');
+            }
           } catch (_) {}
         }
 
-        /* check admin */
+        setClient({
+          ...cData,
+          phone: getClientPhone(cData, auth),
+          therapistId: therapistId || cData.therapistId,
+        });
+
         if (currentUser) {
           try {
             const meSnap = await getDoc(doc(db, 'therapists', currentUser.uid));
@@ -219,35 +463,41 @@ export default function ClientDetails() {
           } catch (_) {}
         }
 
-        /* sessions */
-        try {
-          const sessQ = query(
-            collection(db, 'scheduledCalls'),
-            where('clientId', '==', clientId),
-            orderBy('scheduledAt', 'desc')
-          );
-          const sessSnap = await getDocs(sessQ);
-          setSessions(sessSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (_) { setSessions([]); }
+        const sessRows = await fetchClientSessions(clientId, { authUid: cData.authUid });
+        setSessions(sessRows);
 
-        /* therapy notes subcollection */
         try {
           const tnSnap = await getDocs(
-            query(collection(db, 'clients', clientId, 'therapyNotes'), orderBy('createdAt', 'desc'))
+            query(collection(db, 'clients', clientId, 'therapyNotes'), orderBy('createdAt', 'desc')),
           );
-          setTherapyNotes(tnSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (_) { setTherapyNotes([]); }
+          setTherapyNotes(tnSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        } catch (_) {
+          try {
+            const tnSnap = await getDocs(collection(db, 'clients', clientId, 'therapyNotes'));
+            setTherapyNotes(tnSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          } catch (_) {
+            setTherapyNotes([]);
+          }
+        }
 
-        /* clinical notes collection */
         try {
           const cnQ = query(
             collection(db, 'clinicalNotes'),
             where('clientId', '==', clientId),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
           );
           const cnSnap = await getDocs(cnQ);
-          setClinicalNotes(cnSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (_) { setClinicalNotes([]); }
+          setClinicalNotes(cnSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        } catch (_) {
+          try {
+            const cnSnap = await getDocs(
+              query(collection(db, 'clinicalNotes'), where('clientId', '==', clientId)),
+            );
+            setClinicalNotes(cnSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          } catch (_) {
+            setClinicalNotes([]);
+          }
+        }
 
         /* mood entries */
         try {
@@ -277,13 +527,23 @@ export default function ClientDetails() {
     load();
   }, [clientId]);
 
-  /* ── derived KPIs ── */
+  const displayVal = (val) => (val != null && val !== '' ? val : null);
+
+  const moodFromNotes = therapyNotes
+    .map((n) => Number(n.mood))
+    .filter((m) => !Number.isNaN(m) && m > 0);
+  const moodValues = [
+    ...moodEntries.map((e) => Number(e.mood || e.moodValue || e.value)).filter((m) => !Number.isNaN(m) && m > 0),
+    ...moodFromNotes,
+  ];
+  const avgMood = moodValues.length
+    ? (moodValues.reduce((a, b) => a + b, 0) / moodValues.length).toFixed(1)
+    : null;
+
   const totalSessions = sessions.length;
   const totalNotes = therapyNotes.length + clinicalNotes.length;
-  const avgMood = moodEntries.length
-    ? (moodEntries.reduce((s, e) => s + (Number(e.mood || e.moodValue || e.value) || 0), 0) / moodEntries.length).toFixed(1)
-    : 'N/A';
-  const lastSession = sessions.find(s => (s.status || '').toLowerCase() === 'completed');
+  const lastSession = getLastSessionRecord(sessions);
+  const lastSessionLabel = lastSession ? formatSessionDateLabel(lastSession) : null;
 
   /* ── status change ── */
   const handleStatusChange = async (newStatus) => {
@@ -312,8 +572,31 @@ export default function ClientDetails() {
         query(collection(db, 'clients', clientId, 'therapyNotes'), orderBy('createdAt', 'desc'))
       );
       setTherapyNotes(tnSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (_) {}
+    } catch (_) {
+      try {
+        const tnSnap = await getDocs(collection(db, 'clients', clientId, 'therapyNotes'));
+        setTherapyNotes(tnSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (_) {}
+    }
+    try {
+      const cnQ = query(
+        collection(db, 'clinicalNotes'),
+        where('clientId', '==', clientId),
+        orderBy('createdAt', 'desc'),
+      );
+      const cnSnap = await getDocs(cnQ);
+      setClinicalNotes(cnSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (_) {
+      try {
+        const cnSnap = await getDocs(
+          query(collection(db, 'clinicalNotes'), where('clientId', '==', clientId)),
+        );
+        setClinicalNotes(cnSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (_) {}
+    }
   };
+
+  const openNoteDetail = (note, kind) => setViewingNote({ note, kind });
 
   /* ── goals ── */
   const handleSaveGoal = async () => {
@@ -347,11 +630,6 @@ export default function ClientDetails() {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   };
 
-  const cardStyle = {
-    background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-  };
-
   const TABS = ['overview', 'sessions', 'notes', 'mood', 'goals'];
 
   if (loading) {
@@ -377,7 +655,8 @@ export default function ClientDetails() {
     );
   }
 
-  const clientName = client.clientName || client.displayName || client.name || 'Unknown';
+  const clientName = getClientDisplayName(client, authProfile);
+  const clientPhone = getClientPhone(client, authProfile);
   const statusColors = statusColor(client.status);
 
   return (
@@ -410,8 +689,8 @@ export default function ClientDetails() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontSize: '0.82rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
               <Mail size={13} />
               <span>{client.clientEmail || client.email || 'No email'}</span>
-              {(client.phone) && (
-                <><Phone size={13} style={{ marginLeft: 8 }} /><span>{client.phone}</span></>
+              {clientPhone && (
+                <><Phone size={13} style={{ marginLeft: 8 }} /><span>{clientPhone}</span></>
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
@@ -503,10 +782,10 @@ export default function ClientDetails() {
         {[
           { icon: <Activity size={20} color="#4f46e5" />, label: 'Total Sessions', value: totalSessions, bg: '#eff6ff' },
           { icon: <FileText size={20} color="#0891b2" />, label: 'Total Notes', value: totalNotes, bg: '#ecfeff' },
-          { icon: <TrendingUp size={20} color="#059669" />, label: 'Avg Mood', value: avgMood, bg: '#ecfdf5' },
+          { icon: <TrendingUp size={20} color="#059669" />, label: 'Avg Mood', value: avgMood ?? '—', bg: '#ecfdf5' },
           {
             icon: <Clock size={20} color="#d97706" />, label: 'Last Session',
-            value: lastSession ? fmtDate(lastSession.scheduledAt) : 'N/A', bg: '#fffbeb',
+            value: lastSessionLabel || '—', bg: '#fffbeb',
           },
         ].map((kpi, i) => (
           <div key={i} style={{ ...cardStyle, padding: '1.2rem 1.4rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -553,17 +832,17 @@ export default function ClientDetails() {
             </div>
             {[
               ['Name', clientName],
-              ['Email', client.clientEmail || client.email],
-              ['Phone', client.phone || client.phoneNumber],
+              ['Email', client.clientEmail || client.email || authProfile?.email],
+              ['Phone', clientPhone],
               ['Age', client.age],
               ['Gender', client.gender === 'man' ? 'Male' : client.gender === 'woman' ? 'Female' : client.gender],
               ['Country', client.country],
               ['Employment', client.employment],
-              ['Relationship Status', client.relationshipStatus],
+              ['Relationship Status', getClientRelationshipStatus(client)],
             ].map(([label, val]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.55rem 0', borderBottom: '1px solid #f1f5f9' }}>
                 <span style={{ color: '#64748b', fontWeight: 500, fontSize: '0.82rem' }}>{label}</span>
-                <span style={{ color: '#0f172a', fontWeight: 600, fontSize: '0.875rem' }}>{val || 'N/A'}</span>
+                <span style={{ color: '#0f172a', fontWeight: 600, fontSize: '0.875rem' }}>{displayVal(val) ?? '—'}</span>
               </div>
             ))}
           </div>
@@ -574,7 +853,7 @@ export default function ClientDetails() {
               <Calendar size={15} /> Therapy Information
             </div>
             {[
-              ['Therapy Type', client.therapyType],
+              ['Therapy Type', formatFieldValue(client.therapyType || client.therapyTypes)],
               ['Session Frequency', client.sessionFrequency],
               ['Session Structure', client.sessionStructure],
               ['Therapist Style', client.therapistStyle],
@@ -582,7 +861,7 @@ export default function ClientDetails() {
             ].map(([label, val]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.55rem 0', borderBottom: '1px solid #f1f5f9' }}>
                 <span style={{ color: '#64748b', fontWeight: 500, fontSize: '0.82rem' }}>{label}</span>
-                <span style={{ color: '#0f172a', fontWeight: 600, fontSize: '0.875rem' }}>{val || 'N/A'}</span>
+                <span style={{ color: '#0f172a', fontWeight: 600, fontSize: '0.875rem' }}>{displayVal(val) ?? '—'}</span>
               </div>
             ))}
           </div>
@@ -602,10 +881,12 @@ export default function ClientDetails() {
             ].map(([label, val]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.55rem 0', borderBottom: '1px solid #f1f5f9' }}>
                 <span style={{ color: '#64748b', fontWeight: 500, fontSize: '0.82rem' }}>{label}</span>
-                <span style={{ color: '#0f172a', fontWeight: 600, fontSize: '0.875rem' }}>{val || 'N/A'}</span>
+                <span style={{ color: '#0f172a', fontWeight: 600, fontSize: '0.875rem' }}>{displayVal(val) ?? '—'}</span>
               </div>
             ))}
           </div>
+
+          <QuestionnaireResponsesPanel client={client} />
 
           {/* Mental Health History */}
           {(client.mentalHealthHistory || client.previousTherapy || client.medications) && (
@@ -654,8 +935,12 @@ export default function ClientDetails() {
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
-                          {fmtDate(sess.scheduledAt)}
-                          {sess.scheduledAt && <span style={{ color: '#64748b', fontWeight: 500, marginLeft: 8 }}>{fmtTime(sess.scheduledAt)}</span>}
+                          {formatSessionDateLabel(sess)}
+                          {sessionTimestamp(sess) && (
+                            <span style={{ color: '#64748b', fontWeight: 500, marginLeft: 8 }}>
+                              {formatSessionTimeLabel(sess)}
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>
                           {sess.sessionType || sess.type || 'Session'}
@@ -693,32 +978,8 @@ export default function ClientDetails() {
               <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No therapy notes yet.</div>
             ) : (
               <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
-                {therapyNotes.map(note => (
-                  <div key={note.id} style={{ padding: '1.2rem', margin: '0.75rem 0', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600 }}>{fmtDate(note.createdAt)}</div>
-                      {note.mood && (
-                        <span style={{ padding: '0.2rem 0.65rem', borderRadius: 20, background: '#eff6ff', color: '#4f46e5', fontSize: '0.72rem', fontWeight: 700 }}>
-                          Mood {note.mood}/10
-                        </span>
-                      )}
-                    </div>
-                    {note.sessionFocus && (
-                      <div style={{ marginBottom: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focus: </span>
-                        <span style={{ fontSize: '0.875rem', color: '#0f172a' }}>{note.sessionFocus}</span>
-                      </div>
-                    )}
-                    {note.progressAssessment && (
-                      <div style={{ marginBottom: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Progress: </span>
-                        <span style={{ fontSize: '0.875rem', color: '#0f172a' }}>{note.progressAssessment}</span>
-                      </div>
-                    )}
-                    {note.notes && (
-                      <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#475569', lineHeight: 1.6 }}>{note.notes}</p>
-                    )}
-                  </div>
+                {therapyNotes.map((note) => (
+                  <NoteListCard key={note.id} note={note} kind="therapy" onOpen={openNoteDetail} />
                 ))}
               </div>
             )}
@@ -733,25 +994,8 @@ export default function ClientDetails() {
               <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No clinical notes found.</div>
             ) : (
               <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
-                {clinicalNotes.map(note => (
-                  <div key={note.id} style={{ padding: '1.2rem', margin: '0.75rem 0', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.6rem' }}>{fmtDate(note.createdAt)}</div>
-                    {note.sessionFocus && (
-                      <div style={{ marginBottom: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Focus: </span>
-                        <span style={{ fontSize: '0.875rem', color: '#0f172a' }}>{note.sessionFocus}</span>
-                      </div>
-                    )}
-                    {note.progressAssessment && (
-                      <div style={{ marginBottom: '0.4rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Progress: </span>
-                        <span style={{ fontSize: '0.875rem', color: '#0f172a' }}>{note.progressAssessment}</span>
-                      </div>
-                    )}
-                    {note.content && (
-                      <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#475569', lineHeight: 1.6 }}>{note.content}</p>
-                    )}
-                  </div>
+                {clinicalNotes.map((note) => (
+                  <NoteListCard key={note.id} note={note} kind="clinical" onOpen={openNoteDetail} />
                 ))}
               </div>
             )}
@@ -913,6 +1157,14 @@ export default function ClientDetails() {
           therapistId={currentUser?.uid}
           onClose={() => setShowNoteModal(false)}
           onSaved={reloadNotes}
+        />
+      )}
+
+      {viewingNote && (
+        <NoteDetailModal
+          note={viewingNote.note}
+          kind={viewingNote.kind}
+          onClose={() => setViewingNote(null)}
         />
       )}
 

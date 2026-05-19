@@ -4,26 +4,64 @@ import { steps, phq9Questions } from './steps';
 import './Questionnaire.css';
 import { db } from '../Auth/firebaseConfig';
 import { collection, addDoc } from 'firebase/firestore';
+import {
+  buildTeenClientRecord,
+  loadJson,
+  mergeTeenIntoQuestionnaireData,
+  TEEN_STORAGE_KEYS,
+} from '../../utils/teenTherapyStorage';
+import {
+  buildIndividualConsentRecord,
+  INDIVIDUAL_CONSENT_STEP,
+  needsIndividualQuestionnaireConsent,
+} from '../../utils/individualTherapyConfig';
+import { nessaHubPolicyUrl, NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
+import {
+  getQuestionnaireAgeOptions,
+  validateQuestionnaireAge,
+} from '../../utils/therapyAgeValidation';
 
 const storageKey = 'th.onboard';
 
 const getInitial = () => {
   try {
     const fromStorage = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    return fromStorage || {};
-  } catch { return {}; }
+    return mergeTeenIntoQuestionnaireData(fromStorage || {});
+  } catch {
+    return {};
+  }
 };
 
 export default function Questionnaire() {
   const navigate = useNavigate();
   const [data, setData] = useState(getInitial());
+  const isTeen = data.therapyType === 'teen';
+  const childInfo = data.childInfo || loadJson(TEEN_STORAGE_KEYS.child);
+  const childName = [childInfo.firstName, childInfo.lastName].filter(Boolean).join(' ').trim();
+
   const [index, setIndex] = useState(() => {
-    // If therapy type picked on home, start at step 2
-    return data.therapyType ? 1 : 0;
+    const initial = getInitial();
+    if (initial.therapyType === 'teen' && !initial.parentInfo?.firstName) {
+      return 0;
+    }
+    return initial.therapyType ? 1 : 0;
   });
   const [loading, setLoading] = useState(false);
 
-  const current = steps[index];
+  const activeSteps = useMemo(() => {
+    if (needsIndividualQuestionnaireConsent(data.therapyType)) {
+      return [...steps, INDIVIDUAL_CONSENT_STEP];
+    }
+    return steps;
+  }, [data.therapyType]);
+
+  useEffect(() => {
+    if (data.therapyType === 'teen' && !data.parentInfo?.firstName) {
+      navigate('/teen/parent-guardian', { replace: true });
+    }
+  }, [data.therapyType, data.parentInfo, navigate]);
+
+  const current = activeSteps[index];
 
   const save = (partial) => {
     const next = { ...data, ...partial };
@@ -31,7 +69,7 @@ export default function Questionnaire() {
     localStorage.setItem(storageKey, JSON.stringify(next));
   };
 
-  const nextStep = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
+  const nextStep = () => setIndex((i) => Math.min(i + 1, activeSteps.length - 1));
   const prevStep = () => setIndex((i) => Math.max(i - 1, 0));
 
   // Check if a specific field is complete
@@ -53,6 +91,15 @@ export default function Questionnaire() {
         return Object.keys(value).length === phq9Questions.length;
       } else if (field.type === 'phq9_single') {
         return data[field.name] !== undefined && data[field.name] !== '';
+      } else if (field.type === 'consent_check') {
+        return data[field.name] === true;
+      } else if (field.type === 'signature') {
+        return String(data[field.name] || '').trim() !== '';
+      } else if (field.type === 'consent_footer') {
+        return true;
+      } else if (field.name === 'age') {
+        if (!data.age) return false;
+        return !validateQuestionnaireAge(data.therapyType, data.age);
       } else {
         return data[field.name] && data[field.name] !== '';
       }
@@ -60,8 +107,8 @@ export default function Questionnaire() {
 
   // Check if all fields in current step are answered
   const isCurrentStepComplete = () => {
-    const current = steps[index];
-    return current.fields.every(isFieldComplete);
+    const step = activeSteps[index];
+    return step.fields.every(isFieldComplete);
   };
 
   const complete = async () => {
@@ -82,15 +129,23 @@ export default function Questionnaire() {
         }
       }
 
-      // Submit questionnaire data to Firestore clients collection
-      const clientData = {
-        ...data,
-        phq9: phq9Data, // Add the combined PHQ-9 data
+      const merged = mergeTeenIntoQuestionnaireData(data);
+      let clientData = {
+        ...merged,
+        phq9: phq9Data,
         completedAt: new Date().toISOString(),
-        status: 'pending', // Set to active so client can login
-        displayName: data.name || data.firstName + ' ' + data.lastName || 'Client',
-        clientName: data.name || data.firstName + ' ' + data.lastName || 'Client'
+        createdAt: new Date().toISOString(),
+        status: 'active',
+        displayName: merged.name || [merged.firstName, merged.lastName].filter(Boolean).join(' ') || 'Client',
+        clientName: merged.name || [merged.firstName, merged.lastName].filter(Boolean).join(' ') || 'Client',
       };
+
+      if (merged.therapyType === 'teen') {
+        clientData = buildTeenClientRecord(clientData);
+      } else if (needsIndividualQuestionnaireConsent(merged.therapyType)) {
+        clientData.individualConsent = buildIndividualConsentRecord(merged);
+        clientData.consentComplete = true;
+      }
       
       const docRef = await addDoc(collection(db, 'clients'), clientData);
       
@@ -134,17 +189,17 @@ export default function Questionnaire() {
       {/* Progress Bar */}
       <div className="progress-container">
         <div className="progress-header">
-          <h3 className="progress-title">Getting to know you</h3>
-          <span className="progress-text">{index + 1} of {steps.length}</span>
+          <h3 className="progress-title">{isTeen ? 'Getting to know your teen' : 'Getting to know you'}</h3>
+          <span className="progress-text">{index + 1} of {activeSteps.length}</span>
         </div>
         <div className="progress-bar">
           <div 
             className="progress-fill" 
-            style={{ width: `${((index + 1) / steps.length) * 100}%` }}
+            style={{ width: `${((index + 1) / activeSteps.length) * 100}%` }}
           ></div>
         </div>
         <div className="progress-steps">
-          {steps.map((step, i) => (
+          {activeSteps.map((step, i) => (
             <div 
               key={step.key} 
               className={`progress-step ${i < index ? 'completed' : i === index ? 'active' : ''}`}
@@ -157,11 +212,33 @@ export default function Questionnaire() {
 
       {/* Question Card */}
       <div className="question-card">
+        {isTeen && childName ? (
+          <div className="teen-banner">
+            Questionnaire for <strong>{childName}</strong> — answers should reflect your teen&apos;s needs and preferences.
+          </div>
+        ) : null}
         <div className="question-header">
           <h2 className="question-title">{current.title}</h2>
           <p className="question-description">
-            Help us match you to the right therapist<br />
-            It's important to have a therapist who you can establish a personal connection with. The following questions are designed to match you to a licensed therapist based on your therapy needs and personal preferences.
+            {isTeen ? (
+              <>
+                Help us match your child to the right therapist.
+                <br />
+                These questions help us find a licensed therapist suited to your teen&apos;s needs. A parent or guardian may assist with answers where helpful.
+              </>
+            ) : current.key === 'consent' ? (
+              <>
+                Please review and accept the following before we create your account.
+                <br />
+                Use the arrow on each row to read the full policy on our policies site.
+              </>
+            ) : (
+              <>
+                Help us match you to the right therapist
+                <br />
+                It&apos;s important to have a therapist who you can establish a personal connection with. The following questions are designed to match you to a licensed therapist based on your therapy needs and personal preferences.
+              </>
+            )}
           </p>
         </div>
         
@@ -179,7 +256,7 @@ export default function Questionnaire() {
 
         <div className="question-actions">
           <button className="btn" onClick={prevStep} disabled={index === 0}>Back</button>
-          {index < steps.length - 1 ? (
+          {index < activeSteps.length - 1 ? (
             <button 
               className="btn primary" 
               onClick={nextStep} 
@@ -282,6 +359,12 @@ function Field({ field, value, onChange, isComplete }) {
   }
 
   if (field.type === 'select') {
+    const isAgeField = field.name === 'age';
+    const selectOptions = isAgeField
+      ? getQuestionnaireAgeOptions(value.therapyType)
+      : field.options;
+    const ageError =
+      isAgeField && value.age ? validateQuestionnaireAge(value.therapyType, value.age) : null;
     return (
       <div className={`field ${isComplete ? 'complete' : 'incomplete'}`}>
         <div className="label">
@@ -290,8 +373,20 @@ function Field({ field, value, onChange, isComplete }) {
         </div>
         <select className="select" value={value[field.name] ?? ''} onChange={(e) => set(field.name, e.target.value)}>
           <option value="" disabled>Select…</option>
-          {field.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          {selectOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
         </select>
+        {ageError ? <p className="field-error">{ageError}</p> : null}
+        {isAgeField && !ageError ? (
+          <p className="hint">
+            {value.therapyType === 'teen'
+              ? 'Teen therapy is for ages 13–17.'
+              : 'You must be 18 or older for this program.'}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -337,6 +432,75 @@ function Field({ field, value, onChange, isComplete }) {
           <option value="Other">Other</option>
         </select>
         <div className="hint">Auto-detected from your network. You can change if incorrect.</div>
+      </div>
+    );
+  }
+
+  if (field.type === 'consent_check') {
+    const policyHref = field.policySlug ? nessaHubPolicyUrl(field.policySlug) : null;
+    return (
+      <div key={field.name} className="questionnaire-consent-row">
+        <label className="questionnaire-consent-main">
+          <input
+            type="checkbox"
+            checked={!!value[field.name]}
+            onChange={(e) => set(field.name, e.target.checked)}
+          />
+          <span>
+            <strong>{field.label}</strong>
+            {field.description ? <small>{field.description}</small> : null}
+          </span>
+        </label>
+        {policyHref ? (
+          <a
+            className="questionnaire-consent-link"
+            href={policyHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Read full ${field.label} policy`}
+            title="Read full policy"
+          >
+            →
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (field.type === 'signature') {
+    const date = new Date().toISOString().split('T')[0];
+    return (
+      <div className={`field ${isComplete ? 'complete' : 'incomplete'}`}>
+        <div className="label">
+          {field.label}
+          {isComplete && <span className="completion-indicator">✓</span>}
+        </div>
+        <input
+          className="input"
+          value={value[field.name] ?? ''}
+          onChange={(e) => set(field.name, e.target.value)}
+          placeholder="Type your full legal name"
+        />
+        <p className="hint">Date: {date}</p>
+      </div>
+    );
+  }
+
+  if (field.type === 'consent_footer') {
+    return (
+      <div className="questionnaire-consent-note">
+        <strong>Important</strong>
+        <p>
+          By proceeding, you agree to our{' '}
+          <a href={NESSA_HUB_POLICY_LINKS.terms} target="_blank" rel="noopener noreferrer">
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a href={NESSA_HUB_POLICY_LINKS.privacy} target="_blank" rel="noopener noreferrer">
+            Privacy Policy
+          </a>
+          .
+        </p>
       </div>
     );
   }

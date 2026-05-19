@@ -12,6 +12,7 @@ import PharmacyPrescriptions from './PharmacyPrescriptions';
 import PharmacyReports from './PharmacyReports';
 import PharmacySettings from './PharmacySettings';
 import GlobalReportForm from '../Common/GlobalReportForm';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 
 const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
@@ -78,6 +79,7 @@ export default function PharmacyDashboard({ profile }) {
             <div>
               <p className="pharmacy-user-name">{profile?.pharmacyName || 'Pharmacy'}</p>
               <p className="pharmacy-user-role">Parent Account</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ChatModal from './ChatModal';
 import './Clients.css';
+import { enrichClientRecord } from '../../../utils/clientTherapyMetrics';
 
 // ── Therapy Note Modal ──────────────────────────────────────────────────────
 function TherapyNoteModal({ client, onClose, onSave }) {
@@ -257,49 +258,10 @@ export default function TherapistClients({ profile }) {
         try {
           const clientDoc = await getDoc(doc(db, 'clients', cid));
           if (!clientDoc.exists()) continue;
-          const cd = clientDoc.data();
-
-          // Get auth record for email
-          let email = cd.email || '';
-          if (!email) {
-            try {
-              const authQ = query(collection(db, 'auth'), where('clientId', '==', cid));
-              const authSnap = await getDocs(authQ);
-              if (!authSnap.empty) email = authSnap.docs[0].data().email || '';
-            } catch (_) {}
-          }
-
-          // Count sessions
-          let sessionCount = 0;
-          let lastSession = null;
-          try {
-            const sessQ = query(
-              collection(db, 'scheduledCalls'),
-              where('therapistId', '==', currentUser.uid),
-              where('clientId', '==', cid),
-              orderBy('scheduledTime', 'desc')
-            );
-            const sessSnap = await getDocs(sessQ);
-            sessionCount = sessSnap.size;
-            if (!sessSnap.empty) lastSession = sessSnap.docs[0].data().scheduledTime;
-          } catch (_) {}
-
-          // Count notes
-          let noteCount = 0;
-          try {
-            const notesSnap = await getDocs(collection(db, 'clients', cid, 'therapyNotes'));
-            noteCount = notesSnap.size;
-          } catch (_) {}
-
+          const enriched = await enrichClientRecord(cid, { id: cid, ...clientDoc.data() });
           clientsData.push({
-            id: cid,
-            ...cd,
-            email: email || cd.email || '',
-            sessionCount,
-            lastSession,
-            noteCount,
-            status: cd.status || 'active',
-            name: cd.name || cd.displayName || email || `Client ${cid.slice(-4)}`,
+            ...enriched,
+            status: enriched.status || 'active',
           });
         } catch (e) {
           console.error('Error loading client', cid, e);
@@ -329,16 +291,20 @@ export default function TherapistClients({ profile }) {
       }));
 
       const snap = await getDocs(collection(db, 'clients'));
-      setAllSystemClients(snap.docs.map(d => {
+      const base = snap.docs.map((d) => {
         const data = d.data();
         const resolvedTherapistId = data.therapistId || clientTherapistMap[d.id] || null;
         return {
-          id: d.id, ...data,
+          id: d.id,
+          ...data,
           therapistId: resolvedTherapistId,
-          name: data.name || data.displayName || data.email || `Client ${d.id.slice(-4)}`,
           status: data.status || 'active',
         };
-      }));
+      });
+      const enriched = await Promise.all(
+        base.map((c) => enrichClientRecord(c.id, c)),
+      );
+      setAllSystemClients(enriched);
     } catch (e) { console.error('Load all clients error:', e); }
   };
 

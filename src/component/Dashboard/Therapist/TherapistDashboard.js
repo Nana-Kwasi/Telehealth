@@ -9,11 +9,9 @@ import {
   BookOpen,
   Settings,
   LogOut,
-  UserPlus,
   Clock,
   FileText,
   Flag,
-  Stethoscope,
   Activity,
   Heart,
 } from 'lucide-react';
@@ -35,19 +33,22 @@ import TherapistReports from './Reports';
 import TherapistSettings from './Settings';
 import TherapistLogs from './Logs';
 import MoodDashboard from './MoodDashboard';
-import OnboardTherapist from '../Admin/OnboardTherapist';
-import OnboardDoctor from '../Admin/OnboardDoctor';
 import ClientDetails from './ClientDetails';
 import ViewNote from './ViewNote';
 import ReportDetails from './ReportDetails';
 import Notifications from './Notifications';
 import GlobalReportForm from '../Common/GlobalReportForm';
+import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 
 export default function TherapistDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
   
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin =
+    profile?.role === 'admin' ||
+    profile?.type === 'Administrator' ||
+    profile?.isAdminTherapist === true;
 
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: 'Home', component: TherapistHome },
@@ -63,22 +64,9 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: TherapistSettings }
   ];
 
-  // Add admin-only navigation items
   if (isAdmin) {
     navigationItems.push(
       { path: '/dashboard/logs', icon: FileText, label: 'Logs', component: TherapistLogs },
-      {
-        path: '/dashboard/admin',
-        icon: UserPlus,
-        label: 'Onboard Therapist',
-        component: OnboardTherapist
-      },
-      {
-        path: '/dashboard/onboard-doctor',
-        icon: Stethoscope,
-        label: 'Onboard Doctor',
-        component: OnboardDoctor
-      }
     );
   }
 
@@ -149,6 +137,7 @@ export default function TherapistDashboard({ profile }) {
             <div className="user-details">
               <p className="user-name">Dr. {profile?.name || 'Therapist'}</p>
               <p className="user-role">{isAdmin ? 'Admin Therapist' : 'Therapist'}</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>
@@ -182,6 +171,7 @@ export default function TherapistDashboard({ profile }) {
 
       {/* Main Content */}
       <main className="therapist-main">
+        <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="therapists" />
         <Routes>
           <Route path="/" element={<TherapistHome profile={profile} />} />
           <Route path="/clients" element={<TherapistClients profile={profile} />} />
@@ -199,8 +189,6 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/reports/:reportId" element={<ReportDetails />} />
           <Route path="/notifications" element={<Notifications />} />
           {isAdmin && <Route path="/logs" element={<TherapistLogs />} />}
-          {isAdmin && <Route path="/admin" element={<OnboardTherapist />} />}
-          {isAdmin && <Route path="/onboard-doctor" element={<OnboardDoctor profile={profile} />} />}
         </Routes>
       </main>
     </div>

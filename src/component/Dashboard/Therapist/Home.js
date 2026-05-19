@@ -10,11 +10,18 @@ import {
 } from 'recharts';
 import './Home.css';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
+import {
+  enrichClientRecord,
+  getClientDisplayName,
+  toFirestoreDate,
+} from '../../../utils/clientTherapyMetrics';
 
 export default function TherapistHome({ profile }) {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [therapistProfile, setTherapistProfile] = useState(null);
+  const [locationProfile, setLocationProfile] = useState(null);
   const [kpis, setKpis] = useState({ activeClients: 0, todaySessions: 0, pendingNotes: 0, completionRate: 0, totalSessions: 0, totalNotes: 0 });
   const [todayAppointments, setTodayAppointments] = useState([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
@@ -36,103 +43,137 @@ export default function TherapistHome({ profile }) {
     return () => clearInterval(t);
   }, []);
 
+  const isAdminTherapist =
+    profile?.role === 'admin' ||
+    profile?.isAdminTherapist === true ||
+    therapistProfile?.role === 'admin';
+
   // Load all dashboard data
   useEffect(() => {
     if (!currentUser) return;
     loadDashboardData();
     const unsubNotifs = loadNotifications();
     return () => { if (unsubNotifs) unsubNotifs(); };
-  }, [currentUser]);
+  }, [currentUser, profile?.role, profile?.isAdminTherapist]);
 
   const loadDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      await Promise.all([
-        loadTherapistProfile(),
-        loadKPIs(),
-        loadTodaySchedule(),
-        loadUpcomingAppointments(),
-        loadClientProgress(),
-        loadWeeklyData(),
-        loadRecentActivities(),
-      ]);
-    } catch (e) {
-      console.error('Dashboard load error:', e);
-    } finally {
-      setIsLoading(false);
-    }
+    setIsLoading(true);
+    const adminView =
+      profile?.role === 'admin' ||
+      profile?.isAdminTherapist === true;
+    await Promise.allSettled([
+      loadTherapistProfile(),
+      loadKPIs(adminView),
+      loadTodaySchedule(adminView),
+      loadUpcomingAppointments(adminView),
+      loadClientProgress(adminView),
+      loadWeeklyData(adminView),
+      loadRecentActivities(adminView),
+    ]);
+    setIsLoading(false);
   };
 
   const loadTherapistProfile = async () => {
     const snap = await getDoc(doc(db, 'therapists', currentUser.uid));
-    if (snap.exists()) setTherapistProfile(snap.data());
+    const roleData = snap.exists() ? snap.data() : null;
+    setTherapistProfile(roleData);
+    const authLoc = await fetchAuthLocationProfile(currentUser.uid);
+    setLocationProfile(mergeLocationProfile(profile, authLoc, roleData));
   };
 
-  const loadKPIs = async () => {
+  const loadKPIs = async (adminView = false) => {
     try {
-      // Active clients
-      const clientsRef = collection(db, 'therapists', currentUser.uid, 'clients');
-      const clientsSnap = await getDocs(clientsRef);
-      const activeClients = clientsSnap.size;
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
-      // Today's sessions
-      const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-      const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999);
-      const todayQ = query(
-        collection(db, 'scheduledCalls'),
-        where('therapistId', '==', currentUser.uid),
-        where('scheduledTime', '>=', Timestamp.fromDate(todayStart)),
-        where('scheduledTime', '<=', Timestamp.fromDate(todayEnd))
-      );
+      let activeClients = 0;
+      if (adminView) {
+        const clientsSnap = await getDocs(collection(db, 'clients'));
+        activeClients = clientsSnap.size;
+      } else {
+        const clientsSnap = await getDocs(collection(db, 'therapists', currentUser.uid, 'clients'));
+        activeClients = clientsSnap.size;
+      }
+
+      const todayQ = adminView
+        ? query(
+            collection(db, 'scheduledCalls'),
+            where('scheduledTime', '>=', Timestamp.fromDate(todayStart)),
+            where('scheduledTime', '<=', Timestamp.fromDate(todayEnd)),
+          )
+        : query(
+            collection(db, 'scheduledCalls'),
+            where('therapistId', '==', currentUser.uid),
+            where('scheduledTime', '>=', Timestamp.fromDate(todayStart)),
+            where('scheduledTime', '<=', Timestamp.fromDate(todayEnd)),
+          );
       const todaySnap = await getDocs(todayQ);
 
-      // Pending (draft) notes
       let pendingNotes = 0;
       try {
-        const notesQ = query(
-          collection(db, 'clinicalNotes'),
-          where('therapistId', '==', currentUser.uid),
-          where('isDraft', '==', true)
-        );
+        const notesQ = adminView
+          ? query(collection(db, 'clinicalNotes'), where('isDraft', '==', true))
+          : query(
+              collection(db, 'clinicalNotes'),
+              where('therapistId', '==', currentUser.uid),
+              where('isDraft', '==', true),
+            );
         const notesSnap = await getDocs(notesQ);
         pendingNotes = notesSnap.size;
-      } catch (_) {}
+      } catch (notesErr) {
+        console.warn('Pending notes KPI:', notesErr);
+      }
 
-      // Completion rate (completed / total all time)
-      const allQ = query(
-        collection(db, 'scheduledCalls'),
-        where('therapistId', '==', currentUser.uid)
-      );
+      const allQ = adminView
+        ? query(collection(db, 'scheduledCalls'), orderBy('scheduledTime', 'desc'), limit(500))
+        : query(collection(db, 'scheduledCalls'), where('therapistId', '==', currentUser.uid));
       const allSnap = await getDocs(allQ);
       const total = allSnap.size;
-      const done  = allSnap.docs.filter(d => d.data().status === 'completed').length;
+      const done = allSnap.docs.filter((d) => d.data().status === 'completed').length;
       const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
-      // Total clinical notes
       let totalNotes = 0;
       try {
-        const allNotesQ = query(collection(db, 'clinicalNotes'), where('therapistId', '==', currentUser.uid));
+        const allNotesQ = adminView
+          ? query(collection(db, 'clinicalNotes'), limit(500))
+          : query(collection(db, 'clinicalNotes'), where('therapistId', '==', currentUser.uid));
         const allNotesSnap = await getDocs(allNotesQ);
         totalNotes = allNotesSnap.size;
-      } catch (_) {}
+      } catch (notesErr) {
+        console.warn('Total notes KPI:', notesErr);
+      }
 
-      setKpis({ activeClients, todaySessions: todaySnap.size, pendingNotes, completionRate, totalSessions: total, totalNotes });
+      setKpis({
+        activeClients,
+        todaySessions: todaySnap.size,
+        pendingNotes,
+        completionRate,
+        totalSessions: total,
+        totalNotes,
+      });
     } catch (e) {
       console.error('KPI error:', e);
     }
   };
 
-  const loadTodaySchedule = async () => {
+  const loadTodaySchedule = async (adminView = false) => {
     try {
-      const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-      const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999);
-      const q = query(
-        collection(db, 'scheduledCalls'),
-        where('therapistId', '==', currentUser.uid),
-        where('scheduledTime', '>=', Timestamp.fromDate(todayStart)),
-        where('scheduledTime', '<=', Timestamp.fromDate(todayEnd)),
-        orderBy('scheduledTime', 'asc')
-      );
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const q = adminView
+        ? query(
+            collection(db, 'scheduledCalls'),
+            where('scheduledTime', '>=', Timestamp.fromDate(todayStart)),
+            where('scheduledTime', '<=', Timestamp.fromDate(todayEnd)),
+            orderBy('scheduledTime', 'asc'),
+          )
+        : query(
+            collection(db, 'scheduledCalls'),
+            where('therapistId', '==', currentUser.uid),
+            where('scheduledTime', '>=', Timestamp.fromDate(todayStart)),
+            where('scheduledTime', '<=', Timestamp.fromDate(todayEnd)),
+            orderBy('scheduledTime', 'asc'),
+          );
       const snap = await getDocs(q);
       const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTodayAppointments(appts);
@@ -141,16 +182,23 @@ export default function TherapistHome({ profile }) {
     }
   };
 
-  const loadUpcomingAppointments = async () => {
+  const loadUpcomingAppointments = async (adminView = false) => {
     try {
       const now = new Date();
-      const q = query(
-        collection(db, 'scheduledCalls'),
-        where('therapistId', '==', currentUser.uid),
-        where('scheduledTime', '>=', Timestamp.fromDate(now)),
-        orderBy('scheduledTime', 'asc'),
-        limit(5)
-      );
+      const q = adminView
+        ? query(
+            collection(db, 'scheduledCalls'),
+            where('scheduledTime', '>=', Timestamp.fromDate(now)),
+            orderBy('scheduledTime', 'asc'),
+            limit(5),
+          )
+        : query(
+            collection(db, 'scheduledCalls'),
+            where('therapistId', '==', currentUser.uid),
+            where('scheduledTime', '>=', Timestamp.fromDate(now)),
+            orderBy('scheduledTime', 'asc'),
+            limit(5),
+          );
       const snap = await getDocs(q);
       const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setUpcomingAppointments(appts);
@@ -165,23 +213,26 @@ export default function TherapistHome({ profile }) {
     }
   };
 
-  const loadClientProgress = async () => {
+  const loadClientProgress = async (adminView = false) => {
     try {
-      // Primary: get client IDs from therapist's subcollection
       let clientIds = [];
-      try {
-        const subSnap = await getDocs(collection(db, 'therapists', currentUser.uid, 'clients'));
-        clientIds = subSnap.docs.map(d => d.data().clientId || d.data().id || d.id).filter(Boolean);
-      } catch (_) {}
-
-      // Fallback: query clients collection directly by therapistId field
-      if (clientIds.length === 0) {
+      if (adminView) {
+        const allClientsSnap = await getDocs(query(collection(db, 'clients'), limit(50)));
+        clientIds = allClientsSnap.docs.map((d) => d.id);
+      } else {
         try {
-          const directSnap = await getDocs(
-            query(collection(db, 'clients'), where('therapistId', '==', currentUser.uid))
-          );
-          clientIds = directSnap.docs.map(d => d.id);
+          const subSnap = await getDocs(collection(db, 'therapists', currentUser.uid, 'clients'));
+          clientIds = subSnap.docs.map((d) => d.data().clientId || d.data().id || d.id).filter(Boolean);
         } catch (_) {}
+
+        if (clientIds.length === 0) {
+          try {
+            const directSnap = await getDocs(
+              query(collection(db, 'clients'), where('therapistId', '==', currentUser.uid)),
+            );
+            clientIds = directSnap.docs.map((d) => d.id);
+          } catch (_) {}
+        }
       }
 
       if (clientIds.length === 0) {
@@ -189,49 +240,40 @@ export default function TherapistHome({ profile }) {
         return;
       }
 
+      const therapistNameById = {};
+      try {
+        const tSnap = await getDocs(collection(db, 'therapists'));
+        tSnap.docs.forEach((t) => {
+          therapistNameById[t.id] = t.data().name || t.data().displayName || 'Therapist';
+        });
+      } catch (_) {}
+
       const progressList = [];
       for (const cid of clientIds.slice(0, 6)) {
         try {
           const clientSnap = await getDoc(doc(db, 'clients', cid));
           if (!clientSnap.exists()) continue;
-          const cd = clientSnap.data();
-          const name = cd.name || cd.displayName || cd.email || `Client ${cid.slice(-4)}`;
-
-          // Count notes for progress score
-          let noteCount = 0;
-          try {
-            const notesSnap = await getDocs(collection(db, 'clients', cid, 'therapyNotes'));
-            noteCount = notesSnap.size;
-          } catch (_) {}
-          // Also check clinicalNotes
-          if (noteCount === 0) {
-            try {
-              const cnSnap = await getDocs(
-                query(collection(db, 'clinicalNotes'), where('clientId', '==', cid))
-              );
-              noteCount = cnSnap.size;
-            } catch (_) {}
-          }
-
+          const enriched = await enrichClientRecord(cid, { id: cid, ...clientSnap.data() });
+          const noteCount = enriched.noteCount ?? 0;
           const progress = Math.min(95, 20 + noteCount * 7);
+          const lastDt = toFirestoreDate(enriched.lastSession);
+          const lastSession = lastDt
+            ? lastDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'No sessions yet';
+          const therapistLabel = enriched.therapistId
+            ? therapistNameById[enriched.therapistId] || enriched.assignedTherapistName || 'Assigned'
+            : enriched.assignedTherapistName || 'Unassigned';
+          const therapyLabel = enriched.therapyTypeLabel || 'Not set';
 
-          // Last session — try both scheduledTime and scheduledAt field names
-          let lastSession = 'No sessions yet';
-          try {
-            const sessQ = query(
-              collection(db, 'scheduledCalls'),
-              where('clientId', '==', cid),
-              orderBy('scheduledTime', 'desc'),
-              limit(1)
-            );
-            const sessSnap = await getDocs(sessQ);
-            if (!sessSnap.empty) {
-              const dt = sessSnap.docs[0].data().scheduledTime?.toDate?.() || new Date();
-              lastSession = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            }
-          } catch (_) {}
-
-          progressList.push({ cid, name, progress, lastSession, noteCount });
+          progressList.push({
+            cid,
+            name: enriched.name || getClientDisplayName(enriched),
+            progress,
+            lastSession,
+            noteCount,
+            therapistName: therapistLabel,
+            therapyType: therapyLabel,
+          });
         } catch (_) {}
       }
       setClientProgress(progressList);
@@ -241,14 +283,16 @@ export default function TherapistHome({ profile }) {
   };
 
   // Load ALL sessions, grouped by month (last 6 months or all time)
-  const loadWeeklyData = async () => {
+  const loadWeeklyData = async (adminView = false) => {
     try {
       const snap = await getDocs(
-        query(
-          collection(db, 'scheduledCalls'),
-          where('therapistId', '==', currentUser.uid),
-          orderBy('scheduledTime', 'asc')
-        )
+        adminView
+          ? query(collection(db, 'scheduledCalls'), orderBy('scheduledTime', 'asc'), limit(500))
+          : query(
+              collection(db, 'scheduledCalls'),
+              where('therapistId', '==', currentUser.uid),
+              orderBy('scheduledTime', 'asc'),
+            ),
       );
       const monthMap = {};
       snap.docs.forEach(d => {
@@ -260,31 +304,28 @@ export default function TherapistHome({ profile }) {
       });
       const monthKeys = Object.keys(monthMap);
       if (monthKeys.length === 0) {
-        setWeeklyData([{ day: 'No data', sessions: 0, notes: 0 }]);
+        setWeeklyData([{ day: 'No sessions yet', sessions: 0, notes: 0 }]);
         return;
       }
-      // Show all months, capped at 12 most recent
       setWeeklyData(monthKeys.slice(-12).map(k => monthMap[k]));
     } catch (e) {
-      setWeeklyData([
-        { day: 'Jan', sessions: 3, notes: 2 }, { day: 'Feb', sessions: 5, notes: 4 },
-        { day: 'Mar', sessions: 4, notes: 3 }, { day: 'Apr', sessions: 6, notes: 5 },
-        { day: 'May', sessions: 5, notes: 4 }, { day: 'Jun', sessions: 7, notes: 6 },
-      ]);
+      console.error('Weekly chart error:', e);
+      setWeeklyData([{ day: 'No sessions yet', sessions: 0, notes: 0 }]);
     }
   };
 
-  const loadRecentActivities = async () => {
+  const loadRecentActivities = async (adminView = false) => {
     try {
       const activities = [];
 
-      // Recent scheduled calls
-      const q = query(
-        collection(db, 'scheduledCalls'),
-        where('therapistId', '==', currentUser.uid),
-        orderBy('scheduledTime', 'desc'),
-        limit(5)
-      );
+      const q = adminView
+        ? query(collection(db, 'scheduledCalls'), orderBy('scheduledTime', 'desc'), limit(5))
+        : query(
+            collection(db, 'scheduledCalls'),
+            where('therapistId', '==', currentUser.uid),
+            orderBy('scheduledTime', 'desc'),
+            limit(5),
+          );
       const snap = await getDocs(q);
       snap.docs.forEach(d => {
         const data = d.data();
@@ -299,12 +340,14 @@ export default function TherapistHome({ profile }) {
 
       // Recent clinical notes
       try {
-        const notesQ = query(
-          collection(db, 'clinicalNotes'),
-          where('therapistId', '==', currentUser.uid),
-          orderBy('createdAt', 'desc'),
-          limit(3)
-        );
+        const notesQ = adminView
+          ? query(collection(db, 'clinicalNotes'), orderBy('createdAt', 'desc'), limit(3))
+          : query(
+              collection(db, 'clinicalNotes'),
+              where('therapistId', '==', currentUser.uid),
+              orderBy('createdAt', 'desc'),
+              limit(3),
+            );
         const notesSnap = await getDocs(notesQ);
         notesSnap.docs.forEach(d => {
           const data = d.data();
@@ -329,7 +372,7 @@ export default function TherapistHome({ profile }) {
     try {
       const q = query(
         collection(db, 'notifications'),
-        where('recipientId', '==', currentUser.uid),
+        where('targetId', '==', currentUser.uid),
         orderBy('createdAt', 'desc'),
         limit(10)
       );
@@ -405,7 +448,16 @@ export default function TherapistHome({ profile }) {
 
   return (
     <div className="dashboard-home">
-      <LocationSummaryCard profile={therapistProfile || profile} onEdit={() => navigate('/dashboard/settings')} />
+      <LocationSummaryCard
+        profile={locationProfile || mergeLocationProfile(profile, therapistProfile)}
+        onEdit={() => navigate('/dashboard/settings')}
+      />
+
+      {isAdminTherapist && (
+        <div className="th-home-admin-banner">
+          Platform overview — showing therapy data across all clients and sessions (admin therapist view).
+        </div>
+      )}
 
       {/* ── Welcome Banner ── */}
       <div className="enhanced-header">
@@ -673,9 +725,13 @@ export default function TherapistHome({ profile }) {
                   <div className="progress-bar" style={{ marginTop:'0.5rem' }}>
                     <div className="progress-fill" style={{ width:`${pct}%`, background:`linear-gradient(90deg, ${color}, ${color}bb)`, transition:'width 0.6s ease' }} />
                   </div>
-                  <div className="client-sessions" style={{ marginTop:'0.4rem' }}>
-                    <span className="last-session">Last: {c.lastSession}</span>
-                    <span className="next-session">{c.noteCount} note{c.noteCount !== 1 ? 's' : ''}</span>
+                  <div className="client-sessions client-sessions-stacked" style={{ marginTop:'0.4rem' }}>
+                    <span className="last-session">Therapy: {c.therapyType || '—'}</span>
+                    <span className="last-session">Therapist: {c.therapistName || '—'}</span>
+                    <div className="client-sessions-row">
+                      <span className="last-session">Last: {c.lastSession}</span>
+                      <span className="next-session">{c.noteCount} note{c.noteCount !== 1 ? 's' : ''}</span>
+                    </div>
                   </div>
                 </div>
               );

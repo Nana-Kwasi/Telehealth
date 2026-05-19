@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db, auth } from '../../Auth/firebaseConfig';
+import { db, functions, httpsCallable } from '../../Auth/firebaseConfig';
 import {
   doc, getDoc, updateDoc, deleteDoc, serverTimestamp,
   collection, getDocs, query, where,
 } from 'firebase/firestore';
-import { sendPasswordResetEmail } from 'firebase/auth';
 import { logAction, A } from '../../../utils/auditLogger';
 
 const EDITABLE_FIELDS = {
@@ -16,11 +15,13 @@ const EDITABLE_FIELDS = {
   pharmacies:  ['pharmacyName', 'email', 'phone', 'address', 'country', 'businessReg'],
   labs:        ['labName', 'email', 'phone', 'address', 'country'],
   scanCenters: ['scanCenterName', 'email', 'phone', 'address', 'country'],
+  homeCareNurses: ['fullName', 'email', 'phone', 'specialty', 'licenseNumber', 'bio'],
 };
 
 const COL_LABELS = {
   auth: 'Medical Patient', clients: 'Therapy Client', doctors: 'Doctor',
-  therapists: 'Therapist', pharmacies: 'Pharmacy', labs: 'Lab Center', scanCenters: 'Scan Center',
+  therapists: 'Therapist', homeCareNurses: 'Home Care Nurse',
+  pharmacies: 'Pharmacy', labs: 'Lab Center', scanCenters: 'Scan Center',
 };
 
 const COL_COLORS = {
@@ -31,6 +32,7 @@ const COL_COLORS = {
   pharmacies: { bg: 'linear-gradient(135deg, #7c2d12, #1c1917)', accent: '#fb923c' },
   labs: { bg: 'linear-gradient(135deg, #064e3b, #0f172a)', accent: '#34d399' },
   scanCenters: { bg: 'linear-gradient(135deg, #4c1d95, #1e1b4b)', accent: '#c084fc' },
+  homeCareNurses: { bg: 'linear-gradient(135deg, #134e4a, #0f172a)', accent: '#5eead4' },
 };
 
 const FIELD_LABELS = {
@@ -38,9 +40,99 @@ const FIELD_LABELS = {
   ghanaCard: 'Ghana Card', dateOfBirth: 'Date of Birth', gender: 'Gender', address: 'Address',
   bloodGroup: 'Blood Group', specialization: 'Specialization', specialties: 'Specialties',
   licenseNumber: 'License Number', consultationFee: 'Consultation Fee', yearsExperience: 'Years Exp.',
-  bio: 'Bio', pharmacyName: 'Pharmacy Name', labName: 'Lab Name', scanCenterName: 'Center Name',
-  country: 'Country', businessReg: 'Business Reg.', status: 'Status',
+  bio: 'Bio', fullName: 'Full Name', specialty: 'Specialty',
+  pharmacyName: 'Pharmacy Name', labName: 'Lab Name', scanCenterName: 'Center Name',
+  country: 'Country', businessReg: 'Business Reg.', status: 'Status', accountStatus: 'Account status',
+  role: 'Role',
 };
+
+const THERAPIST_ROLE_OPTIONS = [
+  { value: 'user', label: 'Therapist' },
+  { value: 'admin', label: 'Admin therapist' },
+];
+
+function therapistRoleLabel(role) {
+  return role === 'admin' ? 'Admin therapist' : 'Therapist';
+}
+
+function asDate(ts) {
+  if (ts == null || ts === '') return null;
+  try {
+    if (typeof ts.toDate === 'function') return ts.toDate();
+  } catch (_) { /* ignore */ }
+  if (typeof ts.seconds === 'number') return new Date(ts.seconds * 1000);
+  if (ts instanceof Date && !Number.isNaN(ts.getTime())) return ts;
+  if (typeof ts === 'string' || typeof ts === 'number') {
+    const d = new Date(ts);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function fmtDate(ts) {
+  const d = asDate(ts);
+  return d
+    ? d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—';
+}
+
+function fmtShort(ts) {
+  const d = asDate(ts);
+  return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+}
+
+function buildAddressFromRecord(d) {
+  if (!d || typeof d !== 'object') return '';
+  const direct = [d.address, d.streetAddress, d.mailingAddress]
+    .map((x) => (x != null && String(x).trim() ? String(x).trim() : ''))
+    .find(Boolean);
+  if (direct) return direct;
+  const parts = [d.street, d.area, d.city, d.region, d.country].filter((x) => x != null && String(x).trim());
+  if (parts.length) return parts.map((x) => String(x).trim()).join(', ');
+  const lm = d.locationMeta;
+  if (lm && typeof lm === 'object') {
+    const lp = [lm.street, lm.area, lm.city, lm.region, lm.country].filter((x) => x != null && String(x).trim());
+    if (lp.length) return lp.map((x) => String(x).trim()).join(', ');
+  }
+  const loc = d.location;
+  if (loc && typeof loc === 'object') {
+    const lp = [loc.street, loc.city, loc.country].filter(Boolean);
+    if (lp.length) return lp.join(', ');
+  }
+  return '';
+}
+
+function normalizeClientAdmin(c, authData) {
+  const a = authData || {};
+  const displayName = c.displayName || c.clientName || c.name || a.name || a.displayName || '';
+  const addr = (c.address && String(c.address).trim()) || buildAddressFromRecord(c) || buildAddressFromRecord(a) || (a.address && String(a.address).trim()) || '';
+  const hasClientStatus = c.status !== undefined && c.status !== null && c.status !== '';
+  let status = hasClientStatus ? c.status : (a.status || 'active');
+  if (String(c.status).toLowerCase() === 'pending' && String(a.status).toLowerCase() === 'active') {
+    status = 'active';
+  }
+  return {
+    ...c,
+    name: c.name || displayName,
+    displayName: c.displayName || displayName,
+    clientName: c.clientName || displayName,
+    email: c.email || a.email || '',
+    phone: c.phone || c.phoneNumber || a.phone || a.phoneNumber || '',
+    dateOfBirth: c.dateOfBirth || c.dob || a.dateOfBirth || '',
+    gender: c.gender || a.gender || '',
+    address: addr,
+    status,
+  };
+}
+
+function normalizeAuthAdmin(c) {
+  return {
+    ...c,
+    name: c.name || c.displayName || '',
+    phone: c.phone || c.phoneNumber || '',
+    address: (c.address && String(c.address).trim()) || buildAddressFromRecord(c) || '',
+  };
+}
 
 function InfoRow({ label, value, mono }) {
   if (!value && value !== 0) return null;
@@ -74,7 +166,8 @@ export default function AdminUserDetail() {
   const [editForm, setEditForm]   = useState({});
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);
-  const [pwReset, setPwReset]     = useState({ sent: false, sending: false, error: '' });
+  const [pwModal, setPwModal] = useState({ open: false, branch: null, generatedPassword: null });
+  const [pwActionBusy, setPwActionBusy] = useState(false);
   const [related, setRelated]     = useState({ appointments: [], prescriptions: [], diagnostics: [] });
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [relatedLoaded, setRelatedLoaded] = useState(false);
@@ -96,10 +189,27 @@ export default function AdminUserDetail() {
     try {
       const snap = await getDoc(doc(db, col, userId));
       if (snap.exists()) {
-        const data = { id: snap.id, ...snap.data() };
+        let data = { id: snap.id, ...snap.data() };
+        if (col === 'clients') {
+          let authData;
+          if (data.authUid) {
+            const authSnap = await getDoc(doc(db, 'auth', data.authUid));
+            if (authSnap.exists()) authData = authSnap.data();
+          }
+          data = normalizeClientAdmin(data, authData);
+        } else if (col === 'auth') {
+          data = normalizeAuthAdmin(data);
+        }
         setUser(data);
-        setEditForm(data);
-        setRoleType(col === 'auth' ? 'Medical Patient' : col === 'clients' ? 'Therapy Client' : COL_LABELS[col] || col);
+        const formData = col === 'therapists'
+          ? { ...data, role: data.role === 'admin' ? 'admin' : 'user' }
+          : { ...data };
+        setEditForm(formData);
+        if (col === 'therapists') {
+          setRoleType(therapistRoleLabel(formData.role));
+        } else {
+          setRoleType(col === 'auth' ? 'Medical Patient' : col === 'clients' ? 'Therapy Client' : COL_LABELS[col] || col);
+        }
       } else {
         setUser(null);
       }
@@ -177,9 +287,37 @@ export default function AdminUserDetail() {
       const payload = { updatedAt: serverTimestamp() };
       const fields = EDITABLE_FIELDS[col] || [];
       fields.forEach(f => { if (editForm[f] !== undefined) payload[f] = editForm[f]; });
+      if (col === 'clients' && payload.name !== undefined) {
+        payload.displayName = payload.name;
+        payload.clientName = payload.name;
+      }
+      const statusKey = col === 'homeCareNurses' ? 'accountStatus' : 'status';
+      const rawStatus = col === 'homeCareNurses' ? (editForm.accountStatus ?? editForm.status) : editForm.status;
+      if (rawStatus !== undefined && rawStatus !== null && String(rawStatus).trim() !== '') {
+        payload[statusKey] = String(rawStatus).trim();
+        payload.statusUpdatedAt = serverTimestamp();
+      }
+      if (col === 'therapists' && editForm.role !== undefined) {
+        const nextRole = editForm.role === 'admin' ? 'admin' : 'user';
+        payload.role = nextRole;
+        if (nextRole === 'admin') payload.type = 'Administrator';
+        else if (user.type === 'Administrator') payload.type = 'Therapist';
+      }
       await updateDoc(doc(db, col, userId), payload);
-      await logAction(A.ADMIN_USER_EDITED, { targetId: userId, collection: col, fields: fields.join(',') }, 'admin');
-      setUser(prev => ({ ...prev, ...editForm }));
+      if (col === 'clients' && payload.status !== undefined && user.authUid) {
+        await updateDoc(doc(db, 'auth', user.authUid), {
+          status: payload.status,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      const loggedFields = [...fields];
+      if (payload[statusKey] !== undefined) loggedFields.push(statusKey);
+      if (payload.role !== undefined) loggedFields.push('role');
+      await logAction(A.ADMIN_USER_EDITED, { targetId: userId, collection: col, fields: loggedFields.join(',') }, 'admin');
+      setUser(prev => ({ ...prev, ...editForm, ...(payload[statusKey] !== undefined ? { [statusKey]: payload[statusKey] } : {}), ...(payload.role !== undefined ? { role: payload.role, type: payload.type ?? prev.type } : {}) }));
+      if (col === 'therapists' && payload.role !== undefined) {
+        setRoleType(therapistRoleLabel(payload.role));
+      }
       showFeedback('success', 'Profile updated successfully.');
     } catch (e) {
       showFeedback('error', 'Failed to save: ' + e.message);
@@ -189,11 +327,18 @@ export default function AdminUserDetail() {
   const changeStatus = async (status) => {
     if (!window.confirm(`Set status to "${status}"?`)) return;
     setSaving(true);
+    const statusField = col === 'homeCareNurses' ? 'accountStatus' : 'status';
+    let next = status;
+    if (col === 'homeCareNurses' && String(status).toLowerCase() === 'active') next = 'approved';
     try {
-      await updateDoc(doc(db, col, userId), { status, statusUpdatedAt: serverTimestamp() });
-      await logAction(A.ADMIN_USER_STATUS, { targetId: userId, collection: col, newStatus: status }, 'admin');
-      setUser(prev => ({ ...prev, status }));
-      showFeedback('success', `Status changed to ${status}.`);
+      await updateDoc(doc(db, col, userId), { [statusField]: next, statusUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      if (col === 'clients' && statusField === 'status' && user.authUid) {
+        await updateDoc(doc(db, 'auth', user.authUid), { status: next, updatedAt: serverTimestamp() });
+      }
+      await logAction(A.ADMIN_USER_STATUS, { targetId: userId, collection: col, newStatus: next }, 'admin');
+      setUser(prev => ({ ...prev, [statusField]: next }));
+      setEditForm(prev => ({ ...prev, [statusField]: next }));
+      showFeedback('success', `Status changed to ${next}.`);
     } catch (e) {
       showFeedback('error', 'Failed: ' + e.message);
     } finally { setSaving(false); }
@@ -226,18 +371,83 @@ export default function AdminUserDetail() {
     }
   };
 
-  const sendPasswordReset = async () => {
-    const email = user?.email;
-    if (!email) { showFeedback('error', 'No email address on this account.'); return; }
-    setPwReset({ sent: false, sending: true, error: '' });
+  const openBranchPwReset = (branch) => {
+    if (!branch?.email) {
+      showFeedback('error', 'Branch email missing.');
+      return;
+    }
+    setPwModal({ open: true, branch, generatedPassword: null });
+  };
+
+  const closePwModal = (force) => {
+    if (pwActionBusy) return;
+    if (pwModal.generatedPassword && !force) {
+      const ok = window.confirm('Close this dialog? You cannot retrieve the one-time password here again.');
+      if (!ok) return;
+    }
+    setPwModal({ open: false, branch: null, generatedPassword: null });
+  };
+
+  const copyPwModalPassword = async () => {
+    const p = pwModal.generatedPassword;
+    if (!p) return;
     try {
-      await sendPasswordResetEmail(auth, email);
-      await logAction(A.PASSWORD_RESET_SENT, { targetId: userId, email }, 'admin');
-      setPwReset({ sent: true, sending: false, error: '' });
-      showFeedback('success', `Password reset sent to ${email}.`);
+      await navigator.clipboard.writeText(p);
+      showFeedback('success', 'Copied.');
+    } catch {
+      showFeedback('error', 'Copy failed — select the password manually.');
+    }
+  };
+
+  const applyAdminPasswordReset = async () => {
+    const branch = pwModal.branch;
+    let entityCollection = col;
+    let entityDocId = userId;
+    if (branch) {
+      const cfg = getBranchCfg();
+      if (!cfg) return;
+      entityCollection = cfg.collectionName;
+      entityDocId = branch.id;
+    }
+    setPwActionBusy(true);
+    try {
+      const fn = httpsCallable(functions, 'adminSetTemporaryPassword', { timeout: 120000 });
+      const result = await fn({ entityCollection, entityDocId });
+      const temporaryPassword = result.data?.temporaryPassword;
+      if (!temporaryPassword) {
+        showFeedback('error', 'Server did not return a temporary password. Redeploy the `adminSetTemporaryPassword` Cloud Function.');
+        return;
+      }
+      await logAction(A.ADMIN_TEMP_PASSWORD_SET, {
+        targetCollection: entityCollection,
+        targetDocId: entityDocId,
+        targetEmail: branch ? branch.email : user?.email,
+      }, 'admin');
+      showFeedback('success', 'One-time password generated. Copy it below; it is not kept after you close this dialog.');
+      setPwModal((prev) => ({ ...prev, generatedPassword: temporaryPassword }));
+      if (branch) await loadBranches();
+      else await loadUser();
     } catch (e) {
-      setPwReset({ sent: false, sending: false, error: e.message });
-      showFeedback('error', 'Reset failed: ' + e.message);
+      const code = e?.code || '';
+      const details = e?.customData?.details ?? e?.details;
+      const detailStr = typeof details === 'string' ? details : '';
+      const msg = detailStr || e?.message || String(e);
+      if (code === 'functions/permission-denied' || msg.includes('permission-denied')) {
+        showFeedback('error', 'Permission denied.');
+      } else if (code === 'functions/unauthenticated') {
+        showFeedback('error', 'Your session expired. Sign in again.');
+      } else if (code === 'functions/failed-precondition' || code === 'functions/invalid-argument' || code === 'functions/not-found') {
+        showFeedback('error', msg || 'Reset failed.');
+      } else if (code === 'functions/internal' || msg === 'internal') {
+        showFeedback(
+          'error',
+          'Callable returned internal (often: function not deployed to teleehealth, wrong region, or Cloud Run invoker). Redeploy `adminSetTemporaryPassword` and check Functions logs in Firebase console.'
+        );
+      } else {
+        showFeedback('error', `Reset failed: ${msg}`);
+      }
+    } finally {
+      setPwActionBusy(false);
     }
   };
 
@@ -306,21 +516,9 @@ export default function AdminUserDetail() {
     showFeedback('success', 'Branch deleted.');
   };
 
-  const resetBranchPassword = async (branch) => {
-    const cfg = getBranchCfg();
-    if (!cfg) return;
-    if (!branch.email) return showFeedback('error', 'Branch email missing.');
-    await sendPasswordResetEmail(auth, branch.email);
-    await updateDoc(doc(db, cfg.collectionName, branch.id), {
-      mustChangePassword: true,
-      updatedAt: serverTimestamp(),
-    });
-    showFeedback('success', `Password reset email sent to ${branch.email}.`);
-  };
+  const resetBranchPassword = (branch) => openBranchPwReset(branch);
 
-  const getName  = u => u?.name || u?.pharmacyName || u?.labName || u?.scanCenterName || u?.centerName || u?.displayName || u?.email || '—';
-  const fmtDate  = ts => ts?.seconds ? new Date(ts.seconds * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : (typeof ts === 'string' ? ts : '—');
-  const fmtShort = ts => ts?.seconds ? new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (typeof ts === 'string' ? ts?.slice(0, 10) : '—');
+  const getName  = u => u?.fullName || u?.name || u?.pharmacyName || u?.labName || u?.scanCenterName || u?.centerName || u?.displayName || u?.clientName || u?.email || '—';
 
   if (loading) return (
     <div className="admin-page">
@@ -340,12 +538,21 @@ export default function AdminUserDetail() {
     </div>
   );
 
-  const status = user.status || 'active';
-  const statusBadge = status === 'active' ? { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' }
+  const status = col === 'homeCareNurses'
+    ? (user.accountStatus || user.status || 'pending')
+    : (user.status || 'active');
+  const accountLive = col === 'homeCareNurses'
+    ? ['approved', 'active'].includes(String(status).toLowerCase())
+    : status === 'active';
+  const statusBadge = status === 'active' || status === 'approved' ? { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' }
     : status === 'suspended' ? { bg: '#fff1f2', color: '#dc2626', border: '#fecdd3' }
     : { bg: '#fff7ed', color: '#d97706', border: '#fed7aa' };
 
   const editableFields = EDITABLE_FIELDS[col] || [];
+  const statusEditKey = col === 'homeCareNurses' ? 'accountStatus' : 'status';
+  const statusSelectOptions = col === 'homeCareNurses'
+    ? ['pending', 'approved', 'suspended', 'rejected']
+    : ['active', 'suspended', 'pending', 'inactive', 'rejected'];
   const SKIP = new Set(['id', '_col', '_roleLabel', 'password', 'uid']);
   const allFields = Object.entries(user).filter(([k]) => !SKIP.has(k)).sort(([a], [b]) => a.localeCompare(b));
 
@@ -409,7 +616,7 @@ export default function AdminUserDetail() {
           {/* Quick stats */}
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             {[
-              { label: 'Joined', val: fmtShort(user.createdAt) },
+              { label: 'Joined', val: fmtShort(user.createdAt || user.completedAt) },
               ...(user.specialization ? [{ label: 'Specialty', val: user.specialization }] : []),
               ...(user.consultationFee ? [{ label: 'Fee (GHS)', val: user.consultationFee }] : []),
               ...(user.yearsExperience ? [{ label: 'Experience', val: `${user.yearsExperience}y` }] : []),
@@ -429,9 +636,9 @@ export default function AdminUserDetail() {
             style={{ padding: '0.45rem 1rem', borderRadius: 8, border: `1px solid ${colStyle.accent}50`, background: `${colStyle.accent}15`, color: colStyle.accent, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
             ✏️ Edit Profile
           </button>
-          <button disabled={pwReset.sending} onClick={sendPasswordReset}
+          <button type="button" onClick={() => setPwModal({ open: true, branch: null, generatedPassword: null })}
             style={{ padding: '0.45rem 1rem', borderRadius: 8, border: '1px solid #fcd34d50', background: '#fcd34d15', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-            {pwReset.sending ? 'Sending…' : '🔑 Reset Password'}
+            🔑 Reset Password
           </button>
           {col === 'pharmacies' && (
             <button
@@ -451,13 +658,13 @@ export default function AdminUserDetail() {
               {user?.mfaRequired ? '🛡️ MFA Required: ON' : '🛡️ MFA Required: OFF'}
             </button>
           )}
-          {status !== 'active' && (
+          {!accountLive && status !== 'inactive' && status !== 'rejected' && (
             <button disabled={saving} onClick={() => changeStatus('active')}
               style={{ padding: '0.45rem 1rem', borderRadius: 8, border: '1px solid #4ade8040', background: '#4ade8015', color: '#4ade80', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
               ✓ Activate
             </button>
           )}
-          {status === 'active' && (
+          {accountLive && (
             <button disabled={saving} onClick={() => changeStatus('suspended')}
               style={{ padding: '0.45rem 1rem', borderRadius: 8, border: '1px solid #f8717150', background: '#f8717115', color: '#f87171', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
               ⛔ Suspend
@@ -505,7 +712,7 @@ export default function AdminUserDetail() {
             <InfoRow label="Gender"       value={user.gender} />
             <InfoRow label="Blood Group"  value={user.bloodGroup} />
             <InfoRow label="National ID"  value={user.nationalId || user.ghanaCard} />
-            <InfoRow label="Address"      value={user.address} />
+            <InfoRow label="Address"      value={user.address || buildAddressFromRecord(user)} />
             <InfoRow label="Country"      value={user.country || user.location?.country} />
             <InfoRow label="City"         value={user.city || user.location?.city} />
           </SectionCard>
@@ -514,10 +721,10 @@ export default function AdminUserDetail() {
             <InfoRow label="Firebase UID"  value={user.uid || userId} mono />
             <InfoRow label="Firestore ID"  value={userId} mono />
             <InfoRow label="Collection"    value={col} />
-            <InfoRow label="Role / Type"   value={user.role || roleType} />
+            <InfoRow label="Role / Type"   value={col === 'therapists' ? therapistRoleLabel(user.role) : (user.role || roleType)} />
             <InfoRow label="Status"        value={status} />
             <InfoRow label="Username"      value={user.username} />
-            <InfoRow label="Joined"        value={fmtDate(user.createdAt)} />
+            <InfoRow label="Joined"        value={fmtDate(user.createdAt || user.completedAt)} />
             <InfoRow label="Last Updated"  value={fmtDate(user.updatedAt || user.statusUpdatedAt)} />
             <InfoRow label="Must Change PW"value={user.mustChangePassword ? 'Yes' : undefined} />
           </SectionCard>
@@ -613,17 +820,44 @@ export default function AdminUserDetail() {
                 )}
               </div>
             ))}
+            {col === 'therapists' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {FIELD_LABELS.role}
+                </label>
+                <select
+                  value={editForm.role === 'admin' ? 'admin' : 'user'}
+                  onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
+                  style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.875rem', background: '#fff', boxSizing: 'border-box' }}
+                >
+                  {THERAPIST_ROLE_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</label>
-              <select value={editForm.status || 'active'} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
-                style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.875rem', background: '#fff', boxSizing: 'border-box' }}>
-                {['active', 'suspended', 'pending', 'inactive', 'rejected'].map(s => <option key={s} value={s}>{s}</option>)}
+              <select
+                value={editForm[statusEditKey] ?? (col === 'homeCareNurses' ? 'pending' : 'active')}
+                onChange={(e) => setEditForm((f) => ({ ...f, [statusEditKey]: e.target.value }))}
+                style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.875rem', background: '#fff', boxSizing: 'border-box' }}
+              >
+                {statusSelectOptions.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button className="btn btn-primary" disabled={saving} onClick={saveEdits}>{saving ? 'Saving…' : '💾 Save All Changes'}</button>
-            <button className="btn btn-ghost" onClick={() => { setEditForm(user); setActiveTab('profile'); }}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => {
+              const reset = col === 'therapists'
+                ? { ...user, role: user.role === 'admin' ? 'admin' : 'user' }
+                : user;
+              setEditForm(reset);
+              setActiveTab('profile');
+            }}>Cancel</button>
           </div>
         </SectionCard>
       )}
@@ -719,6 +953,85 @@ export default function AdminUserDetail() {
           })}
         </SectionCard>
       )}
+
+      {pwModal.open ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.45)',
+            zIndex: 4000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => closePwModal(false)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              maxWidth: 460,
+              width: '100%',
+              padding: '1.35rem',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.15)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+              {pwModal.generatedPassword ? 'One-time password' : 'Reset password'}
+            </h3>
+            {pwModal.generatedPassword ? (
+              <>
+                <p style={{ margin: '0 0 1rem', fontSize: '0.84rem', color: '#64748b', lineHeight: 1.55 }}>
+                  Hand off over a secure channel. Closing this dialog clears it from the screen (it is not stored in the app).
+                </p>
+                <div style={{ background: '#f0fdf4', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', marginBottom: 6 }}>Temporary password</div>
+                  <code style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', wordBreak: 'break-all' }}>{pwModal.generatedPassword}</code>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: '0 0 1rem', fontSize: '0.84rem', color: '#64748b', lineHeight: 1.55 }}>
+                  A strong random one-time password is generated on the server when you confirm (no email link). The user must choose a new password after signing in.
+                </p>
+                <div style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 6 }}>After confirm</div>
+                  <span style={{ fontSize: '0.84rem', color: '#64748b' }}>The password appears here once so you can copy it — not saved in the dashboard after you close.</span>
+                </div>
+              </>
+            )}
+            <p style={{ margin: '0 0 1rem', fontSize: '0.78rem', color: '#94a3b8' }}>
+              Target:{' '}
+              {(() => {
+                if (!pwModal.branch) return `${col} / ${userId}`;
+                const bc = getBranchCfg();
+                return `${bc?.collectionName || 'branch'} / ${pwModal.branch.branchName || pwModal.branch.id}`;
+              })()}
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              {pwModal.generatedPassword ? (
+                <>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={copyPwModalPassword}>Copy</button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => closePwModal(true)}>Done</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={pwActionBusy} onClick={() => closePwModal(false)}>Cancel</button>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={pwActionBusy} onClick={applyAdminPasswordReset}>
+                    {pwActionBusy ? 'Applying…' : 'Confirm reset'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {branchEditModal ? (
         <div

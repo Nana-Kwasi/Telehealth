@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import './Home.css';
+import { NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
+import { beginTherapySession, beginHomeCareSession } from '../../utils/patientSessionIntent';
 import individualIcon from '../../../src/Images /v.jpg';
 import couplesIcon    from '../../../src/Images /v2.jpg';
 import teenIcon       from '../../../src/Images /v1.jpg';
 
 const therapyTypes = [
-  { key: 'individual', title: 'Individual', desc: 'For myself',      iconSrc: individualIcon, bgColor: '#2d6a4f' },
-  { key: 'couples',    title: 'Couples',    desc: 'Me & my partner', iconSrc: couplesIcon,    bgColor: '#1a5276' },
-  { key: 'teen',       title: 'Teen',       desc: 'For my child',    iconSrc: teenIcon,       bgColor: '#6d4c41' },
+  { key: 'individual', title: 'Individual', desc: 'For myself', iconSrc: individualIcon },
+  { key: 'couples', title: 'Couples', desc: 'Me & my partner', iconSrc: couplesIcon },
+  { key: 'teen', title: 'Teen', desc: 'For my child', iconSrc: teenIcon },
 ];
 
 const steps = [
-  { n: '1', title: 'Choose your service',       desc: 'Select therapy or medical consultations — or both.' },
+  { n: '1', title: 'Choose your service',       desc: 'Select therapy, medical care, or home-care when available.' },
   { n: '2', title: 'Match with a professional', desc: 'We pair you with the right therapist or doctor based on your needs.' },
   { n: '3', title: 'Start your session',        desc: 'Connect via video, chat, or audio. Get care on your schedule.' },
 ];
@@ -28,8 +30,6 @@ export default function Home() {
   const navigate = useNavigate();
   const [selectedService, setSelectedService] = useState(null);
   const [counters, setCounters] = useState({ therapists: 0, sessions: 0, clients: 0, messages: 0 });
-  const [showModal, setShowModal] = useState(false);
-  const [modalContent, setModalContent] = useState({ title: '', content: '' });
   const currentYear = new Date().getFullYear();
 
   const finalValues = { therapists: 150, sessions: 278000000, clients: 1000000, messages: 50000000 };
@@ -58,26 +58,42 @@ export default function Home() {
   };
 
   const startTherapy = (type) => {
-    localStorage.removeItem('th.onboard');
-    localStorage.removeItem('th.subscription');
-    localStorage.removeItem('th.match');
+    beginTherapySession(type === 'couples' ? 'couples' : 'therapy');
+
+    const keys = [
+      'th.onboard',
+      'th.subscription',
+      'th.match',
+      'th.parentInfo',
+      'th.childInfo',
+      'th.parentConsent',
+      'th.coupleId',
+      'th.couplePartnerRole',
+      'th.coupleInviteToken',
+      'th.coupleMyIntakeComplete',
+    ];
+    keys.forEach((k) => localStorage.removeItem(k));
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith('th.coupleDraft_')) localStorage.removeItem(k);
+    });
+
+    if (type === 'teen') {
+      navigate('/teen/parent-guardian');
+      return;
+    }
+
+    if (type === 'couples') {
+      navigate('/couple/initiation');
+      return;
+    }
+
     localStorage.setItem('th.onboard', JSON.stringify({ therapyType: type, startedAt: new Date().toISOString() }));
     navigate('/questionnaire');
   };
 
-  const openModal = (type) => {
-    const content = {
-      privacy: {
-        title: 'Privacy Policy',
-        content: `<h3>Privacy Policy</h3><p><strong>Last updated:</strong> ${new Date().toLocaleDateString()}</p>
-          <h4>Information We Collect</h4><p>We collect information you provide when you create an account or use our services.</p>
-          <h4>How We Use Your Information</h4><p>We use collected information to provide, maintain, and improve our services.</p>
-          <h4>Data Security</h4><p>We implement appropriate security measures to protect your personal information.</p>
-          <h4>Contact Us</h4><p>Questions? Email us at privacy@nessahub.com</p>`
-      },
-    };
-    setModalContent(content[type] || { title: type, content: '' });
-    setShowModal(true);
+  const selectHomeCare = () => {
+    beginHomeCareSession();
+    navigate('/home-care/browse');
   };
 
   return (
@@ -89,7 +105,7 @@ export default function Home() {
 
           <div className="hero-eyebrow">
             <span className="hero-eyebrow-dot" />
-            Therapy &amp; Medical — One Platform
+            Therapy, Medical &amp; Home-Care
           </div>
 
           <h1 className="home-title">
@@ -131,19 +147,41 @@ export default function Home() {
               </p>
               <div className="choice-card-cta">Find a doctor →</div>
             </div>
+
+            <div
+              className="hero-choice-card homecare"
+              onClick={selectHomeCare}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectHomeCare(); }}
+            >
+              <div className="choice-card-icon">🏠</div>
+              <h3 className="choice-card-title">Home-Care</h3>
+              <p className="choice-card-desc">
+                At-home support and care services through NessaHub.
+              </p>
+              <div className="choice-card-cta">Find a nurse →</div>
+            </div>
           </div>
 
           {/* ── Therapy Type Cards (revealed on Therapy click) ── */}
           {selectedService === 'therapy' && (
             <div className="therapy-reveal">
               <p className="cards-section-title">Start therapy today — choose your type</p>
-              <div className="cards-grid">
-                {therapyTypes.map(({ key, title, desc, iconSrc, bgColor }) => (
+              <div className="therapy-cards-grid">
+                {therapyTypes.map(({ key, title, desc, iconSrc }) => (
                   <div
                     key={key}
-                    className="therapy-card"
+                    className={`therapy-card therapy-card--${key}`}
                     onClick={() => startTherapy(key)}
-                    style={{ backgroundColor: bgColor }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        startTherapy(key);
+                      }
+                    }}
                   >
                     <div className="card-content">
                       <h3 className="therapy-title">{title}</h3>
@@ -151,7 +189,7 @@ export default function Home() {
                       <div className="therapy-arrow">→</div>
                     </div>
                     <div className="therapy-icon">
-                      <img src={iconSrc} alt={title} className="therapy-icon-img" />
+                      <img src={iconSrc} alt="" className="therapy-icon-img" />
                     </div>
                   </div>
                 ))}
@@ -228,35 +266,48 @@ export default function Home() {
             <div className="footer-section">
               <h4>Navigation</h4>
               <ul>
-                <li><a href="/about">About</a></li>
-                <li><a href="/login">Log in</a></li>
-                <li><a href="/faqs">FAQs</a></li>
-                <li><a href="/contact">Contact</a></li>
+                <li><Link to="/about">About</Link></li>
+                <li><Link to="/login">Log in</Link></li>
+                <li><Link to="/faqs">FAQs</Link></li>
+                <li><Link to="/contact">Contact</Link></li>
               </ul>
             </div>
             <div className="footer-section">
               <h4>Services</h4>
               <ul>
-                <li><a href="/questionnaire">Individual Therapy</a></li>
-                <li><a href="/questionnaire">Couples Therapy</a></li>
-                <li><a href="/questionnaire">Teen Therapy</a></li>
-                <li><a href="/doctors">Medical Consultations</a></li>
+                <li><Link to="/questionnaire">Individual Therapy</Link></li>
+                <li><Link to="/questionnaire">Couples Therapy</Link></li>
+                <li><Link to="/questionnaire">Teen Therapy</Link></li>
+                <li><Link to="/doctors">Medical Consultations</Link></li>
+                <li><button type="button" className="footer-link-button" onClick={selectHomeCare}>Home-Care</button></li>
               </ul>
             </div>
             <div className="footer-section">
               <h4>Support</h4>
               <ul>
-                <li><a href="/advice">Resources</a></li>
-                <li><a href="/faqs">Help Center</a></li>
-                <li><a href="/contact">Crisis Support</a></li>
+                <li><Link to="/advice">Resources</Link></li>
+                <li><Link to="/help">Help Center</Link></li>
+                <li><Link to="/crisis-support">Crisis Support</Link></li>
               </ul>
             </div>
             <div className="footer-section">
               <h4>Legal</h4>
               <ul>
-                <li><button className="footer-link-button" onClick={() => navigate('/terms')}>Terms of Service</button></li>
-                <li><button className="footer-link-button" onClick={() => navigate('/privacy')}>Privacy Policy</button></li>
-                <li><button className="footer-link-button" onClick={() => openModal('privacy')}>Cookie Policy</button></li>
+                <li>
+                  <a className="footer-external-link" href={NESSA_HUB_POLICY_LINKS.terms} target="_blank" rel="noopener noreferrer">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a className="footer-external-link" href={NESSA_HUB_POLICY_LINKS.privacy} target="_blank" rel="noopener noreferrer">
+                    Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a className="footer-external-link" href={NESSA_HUB_POLICY_LINKS.cookies} target="_blank" rel="noopener noreferrer">
+                    Cookie Policy
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
@@ -267,18 +318,6 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* ── MODAL ── */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{modalContent.title}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
-            </div>
-            <div className="modal-body" dangerouslySetInnerHTML={{ __html: modalContent.content }} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

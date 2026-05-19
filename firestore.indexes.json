@@ -19,6 +19,34 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "therapistId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scheduledTime",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinicalNotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "therapistId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "scheduledCalls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "clientId",
           "order": "ASCENDING"
         },

@@ -1,4 +1,8 @@
-const { onCall } = require("firebase-functions/v2/https");
+const crypto = require("node:crypto");
+const { logger } = require("firebase-functions");
+const functionsV1 = require("firebase-functions/v1");
+const { HttpsError: CallableHttpsError } = require("firebase-functions/v1/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const twilio = require("twilio");
@@ -197,6 +201,134 @@ exports.getRoomStatus = onCall(async (request) => {
   };
 });
 
+/** One-time handoff password: upper, lower, digit, symbol; shuffled. Not persisted server-side beyond the callable response. */
+function generateOneTimeTemporaryPassword() {
+  const len = 22;
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%&*";
+  const all = upper + lower + digits + symbols;
+  const rnd = crypto.randomBytes(len + 48);
+  const out = [];
+  out.push(upper[rnd[0] % upper.length]);
+  out.push(lower[rnd[1] % lower.length]);
+  out.push(digits[rnd[2] % digits.length]);
+  out.push(symbols[rnd[3] % symbols.length]);
+  for (let i = 4; i < len; i++) {
+    out.push(all[rnd[i] % all.length]);
+  }
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = rnd[len + (out.length - 1 - i)] % (i + 1);
+    const t = out[i];
+    out[i] = out[j];
+    out[j] = t;
+  }
+  return out.join("");
+}
+
+const ADMIN_RESET_ENTITY_COLLECTIONS = new Set([
+  "auth",
+  "clients",
+  "doctors",
+  "therapists",
+  "admins",
+  "pharmacies",
+  "labs",
+  "scanCenters",
+  "pharmacyBranches",
+  "labBranches",
+  "scanBranches",
+]);
+
+async function assertPlatformSuperAdmin(uid) {
+  const [adminSnap, therapistSnap] = await Promise.all([
+    db.collection("admins").doc(uid).get(),
+    db.collection("therapists").doc(uid).get(),
+  ]);
+  if (adminSnap.exists) return;
+  const t = therapistSnap.exists ? therapistSnap.data() : null;
+  if (t && t.role === "admin") return;
+  throw new CallableHttpsError("permission-denied", "Only platform administrators can reset passwords this way.");
+}
+
+/**
+ * adminSetTemporaryPassword — 1st gen callable (same name / region as web SDK) to avoid Gen2
+ * Cloud Run invoker issues that surface as functions/internal from the client.
+ *
+ * Data: { entityCollection: string, entityDocId: string }
+ * Returns: { success: true, temporaryPassword: string }
+ */
+exports.adminSetTemporaryPassword = functionsV1.region("us-central1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new CallableHttpsError("unauthenticated", "Sign in required");
+  }
+  try {
+    await assertPlatformSuperAdmin(context.auth.uid);
+
+    const raw = data || {};
+    const entityCollection = typeof raw.entityCollection === "string" ? raw.entityCollection.trim() : "";
+    const entityDocId = typeof raw.entityDocId === "string" ? raw.entityDocId.trim() : "";
+    if (!entityCollection || !entityDocId) {
+      throw new CallableHttpsError("invalid-argument", "entityCollection and entityDocId are required");
+    }
+    if (!ADMIN_RESET_ENTITY_COLLECTIONS.has(entityCollection)) {
+      throw new CallableHttpsError("invalid-argument", "Unsupported entity collection");
+    }
+
+    const ref = db.collection(entityCollection).doc(entityDocId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new CallableHttpsError("not-found", "User record not found");
+    }
+    const snapData = snap.data() || {};
+    const fromDoc = snapData.uid && String(snapData.uid).trim();
+    const targetUid = (fromDoc || entityDocId).trim();
+
+    if (targetUid === context.auth.uid) {
+      throw new CallableHttpsError("failed-precondition", "You cannot reset your own account this way.");
+    }
+
+    try {
+      await admin.auth().getUser(targetUid);
+    } catch (e) {
+      throw new CallableHttpsError("failed-precondition", "No Firebase Auth user matches this account.");
+    }
+
+    const flagPayload = {
+      mustChangePassword: true,
+      passwordResetByAdminAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const temporaryPassword = generateOneTimeTemporaryPassword();
+    await admin.auth().updateUser(targetUid, { password: temporaryPassword });
+    await ref.update(flagPayload);
+
+    if (entityCollection === "clients") {
+      const authSnap = await db.collection("auth").where("clientId", "==", entityDocId).get();
+      const batch = db.batch();
+      let n = 0;
+      authSnap.docs.forEach((d) => {
+        batch.update(d.ref, flagPayload);
+        n += 1;
+      });
+      if (n > 0) await batch.commit();
+    }
+
+    return { success: true, temporaryPassword };
+  } catch (err) {
+    logger.error("adminSetTemporaryPassword failed", {
+      message: err?.message,
+      code: err?.code,
+      stack: err?.stack,
+    });
+    if (err instanceof CallableHttpsError) throw err;
+    const msg = err?.message || String(err);
+    throw new CallableHttpsError("failed-precondition", msg || "Password reset failed");
+  }
+});
+
 /**
  * validateUserAccess — returns the calling user's role from Firestore.
  */
@@ -370,3 +502,7 @@ exports.onPrescriptionCreate = onDocumentCreated(
     });
   }
 );
+
+Object.assign(exports, require("./homeCare"));
+Object.assign(exports, require("./pushNotifications"));
+Object.assign(exports, require("./coupleTherapy"));

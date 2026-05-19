@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../Auth/firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
+import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import './AdminDashboard.css';
 
 import AdminOverview          from './AdminOverview';
@@ -11,6 +14,8 @@ import AdminPrescriptionMonitor from './AdminPrescriptionMonitor';
 import AdminSystemConfig      from './AdminSystemConfig';
 import OnboardDoctor          from './OnboardDoctor';
 import OnboardTherapist       from './OnboardTherapist';
+import AdminOnboardHomeCareNurse from './AdminOnboardHomeCareNurse';
+import AdminHomeCareManage from './AdminHomeCareManage';
 import AdminCreateLabScan     from './AdminCreateLabScan';
 import AdminAppointments      from './AdminAppointments';
 import AdminNotifications     from './AdminNotifications';
@@ -32,6 +37,8 @@ const NAV = [
   { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: '🏥', section: 'ONBOARDING' },
   { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: '🩺', section: 'ONBOARDING' },
   { path: '/dashboard/onboard-therapist', label: 'Onboard Therapist',     icon: '🧠', section: 'ONBOARDING' },
+  { path: '/dashboard/onboard-homecare-nurse', label: 'Onboard Home-Care Nurse', icon: '🏠', section: 'ONBOARDING' },
+  { path: '/dashboard/home-care-manage', label: 'Home Care Manage', icon: '🩹', section: 'ONBOARDING' },
   { path: '/dashboard/create-lab-scan',   label: 'Create Lab / Scan',     icon: '🧪', section: 'ONBOARDING' },
   // ANALYTICS & COMMS
   { path: '/dashboard/reports',           label: 'Analytics & Reports',   icon: '📈', section: 'ANALYTICS' },
@@ -46,6 +53,16 @@ const NAV = [
 export default function AdminDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [forcedPwCollection, setForcedPwCollection] = useState(null);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    (async () => {
+      const adm = await getDoc(doc(db, 'admins', uid));
+      setForcedPwCollection(adm.exists() ? 'admins' : 'therapists');
+    })();
+  }, []);
 
   const handleLogout = async () => {
     try { await signOut(auth); navigate('/'); } catch {}
@@ -70,6 +87,7 @@ export default function AdminDashboard({ profile }) {
             <div>
               <p className="admin-user-name">{profile?.name || 'Admin'}</p>
               <p className="admin-user-role">Super Admin</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>
@@ -102,6 +120,9 @@ export default function AdminDashboard({ profile }) {
       </aside>
 
       <main className="admin-main">
+        {forcedPwCollection ? (
+          <ForcedPasswordChangeOverlay profile={profile} firestoreCollection={forcedPwCollection} />
+        ) : null}
         <Routes>
           <Route path="/"                    element={<AdminOverview />} />
           <Route path="/users"               element={<AdminUserManagement />} />
@@ -112,6 +133,8 @@ export default function AdminDashboard({ profile }) {
           <Route path="/create-pharmacy"     element={<AdminCreatePharmacy />} />
           <Route path="/onboard-doctor"      element={<OnboardDoctor />} />
           <Route path="/onboard-therapist"   element={<OnboardTherapist />} />
+          <Route path="/onboard-homecare-nurse" element={<AdminOnboardHomeCareNurse />} />
+          <Route path="/home-care-manage" element={<AdminHomeCareManage />} />
           <Route path="/create-lab-scan"     element={<AdminCreateLabScan />} />
           <Route path="/reports"             element={<AdminReports />} />
           <Route path="/system-pdf-export"   element={<AdminSystemPdfExport />} />

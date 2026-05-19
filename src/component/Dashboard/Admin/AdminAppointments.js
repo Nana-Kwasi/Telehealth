@@ -18,11 +18,12 @@ export default function AdminAppointments() {
     setLoading(true);
     try {
       // Load users, appointments, and therapy sessions in parallel
-      const [authSnap, clientSnap, drSnap, thSnap] = await Promise.all([
+      const [authSnap, clientSnap, drSnap, thSnap, hcSnap] = await Promise.all([
         getDocs(collection(db, 'auth')),
         getDocs(collection(db, 'clients')),
         getDocs(collection(db, 'doctorAppointments')),
         getDocs(collection(db, 'scheduledCalls')),
+        getDocs(collection(db, 'homeCareBookings')),
       ]);
 
       // Build name lookup maps so we can resolve "Patient" → real name
@@ -66,7 +67,20 @@ export default function AdminAppointments() {
         };
       });
 
-      const all = [...drList, ...thList];
+      const hcList = hcSnap.docs.map((d) => {
+        const data = d.data();
+        const st = (data.status || 'pending').toLowerCase();
+        return {
+          id: d.id,
+          ...data,
+          _source: 'homecare',
+          status: st,
+          _patientDisplay: resolveName(data.patientName, data.patientId),
+          _doctorDisplay: data.nurseName || '—',
+        };
+      });
+
+      const all = [...drList, ...thList, ...hcList];
       all.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setAppointments(all);
     } catch (e) {
@@ -75,6 +89,7 @@ export default function AdminAppointments() {
   };
 
   const setStatus = async (appt, status) => {
+    if (appt._source === 'homecare') return;
     setActing(appt.id);
     const colName = appt._source === 'therapy' ? 'scheduledCalls' : 'doctorAppointments';
     try {
@@ -94,7 +109,7 @@ export default function AdminAppointments() {
     if (typeFilter && (a.type || a.sessionType || a.appointmentType) !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return [a._patientDisplay, a._doctorDisplay, a.reason, a.chiefComplaint, a.type, a.sessionType, a.clientId, a.patientId]
+      return [a._patientDisplay, a._doctorDisplay, a.reason, a.chiefComplaint, a.type, a.sessionType, a.clientId, a.patientId, a.address, a.bookingType, a.careType]
         .some(v => (v || '').toLowerCase().includes(q));
     }
     return true;
@@ -104,9 +119,19 @@ export default function AdminAppointments() {
     total:     appointments.length,
     doctor:    appointments.filter(a => a._source === 'doctor').length,
     therapy:   appointments.filter(a => a._source === 'therapy').length,
-    upcoming:  appointments.filter(a => ['upcoming', 'confirmed', 'pending', 'scheduled'].includes(a.status)).length,
-    completed: appointments.filter(a => a.status === 'completed').length,
-    cancelled: appointments.filter(a => ['cancelled', 'no-show'].includes(a.status)).length,
+    homecare:  appointments.filter(a => a._source === 'homecare').length,
+    upcoming:  appointments.filter((a) => {
+      if (a._source === 'homecare') {
+        return ['pending', 'accepted', 'en_route', 'arrived', 'in_progress', 'ongoing'].includes((a.status || '').toLowerCase());
+      }
+      return ['upcoming', 'confirmed', 'pending', 'scheduled'].includes((a.status || '').toLowerCase());
+    }).length,
+    completed: appointments.filter((a) => (a.status || '').toLowerCase() === 'completed').length,
+    cancelled: appointments.filter((a) => {
+      const s = (a.status || '').toLowerCase();
+      if (a._source === 'homecare') return s === 'cancelled' || s === 'declined';
+      return s === 'cancelled' || s === 'no-show';
+    }).length,
   };
 
   const fmtDate = ts => ts?.seconds
@@ -128,12 +153,18 @@ export default function AdminAppointments() {
   // Build all raw fields for the modal
   const SKIP_RAW = ['_source', '_patientDisplay', '_doctorDisplay'];
 
+  const typeBadge = (appt) => {
+    if (appt._source === 'therapy') return { cls: 'badge-purple', label: '🧠 Therapy' };
+    if (appt._source === 'homecare') return { cls: 'badge-green', label: '🏠 Home care' };
+    return { cls: 'badge-blue', label: '🩺 Doctor' };
+  };
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
           <h1 className="admin-page-title">Appointment Monitor</h1>
-          <p className="admin-page-sub">All doctor appointments and therapy sessions across the platform</p>
+          <p className="admin-page-sub">Doctor appointments, therapy sessions, and home care bookings</p>
         </div>
         <button className="btn btn-primary" onClick={loadData}>↻ Refresh</button>
       </div>
@@ -144,6 +175,7 @@ export default function AdminAppointments() {
           { label: 'Total',          val: stats.total,     color: '#1d4ed8', bg: '#eff6ff', icon: '📅' },
           { label: 'Doctor Appts',   val: stats.doctor,    color: '#059669', bg: '#f0fdf4', icon: '🩺' },
           { label: 'Therapy Sessions', val: stats.therapy, color: '#7c3aed', bg: '#faf5ff', icon: '🧠' },
+          { label: 'Home care',      val: stats.homecare,  color: '#0d9488', bg: '#f0fdfa', icon: '🏠' },
           { label: 'Upcoming',       val: stats.upcoming,  color: '#d97706', bg: '#fffbeb', icon: '⏰' },
           { label: 'Completed',      val: stats.completed, color: '#16a34a', bg: '#f0fdf4', icon: '✅' },
           { label: 'Cancelled',      val: stats.cancelled, color: '#dc2626', bg: '#fef2f2', icon: '❌' },
@@ -167,7 +199,7 @@ export default function AdminAppointments() {
 
         {/* Source filter */}
         <div style={{ display: 'flex', gap: '0.35rem' }}>
-          {[['', 'All'], ['doctor', '🩺 Doctor'], ['therapy', '🧠 Therapy']].map(([val, label]) => (
+          {[['', 'All'], ['doctor', '🩺 Doctor'], ['therapy', '🧠 Therapy'], ['homecare', '🏠 Home care']].map(([val, label]) => (
             <button key={val} onClick={() => setSourceFilter(val)}
               style={{
                 padding: '0.45rem 0.8rem', borderRadius: 8, border: '1.5px solid',
@@ -223,31 +255,33 @@ export default function AdminAppointments() {
               {filtered.map(appt => (
                 <tr key={`${appt._source}-${appt.id}`}>
                   <td>
-                    <span className={`badge ${appt._source === 'therapy' ? 'badge-purple' : 'badge-blue'}`}>
-                      {appt._source === 'therapy' ? '🧠 Therapy' : '🩺 Doctor'}
+                    <span className={`badge ${typeBadge(appt).cls}`}>
+                      {typeBadge(appt).label}
                     </span>
                   </td>
                   <td style={{ fontWeight: 600 }}>{appt._patientDisplay}</td>
                   <td style={{ fontSize: '0.82rem' }}>
                     {appt._source === 'therapy'
                       ? (appt.therapistName || appt._doctorDisplay || '—')
-                      : (appt.doctorName ? `Dr. ${appt.doctorName}` : '—')}
+                      : appt._source === 'homecare'
+                        ? (appt.nurseName || appt._doctorDisplay || '—')
+                        : (appt.doctorName ? `Dr. ${appt.doctorName}` : '—')}
                   </td>
                   <td style={{ fontSize: '0.8rem' }}>
-                    <div>{appt.date || fmtDate(appt.scheduledAt || appt.appointmentDate)}</div>
+                    <div>{appt.date || appt.startDate || fmtDate(appt.scheduledAt || appt.appointmentDate || appt.createdAt)}</div>
                     {appt.time && <div style={{ color: '#64748b' }}>{appt.time}</div>}
                   </td>
-                  <td style={{ fontSize: '0.82rem' }}>{appt.type || appt.sessionType || appt.appointmentType || '—'}</td>
+                  <td style={{ fontSize: '0.82rem' }}>{appt.type || appt.sessionType || appt.appointmentType || appt.bookingType || appt.careType || '—'}</td>
                   <td style={{ fontSize: '0.8rem', maxWidth: 160 }}>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {appt.reason || appt.chiefComplaint || appt.notes || '—'}
+                      {appt.reason || appt.chiefComplaint || appt.specialNotes || appt.notes || '—'}
                     </div>
                   </td>
                   <td>{statusBadge(appt.status)}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.35rem' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setSelected(appt)}>View</button>
-                      {['upcoming', 'pending', 'confirmed', 'scheduled'].includes(appt.status) && (
+                      {appt._source !== 'homecare' && ['upcoming', 'pending', 'confirmed', 'scheduled'].includes(appt.status) && (
                         <button className="btn btn-sm" disabled={acting === appt.id}
                           style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.72rem' }}
                           onClick={() => setStatus(appt, 'cancelled')}>Cancel</button>
@@ -267,11 +301,74 @@ export default function AdminAppointments() {
           <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h3 className="admin-modal-title">
-                {selected._source === 'therapy' ? '🧠 Therapy Session' : '🩺 Doctor Appointment'} — Full Detail
+                {selected._source === 'therapy'
+                  ? '🧠 Therapy Session — Full Detail'
+                  : selected._source === 'homecare'
+                    ? '🏠 Home Care Booking — Full Detail'
+                    : '🩺 Doctor Appointment — Full Detail'}
               </h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
             </div>
 
+            {selected._source === 'homecare' ? (
+            <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              {[
+                ['Patient', selected._patientDisplay],
+                ['Nurse', selected.nurseName || '—'],
+                ['Patient ID', selected.patientId || '—'],
+                ['Nurse ID', selected.nurseId || '—'],
+                ['Booking type', selected.bookingType || (selected.isEmergency ? 'emergency' : '—')],
+                ['Care type', selected.careType || '—'],
+                ['Duration', selected.durationType || '—'],
+                ['Status', selected.status || '—'],
+                ['Start date', selected.startDate || '—'],
+                ['End date', selected.endDate || '—'],
+                ['Address', selected.address || '—'],
+                ['Reference fee', selected.referenceFeeAmount != null ? String(selected.referenceFeeAmount) : '—'],
+                ['Record ID', selected.id],
+                ['Created', fmtFull(selected.createdAt)],
+                ['Updated', fmtFull(selected.updatedAt)],
+              ].map(([label, val]) => (
+                <div key={label} className="admin-info-row">
+                  <span className="admin-info-label">{label}</span>
+                  <span className="admin-info-value" style={{ fontFamily: label.includes('ID') ? 'monospace' : undefined, fontSize: label.includes('ID') ? '0.72rem' : undefined }}>
+                    {val || '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {selected.specialNotes ? (
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: '0.85rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
+                <b>Care notes:</b> {selected.specialNotes}
+              </div>
+            ) : null}
+            <details style={{ marginBottom: '1rem' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, color: '#64748b', marginBottom: '0.5rem' }}>
+                📋 Show all raw fields
+              </summary>
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: '0.85rem', marginTop: '0.5rem' }}>
+                {Object.entries(selected)
+                  .filter(([k]) => !SKIP_RAW.includes(k))
+                  .map(([k, v]) => {
+                    const display = typeof v === 'object' && v !== null
+                      ? (v.seconds ? fmtFull(v) : JSON.stringify(v))
+                      : String(v ?? '—');
+                    return (
+                      <div key={k} style={{ display: 'flex', gap: '0.75rem', padding: '0.3rem 0', borderBottom: '1px solid #e2e8f0', fontSize: '0.78rem' }}>
+                        <span style={{ minWidth: 160, fontWeight: 700, color: '#64748b', fontFamily: 'monospace' }}>{k}</span>
+                        <span style={{ color: '#0f172a', wordBreak: 'break-word' }}>{display}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </details>
+            <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>Close</button>
+            </div>
+            </>
+            ) : (
+            <>
             {/* Core fields - always shown */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1.25rem' }}>
               {[
@@ -357,6 +454,8 @@ export default function AdminAppointments() {
               )}
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>Close</button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

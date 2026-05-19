@@ -1,0 +1,241 @@
+/* Scrolls inside .admin-main — no overflow trap */
+.hc-onboard {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.5rem 2rem 3rem;
+  min-height: min-content;
+}
+
+.hc-onboard-hero {
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 55%, #134e4a 100%);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.25);
+  flex-shrink: 0;
+}
+
+.hc-onboard-hero h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.hc-onboard-hero p {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.92;
+  line-height: 1.5;
+}
+
+.hc-onboard-hero code {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.82em;
+}
+
+.hc-onboard-alert {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.hc-onboard-alert--success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.hc-onboard-alert--error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.hc-onboard-form {
+  display: block;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  overflow: visible;
+}
+
+.hc-onboard-sections {
+  padding: 1.5rem 1.75rem 0.5rem;
+}
+
+.hc-onboard-section {
+  margin-bottom: 1.75rem;
+}
+
+.hc-onboard-section:last-child {
+  margin-bottom: 0.5rem;
+}
+
+.hc-onboard-section h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #134e4a;
+  margin: 0 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #ccfbf1;
+}
+
+.hc-onboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem 1.25rem;
+}
+
+.hc-onboard-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.hc-onboard-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hc-onboard-field--full {
+  grid-column: 1 / -1;
+}
+
+.hc-onboard-field label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.35rem;
+}
+
+.hc-onboard-field label .req {
+  color: #dc2626;
+}
+
+.hc-onboard-field input,
+.hc-onboard-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #0f172a;
+  background: #fff;
+}
+
+.hc-onboard-field input:focus,
+.hc-onboard-field select:focus {
+  outline: none;
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+.hc-onboard-hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.3rem;
+  line-height: 1.35;
+}
+
+.hc-onboard-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 1rem 1.1rem;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.hc-onboard-check input {
+  margin-top: 0.2rem;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  accent-color: #0d9488;
+}
+
+.hc-onboard-check strong {
+  display: block;
+  font-size: 0.875rem;
+  color: #134e4a;
+  margin-bottom: 0.2rem;
+}
+
+.hc-onboard-check span {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Sticky submit bar — always reachable while scrolling */
+.hc-onboard-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.75rem;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.hc-onboard-btn {
+  padding: 0.75rem 1.75rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+
+.hc-onboard-btn--primary {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.hc-onboard-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0f766e, #134e4a);
+}
+
+.hc-onboard-btn--primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .hc-onboard-grid,
+  .hc-onboard-grid--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .hc-onboard {
+    padding: 1rem 1rem 2.5rem;
+  }
+
+  .hc-onboard-sections {
+    padding: 1.25rem 1.25rem 0.25rem;
+  }
+
+  .hc-onboard-actions {
+    padding: 1rem 1.25rem;
+    flex-direction: column;
+  }
+
+  .hc-onboard-btn {
+    width: 100%;
+  }
+}

@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../Auth/firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
+import {
+  isMedicalPatientAuthDoc,
+  buildTherapyLinkedAuthUidSet,
+  buildHomeCareNurseUidSet,
+} from '../../../utils/authUserFilters';
 
 const TABS = [
-  { key: 'Medical Patients', col: 'auth',       icon: '🤒', roleLabel: 'Medical Patient' },
-  { key: 'Clients',          col: 'clients',    icon: '🧘', roleLabel: 'Therapy Client'  },
-  { key: 'Doctors',      col: 'doctors',        icon: '🩺', roleLabel: 'Doctor'          },
-  { key: 'Therapists',   col: 'therapists',     icon: '🧠', roleLabel: 'Therapist'       },
-  { key: 'Pharmacies',   col: 'pharmacies',     icon: '💊', roleLabel: 'Pharmacy'        },
-  { key: 'Labs',         col: 'labs',           icon: '🧪', roleLabel: 'Lab Center'      },
-  { key: 'Scan Centers', col: 'scanCenters',    icon: '🩻', roleLabel: 'Imaging Center'  },
+  { key: 'Medical Patients', col: 'auth',            icon: '🤒', roleLabel: 'Medical Patient' },
+  { key: 'Clients',          col: 'clients',         icon: '🧘', roleLabel: 'Therapy Client'  },
+  { key: 'Doctors',          col: 'doctors',         icon: '🩺', roleLabel: 'Doctor'          },
+  { key: 'Therapists',       col: 'therapists',      icon: '🧠', roleLabel: 'Therapist'       },
+  { key: 'Nurses',           col: 'homeCareNurses',  icon: '🏠', roleLabel: 'Home Care Nurse' },
+  { key: 'Pharmacies',       col: 'pharmacies',      icon: '💊', roleLabel: 'Pharmacy'        },
+  { key: 'Labs',             col: 'labs',            icon: '🧪', roleLabel: 'Lab Center'      },
+  { key: 'Scan Centers',     col: 'scanCenters',     icon: '🩻', roleLabel: 'Imaging Center'  },
 ];
 
 export default function AdminUserManagement() {
@@ -27,9 +33,23 @@ export default function AdminUserManagement() {
 
   const loadAllCounts = async () => {
     try {
-      const results = await Promise.all(TABS.map(t => getDocs(collection(db, t.col))));
+      const [clientsSnap, nursesSnap] = await Promise.all([
+        getDocs(collection(db, 'clients')),
+        getDocs(collection(db, 'homeCareNurses')),
+      ]);
+      const therapyUids = buildTherapyLinkedAuthUidSet(clientsSnap);
+      const nurseUids = buildHomeCareNurseUidSet(nursesSnap);
       const c = {};
-      TABS.forEach((t, i) => { c[t.key] = results[i].size; });
+      for (const t of TABS) {
+        const snap = await getDocs(collection(db, t.col));
+        if (t.key === 'Medical Patients') {
+          c[t.key] = snap.docs.filter((d) =>
+            isMedicalPatientAuthDoc({ id: d.id, ...d.data() }, therapyUids, nurseUids)
+          ).length;
+        } else {
+          c[t.key] = snap.size;
+        }
+      }
       setCounts(c);
     } catch {}
   };
@@ -39,11 +59,15 @@ export default function AdminUserManagement() {
     const tabCfg = TABS.find(x => x.key === t);
     if (!tabCfg) return;
     try {
-      const snap = await getDocs(collection(db, tabCfg.col));
-      const PROVIDER_ROLES = new Set(['doctor','therapist','admin','pharmacy','lab','scan','branch_user','pharmacist']);
+      const [snap, clientsSnap, nursesSnap] = await Promise.all([
+        getDocs(collection(db, tabCfg.col)),
+        t === 'Medical Patients' ? getDocs(collection(db, 'clients')) : Promise.resolve(null),
+        t === 'Medical Patients' ? getDocs(collection(db, 'homeCareNurses')) : Promise.resolve(null),
+      ]);
+      const therapyUids = clientsSnap ? buildTherapyLinkedAuthUidSet(clientsSnap) : null;
+      const nurseUids = nursesSnap ? buildHomeCareNurseUidSet(nursesSnap) : null;
       let rows = snap.docs.map(d => ({ id: d.id, ...d.data(), _col: tabCfg.col, _roleLabel: tabCfg.roleLabel }));
-      // Medical Patients tab: auth collection minus any provider accounts
-      if (t === 'Medical Patients') rows = rows.filter(r => !PROVIDER_ROLES.has(r.role));
+      if (t === 'Medical Patients') rows = rows.filter((r) => isMedicalPatientAuthDoc(r, therapyUids, nurseUids));
       rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setData(rows);
     } catch (e) {
@@ -53,16 +77,19 @@ export default function AdminUserManagement() {
     }
   };
 
-  const getName    = r => r.name || r.pharmacyName || r.labName || r.scanCenterName || r.centerName || r.displayName || r.email || '—';
+  const getName    = r => r.fullName || r.name || r.pharmacyName || r.labName || r.scanCenterName || r.centerName || r.displayName || r.email || '—';
   const getEmail   = r => r.email || '—';
   const getPhone   = r => r.phone || r.phoneNumber || '—';
-  const getStatus  = r => r.status || 'active';
+  const getStatus  = r => (tab === 'Nurses' ? r.accountStatus : null) || r.status || 'active';
   const getJoined  = r => r.createdAt?.seconds
     ? new Date(r.createdAt.seconds * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
     : (typeof r.createdAt === 'string' ? r.createdAt.slice(0, 10) : '—');
 
   const statusBadge = (s) => {
-    const cls = s === 'active' ? 'badge-green' : s === 'suspended' ? 'badge-red' : s === 'pending' ? 'badge-yellow' : 'badge-gray';
+    const cls = s === 'active' || s === 'approved' ? 'badge-green'
+      : s === 'suspended' ? 'badge-red'
+      : s === 'pending' ? 'badge-yellow'
+      : 'badge-gray';
     return <span className={`badge ${cls}`}>{s}</span>;
   };
 
@@ -162,7 +189,8 @@ export default function AdminUserManagement() {
                 <th>Name / ID</th>
                 <th>Email</th>
                 <th>Phone</th>
-                {(tab === 'Doctors' || tab === 'Therapists') && <th>Specialization</th>}
+                {(tab === 'Doctors' || tab === 'Therapists' || tab === 'Nurses') && <th>Specialization</th>}
+                {tab === 'Nurses' && <th>License</th>}
                 {(tab === 'Pharmacies' || tab === 'Labs' || tab === 'Scan Centers') && <th>Location</th>}
                 {tab === 'Medical Patients' && <th>National ID</th>}
                 <th>Joined</th>
@@ -178,12 +206,23 @@ export default function AdminUserManagement() {
                   <td>
                     <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.85rem', textDecoration: 'underline' }}>{getName(row)}</div>
                     {row.licenseNumber && <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Lic: {row.licenseNumber}</div>}
-                    {row.role && <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{row.role}</div>}
+                    {tab === 'Medical Patients' && (
+                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Medical patient</div>
+                    )}
+                    {tab === 'Nurses' && (
+                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Home care nurse</div>
+                    )}
+                    {tab !== 'Medical Patients' && tab !== 'Nurses' && row.role && (
+                      <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{row.role}</div>
+                    )}
                   </td>
                   <td style={{ fontSize: '0.82rem' }}>{getEmail(row)}</td>
                   <td style={{ fontSize: '0.82rem' }}>{getPhone(row)}</td>
-                  {(tab === 'Doctors' || tab === 'Therapists') && (
-                    <td style={{ fontSize: '0.8rem' }}>{row.specialization || (Array.isArray(row.specialties) ? row.specialties[0] : row.specialties) || '—'}</td>
+                  {(tab === 'Doctors' || tab === 'Therapists' || tab === 'Nurses') && (
+                    <td style={{ fontSize: '0.8rem' }}>{row.specialization || row.specialty || (Array.isArray(row.specialties) ? row.specialties[0] : row.specialties) || '—'}</td>
+                  )}
+                  {tab === 'Nurses' && (
+                    <td style={{ fontSize: '0.8rem' }}>{row.licenseNumber || '—'}</td>
                   )}
                   {(tab === 'Pharmacies' || tab === 'Labs' || tab === 'Scan Centers') && (
                     <td style={{ fontSize: '0.8rem' }}>{row.city || row.location?.city || '—'}, {row.country || row.location?.country || '—'}</td>

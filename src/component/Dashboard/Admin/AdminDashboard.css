@@ -506,6 +506,7 @@
   .admin-sidebar { width: 220px; min-width: 220px; }
   .admin-page { padding: 1.25rem; }
   .admin-form-grid { grid-template-columns: 1fr; }
+  .admin-form-grid.cols-3 { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .admin-sidebar { display: none; }

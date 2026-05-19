@@ -8,6 +8,7 @@ import BranchPrescriptionOps from './BranchPrescriptionOps';
 import BranchReports from './BranchReports';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
 import './PharmacyDashboard.css';
@@ -675,6 +676,7 @@ export default function BranchDashboard({ profile }) {
             <div>
               <p className="pharmacy-user-name">{profile?.branchName || 'Branch'}</p>
               <p className="pharmacy-user-role">{profile?.pharmacyName || 'Pharmacy'}</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>

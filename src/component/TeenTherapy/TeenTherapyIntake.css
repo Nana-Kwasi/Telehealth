@@ -1,0 +1,271 @@
+.teen-intake-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.teen-intake-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.teen-intake-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e5e7eb;
+}
+
+.teen-intake-progress-dot.active {
+  background: #4a7c59;
+}
+
+.teen-intake-header {
+  margin-bottom: 1.5rem;
+}
+
+.teen-intake-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1f2937;
+}
+
+.teen-intake-header p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.55;
+  font-size: 1rem;
+}
+
+.teen-intake-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.teen-intake-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #134e4a;
+}
+
+.teen-intake-card p.section-hint {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.teen-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .teen-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.teen-field {
+  margin-bottom: 1rem;
+}
+
+.teen-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 0.35rem;
+}
+
+.teen-field label .req {
+  color: #dc2626;
+}
+
+.teen-field input,
+.teen-field textarea,
+.teen-field select {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.teen-field input:focus,
+.teen-field textarea:focus,
+.teen-field select:focus {
+  outline: none;
+  border-color: #4a7c59;
+  box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.15);
+}
+
+.teen-field input.error,
+.teen-field textarea.error {
+  border-color: #dc2626;
+}
+
+.teen-field-error {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+.teen-field-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.teen-field-age {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4a7c59;
+}
+
+.teen-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.teen-chip {
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.teen-chip:hover {
+  border-color: #4a7c59;
+}
+
+.teen-chip.selected {
+  background: #4a7c59;
+  border-color: #4a7c59;
+  color: #fff;
+}
+
+.teen-loc-btn {
+  margin-bottom: 0.75rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(74, 124, 89, 0.35);
+  background: rgba(74, 124, 89, 0.08);
+  color: #3d6849;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.teen-loc-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.teen-consent-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+  cursor: pointer;
+  text-align: left;
+}
+
+.teen-consent-item input {
+  margin-top: 0.2rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: #4a7c59;
+}
+
+.teen-consent-item strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #1f2937;
+  font-size: 0.95rem;
+}
+
+.teen-consent-item span {
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.teen-note {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.teen-note strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #92400e;
+}
+
+.teen-note p {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.teen-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.teen-actions .btn {
+  flex: 1;
+  min-width: 140px;
+}
+
+.teen-actions .btn.primary {
+  background: linear-gradient(135deg, #4a7c59, #3d6849);
+  border-color: #4a7c59;
+}
+
+.teen-banner {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #065f46;
+}
+
+.teen-banner strong {
+  color: #047857;
+}

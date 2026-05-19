@@ -22,6 +22,8 @@ import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
 import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
+import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 
 function getInitials(name) {
   if (!name) return 'P';
@@ -4440,6 +4442,7 @@ export default function MedicalPatientDashboard({ profile }) {
             <div className="mp-user-info">
               <p className="mp-user-name">{profile?.name || 'Patient'}</p>
               <p className="mp-user-role">Patient Portal</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>
@@ -4467,6 +4470,7 @@ export default function MedicalPatientDashboard({ profile }) {
       </aside>
 
       <main className="mp-main">
+        <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
         <Routes>
           <Route path="/"              element={<MedPatHome          profile={profile} />} />
           <Route path="/appointments"  element={<MedPatAppointments  profile={profile} />} />

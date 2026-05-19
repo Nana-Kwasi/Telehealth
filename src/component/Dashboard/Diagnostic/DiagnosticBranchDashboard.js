@@ -9,6 +9,8 @@ import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import DiagnosticBranchSettings from './DiagnosticBranchSettings';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
+import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 
 function diagBranchEventLabel(action, branchType) {
   const m = {
@@ -102,6 +104,7 @@ function BranchOverview({ type, profile }) {
 
   const completionPct = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
   const label = type === 'lab' ? 'Lab Branch Overview' : 'Scan Branch Overview';
+  const isBranch = profile?.role === 'lab_branch' || profile?.role === 'scan_branch';
 
   const statusBadgeClass = (raw) => {
     const n = normalizeDiagnosticOrderStatus(raw);
@@ -123,6 +126,11 @@ function BranchOverview({ type, profile }) {
     <div className="pharmacy-page diag-branch-overview">
       <h1 className="pharmacy-page-title">{label}</h1>
       <p className="pharmacy-page-sub">Live queue, recent orders, and branch activity.</p>
+      <LocationSummaryCard
+        profile={profile}
+        title={isBranch ? 'Branch location' : `${type === 'lab' ? 'Lab' : 'Scan center'} location`}
+        onEdit={() => navigate('/dashboard/settings')}
+      />
 
       {loading ? (
         <p className="diag-branch-loading">Loading overview…</p>
@@ -638,6 +646,7 @@ export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
                 <p className="pharmacy-user-role" style={{ fontWeight: 700, color: '#e0f2fe' }}>{parentOrgName}</p>
               ) : null}
               <p className="pharmacy-user-role">{type === 'lab' ? 'Lab' : 'Scan'} branch</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>

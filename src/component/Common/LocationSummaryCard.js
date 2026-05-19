@@ -1,5 +1,20 @@
 import React from 'react';
 
+export function formatDashboardLocationLine(profile = {}) {
+  const loc = pickLocation(profile);
+  const composed = [loc.area || loc.street, loc.city].filter(Boolean).join(', ');
+  const tail = [loc.region, loc.country].filter(Boolean).join(', ');
+  const primary = [composed, tail].filter(Boolean).join(' · ');
+  if (primary) return primary;
+  if (loc.ghanaDigitalAddress) return loc.ghanaDigitalAddress;
+  const raw = String(profile.formattedAddress || profile.address || profile.location?.address || '').trim();
+  if (raw && !/^[A-Z]{2}-\d{3}-\d{4}$/i.test(raw)) return raw;
+  if (Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)) {
+    return `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`;
+  }
+  return '';
+}
+
 function pickLocation(profile = {}) {
   const src = profile || {};
   const locationMeta = src.locationMeta || {};
@@ -66,7 +81,7 @@ function flagFromCountry(country = '') {
 
 export default function LocationSummaryCard({ profile, title = 'Your Saved Location', onEdit }) {
   const loc = pickLocation(profile);
-  const composedAddress = [loc.area || loc.street, loc.city, loc.country].filter(Boolean).join(', ');
+  const composedAddress = [loc.area || loc.street, loc.city].filter(Boolean).join(', ');
   const rawFormatted = (profile?.formattedAddress || profile?.address || profile?.location?.address || '').trim();
   const isDigitalCodeOnly = /^[A-Z]{2}-\d{3}-\d{4}$/i.test(rawFormatted);
   const formattedAddress = composedAddress || (rawFormatted && !isDigitalCodeOnly ? rawFormatted : '');
@@ -100,7 +115,7 @@ export default function LocationSummaryCard({ profile, title = 'Your Saved Locat
           >
             {flag}
           </span>
-          <span>📍 {title}</span>
+          <span>{loc.country || 'Location'}</span>
         </h3>
         <span style={{
           padding: '0.2rem 0.55rem',

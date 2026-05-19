@@ -117,12 +117,12 @@
   line-height: 1.65;
 }
 
-/* ── 2-Choice Entry Cards ── */
+/* ── Service entry cards (therapy / doctor / home-care) ── */
 .hero-service-choice {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-  max-width: 860px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  max-width: 1100px;
   margin: 0 0 2rem;
 }
 
@@ -161,6 +161,18 @@
   border-color: rgba(147, 197, 253, 0.55);
   transform: translateY(-3px);
   box-shadow: 0 10px 28px rgba(30, 107, 184, 0.22);
+}
+
+.hero-choice-card.homecare {
+  background: rgba(180, 83, 9, 0.14);
+  border-color: rgba(253, 186, 116, 0.38);
+}
+
+.hero-choice-card.homecare:hover {
+  background: rgba(180, 83, 9, 0.24);
+  border-color: rgba(253, 186, 116, 0.55);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(180, 83, 9, 0.2);
 }
 
 .choice-card-icon {
@@ -302,80 +314,134 @@
 /* ── Therapy type cards ── */
 .cards-section-title {
   font-size: var(--text-sm, 0.875rem);
-  font-weight: 600;
-  color: rgba(255,255,255,0.45);
-  letter-spacing: 0.75px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: var(--space-4, 1rem);
+  margin: 0 0 var(--space-4, 1rem);
 }
 
-.cards-grid {
-  display: flex;
-  gap: var(--space-4, 1rem);
-  flex-wrap: wrap;
+.therapy-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  width: 100%;
+  max-width: 1100px;
+}
+
+.therapy-cards-grid .therapy-card {
+  min-width: 0;
 }
 
 .therapy-card {
-  flex: 1;
-  min-width: 160px;
-  max-width: 220px;
+  min-height: 148px;
   border-radius: var(--radius-lg, 14px);
-  padding: var(--space-5, 1.25rem);
+  padding: 1.15rem 1.2rem;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: all 350ms ease;
-  border: 1px solid rgba(255,255,255,0.12);
+  transition: transform 280ms ease, box-shadow 280ms ease, border-color 280ms ease;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  text-align: left;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
-.therapy-card:hover {
+.therapy-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(145deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.38) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.therapy-card--individual {
+  background: linear-gradient(145deg, #3d8b63 0%, #1b4332 55%, #081c15 100%);
+}
+
+.therapy-card--couples {
+  background: linear-gradient(145deg, #3b82c4 0%, #1a5276 55%, #0c2238 100%);
+}
+
+.therapy-card--teen {
+  background: linear-gradient(145deg, #c97b63 0%, #8d5b4a 50%, #4a3228 100%);
+}
+
+.therapy-card:hover,
+.therapy-card:focus-visible {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(0,0,0,0.25);
-  border-color: rgba(255,255,255,0.22);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
+  border-color: rgba(255, 255, 255, 0.4);
+  outline: none;
 }
 
-.card-content { position: relative; z-index: 1; }
-
-.therapy-title {
-  font-size: var(--text-lg, 1.125rem);
-  font-weight: 700;
-  color: white;
-  margin: 0 0 var(--space-1, 0.25rem);
+.therapy-card:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 18px 36px rgba(0, 0, 0, 0.32);
 }
 
-.therapy-description {
-  font-size: var(--text-xs, 0.75rem);
-  color: rgba(255,255,255,0.7);
-  margin: 0 0 var(--space-4, 1rem);
+.card-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.therapy-card .therapy-title,
+.therapy-card h3.therapy-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin: 0 0 0.35rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  -webkit-text-fill-color: #ffffff;
+}
+
+.therapy-card .therapy-description,
+.therapy-card p.therapy-description {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0 0 1rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .therapy-arrow {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  margin-top: auto;
   border-radius: 50%;
-  background: rgba(255,255,255,0.2);
-  color: white;
-  font-size: 0.85rem;
-  transition: all 120ms ease;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition: background 160ms ease, transform 160ms ease;
 }
 
 .therapy-card:hover .therapy-arrow {
-  background: rgba(255,255,255,0.35);
+  background: rgba(255, 255, 255, 0.38);
   transform: translateX(3px);
 }
 
 .therapy-icon {
   position: absolute;
-  bottom: -8px;
-  right: -8px;
-  width: 80px;
-  height: 80px;
-  opacity: 0.2;
+  bottom: -6px;
+  right: -6px;
+  width: 88px;
+  height: 88px;
+  opacity: 0.35;
   border-radius: 12px;
   overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .therapy-icon-img {
@@ -670,6 +736,7 @@
 }
 
 .footer-section ul li a,
+.footer-external-link,
 .footer-link-button {
   color: var(--color-gray-500, #6b7280);
   text-decoration: none;
@@ -682,6 +749,7 @@
 }
 
 .footer-section ul li a:hover,
+.footer-external-link:hover,
 .footer-link-button:hover {
   color: #ffffff;
 }
@@ -772,6 +840,13 @@
 /* ══════════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .hero-service-choice {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+  }
+}
+
 @media (max-width: 1024px) {
   .hero-services { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -784,8 +859,9 @@
   .home-container { padding: var(--space-10, 2.5rem) var(--space-4, 1rem); }
   .hero-service-choice { grid-template-columns: 1fr; }
   .hero-choice-card { padding: 1.5rem; }
-  .cards-grid { flex-direction: column; }
-  .therapy-card { max-width: 100%; }
+  .therapy-cards-grid {
+    grid-template-columns: 1fr;
+  }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: var(--space-4, 1rem); }
   .therapists-grid { grid-template-columns: 1fr; }
   .footer-content { grid-template-columns: 1fr 1fr; gap: var(--space-6, 1.5rem); }

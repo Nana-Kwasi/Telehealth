@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { signInWithEmailOrUsername } from './authService';
 import { logAction, A } from '../../utils/auditLogger';
+import { ensureHomeCareIntent, homeCarePatientLandingPath, isHomeCarePatientIntent } from '../../utils/homeCarePatientIntent';
+import { resolveCoupleLandingPath } from '../../services/coupleTherapyService';
 import './Login.css';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,9 +19,29 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const { role } = await signInWithEmailOrUsername(id, password);
+      const { role, profile } = await signInWithEmailOrUsername(id, password);
       await logAction(A.LOGIN_SUCCESS, { role, identifier: id }, role);
-      navigate('/dashboard');
+      const returnTo = location.state?.returnTo;
+      const homeCare = isHomeCarePatientIntent(profile);
+      if (homeCare) ensureHomeCareIntent();
+      if (role === 'homecare_nurse') {
+        navigate('/dashboard', { replace: true });
+      } else if (role === 'client' && homeCare) {
+        navigate(returnTo || homeCarePatientLandingPath(), { replace: true });
+      } else if (role === 'client') {
+        const coupleLanding = await resolveCoupleLandingPath(profile);
+        if (coupleLanding) {
+          navigate(coupleLanding.path, { replace: true, state: coupleLanding.state });
+        } else if (returnTo && returnTo !== '/dashboard') {
+          navigate(returnTo, { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
+      } else if (returnTo) {
+        navigate(returnTo, { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
       await logAction(A.LOGIN_FAILED, { error: err.message, identifier: id });
       setError(err.message || 'Login failed. Please check your credentials.');

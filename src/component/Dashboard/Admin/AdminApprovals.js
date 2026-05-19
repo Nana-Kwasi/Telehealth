@@ -3,26 +3,36 @@ import { db } from '../../Auth/firebaseConfig';
 import {
   collection, doc, updateDoc, serverTimestamp, onSnapshot,
 } from 'firebase/firestore';
+import { NURSE_ACCOUNT_STATUS, NURSE_PRESENCE } from '../../../constants/homeCareConstants';
 
 const QUEUES = [
-  { key: 'pharmacies',  label: 'Pharmacies',    icon: '💊', col: 'pharmacies',  nameField: 'pharmacyName' },
-  { key: 'doctors',     label: 'Doctors',        icon: '🩺', col: 'doctors',     nameField: 'name' },
-  { key: 'therapists',  label: 'Therapists',     icon: '🧠', col: 'therapists',  nameField: 'name' },
-  { key: 'labs',        label: 'Lab Centers',    icon: '🧪', col: 'labs',        nameField: 'labName' },
-  { key: 'scans',       label: 'Scan Centers',   icon: '🩻', col: 'scanCenters', nameField: 'scanCenterName' },
+  { key: 'pharmacies', label: 'Pharmacies', icon: '💊', col: 'pharmacies', nameField: 'pharmacyName', statusField: 'status' },
+  { key: 'doctors', label: 'Doctors', icon: '🩺', col: 'doctors', nameField: 'name', statusField: 'status' },
+  { key: 'therapists', label: 'Therapists', icon: '🧠', col: 'therapists', nameField: 'name', statusField: 'status' },
+  { key: 'nurses', label: 'Home Care Nurses', icon: '🏠', col: 'homeCareNurses', nameField: 'fullName', statusField: 'accountStatus' },
+  { key: 'labs', label: 'Lab Centers', icon: '🧪', col: 'labs', nameField: 'labName', statusField: 'status' },
+  { key: 'scans', label: 'Scan Centers', icon: '🩻', col: 'scanCenters', nameField: 'scanCenterName', statusField: 'status' },
 ];
 
+function rowStatus(item) {
+  const field = item._statusField || 'status';
+  return item[field];
+}
+
 /** Approved / live accounts — excluded from Pending tab */
-function isApprovedStatus(status) {
-  const s = (status === undefined || status === null ? '' : String(status)).toLowerCase().trim();
+function isApprovedStatus(item) {
+  const s = (rowStatus(item) === undefined || rowStatus(item) === null ? '' : String(rowStatus(item))).toLowerCase().trim();
+  if (item._col === 'homeCareNurses') {
+    return s === 'approved' || s === 'active';
+  }
   return s === 'active' || s === 'approved';
 }
 
 /** Can still approve (not yet live, not rejected) */
 function needsDecision(item) {
-  const s = (item.status === undefined || item.status === null ? '' : String(item.status)).toLowerCase().trim();
+  const s = (rowStatus(item) === undefined || rowStatus(item) === null ? '' : String(rowStatus(item))).toLowerCase().trim();
   if (s === 'rejected') return false;
-  if (isApprovedStatus(item.status)) return false;
+  if (isApprovedStatus(item)) return false;
   return true;
 }
 
@@ -46,6 +56,7 @@ export default function AdminApprovals() {
             ...d.data(),
             _col: q.col,
             _nameField: q.nameField,
+            _statusField: q.statusField || 'status',
           }));
           setQueueData((prev) => ({ ...prev, [q.key]: rows }));
           setLoading(false);
@@ -63,8 +74,8 @@ export default function AdminApprovals() {
     let approvedTotal = 0;
     QUEUES.forEach((q) => {
       const rows = queueData[q.key] || [];
-      const approved = rows.filter((r) => isApprovedStatus(r.status));
-      const pending = rows.filter((r) => !isApprovedStatus(r.status));
+      const approved = rows.filter((r) => isApprovedStatus(r));
+      const pending = rows.filter((r) => !isApprovedStatus(r));
       pendingByQueue[q.key] = pending;
       approvedByQueue[q.key] = approved;
       pendingTotal += pending.length;
@@ -76,10 +87,20 @@ export default function AdminApprovals() {
   const approve = async (item) => {
     setActing(item.id);
     try {
-      await updateDoc(doc(db, item._col, item.id), {
-        status: 'active',
-        approvedAt: serverTimestamp(),
-      });
+      if (item._col === 'homeCareNurses') {
+        await updateDoc(doc(db, item._col, item.id), {
+          accountStatus: NURSE_ACCOUNT_STATUS.APPROVED,
+          presenceStatus: NURSE_PRESENCE.ONLINE,
+          approvedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(doc(db, item._col, item.id), {
+          status: 'active',
+          approvedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
       if (selected?.id === item.id) setSelected(null);
     } catch {
       alert('Could not approve. Try again.');
@@ -92,11 +113,22 @@ export default function AdminApprovals() {
     if (!rejectModal) return;
     setActing(rejectModal.id);
     try {
-      await updateDoc(doc(db, rejectModal._col, rejectModal.id), {
-        status: 'rejected',
-        rejectedAt: serverTimestamp(),
-        rejectionReason: rejectReason.trim() || 'Does not meet platform requirements',
-      });
+      if (rejectModal._col === 'homeCareNurses') {
+        await updateDoc(doc(db, rejectModal._col, rejectModal.id), {
+          accountStatus: NURSE_ACCOUNT_STATUS.REJECTED,
+          presenceStatus: NURSE_PRESENCE.OFFLINE,
+          rejectedAt: serverTimestamp(),
+          rejectionReason: rejectReason.trim() || 'Does not meet platform requirements',
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(doc(db, rejectModal._col, rejectModal.id), {
+          status: 'rejected',
+          rejectedAt: serverTimestamp(),
+          rejectionReason: rejectReason.trim() || 'Does not meet platform requirements',
+          updatedAt: serverTimestamp(),
+        });
+      }
       if (selected?.id === rejectModal.id) setSelected(null);
       setRejectModal(null);
       setRejectReason('');
@@ -122,12 +154,23 @@ export default function AdminApprovals() {
       ? pendingByQueue[entityTab] || []
       : approvedByQueue[entityTab] || [];
 
+  const statusBadgeStyle = (item) => {
+    const s = String(rowStatus(item) || 'pending').toLowerCase();
+    const ok = isApprovedStatus(item);
+    const rej = s === 'rejected';
+    return {
+      background: ok ? '#f0fdf4' : rej ? '#fff1f2' : '#fff7ed',
+      color: ok ? '#16a34a' : rej ? '#dc2626' : '#d97706',
+      border: `1px solid ${ok ? '#bbf7d0' : rej ? '#fecdd3' : '#fed7aa'}`,
+    };
+  };
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
           <h1 className="admin-page-title">Account Approvals</h1>
-          <p className="admin-page-sub">Live queues — pending vs approved accounts (updates instantly)</p>
+          <p className="admin-page-sub">Live queues — pending vs approved accounts (updates instantly). Includes home care nurses awaiting approval after onboard.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           {counts.pendingTotal > 0 && (
@@ -289,28 +332,10 @@ export default function AdminApprovals() {
                         borderRadius: 20,
                         fontSize: '0.7rem',
                         fontWeight: 700,
-                        background:
-                          item.status === 'active' || item.status === 'approved'
-                            ? '#f0fdf4'
-                            : item.status === 'rejected'
-                              ? '#fff1f2'
-                              : '#fff7ed',
-                        color:
-                          item.status === 'active' || item.status === 'approved'
-                            ? '#16a34a'
-                            : item.status === 'rejected'
-                              ? '#dc2626'
-                              : '#d97706',
-                        border: `1px solid ${
-                          item.status === 'active' || item.status === 'approved'
-                            ? '#bbf7d0'
-                            : item.status === 'rejected'
-                              ? '#fecdd3'
-                              : '#fed7aa'
-                        }`,
+                        ...statusBadgeStyle(item),
                       }}
                     >
-                      {item.status || 'pending'}
+                      {rowStatus(item) || 'pending'}
                     </span>
                   </td>
                   <td style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{fmtDate(item.createdAt || item.submittedAt)}</td>
@@ -374,11 +399,12 @@ export default function AdminApprovals() {
                 ['Phone', getPhone(selected)],
                 ['Country', getCountry(selected)],
                 ['City', selected.city || selected.location?.city || '—'],
-                ['Status', selected.status || 'pending'],
+                ['Status', rowStatus(selected) || 'pending'],
                 ['Submitted', fmtDate(selected.createdAt || selected.submittedAt)],
                 ...(selected.licenseNumber ? [['License #', selected.licenseNumber]] : []),
                 ...(selected.registrationNumber ? [['Registration #', selected.registrationNumber]] : []),
                 ...(selected.specialization ? [['Specialization', selected.specialization]] : []),
+                ...(selected.specialty ? [['Specialty', selected.specialty]] : []),
                 ...(selected.yearsExperience ? [['Experience', `${selected.yearsExperience} years`]] : []),
                 ...(selected.pharmacyName ? [['Pharmacy', selected.pharmacyName]] : []),
                 ...(selected.labName ? [['Lab Name', selected.labName]] : []),

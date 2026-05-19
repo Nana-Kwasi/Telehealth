@@ -31,6 +31,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
 
 // Register Chart.js components
 ChartJS.register(
@@ -51,6 +52,7 @@ export default function ClientHome({ profile }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [clientData, setClientData] = useState({});
+  const [locationProfile, setLocationProfile] = useState(null);
   const [therapistData, setTherapistData] = useState(null);
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
   const [progressScore, setProgressScore] = useState(0);
@@ -389,7 +391,9 @@ export default function ClientHome({ profile }) {
           console.log('✅ Home: Client document found:', clientProfile);
           console.log('🔗 Home: Assigned therapist field:', clientProfile.assignedTherapist);
           setClientData(clientProfile);
-          
+          const authLoc = await fetchAuthLocationProfile(currentUser.uid);
+          setLocationProfile(mergeLocationProfile(profile, authLoc, clientProfile));
+
           // Fetch assigned therapist
           if (clientProfile.assignedTherapist) {
             console.log('👨‍⚕️ Home: Fetching therapist data for ID:', clientProfile.assignedTherapist);
@@ -432,12 +436,15 @@ export default function ClientHome({ profile }) {
           const authDoc = await getDoc(doc(db, 'auth', currentUser.uid));
           if (authDoc.exists()) {
             const authData = authDoc.data();
-            setClientData({
+            const fallbackClient = {
               clientName: authData.name || profile?.name || 'Client',
               displayName: authData.name || profile?.name || 'Client',
               email: authData.email || profile?.email,
-              status: authData.status || 'active'
-            });
+              status: authData.status || 'active',
+              ...authData,
+            };
+            setClientData(fallbackClient);
+            setLocationProfile(mergeLocationProfile(profile, authData, fallbackClient));
             console.log('✅ Home: Using auth data as fallback');
           }
         }
@@ -1753,7 +1760,31 @@ export default function ClientHome({ profile }) {
 
   return (
     <div className="dashboard-home">
-      <LocationSummaryCard profile={profile || clientData} onEdit={() => navigate('/dashboard/settings')} />
+      <LocationSummaryCard
+        profile={locationProfile || mergeLocationProfile(profile, clientData)}
+        onEdit={() => navigate('/dashboard/settings')}
+      />
+      {clientData?.coupleId ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/couple/dashboard', { state: { coupleId: clientData.coupleId } })}
+          onKeyDown={(e) => e.key === 'Enter' && navigate('/couple/dashboard', { state: { coupleId: clientData.coupleId } })}
+          style={{
+            margin: '0 0 1rem',
+            padding: '1rem 1.25rem',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg,#ecfdf5,#d1fae5)',
+            border: '1px solid #6ee7b7',
+            cursor: 'pointer',
+          }}
+        >
+          <strong style={{ color: '#065f46' }}>Couple therapy</strong>
+          <p style={{ margin: '0.35rem 0 0', color: '#047857', fontSize: '0.9rem' }}>
+            View shared couple status, payment, and therapist matching →
+          </p>
+        </div>
+      ) : null}
       {/* Clean Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

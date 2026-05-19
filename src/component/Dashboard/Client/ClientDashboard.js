@@ -31,6 +31,9 @@ import TherapistDetails from './TherapistDetails';
 import WorksheetView from './WorksheetView';
 import NoteView from './NoteView';
 import GlobalReportForm from '../Common/GlobalReportForm';
+import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import CoupleClientGate from '../../Common/CoupleClientGate';
 
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
@@ -92,6 +95,7 @@ export default function ClientDashboard({ profile }) {
   };
 
   return (
+    <CoupleClientGate profile={profile}>
     <div className="client-dashboard">
       {/* Sidebar */}
       <aside className="client-sidebar">
@@ -120,6 +124,7 @@ export default function ClientDashboard({ profile }) {
             <div className="user-details">
               <p className="user-name">{profile?.name || 'Client'}</p>
               <p className="user-role">Client</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>
@@ -153,6 +158,7 @@ export default function ClientDashboard({ profile }) {
 
       {/* Main Content */}
       <main className="client-main">
+        <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
         <Routes>
           <Route path="/" element={<ClientHome profile={profile} />} />
           <Route path="/messages" element={<ClientMessages />} />
@@ -170,5 +176,6 @@ export default function ClientDashboard({ profile }) {
         </Routes>
       </main>
     </div>
+    </CoupleClientGate>
   );
 }

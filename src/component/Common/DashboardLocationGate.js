@@ -6,7 +6,9 @@ import useAddressAutofill from '../../hooks/useAddressAutofill';
 function roleTarget(role, profile) {
   const id = profile?.id || auth.currentUser?.uid || null;
   if (!id) return null;
-  if (role === 'admin') return { collection: 'admins', id };
+  if (role === 'admin') {
+    return { collection: profile?.adminSource === 'therapists' ? 'therapists' : 'admins', id };
+  }
   if (role === 'doctor') return { collection: 'doctors', id };
   if (role === 'therapist') return { collection: 'therapists', id };
   if (role === 'pharmacy') return { collection: 'pharmacies', id };
@@ -15,6 +17,7 @@ function roleTarget(role, profile) {
   if (role === 'scan') return { collection: 'scanCenters', id };
   if (role === 'lab_branch') return { collection: 'labBranches', id };
   if (role === 'scan_branch') return { collection: 'scanBranches', id };
+  if (role === 'homecare_nurse') return { collection: 'homeCareNurses', id };
   return { collection: 'auth', id: auth.currentUser?.uid || id };
 }
 

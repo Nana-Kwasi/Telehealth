@@ -41,6 +41,8 @@ import DoctorDiagnosticOrder from './DoctorDiagnosticOrder';
 import DoctorDiagnosticResults from './DoctorDiagnosticResults';
 import NotificationBell from './NotificationBell';
 import GlobalReportForm from '../Common/GlobalReportForm';
+import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
+import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 
 export default function DoctorDashboard({ profile }) {
   const location = useLocation();
@@ -106,6 +108,7 @@ export default function DoctorDashboard({ profile }) {
             <div className="user-details">
               <p className="user-name">Dr. {profile?.name || 'Doctor'}</p>
               <p className="user-role">{profile?.specialization || 'Medical Doctor'}</p>
+              <SidebarSavedLocation profile={profile} />
             </div>
           </div>
         </div>
@@ -141,6 +144,7 @@ export default function DoctorDashboard({ profile }) {
       </aside>
 
       <main className="doctor-main">
+        <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="doctors" />
         <Routes>
           <Route path="/" element={<DoctorHome profile={profile} />} />
           <Route path="/patients" element={<DoctorPatients profile={profile} />} />
