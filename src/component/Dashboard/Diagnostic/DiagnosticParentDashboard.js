@@ -67,9 +67,14 @@ function ParentOverview({ type, profile }) {
         active: branches.filter(b => (b.status || 'active') === 'active').length,
         suspended: branches.filter(b => (b.status || '') === 'suspended').length,
         orders: orders.length,
-        completed: orders.filter(o => (o.status || '') === 'COMPLETED').length,
-        rejected: orders.filter(o => (o.status || '') === 'REJECTED').length,
-        inProgress: orders.filter(o => (o.status || '') === 'IN_PROGRESS').length,
+        // Status casing is not consistent across writers: the web branch dashboard
+        // writes 'COMPLETED', the API defaults and every mobile screen write
+        // 'completed'. Comparing to the uppercase literal counted only the web-set
+        // ones, so these tiles read 0 while the orders table plainly showed
+        // completed work. Normalise before comparing.
+        completed: orders.filter(o => String(o.status || '').toUpperCase() === 'COMPLETED').length,
+        rejected: orders.filter(o => String(o.status || '').toUpperCase() === 'REJECTED').length,
+        inProgress: orders.filter(o => ['IN_PROGRESS', 'PROCESSING'].includes(String(o.status || '').toUpperCase())).length,
       });
       setRecentEvents(events.slice(0, 8));
     })();

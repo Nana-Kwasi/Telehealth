@@ -157,17 +157,31 @@ export function serverTimestamp() {
 
 // ── Timestamp shim ────────────────────────────────────────────────────────────
 
-export const Timestamp = {
-  fromDate: (date) => ({
+// The shim's Timestamp is deliberately DUAL-SHAPED. Screens migrated from Firestore
+// read `ts.seconds * 1000` or `ts.toDate()`; screens written against the REST API do
+// `new Date(ts)` on what they expect to be an ISO string. Implementing valueOf/
+// toString/toJSON makes all three work on the same object, so broadening timestamp
+// normalisation below can't break a caller that was doing it the other way.
+function _mkTimestamp(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  return {
     _isTimestamp: true,
-    _date: date instanceof Date ? date : new Date(date),
+    _date: d,
+    seconds: Math.floor(d.getTime() / 1000),
+    nanoseconds: 0,
     toDate() { return this._date; },
-    seconds: Math.floor((date instanceof Date ? date : new Date(date)).getTime() / 1000),
-  }),
-  now: () => {
-    const d = new Date();
-    return { _isTimestamp: true, _date: d, toDate() { return this._date; }, seconds: Math.floor(d.getTime() / 1000) };
-  },
+    toMillis() { return this._date.getTime(); },
+    // `new Date(ts)` and any arithmetic/sorting on the value resolve through this.
+    valueOf() { return this._date.getTime(); },
+    toString() { return this._date.toISOString(); },
+    // Anything written back to the API serialises as a plain ISO string.
+    toJSON() { return this._date.toISOString(); },
+  };
+}
+
+export const Timestamp = {
+  fromDate: (date) => _mkTimestamp(date),
+  now: () => _mkTimestamp(new Date()),
 };
 
 // ── Helper: admin context + timestamp normalisation for admin list rows ───────
@@ -368,15 +382,52 @@ function _nursePatchBody(data = {}) {
 
 // Backend admin list rows use snake_case + ISO/SQL timestamps. Components expect
 // Firestore-shaped docs with `.createdAt.seconds` / `.scheduledTime.seconds`.
+// A key that holds a moment in time. Case-SENSITIVE camelCase suffix so it matches
+// createdAt / uploadedAt / scheduledTime but not words that merely end in those
+// letters ("format", "seat"). Deliberately excludes `…Date`, because several screens
+// keep a plain 'YYYY-MM-DD' in fields like `sessionDate` and compare it as a string.
+// Values that don't parse as a date (e.g. startTime: '09:00') are left untouched by
+// _asTimestamp, so time-of-day fields survive this too.
+const TIMESTAMP_KEY_RE = /(?:[a-z0-9](?:At|Time)|^timestamp)$/;
+
+function _asTimestamp(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') {
+    if (value._isTimestamp) return value;
+    if (typeof value.toDate === 'function') return value;
+    if (typeof value.seconds === 'number') return Timestamp.fromDate(new Date(value.seconds * 1000));
+    return null;
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+}
+
+// Convert EVERY timestamp-shaped field, not just createdAt/scheduled*.
+//
+// This used to normalise three keys only, so anything reading updatedAt /
+// uploadedAt / completedAt / sentAt got the raw ISO string and did
+// `ts.seconds * 1000` on it — `undefined * 1000` is NaN, which is exactly the
+// "Invalid Date" (and the '—' on web) shown on the diagnostic order and result
+// cards. Timestamps are dual-shaped (see _mkTimestamp), so callers that instead do
+// `new Date(value)` keep working.
 function _normalizeTimestamps(row = {}) {
-  const createdRaw   = row.createdAt   ?? row.created_at;
+  if (!row || typeof row !== 'object') return row;
+  const out = { ...row };
+  for (const [key, value] of Object.entries(row)) {
+    if (!TIMESTAMP_KEY_RE.test(key)) continue;
+    const ts = _asTimestamp(value);
+    if (ts) out[key] = ts;
+  }
+  // snake_case aliases the API occasionally returns, surfaced under the camelCase
+  // spelling the screens read.
+  const createdRaw = row.createdAt ?? row.created_at;
+  if (out.createdAt == null && createdRaw) out.createdAt = _asTimestamp(createdRaw);
   const scheduledRaw = row.scheduledTime ?? row.scheduled_time ?? row.scheduledAt ?? row.scheduled_at;
-  return {
-    ...row,
-    createdAt:     createdRaw   ? Timestamp.fromDate(new Date(createdRaw))   : null,
-    scheduledTime: scheduledRaw ? Timestamp.fromDate(new Date(scheduledRaw)) : (row.scheduledTime || null),
-    scheduledAt:   scheduledRaw ? Timestamp.fromDate(new Date(scheduledRaw)) : (row.scheduledAt || null),
-  };
+  if (scheduledRaw) {
+    out.scheduledTime = _asTimestamp(scheduledRaw) || out.scheduledTime || null;
+    out.scheduledAt = _asTimestamp(scheduledRaw) || out.scheduledAt || null;
+  }
+  return out;
 }
 
 // Cache public system config — it's read very frequently (onSnapshot polling
@@ -911,16 +962,24 @@ async function resolveCollection(path, constraints) {
       const dCenterId = getWhereValue(constraints, 'centerId') || getWhereValue(constraints, 'organizationId') || getWhereValue(constraints, 'labId') || getWhereValue(constraints, 'scanId');
       const dDoctorId = getWhereValue(constraints, 'doctorId');
       const dPatientId = getWhereValue(constraints, 'patientId');
-      const dCenterType = getWhereValue(constraints, 'centerType');
-      // ops/orders supports doctor/patient/branch; compat supports branch/centerId
-      // /centerType. Both hit diagnostic_orders_v2, so results are consistent.
-      let data;
-      if (dDoctorId) data = await api(`/api/v1/diagnostics/operations/orders?doctorId=${dDoctorId}`).catch(() => []);
-      else if (dPatientId) data = await api(`/api/v1/diagnostics/operations/orders?patientId=${dPatientId}`).catch(() => []);
-      else if (dBranchId) data = await api(`/api/v1/compat/diagnostic-orders?branchId=${dBranchId}`).catch(() => []);
-      else if (dCenterId) data = await api(`/api/v1/compat/diagnostic-orders?centerId=${dCenterId}`).catch(() => []);
-      else if (dCenterType) data = await api(`/api/v1/compat/diagnostic-orders?centerType=${dCenterType}`).catch(() => []);
-      else data = await api('/api/v1/compat/diagnostic-orders').catch(() => []);
+      // centerType is intentionally NOT sent to the server — no route filters on it.
+      // It is narrowed by applyInMemoryFilters against the aliased field below.
+      // Always read through ops/orders. Both routes hit diagnostic_orders_v2, but
+      // /compat/diagnostic-orders serialises a NARROW projection entity — it has no
+      // centerId, centerType, testType, patientName, doctorName, branchName or
+      // orderCode. Two things broke because of that:
+      //   • the parent lab/scan dashboard filters where('centerId','==',orgId); the
+      //     compat rows carry no centerId at all, so applyInMemoryFilters dropped
+      //     every row and the centre saw 0 orders while its branches had plenty.
+      //   • the branch order inbox rendered blank test/patient columns.
+      // ops/orders returns the full entity and accepts the same scoping params
+      // (doctorId / patientId / branchId / organizationId+centerId).
+      const dq = new URLSearchParams();
+      if (dDoctorId) dq.set('doctorId', dDoctorId);
+      else if (dPatientId) dq.set('patientId', dPatientId);
+      else if (dBranchId) dq.set('branchId', dBranchId);
+      else if (dCenterId) dq.set('centerId', dCenterId);
+      const data = await api(`/api/v1/diagnostics/operations/orders${dq.toString() ? `?${dq}` : ''}`).catch(() => []);
       // Orders come back with `diagnosticType` ('lab' | 'scan') but callers query
       // where('centerType','==',…). The backend also ignores the centerType query
       // param, so the in-memory filter below was the only thing narrowing the list
@@ -929,14 +988,42 @@ async function resolveCollection(path, constraints) {
       // real orders in the table. Alias it so both the filter and the screens work.
       const items = (Array.isArray(data) ? data : data?.orders || []).map(o => {
         const type = o.centerType || o.diagnosticType || o.type || null;
-        return _normalizeTimestamps({ ...o, centerType: type, type: o.type || type });
+        // The server matched centerId against organization_id, but older rows only
+        // ever populated organizationId — leaving centerId null. The in-memory
+        // where('centerId','==',orgId) re-filter then dropped exactly the rows the
+        // server had just selected. Alias both spellings so old and new rows survive.
+        const center = o.centerId || o.organizationId || null;
+        return _normalizeTimestamps({
+          ...o,
+          centerType: type,
+          type: o.type || type,
+          centerId: center,
+          organizationId: o.organizationId || center,
+        });
       });
       return toQuerySnapshot(applyInMemoryFilters(items, constraints));
     }
 
-    // Diagnostic branch activity feed — no dedicated REST endpoint; safe empty read.
-    case 'diagnosticBranchEvents':
-      return toQuerySnapshot([]);
+    // Diagnostic branch activity feed. This used to return a hard-coded empty array
+    // ("no dedicated REST endpoint"), but /diagnostics/operations/events exists and
+    // backs it — so every lab/scan Activity tab rendered blank no matter how many
+    // orders had been processed.
+    case 'diagnosticBranchEvents': {
+      const evBranchId = getWhereValue(constraints, 'branchId');
+      const evOrderId = getWhereValue(constraints, 'orderId');
+      const evCenterId = getWhereValue(constraints, 'centerId') || getWhereValue(constraints, 'organizationId');
+      const evCenterType = getWhereValue(constraints, 'centerType');
+      const eq = new URLSearchParams();
+      if (evOrderId) eq.set('orderId', evOrderId);
+      else if (evBranchId) eq.set('branchId', evBranchId);
+      else if (evCenterId) {
+        eq.set('centerId', evCenterId);
+        if (evCenterType) eq.set('centerType', evCenterType);
+      }
+      const data = await api(`/api/v1/diagnostics/operations/events${eq.toString() ? `?${eq}` : ''}`).catch(() => []);
+      const items = (Array.isArray(data) ? data : []).map(_normalizeTimestamps);
+      return toQuerySnapshot(applyInMemoryFilters(items, constraints));
+    }
 
     case 'homeCareBookings': {
       // The endpoint requires patientId or nurseId — pull from the where clause.
@@ -1153,7 +1240,9 @@ async function resolveCollection(path, constraints) {
       const pid = getWhereValue(constraints, 'patientId') || getWhereValue(constraints, 'clientId');
       if (!pid) return toQuerySnapshot([]);
       const data = await api(`/api/v1/patients/${pid}/daily-feelings`).catch(() => []);
-      const items = (Array.isArray(data) ? data : []).map(x => ({ id: x.id, ...x }));
+      // Normalise so the check-in cards can read createdAt.seconds for their date
+      // stamp — without this every check-in rendered with a blank date.
+      const items = (Array.isArray(data) ? data : []).map(x => _normalizeTimestamps({ id: x.id, ...x }));
       return toQuerySnapshot(applyInMemoryFilters(items, constraints));
     }
 
@@ -1254,9 +1343,23 @@ async function resolveCollection(path, constraints) {
     }
 
     case 'diagnosticResults': {
-      const data = await api('/api/v1/entity-operations/diagnostics/results').catch(() => []);
-      const items = (Array.isArray(data) ? data : (data?.results || []));
-      return toQuerySnapshot(applyInMemoryFilters(items.map(r => ({ id: r.id, ...r })), constraints));
+      // /entity-operations/diagnostics/results serialises a NARROW projection whose
+      // only columns are id/orderId/branchId/findings/conclusion/reportUrl/status/
+      // released*/timestamps — it has NO doctorId. The doctor's "Lab & Scan Results"
+      // screen filters where('doctorId','==',uid), so applyInMemoryFilters compared
+      // undefined against the uid and dropped every row: a lab could upload a report
+      // and the ordering doctor would never see it.
+      // results-query returns the full diagnostic_results_v2 entity (doctorId,
+      // patientName, testType, centerName, orderCode …) and scopes server-side.
+      const resDoctorId = getWhereValue(constraints, 'doctorId');
+      const resUploadedBy = getWhereValue(constraints, 'uploadedBy') || getWhereValue(constraints, 'branchId');
+      const rq = new URLSearchParams();
+      if (resDoctorId) rq.set('doctorId', resDoctorId);
+      else if (resUploadedBy) rq.set('uploadedBy', resUploadedBy);
+      const data = await api(`/api/v1/diagnostics/operations/results-query${rq.toString() ? `?${rq}` : ''}`).catch(() => []);
+      const items = (Array.isArray(data) ? data : (data?.results || []))
+        .map(r => _normalizeTimestamps({ ...r, id: r.id }));
+      return toQuerySnapshot(applyInMemoryFilters(items, constraints));
     }
 
     case 'adminNotifications': {
@@ -1853,13 +1956,27 @@ export async function addDoc(colRef, data) {
       case 'doctorNotes':
         return api('/api/v1/doctor-notes', { method: 'POST', body: data });
       case 'doctor_chats/messages':
-      case 'doctorChats/messages':
+      case 'doctorChats/messages': {
         // Screen sends {text, from, type}; backend wants {body, senderId, messageType}.
+        // Image/file/voice messages also carry fileUrl/fileName/fileSize/duration —
+        // this mapping used to drop them, so an attachment reached the API as an
+        // empty text message (rejected with "body (or text) is required") and the
+        // uploaded file was lost even once the API accepted it.
+        const dcUrl = data.fileUrl || data.mediaUrl || data.url || null;
         return api(`/api/v1/doctor-chats/${id1}/messages`, { method: 'POST', body: {
           senderId: data.senderId || data.from || getStoredUserId(),
           body: data.body || data.text || '',
           messageType: data.messageType || data.type || 'text',
+          ...(dcUrl ? {
+            fileUrl: dcUrl,
+            mediaUrl: dcUrl,
+            fileName: data.fileName || null,
+            fileSize: data.fileSize ?? null,
+            mimeType: data.mimeType || null,
+            duration: data.duration ?? null,
+          } : {}),
         } });
+      }
       case 'doctorReviews':
         return api(`/api/v1/doctors/${data.doctorId}/reviews`, { method: 'POST', body: data });
       case 'therapistReviews':
@@ -1922,7 +2039,12 @@ export async function addDoc(colRef, data) {
         } });
       case 'diagnosticResults':
         return api(`/api/v1/diagnostics/operations/orders/${data.orderId}/results`, { method: 'POST', body: {
-          branchId: data.branchId || null,
+          // The branch upload form sends its own id as `uploadedBy`, not `branchId`.
+          // The backend derives uploaded_by FROM branchId, so without this fallback
+          // both columns landed null — and the lab's own "Results" list (which reads
+          // results-query?uploadedBy=<branchId>) never showed a report it had just
+          // uploaded from the web.
+          branchId: asUuid(data.branchId) || asUuid(data.uploadedBy) || asUuid(data.centerId) || null,
           findings: data.findings || null,
           conclusion: data.conclusion || null,
           reportUrl: data.reportUrl || data.fileUrl || null,
@@ -1931,8 +2053,22 @@ export async function addDoc(colRef, data) {
           releasedToDoctor: data.releasedToDoctor ?? true,
         } });
       case 'patientNotifications':
-      case 'diagnosticBranchEvents':
         return { id: `tmp_${Date.now()}` };
+      // Branch activity log. This was discarded (fake id, no request), so the lab/scan
+      // Activity feed stayed empty forever even though the read side now has data.
+      // The endpoint is nested under the order, so an event without one has nowhere
+      // to go — keep that case a no-op rather than failing the status change.
+      case 'diagnosticBranchEvents': {
+        const evOrderId = asUuid(data.orderId);
+        if (!evOrderId) return { id: `tmp_${Date.now()}` };
+        return api(`/api/v1/diagnostics/operations/orders/${evOrderId}/events`, { method: 'POST', body: {
+          branchId: asUuid(data.branchId) || null,
+          centerId: asUuid(data.centerId) || asUuid(data.parentId) || null,
+          centerType: data.centerType || null,
+          eventType: data.action || data.eventType || 'update',
+          notes: data.notes || [data.fromStatus, data.toStatus].filter(Boolean).join(' → ') || null,
+        } });
+      }
       // Presence write via addDoc path (rare) → upsert; others have no REST write.
       case 'userPresence':
         return api(`/api/v1/realtime/presence/${id1}`, { method: 'PUT', body: { status: data?.online ? 'online' : 'offline' } }).catch(() => ({ id: id1 }));
@@ -2272,6 +2408,18 @@ export async function updateDoc(docRef, data) {
         return api(`/api/v1/doctor-notes/${id}`, { method: 'PATCH', body: data });
       case 'diagnosticOrders':
         return api(`/api/v1/diagnostics/operations/orders/${id}/status`, { method: 'PATCH', body: data });
+      // Results had NO updateDoc case, so the doctor's "Save Note" fell through to
+      // `default:` — a console warning and a null return. The UI showed the note
+      // attached (it updates local state) but nothing was ever persisted.
+      case 'diagnosticResults':
+        return api(`/api/v1/diagnostics/operations/results/${id}`, { method: 'PATCH', body: {
+          ...(data.doctorNote !== undefined ? { doctorNote: data.doctorNote } : {}),
+          ...(data.findings !== undefined ? { findings: data.findings } : {}),
+          ...(data.conclusion !== undefined ? { conclusion: data.conclusion } : {}),
+          ...(data.status !== undefined ? { status: data.status } : {}),
+          ...(data.reportUrl !== undefined || data.fileUrl !== undefined
+            ? { reportUrl: data.reportUrl || data.fileUrl } : {}),
+        } });
       case 'admins':
         return api(`/api/v1/auth/${id}`, { method: 'PATCH', body: data });
       case 'therapistSettings':
@@ -2513,6 +2661,43 @@ export async function setDoc(docRef, data, _opts = {}) {
             address: data.address || (typeof data.location === 'string' ? data.location : null),
           },
         });
+      }
+      // Parent-org "Create Branch" (lab/scan/pharmacy parent dashboards) and the
+      // admin branch screens write the branch with setDoc(doc(db, col, uid)) so the
+      // branch row id IS the freshly-created login account's uid — that identity is
+      // what lets the branch sign in and what every order/report query keys on.
+      //
+      // Without this case the write fell through to `default:`, which only warns and
+      // returns null. The UI saw no error (setDoc doesn't throw), showed the branch
+      // credentials, then reloaded an empty list — "No branches yet." right after an
+      // apparently-successful create. addDoc has always handled these collections;
+      // only setDoc was missing them.
+      case 'pharmacyBranches':
+      case 'labBranches':
+      case 'scanBranches': {
+        const orgId = data.pharmacyId || data.labId || data.scanId || data.organizationId;
+        const branchType = col === 'pharmacyBranches' ? 'PHARMACY' : col === 'labBranches' ? 'LAB' : 'SCAN_CENTER';
+        const branchBody = {
+          branchName: data.branchName || data.name,
+          branchCode: data.branchCode || null,
+          country: data.country || null,
+          city: data.city || null,
+          address: data.address || (typeof data.location === 'string' ? data.location : null),
+          latitude: Number.isFinite(Number(data.latitude)) ? Number(data.latitude) : null,
+          longitude: Number.isFinite(Number(data.longitude)) ? Number(data.longitude) : null,
+        };
+        if (!orgId) throw new Error('Branch is missing its parent organization id');
+        // The doc id is the branch login's uid (data.uid carries the same value;
+        // prefer the path id since that is what the caller reads back).
+        const branchUid = asUuid(id) || asUuid(data.uid);
+        if (branchUid) {
+          return api('/api/v1/registrations/branches/for-user', {
+            method: 'POST',
+            body: { userId: branchUid, organizationId: orgId, type: branchType, email: data.email || null, ...branchBody },
+          });
+        }
+        // No login account behind this branch → plain branch under the org.
+        return api(`/api/v1/registrations/organizations/${orgId}/branches`, { method: 'POST', body: branchBody });
       }
       case 'systemConfig':
         return _writeSystemConfig(id, data);

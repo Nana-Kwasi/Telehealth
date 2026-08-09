@@ -32,9 +32,60 @@ function getInitials(name) {
   return parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
 }
 
+// The latest reading is returned as `vitalsLatestJson` — a JSON STRING of flat
+// fields ({bpSystolic, heartRate, …}). Reading `vitals.latest` alone always gave
+// undefined, so the card said "No vitals recorded by patient yet" for every patient
+// who had actually recorded them.
+function parseLatestVitals(pd) {
+  if (!pd) return null;
+  if (typeof pd.vitalsLatestJson === 'string' && pd.vitalsLatestJson.trim()) {
+    try {
+      const parsed = JSON.parse(pd.vitalsLatestJson);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch { /* fall through to the legacy shapes */ }
+  }
+  return pd.vitals?.latest || pd.vitals || null;
+}
+
+// A health record's attachments are NOT a single `fileUrl`. The patient's Health
+// Records form uploads one file per selected document type and stores them as
+// `radiologyFiles: { "MRI": {fileUrl, fileName}, … }`; the flat `fileUrl` is left as
+// an empty string. Reading only the flat field is why the File column showed "—"
+// even though three PDFs were attached. Return every file, whichever shape it's in.
+function recordFiles(rec) {
+  if (!rec) return [];
+  const out = [];
+  const push = (label, url, name) => {
+    if (!url || typeof url !== 'string' || !url.trim()) return;
+    if (out.some(f => f.url === url)) return;
+    out.push({ label: label || name || 'Attachment', url, name: name || label || 'file' });
+  };
+  const bag = rec.radiologyFiles && typeof rec.radiologyFiles === 'object' ? rec.radiologyFiles : {};
+  Object.entries(bag).forEach(([label, v]) => {
+    if (!v) return;
+    if (typeof v === 'string') push(label, v, label);
+    else push(label, v.fileUrl || v.url, v.fileName || v.name);
+  });
+  // Some records (and older ones) carry a single top-level attachment instead.
+  push(rec.fileName || 'Attachment', rec.fileUrl || rec.url, rec.fileName);
+  return out;
+}
+
+// The form records the selected document types as `types` (an array). The table read
+// the singular `type`, which does not exist — hence "—" in every Type cell.
+function recordTypes(rec) {
+  if (!rec) return [];
+  if (Array.isArray(rec.types)) return rec.types.filter(Boolean);
+  if (typeof rec.types === 'string' && rec.types.trim()) return [rec.types.trim()];
+  if (rec.type) return [rec.type];
+  return [];
+}
+
 export default function DoctorPatientDetail({ profile }) {
   const { patientId } = useParams();
   const navigate = useNavigate();
+  // Health-record detail modal
+  const [viewingRecord, setViewingRecord] = useState(null);
 
   const [patient, setPatient] = useState(null);
   const [appointments, setAppointments] = useState([]);
@@ -136,7 +187,7 @@ export default function DoctorPatientDetail({ profile }) {
       // vitals, pharmacies) — reuse the profile fetched above for the header.
       if (pd) {
         setPatientProfile(pd);
-        setLatestVitals(pd.vitals?.latest || null);
+        setLatestVitals(parseLatestVitals(pd));
         setPharmacies(pd.pharmacies || []);
         setPatientStatus(pd.status || 'active');
         setDataSharing(pd.privacy?.dataSharing || {});
@@ -988,28 +1039,52 @@ export default function DoctorPatientDetail({ profile }) {
                   <tr><th>Document</th><th>Type</th><th>Date</th><th>Notes</th><th>File</th></tr>
                 </thead>
                 <tbody>
-                  {patientProfile.healthRecords.map((r, i) => (
-                    <tr key={i}>
+                  {patientProfile.healthRecords.map((r, i) => {
+                    const types = recordTypes(r);
+                    const files = recordFiles(r);
+                    return (
+                    <tr key={i} onClick={() => setViewingRecord(r)} style={{ cursor: 'pointer' }} title="Open full record">
                       <td style={{ fontWeight: 600 }}>{r.name}</td>
-                      <td>{r.type || '—'}</td>
+                      <td style={{ maxWidth: 240 }}>
+                        {types.length === 0 ? '—' : (
+                          <span style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                            {types.slice(0, 2).map(t => (
+                              <span key={t} style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', borderRadius: 20, padding: '0.1rem 0.5rem', fontSize: '0.7rem', fontWeight: 700 }}>{t}</span>
+                            ))}
+                            {types.length > 2 && (
+                              <span style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 700, alignSelf: 'center' }}>+{types.length - 2}</span>
+                            )}
+                          </span>
+                        )}
+                      </td>
                       <td>{r.date || '—'}</td>
                       <td style={{ color: '#64748b', fontSize: '0.8rem' }}>{r.notes || '—'}</td>
-                      <td>
-                        {r.fileUrl ? (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {files.length === 0 ? (
+                          <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>—</span>
+                        ) : files.length === 1 ? (
                           <a
-                            href={r.fileUrl}
+                            href={files[0].url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            download={files[0].name}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#1e6bb8', fontWeight: 600, fontSize: '0.8rem', textDecoration: 'none' }}
                           >
-                            <Download size={13} /> {r.fileName || 'View'}
+                            <Download size={13} /> {files[0].name || 'View'}
                           </a>
                         ) : (
-                          <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>—</span>
+                          <button
+                            type="button"
+                            onClick={() => setViewingRecord(r)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#1e6bb8', fontWeight: 700, fontSize: '0.8rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          >
+                            <Download size={13} /> {files.length} files
+                          </button>
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
@@ -1292,6 +1367,18 @@ export default function DoctorPatientDetail({ profile }) {
                     </div>
                   </div>
                 )}
+                {/* Every section above is conditional, so a check-in with no stored
+                    content rendered as a blank white panel that looked broken. Say
+                    plainly that there is nothing to show. */}
+                {!viewingFeeling.mood && viewingFeeling.painLevel == null && symptomList.length === 0
+                  && !viewingFeeling.medications && !viewingFeeling.notes && (
+                  <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 10, padding: '1rem 1.25rem' }}>
+                    <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#92400e' }}>No details were recorded with this check-in.</p>
+                    <p style={{ margin: '0.35rem 0 0', fontSize: '0.82rem', color: '#a16207', lineHeight: 1.5 }}>
+                      The patient logged it, but the answers were not stored. Check-ins submitted from now on capture mood, pain level, symptoms, medications and notes.
+                    </p>
+                  </div>
+                )}
               </div>
               <div style={{ padding: '1rem 1.5rem', borderTop: '1.5px solid #f1f5f9' }}>
                 <button className="doctor-btn doctor-btn-primary" style={{ width: '100%', background: meta.color }} onClick={() => setViewingFeeling(null)}>Close</button>
@@ -1404,6 +1491,88 @@ export default function DoctorPatientDetail({ profile }) {
           </div>
         </div>
       )}
+
+      {/* Health record detail — the table row only has room for a summary, and the
+          record's attachments are per-document-type, so open the whole thing here. */}
+      {viewingRecord && (() => {
+        const types = recordTypes(viewingRecord);
+        const files = recordFiles(viewingRecord);
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}
+            onClick={() => setViewingRecord(null)}
+          >
+            <div
+              style={{ background: 'white', borderRadius: 20, maxWidth: 760, width: '100%', maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ background: '#eff6ff', borderBottom: '1.5px solid #bfdbfe', padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1e3a8a' }}>{viewingRecord.name || 'Health record'}</h3>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#475569' }}>
+                    Submitted by {patient?.name || 'the patient'}{viewingRecord.date ? ` • ${viewingRecord.date}` : ''}
+                  </p>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '0.25rem', flexShrink: 0 }} onClick={() => setViewingRecord(null)}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {types.length > 0 && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Document types</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {types.map(t => (
+                        <span key={t} style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', borderRadius: 20, padding: '0.25rem 0.7rem', fontSize: '0.78rem', fontWeight: 700 }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {viewingRecord.notes && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Patient notes</p>
+                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '1rem', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {viewingRecord.notes}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Attachments {files.length > 0 ? `(${files.length})` : ''}
+                  </p>
+                  {files.length === 0 ? (
+                    <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.875rem' }}>No files attached to this record.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {files.map((f, i) => (
+                        <div key={`${f.url}-${i}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.75rem 1rem' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>{f.label}</p>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</p>
+                          </div>
+                          <a
+                            href={f.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={f.name}
+                            className="doctor-btn doctor-btn-outline doctor-btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0 }}
+                          >
+                            <Download size={14} /> Download
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

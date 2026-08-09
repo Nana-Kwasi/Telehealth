@@ -15,16 +15,40 @@ const STATUS_META = {
   COMPLETED:   { bg: '#dcfce7', color: '#14532d' },
 };
 
+// Accepts a shim Timestamp ({seconds}/toDate), an ISO string from the API, a Date,
+// or epoch millis. The old version required `.seconds` and returned '—' for
+// everything the REST API actually sends.
+function toDateSafe(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'object') {
+    if (typeof value.toDate === 'function') return value.toDate();
+    if (typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+    return null;
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function fmtDate(ts) {
-  if (!ts?.seconds) return '—';
-  return new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const d = toDateSafe(ts);
+  if (!d) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function fmtDateTime(ts) {
-  if (!ts?.seconds) return '—';
-  const d = new Date(ts.seconds * 1000);
+  const d = toDateSafe(ts);
+  if (!d) return '—';
   return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
+
+// Field-name reconciliation. The screens were written against the Firestore
+// documents; the REST entity uses different spellings for the same things.
+const rowDate  = (r) => r.uploadedAt || r.createdAt || r.updatedAt;
+const rowRef   = (r) => r.resultRef || r.orderCode || r.orderId || '';
+const rowFile  = (r) => r.fileUrl || r.resultFileUrl || r.reportUrl || '';
+const rowType  = (r) => String(r.type || r.centerType || r.diagnosticType || 'lab').toLowerCase();
+const rowCenter = (r) => r.centerName || r.branchName || '';
 
 export default function DoctorDiagnosticResults({ profile }) {
   const navigate = useNavigate();
@@ -41,12 +65,22 @@ export default function DoctorDiagnosticResults({ profile }) {
   const loadResults = async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(
-        query(collection(db, 'diagnosticResults'), where('doctorId', '==', auth.currentUser?.uid))
-      );
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.uploadedAt?.seconds || 0) - (a.uploadedAt?.seconds || 0));
-      setResults(list);
+      const uid = auth.currentUser?.uid;
+      // Load orders alongside results. Previously this page showed results only, so
+      // a doctor had no way to see that an order was placed and still pending —
+      // and the "Ready" tab would have been meaningless with nothing to contrast.
+      const [resSnap, ordSnap] = await Promise.all([
+        getDocs(query(collection(db, 'diagnosticResults'), where('doctorId', '==', uid))),
+        getDocs(query(collection(db, 'diagnosticOrders'), where('doctorId', '==', uid))).catch(() => null),
+      ]);
+      const ms = (r) => { const d = toDateSafe(rowDate(r)); return d ? d.getTime() : 0; };
+      const resultRows = resSnap.docs
+        .map(d => ({ id: d.id, ...d.data(), kind: 'result' }));
+      const resultOrderIds = new Set(resultRows.map(r => r.orderId).filter(Boolean));
+      const orderRows = (ordSnap ? ordSnap.docs.map(d => ({ id: d.id, ...d.data(), kind: 'order' })) : [])
+        // An order that already has a result is represented by the result row.
+        .filter(o => !resultOrderIds.has(o.id));
+      setResults([...resultRows, ...orderRows].sort((a, b) => ms(b) - ms(a)));
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -70,14 +104,18 @@ export default function DoctorDiagnosticResults({ profile }) {
     finally { setSavingNote(false); }
   };
 
+  const readyCount = results.filter(r => r.kind === 'result').length;
+
   const filtered = results.filter(r => {
-    if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+    // "Ready" = the centre has uploaded findings, i.e. this row is a result.
+    if (typeFilter === 'ready' && r.kind !== 'result') return false;
+    if ((typeFilter === 'lab' || typeFilter === 'scan') && rowType(r) !== typeFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (r.patientName || '').toLowerCase().includes(q) ||
       (r.testType || '').toLowerCase().includes(q) ||
-      (r.centerName || '').toLowerCase().includes(q) ||
-      (r.resultRef || '').toLowerCase().includes(q);
+      rowCenter(r).toLowerCase().includes(q) ||
+      String(rowRef(r)).toLowerCase().includes(q);
   });
 
   return (
@@ -95,10 +133,10 @@ export default function DoctorDiagnosticResults({ profile }) {
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
         {[
-          { label: 'Total Results', count: results.length, color: '#1e6bb8', bg: '#eff6ff' },
-          { label: 'Lab Results', count: results.filter(r => r.type === 'lab').length, color: '#065f46', bg: '#d1fae5' },
-          { label: 'Scan Reports', count: results.filter(r => r.type === 'scan').length, color: '#4c1d95', bg: '#ede9fe' },
-          { label: 'With Notes', count: results.filter(r => r.doctorNote).length, color: '#d97706', bg: '#fef3c7' },
+          { label: 'Orders & Results', count: results.length, color: '#1e6bb8', bg: '#eff6ff' },
+          { label: 'Results Ready', count: readyCount, color: '#92400e', bg: '#fef3c7' },
+          { label: 'Lab', count: results.filter(r => rowType(r) === 'lab').length, color: '#065f46', bg: '#d1fae5' },
+          { label: 'Scan', count: results.filter(r => rowType(r) === 'scan').length, color: '#4c1d95', bg: '#ede9fe' },
         ].map(({ label, count, color, bg }) => (
           <div key={label} style={{ background: 'white', borderRadius: 12, padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem', flexShrink: 0 }}>
@@ -111,7 +149,7 @@ export default function DoctorDiagnosticResults({ profile }) {
 
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {['all', 'lab', 'scan'].map(t => (
+        {['all', 'ready', 'lab', 'scan'].map(t => (
           <button key={t} onClick={() => setTypeFilter(t)}
             style={{
               padding: '0.4rem 1rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: '1.5px solid', transition: 'all 0.15s',
@@ -120,12 +158,16 @@ export default function DoctorDiagnosticResults({ profile }) {
                   ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
                   : t === 'scan'
                     ? { background: '#ede9fe', color: '#4c1d95', borderColor: '#c4b5fd' }
-                    : { background: '#1e6bb8', color: '#fff', borderColor: '#1e6bb8' }
+                    : t === 'ready'
+                      ? { background: '#fef3c7', color: '#92400e', borderColor: '#fcd34d' }
+                      : { background: '#1e6bb8', color: '#fff', borderColor: '#1e6bb8' }
                 : { background: '#fff', color: '#64748b', borderColor: '#e2e8f0' }),
             }}>
-            {t === 'all' ? 'All Results' : t === 'lab' ? '🧪 Lab' : '🩻 Scan'}
+            {t === 'all' ? 'All' : t === 'ready' ? '✓ Result Ready' : t === 'lab' ? '🧪 Lab' : '🩻 Scan'}
             <span style={{ marginLeft: '0.35rem', background: 'rgba(0,0,0,0.08)', borderRadius: 10, padding: '0 0.4rem', fontSize: '0.72rem' }}>
-              {t === 'all' ? results.length : results.filter(r => r.type === t).length}
+              {t === 'all' ? results.length
+                : t === 'ready' ? readyCount
+                  : results.filter(r => rowType(r) === t).length}
             </span>
           </button>
         ))}
@@ -166,25 +208,29 @@ export default function DoctorDiagnosticResults({ profile }) {
             </thead>
             <tbody>
               {filtered.map(r => {
-                const cfg = TYPE_CFG[r.type] || TYPE_CFG.lab;
-                const smt = STATUS_META[r.status] || STATUS_META.COMPLETED;
+                const t = rowType(r);
+                const cfg = TYPE_CFG[t] || TYPE_CFG.lab;
+                const isReady = r.kind === 'result';
+                const statusKey = String(r.status || (isReady ? 'COMPLETED' : 'PENDING')).toUpperCase();
+                const smt = STATUS_META[statusKey] || STATUS_META.PENDING;
+                const file = rowFile(r);
                 return (
-                  <tr key={r.id}>
+                  <tr key={`${r.kind}-${r.id}`}>
                     <td>
                       <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, borderRadius: 20, padding: '0.2rem 0.6rem', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        {cfg.emoji} {cfg.label}
+                        {cfg.emoji} {isReady ? cfg.label : `${t === 'lab' ? 'Lab' : 'Scan'} Order`}
                       </span>
                     </td>
                     <td style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.patientName || '—'}</td>
                     <td style={{ fontSize: '0.875rem', maxWidth: 160, wordBreak: 'break-word' }}>{r.testType || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '0.8rem' }}>{r.centerName || '—'}</td>
+                    <td style={{ color: '#64748b', fontSize: '0.8rem' }}>{rowCenter(r) || '—'}</td>
                     <td>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8rem', color: '#1e6bb8' }}>{r.resultRef || '—'}</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8rem', color: '#1e6bb8' }}>{rowRef(r) || '—'}</span>
                     </td>
                     <td>
-                      {(r.fileUrl || r.resultFileUrl) ? (
+                      {file ? (
                         <a
-                          href={r.fileUrl || r.resultFileUrl}
+                          href={file}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="doctor-btn doctor-btn-outline doctor-btn-sm"
@@ -197,10 +243,10 @@ export default function DoctorDiagnosticResults({ profile }) {
                         <span style={{ color: '#cbd5e1', fontSize: '0.72rem' }}>—</span>
                       )}
                     </td>
-                    <td style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(r.uploadedAt)}</td>
+                    <td style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(rowDate(r))}</td>
                     <td>
                       <span style={{ background: smt.bg, color: smt.color, padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
-                        {r.status || 'COMPLETED'}
+                        {isReady ? 'RESULT READY' : statusKey}
                       </span>
                     </td>
                     <td>
@@ -227,7 +273,8 @@ export default function DoctorDiagnosticResults({ profile }) {
 
       {/* Result detail modal */}
       {viewing && (() => {
-        const cfg = TYPE_CFG[viewing.type] || TYPE_CFG.lab;
+        const cfg = TYPE_CFG[rowType(viewing)] || TYPE_CFG.lab;
+        const viewingFile = rowFile(viewing);
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(3px)' }}>
             <div style={{ background: 'white', borderRadius: 20, maxWidth: 600, width: '100%', maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
@@ -249,10 +296,10 @@ export default function DoctorDiagnosticResults({ profile }) {
               {/* Modal body */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {/* Meta grid */}
-                {(viewing.fileUrl || viewing.resultFileUrl) && (
+                {viewingFile && (
                   <div style={{ marginBottom: '0.5rem' }}>
                     <a
-                      href={viewing.fileUrl || viewing.resultFileUrl}
+                      href={viewingFile}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="doctor-btn doctor-btn-primary"
@@ -266,18 +313,28 @@ export default function DoctorDiagnosticResults({ profile }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
                   {[
-                    ['Center', viewing.centerName],
-                    ['Result Reference', viewing.resultRef],
-                    ['Uploaded', fmtDateTime(viewing.uploadedAt)],
+                    ['Center', rowCenter(viewing)],
+                    ['Branch', viewing.branchName],
+                    ['Reference', rowRef(viewing)],
+                    [viewing.kind === 'result' ? 'Uploaded' : 'Ordered', fmtDateTime(rowDate(viewing))],
+                    ['Status', String(viewing.status || (viewing.kind === 'result' ? 'completed' : 'pending')).toUpperCase()],
                     ['File name', viewing.fileName],
-                    ['Order ID', viewing.orderId],
-                  ].filter(([, v]) => v).map(([label, val]) => (
+                  ].filter(([, v]) => v && v !== '—').map(([label, val]) => (
                     <div key={label} style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem' }}>
                       <p style={{ margin: '0 0 0.2rem', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
                       <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', wordBreak: 'break-all' }}>{val}</p>
                     </div>
                   ))}
                 </div>
+
+                {/* An order that has no result yet — say so instead of showing an
+                    empty findings/notes shell. */}
+                {viewing.kind === 'order' && (
+                  <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 10, padding: '1rem', fontSize: '0.875rem', color: '#1e40af' }}>
+                    Awaiting the centre. Findings appear here once {rowCenter(viewing) || 'the centre'} uploads the report.
+                    {viewing.notes ? <div style={{ marginTop: '0.5rem', color: '#475569' }}>Order note: {viewing.notes}</div> : null}
+                  </div>
+                )}
 
                 {/* Findings */}
                 {viewing.findings && (
@@ -299,7 +356,8 @@ export default function DoctorDiagnosticResults({ profile }) {
                   </div>
                 )}
 
-                {/* Doctor clinical note */}
+                {/* Doctor clinical note — only a result can carry one. */}
+                {viewing.kind === 'result' && (
                 <div>
                   <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#1e6bb8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Clinical Note</p>
                   <textarea
@@ -314,6 +372,7 @@ export default function DoctorDiagnosticResults({ profile }) {
                     </button>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           </div>
