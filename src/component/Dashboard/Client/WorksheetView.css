@@ -239,3 +239,15 @@
   color: #6b7280;
   font-size: 1.1rem;
 }
+
+/* Shown in place of the submit button once the worksheet has been answered. */
+.worksheet-completed-note {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  font-size: 0.88rem;
+  font-weight: 600;
+}

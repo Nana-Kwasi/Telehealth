@@ -9,8 +9,8 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from '../../../services/firestoreShim';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { dedupePatientPharmacies, hasPatientPharmacy } from '../../../utils/patientPharmacyDedupe';
 

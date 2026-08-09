@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../Auth/firebaseConfig';
+import { collection, getDocs } from '../../../services/firestoreShim';
+import { db } from '../../../services/firestoreShim';
 import { downloadNessaHubSystemPdf } from '../../../utils/nessahubOperationalPdf';
 import { toMillis, parseRangeBounds } from '../../../utils/pharmacyReportMetrics';
 

@@ -20,18 +20,40 @@
 
 
 import React, { useEffect, useState, useRef } from 'react';
-import { auth, db, storage } from '../../Auth/firebaseConfig';
-import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query, doc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { auth, db, storage } from '../../../services/firestoreShim';
+import VoiceNote from '../../Common/VoiceNote';
+import { mediaUrlOf, fileNameOf, fileSizeOf } from '../../../utils/chatMedia';
+import { downloadFile } from '../../../utils/downloadFile';
+import ChatImage from '../../Common/ChatImage';
+import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
+import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query, doc, getDoc, setDoc } from '../../../services/firestoreShim';
+import { ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import { 
   Search, 
   Mic, 
   Send, 
   Paperclip, 
   Smile,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import './Messages.css';
+
+// Render a presence timestamp (Firestore Timestamp, ISO string, millis, or Date)
+// the WhatsApp way: "Online" / "Last seen Xm ago".
+function fmtLastSeen(ts) {
+  let d = null;
+  if (ts?.toDate) d = ts.toDate();
+  else if (typeof ts === 'string') d = new Date(ts);
+  else if (typeof ts === 'number') d = new Date(ts);
+  else if (ts instanceof Date) d = ts;
+  if (!d || isNaN(d.getTime())) return 'Offline';
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000) return 'Online';
+  if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `Last seen today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  return `Last seen ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
 
 export default function ClientMessages() {
   const [assignedTherapist, setAssignedTherapist] = useState(null);
@@ -44,8 +66,10 @@ export default function ClientMessages() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUser, setCurrentUser] = useState(null);
+  const [peerPresence, setPeerPresence] = useState(null); // { online, lastSeen }
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const presenceUnsubRef = useRef(null);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -54,34 +78,71 @@ export default function ClientMessages() {
     return unsubscribe;
   }, []);
 
+  // ── Own presence: heartbeat every 25s while the tab is open (keeps the
+  // backend's 40s "online" window alive), offline on unmount/unload ──
+  useEffect(() => {
+    const uid = currentUser?.uid || auth.currentUser?.uid;
+    if (!uid) return;
+    const presenceRef = doc(db, 'userPresence', uid);
+    const beat = () => setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    beat();
+    const hb = setInterval(beat, 25000);
+    const handleUnload = () => setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      clearInterval(hb);
+      window.removeEventListener('beforeunload', handleUnload);
+      setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
+    };
+  }, [currentUser]);
+
+  // ── Subscribe to the assigned therapist's presence ──
+  useEffect(() => {
+    presenceUnsubRef.current?.();
+    setPeerPresence(null);
+    const peerId = assignedTherapist?.id;
+    if (!peerId) return;
+    presenceUnsubRef.current = onSnapshot(doc(db, 'userPresence', peerId), snap => {
+      setPeerPresence(snap.exists() ? snap.data() : null);
+    });
+    return () => presenceUnsubRef.current?.();
+  }, [assignedTherapist]);
+
   useEffect(() => {
     const u = auth.currentUser;
     if (!u) return;
 
-    // Get client ID from localStorage
-    const clientId = localStorage.getItem('th.clientId');
+    const clientId = resolveClientId();
     if (!clientId) return;
 
-    // Fetch assigned therapist for this client
-    const fetchAssignedTherapist = async () => {
+    // Who is this client's therapist?
+    //
+    // `assignedTherapistId` on the client doc is a Firestore-era field the REST
+    // backend never writes — choosing a therapist records a row in
+    // therapist_client_assignments_v2 instead. Reading only that field left this
+    // screen showing "No Therapist Assigned" to a client who has one, so the chat
+    // was unreachable. Try the legacy field first, then the real record.
+    const loadAssignedTherapist = async () => {
       try {
         const clientDoc = await getDoc(doc(db, 'clients', clientId));
-        if (clientDoc.exists()) {
-          const clientData = clientDoc.data();
-          if (clientData.assignedTherapistId) {
-            // Fetch therapist details
-            const therapistDoc = await getDoc(doc(db, 'therapists', clientData.assignedTherapistId));
-            if (therapistDoc.exists()) {
-              setAssignedTherapist({ id: therapistDoc.id, ...therapistDoc.data() });
-            }
+        const legacyId = clientDoc.exists()
+          ? (clientDoc.data().assignedTherapistId || clientDoc.data().assignedTherapist)
+          : null;
+        if (legacyId) {
+          const therapistDoc = await getDoc(doc(db, 'therapists', legacyId));
+          if (therapistDoc.exists()) {
+            setAssignedTherapist({ id: therapistDoc.id, ...therapistDoc.data() });
+            return;
           }
         }
+        const assigned = await fetchAssignedTherapist(clientId);
+        if (assigned) setAssignedTherapist(assigned);
       } catch (error) {
         console.error('Error fetching assigned therapist:', error);
       }
     };
 
-    fetchAssignedTherapist();
+    loadAssignedTherapist();
   }, []);
 
   useEffect(() => {
@@ -119,15 +180,19 @@ export default function ClientMessages() {
     scrollToBottom();
   }, [messages]);
 
-  const getChatPath = (therapist) => {
-    const clientId = localStorage.getItem('th.clientId');
-    console.log('Client ID from localStorage:', clientId);
-    console.log('Therapist ID:', therapist?.id);
-    // Use the actual Firestore structure that exists
-    const path = `client_chats/${clientId}/messages`;
-    console.log('Chat path:', path);
-    return path;
+  // The client's own id. `th.clientId` is a leftover from the Firestore era: it can
+  // be missing, or hold a stale throwaway value from the intake questionnaire. Used
+  // unguarded it produced paths like `client_chats/null/messages`, so the thread
+  // never resolved and the conversation looked empty in both directions.
+  // In the REST model the client id IS the signed-in user id.
+  const resolveClientId = () => {
+    const stored = localStorage.getItem('th.clientId');
+    const uid = auth.currentUser?.uid;
+    if (stored && !String(stored).startsWith('tmp_')) return stored;
+    return uid || null;
   };
+
+  const getChatPath = () => `client_chats/${resolveClientId()}/messages`;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -169,14 +234,19 @@ export default function ClientMessages() {
       const chatPath = getChatPath(assignedTherapist);
       const messagesCol = collection(db, chatPath);
       const docRef = await addDoc(messagesCol, messageData);
-      
-      // Update the temporary message with the real one
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempId 
-          ? { ...msg, id: docRef.id, status: 'sent', createdAt: docRef.data()?.createdAt || new Date() }
+      // addDoc resolves to a doc REFERENCE ({id}), never a snapshot — calling
+      // .data() on it threw "docRef.data is not a function" and crashed the
+      // screen the moment a message was sent. The server timestamp arrives with
+      // the next poll; until then show the local send time.
+      if (docRef?._failed) throw new Error(docRef._error || 'Message failed to send');
+
+      // Swap the optimistic message for the saved one.
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempId
+          ? { ...msg, id: docRef?.id || msg.id, status: 'sent', createdAt: new Date() }
           : msg
       ));
-      
+
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
@@ -227,7 +297,7 @@ export default function ClientMessages() {
     
     try {
       // Upload file to Firebase Storage
-      const clientId = localStorage.getItem('th.clientId');
+      const clientId = resolveClientId();
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name}`;
       const storageRef = ref(storage, `chat-files/${clientId}/${fileName}`);
@@ -347,20 +417,16 @@ export default function ClientMessages() {
         
         <div className="message-content">
           {message.type === 'text' && (
-            <div className="message-text">{message.content}</div>
+            <div className="message-text">
+              {typeof message.content === 'string' ? message.content : message.text}
+            </div>
           )}
           
           {message.type === 'image' && (
             <div className="message-image">
-              <img 
-                src={message.content.url} 
-                alt="Shared image" 
-                onClick={() => window.open(message.content.url, '_blank')}
-                style={{ cursor: 'pointer' }}
-                title="Click to view full size"
-              />
-              {message.content.name && (
-                <div className="image-filename">{message.content.name}</div>
+              <ChatImage src={mediaUrlOf(message)} name={fileNameOf(message)} />
+              {message.content?.name && (
+                <div className="image-filename">{message.content?.name}</div>
               )}
             </div>
           )}
@@ -372,33 +438,48 @@ export default function ClientMessages() {
                 preload="metadata"
                 style={{ maxWidth: '100%', borderRadius: '8px' }}
               >
-                <source src={message.content.url} type={message.content.type} />
+                <source src={mediaUrlOf(message)} type={message.content?.type} />
                 Your browser does not support the video element.
               </video>
-              {message.content.name && (
-                <div className="video-filename">{message.content.name}</div>
+              {message.content?.name && (
+                <div className="video-filename">{message.content?.name}</div>
               )}
             </div>
           )}
           
-          {message.type === 'document' && (
-            <div className="message-document">
+          {(message.type === 'document' || message.type === 'file') && (
+            // Was a plain icon + name with no way to open or save it. Both sides
+            // now get a real link: it opens in a new tab (so the sender can view
+            // what they sent) and carries `download` so the receiver can save it.
+            <a
+              className="message-document"
+              href={mediaUrlOf(message)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Download ${fileNameOf(message)}`}
+              onClick={(e) => {
+                // `download` is ignored cross-origin, so the plain link did
+                // nothing. Fetch the bytes and save them instead.
+                e.preventDefault();
+                downloadFile(mediaUrlOf(message), fileNameOf(message));
+              }}
+            >
               <FileText size={20} />
-              <span>{message.content.name}</span>
-              <small className="file-size">({(message.content.size / 1024).toFixed(1)} KB)</small>
-            </div>
+              <span className="file-name">{fileNameOf(message)}</span>
+              {fileSizeOf(message) && (
+                <small className="file-size">{fileSizeOf(message)}</small>
+              )}
+              <Download size={16} className="file-download-icon" />
+            </a>
           )}
           
           {message.type === 'audio' && (
-            <div className="message-audio">
-              <div className="audio-controls">
-                <audio controls className="audio-player">
-                  <source src={message.content.url} type="audio/webm" />
-                  Your browser does not support the audio element.
-                </audio>
-                <span className="audio-duration">{message.content.duration}s</span>
-              </div>
-            </div>
+            <VoiceNote
+              src={mediaUrlOf(message)}
+              mimeType={message.content?.type}
+              duration={message.content?.duration}
+              isOwn={isOwnMessage}
+            />
           )}
           
           <div className="message-footer">
@@ -450,7 +531,15 @@ export default function ClientMessages() {
           </div>
           <div className="chat-details">
             <h3 className="chat-name">{assignedTherapist.name}</h3>
-            <p className="chat-role">{assignedTherapist.type || 'Therapist'}</p>
+            {(() => {
+              const isOnline = peerPresence?.online === true;
+              const label = peerPresence ? (isOnline ? 'Online' : fmtLastSeen(peerPresence.lastSeen)) : (assignedTherapist.type || 'Therapist');
+              return (
+                <p className="chat-role" style={{ color: isOnline ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>
+                  {isOnline ? '● Online' : label}
+                </p>
+              );
+            })()}
           </div>
         </div>
       </div>

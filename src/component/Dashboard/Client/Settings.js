@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { auth, db, storage } from '../../Auth/firebaseConfig';
+import { auth, db, storage } from '../../../services/firestoreShim';
 import './Settings.css';
+import { uploadAvatar } from '../../../utils/profileImage';
 import {
   doc,
   getDoc,
   updateDoc,
   deleteDoc
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
   deleteUser
-} from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+} from '../../../services/authShim';
+import { ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import {
   User,
   Mail,
@@ -335,12 +336,12 @@ export default function ClientSettings() {
     if (!file || !currentUser) return;
     setUploadingPhoto(true);
     try {
-      const storageRef = ref(storage, `profile-images/${currentUser.uid}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      // Was a Firebase Storage upload followed by a PATCH of `photoURL` — this
+      // app no longer runs on Firebase, and the picture is now kept on the user
+      // record so every avatar in the dashboard resolves from one place.
       const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
-      await updateDoc(doc(db, 'clients', clientId), { photoURL: downloadURL });
-      setClientData(prev => ({ ...prev, photoURL: downloadURL }));
+      const downloadURL = await uploadAvatar(file, clientId);
+      setClientData(prev => ({ ...prev, photoURL: downloadURL, avatarUrl: downloadURL }));
       setSuccessMessage('Profile photo updated!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {

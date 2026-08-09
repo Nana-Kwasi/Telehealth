@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Star, Search, MessageSquare } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, doc, updateDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, doc, updateDoc, orderBy, serverTimestamp } from '../../../services/firestoreShim';
 
 export default function DoctorReviews({ profile }) {
   const [reviews, setReviews] = useState([]);

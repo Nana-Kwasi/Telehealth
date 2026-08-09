@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../Auth/firebaseConfig';
+import { db } from '../../../services/firestoreShim';
 import {
   collection, getDocs, doc, updateDoc, serverTimestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 
 const CATEGORIES = ['complaint', 'feedback', 'technical', 'billing', 'emergency', 'other'];
 const REPORTER_TYPES = ['', 'patient', 'client', 'doctor', 'therapist', 'pharmacy', 'pharmacy_parent', 'pharmacy_branch', 'lab', 'scan'];

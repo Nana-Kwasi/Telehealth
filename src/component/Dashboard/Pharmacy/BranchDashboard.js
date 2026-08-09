@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { signOut, updatePassword } from 'firebase/auth';
-import { auth, db } from '../../Auth/firebaseConfig';
-import { doc, updateDoc, getDocs, query, collection, where, serverTimestamp, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { signOut, updatePassword } from '../../../services/authShim';
+import { auth, db } from '../../../services/firestoreShim';
+import { doc, updateDoc, getDocs, query, collection, where, serverTimestamp, orderBy, limit, onSnapshot } from '../../../services/firestoreShim';
 import { PharmacyWalkInVerifyPanel } from './PharmacyWalkIn';
 import BranchPrescriptionOps from './BranchPrescriptionOps';
 import BranchReports from './BranchReports';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import { buildTransferRows } from '../../../utils/pharmacyTransfers';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
@@ -57,10 +58,15 @@ function BranchPrescriptions({ profile }) {
     }
   }, [location.pathname, location.hash]);
 
+  // A branch profile carries the parent org id as `organizationId` (and not always
+  // `pharmacyId`). Without this fallback the prescription query runs with '' and the
+  // branch sees nothing routed to it.
+  const parentOrgId = profile?.pharmacyId || profile?.organizationId || '';
+
   useEffect(() => {
     const q = query(
       collection(db, 'doctorPrescriptions'),
-      where('pharmacyId', '==', profile?.pharmacyId || '')
+      where('pharmacyId', '==', parentOrgId)
     );
     const unsub = onSnapshot(q, snap => {
       const list = snap.docs.map(d => {
@@ -80,7 +86,7 @@ function BranchPrescriptions({ profile }) {
       setLoading(false);
     });
     return unsub;
-  }, [profile?.pharmacyId, profile?.id]);
+  }, [parentOrgId, profile?.id]);
 
   const updateDrugStatus = async (rx, medIndex, newStatus) => {
     setSaving(true);
@@ -200,6 +206,10 @@ function BranchOverview({ profile }) {
   const [drugSummary, setDrugSummary] = useState({ available: 0, not_available: 0, pending: 0, alternative_suggested: 0, approved_replacement: 0, transferred: 0 });
   const [events, setEvents] = useState([]);
 
+  // Branch profiles carry the parent org id as `organizationId` (not always
+  // `pharmacyId`); fall back so the prescription stats query isn't empty.
+  const parentOrgId = profile?.pharmacyId || profile?.organizationId || '';
+
   useEffect(() => {
     const locationMeta = profile?.locationMeta || {};
     const location = profile?.location || {};
@@ -219,7 +229,7 @@ function BranchOverview({ profile }) {
   }, [profile]);
 
   useEffect(() => {
-    getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile?.pharmacyId || '')))
+    getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', parentOrgId)))
       .then(snap => {
         const full = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const list = full.filter(rx =>
@@ -245,7 +255,7 @@ function BranchOverview({ profile }) {
             .slice(0, 6),
         );
       }).catch(() => {});
-  }, [profile.id]);
+  }, [parentOrgId, profile.id]);
 
   useEffect(() => {
     (async () => {
@@ -423,52 +433,101 @@ function BranchOverview({ profile }) {
 }
 
 function BranchTransfers({ profile }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
+  const [filter, setFilter] = useState('all');
+
+  // Previously this listed only lines where a transfer had FAILED and this branch was
+  // the one that failed to receive it — a single failure case, so the screen was
+  // permanently empty in normal use. It now shows every transfer this branch is party
+  // to, in both directions, with the stage each has reached.
+  const parentOrgId = profile?.pharmacyId || profile?.organizationId || '';
+
   useEffect(() => {
+    if (!parentOrgId || !profile?.id) { setLoading(false); return; }
     (async () => {
       try {
-        const snap = await getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile?.pharmacyId || '')));
-        const list = [];
-        snap.docs.forEach(d => {
-          const rx = { id: d.id, ...d.data() };
-          (rx.medications || []).forEach(m => {
-            if ((m.transferOutcome || '') === 'not_received' && (m.transferFailedByBranchId || '') === (profile.id || '')) {
-              list.push({
-                rxId: rx.id,
-                patientName: rx.patientName || 'Patient',
-                ref: rx.prescriptionRef || '—',
-                drug: m.name || 'Drug',
-                to: m.transferFromBranchName || rx.branchName || 'Branch',
-                toAddress: '',
-                updatedAt: rx.updatedAt?.seconds || 0,
-              });
-            }
-          });
-        });
-        list.sort((a, b) => b.updatedAt - a.updatedAt);
-        setRows(list);
+        const snap = await getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', parentOrgId)));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setRows(buildTransferRows(list, profile.id));
       } finally { setLoading(false); }
     })();
-  }, [profile.id]);
+  }, [parentOrgId, profile?.id]);
+
+  const actionCount = rows.filter(r => r.actionable).length;
+  const visible = filter === 'all' ? rows
+    : filter === 'action' ? rows.filter(r => r.actionable)
+    : rows.filter(r => r.direction === filter);
+
+  const TONE = {
+    ok:   { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534' },
+    bad:  { bg: '#fff1f2', border: '#fecdd3', color: '#be123c' },
+    warn: { bg: '#fffbeb', border: '#fde68a', color: '#92400e' },
+    info: { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af' },
+  };
 
   return (
     <div className="pharmacy-page">
       <h1 className="pharmacy-page-title">Transfers</h1>
-      <p className="pharmacy-page-sub">Drugs this branch could not receive after transfer</p>
-      {loading ? <p>Loading…</p> : rows.length === 0 ? <p style={{ color: '#94a3b8' }}>No unresolved incoming transfer failures.</p> : (
+      <p className="pharmacy-page-sub">Drugs moving to or from this branch</p>
+
+      {actionCount > 0 && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '0.65rem 0.85rem', color: '#1e40af', fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+          {actionCount} transfer{actionCount === 1 ? '' : 's'} waiting for you to confirm receipt.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
+        {[['all', 'All'], ['incoming', 'Incoming'], ['outgoing', 'Outgoing'], ['action', `Needs action${actionCount ? ` (${actionCount})` : ''}`]].map(([v, l]) => (
+          <button key={v} type="button" onClick={() => setFilter(v)}
+            style={{
+              padding: '0.35rem 0.75rem', borderRadius: 8, border: '1.5px solid',
+              borderColor: filter === v ? '#2563eb' : '#e2e8f0',
+              background: filter === v ? '#eff6ff' : '#fff',
+              color: filter === v ? '#2563eb' : '#64748b',
+              fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer',
+            }}>{l}</button>
+        ))}
+      </div>
+
+      {loading ? <p>Loading…</p> : visible.length === 0 ? (
+        <p style={{ color: '#94a3b8' }}>
+          {filter === 'all' ? 'No drug transfers involve this branch yet.' : 'Nothing matches this filter.'}
+        </p>
+      ) : (
         <div className="pharmacy-table-wrap">
           <table className="pharmacy-table">
-            <thead><tr><th>Patient</th><th>Ref</th><th>Drug</th><th>Transferred From</th></tr></thead>
+            <thead>
+              <tr><th>Direction</th><th>Drug</th><th>Counterparty</th><th>Patient</th><th>Ref</th><th>Stage</th><th>Updated</th><th /></tr>
+            </thead>
             <tbody>
-              {rows.map((r, i) => (
-                <tr key={`${r.rxId}-${i}`}>
-                  <td>{r.patientName}</td>
-                  <td>{r.ref}</td>
-                  <td>{r.drug}</td>
-                  <td>{r.to}{r.toAddress ? ` · ${r.toAddress}` : ''}</td>
-                </tr>
-              ))}
+              {visible.map(r => {
+                const tone = TONE[r.stage.tone] || TONE.info;
+                return (
+                  <tr key={r.key}>
+                    <td style={{ fontWeight: 700, color: r.direction === 'incoming' ? '#1e40af' : '#0f766e' }}>
+                      {r.direction === 'incoming' ? '↓ Incoming' : '↑ Outgoing'}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{r.drug}{r.strength ? ` (${r.strength})` : ''}</td>
+                    <td>{r.counterparty}</td>
+                    <td>{r.patientName}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{r.ref}</td>
+                    <td>
+                      <span style={{ background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color, borderRadius: 20, padding: '0.15rem 0.55rem', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {r.stage.label}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.78rem', color: '#94a3b8' }}>{r.at ? new Date(r.at).toLocaleString() : '—'}</td>
+                    <td>
+                      <button type="button" className="btn btn-ghost btn-sm"
+                        onClick={() => navigate(`/dashboard/prescriptions/${r.rxId}`)}>
+                        {r.actionable ? 'Confirm receipt' : 'Open'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { auth, db } from '../Auth/firebaseConfig';
+import { auth, db } from '../../services/firestoreShim';
 import './MatchTherapist.css';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc } from '../../services/firestoreShim';
 import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
 import {
   loadCouple,
@@ -11,6 +11,14 @@ import {
   proposeCoupleTherapist,
   confirmCoupleTherapist,
 } from '../../services/coupleTherapyService';
+
+
+/** A therapist's own per-session charge (stored in their profile metadata). */
+export function therapistRate(t) {
+  const raw = t?.sessionRate ?? t?.consultationFee ?? t?.rate ?? t?.price;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export default function MatchTherapist() {
   const navigate = useNavigate();
@@ -22,13 +30,17 @@ export default function MatchTherapist() {
   const [availabilityOverlap, setAvailabilityOverlap] = useState(true);
   const [myPartnerKey, setMyPartnerKey] = useState(null);
 
-  const questionnaireData = (() => {
+  // MUST be memoised: this object is a dependency of the loader effect below, and
+  // rebuilding it on every render made the effect re-run on every render — an
+  // infinite render/fetch loop that fired well over a thousand
+  // /couples/{id}/matched-therapists requests in a few seconds.
+  const questionnaireData = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('th.onboard') || '{}');
     } catch {
       return {};
     }
-  })();
+  }, []);
 
   const clientId = localStorage.getItem('th.clientId');
 
@@ -36,8 +48,10 @@ export default function MatchTherapist() {
     let score = 50;
     if (therapist.role === 'admin') score += 25;
     else if (therapist.role === 'therapist') score += 15;
-    if (therapist.type && data.therapyType) {
-      if (therapist.type.toLowerCase().includes(data.therapyType)) score += 10;
+    // The API returns `therapyType`; `type` is the Firestore-era name.
+    const therapistType = therapist.therapyType || therapist.type;
+    if (therapistType && data.therapyType) {
+      if (String(therapistType).toLowerCase().includes(String(data.therapyType).toLowerCase())) score += 10;
     }
     if (data.preferChristianTherapist === 'Yes' && therapist.religion === 'Christianity') score += 8;
     if (data.therapistGender && data.therapistGender !== 'No preference') {
@@ -94,18 +108,38 @@ export default function MatchTherapist() {
         const res = await getDocs(col);
         const all = res.docs.map((d) => ({ id: d.id, ...d.data() }));
 
+        // Only exclude a therapist on a *definite* mismatch. These filters used to read
+        // `t.type` (the API returns `therapyType`) and treated a therapist with no
+        // recorded gender / religion / affirming flag as a mismatch — so a single stated
+        // preference emptied the whole list and the screen rendered no names at all.
+        // Preference strength is already expressed by calculateRelevanceScore ranking.
+        const matchesPreference = (value, pref) => {
+          if (!pref) return true;
+          if (value == null || value === '') return true; // unknown → don't exclude
+          return String(value).toLowerCase() === String(pref).toLowerCase();
+        };
         const filtered = all.filter((t) => {
+          // Therapy modality (individual/couples/teen) is its own axis — do NOT fold
+          // specialization/specialties in here, or a therapist listed under "Anxiety"
+          // gets excluded from individual therapy.
+          // therapyType only — `t.type` is 'Administrator' for an admin therapist,
+          // which matches no modality and would drop them from the match list.
+          const therapistType = String(t.therapyType || '').toLowerCase();
           const typeMatch =
             !questionnaireData.therapyType ||
-            (t.type || '').toLowerCase().includes(questionnaireData.therapyType);
-          const christianPref = questionnaireData.preferChristianTherapist === 'Yes';
-          const religionMatch = !christianPref || (t.religion || '').toLowerCase() === 'christianity';
-          const genderPref = questionnaireData.therapistGender;
-          const genderMatch =
-            !genderPref || genderPref === 'No preference' || (t.gender || '').toLowerCase() === genderPref.toLowerCase();
-          const lgbtqiaPref = questionnaireData.lgbtqia;
+            !therapistType ||
+            therapistType.includes(String(questionnaireData.therapyType).toLowerCase());
+          const religionMatch =
+            questionnaireData.preferChristianTherapist !== 'Yes' ||
+            matchesPreference(t.religion, 'christianity');
+          const genderPref =
+            questionnaireData.therapistGender === 'No preference' ? null : questionnaireData.therapistGender;
+          const genderMatch = matchesPreference(t.gender, genderPref);
           const lgbtqiaMatch =
-            !lgbtqiaPref || lgbtqiaPref === 'No preference' || t.lgbtqiaAffirming === true;
+            questionnaireData.lgbtqia !== 'Yes, this is important to me' ||
+            t.lgbtqiaAffirming == null ||
+            t.lgbtqiaAffirming === true ||
+            String(t.lgbtqiaAffirming).toLowerCase() === 'true';
           return typeMatch && religionMatch && genderMatch && lgbtqiaMatch;
         });
 
@@ -141,23 +175,20 @@ export default function MatchTherapist() {
         return;
       }
 
-      const u = auth.currentUser;
-      if (u && clientId) {
-        await setDoc(
-          doc(db, 'clients', clientId),
-          {
-            assignedTherapistId: t.id,
-            assignedTherapistName: t.name,
-            assignedAt: new Date().toISOString(),
+      // Individual therapy: carry the chosen therapist to payment so the client is
+      // charged that therapist's own session rate. The assignment is written once
+      // payment completes, not here — picking someone is not the same as booking.
+      navigate('/payment', {
+        state: {
+          therapist: {
+            id: t.id,
+            name: t.name || t.fullName || t.displayName || 'Therapist',
+            specialization: t.specialization || t.therapyType || '',
+            sessionRate: therapistRate(t),
+            photoURL: t.photoURL || null,
           },
-          { merge: true },
-        );
-        await setDoc(doc(db, 'therapists', t.id, 'clients', clientId), {
-          clientId,
-          assignedAt: new Date().toISOString(),
-        });
-      }
-      navigate('/dashboard');
+        },
+      });
     } catch (error) {
       console.error('Error assigning therapist:', error);
       alert('There was an error assigning your therapist. Please try again.');
@@ -199,6 +230,24 @@ export default function MatchTherapist() {
             : 'We matched a few options based on your preferences.'}
       </p>
 
+      {/* Same escape hatch medical patients get when they skip doctor booking:
+          go to the dashboard now and pick a therapist from the CTA there.
+          Couples can't skip — their flow needs both partners on one therapist. */}
+      {!coupleProfile ? (
+        <button
+          type="button"
+          className="skip-link"
+          onClick={() => navigate('/dashboard', { replace: true })}
+          style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            color: '#4f46e5', fontWeight: 600, fontSize: '0.875rem',
+            textDecoration: 'underline', marginBottom: '1.25rem',
+          }}
+        >
+          Skip for now — I'll choose a therapist later
+        </button>
+      ) : null}
+
       {coupleProfile && !availabilityOverlap ? (
         <div className="no-matches-card" style={{ marginBottom: '1rem' }}>
           No overlapping availability detected. Consider updating availability in intake or choose the closest match.
@@ -226,11 +275,19 @@ export default function MatchTherapist() {
             <div key={t.id} className="therapist-card">
               <div className="therapist-avatar">{t.photoURL ? <img alt="" src={t.photoURL} /> : '🧑‍⚕️'}</div>
               <div className="therapist-info">
-                <div className="therapist-name">{t.name}</div>
+                <div className="therapist-name">{t.name || t.fullName || t.displayName || 'Therapist'}</div>
                 <div className="therapist-details">
-                  {t.type} • {t.yearsExperience ? `${t.yearsExperience} yrs` : 'Experience N/A'}
+                  {t.therapyType || t.type || t.specialization || 'Therapist'} •{' '}
+                  {t.yearsExperience ? `${t.yearsExperience} yrs` : 'Experience N/A'}
                 </div>
-                <div className="therapist-specialties">{(t.specialties || []).join(', ')}</div>
+                <div className="therapist-specialties">
+                  {(Array.isArray(t.specialties) ? t.specialties : [t.specialties]).filter(Boolean).join(', ')}
+                </div>
+                <div className="therapist-rate">
+                  {therapistRate(t) != null
+                    ? `GHS ${therapistRate(t).toFixed(2)} / session`
+                    : 'Rate not published'}
+                </div>
                 {t.score ? <div className="therapist-score">Match: {Math.round(t.score)}%</div> : null}
               </div>
               <div>

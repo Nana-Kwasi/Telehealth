@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../Auth/firebaseConfig';
+import { createUserWithEmailAndPassword } from '../../services/authShim';
+import { doc, setDoc } from '../../services/firestoreShim';
+import { auth, db } from '../../services/firestoreShim';
 import { isValidEmergencyPhone } from '../../utils/homeCareUtils';
 import './HomeCare.css';
 

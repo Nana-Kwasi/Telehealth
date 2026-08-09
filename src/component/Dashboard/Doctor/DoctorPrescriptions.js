@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDown } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot } from '../../../services/firestoreShim';
 
 const FREQUENCY_OPTIONS = [
   'Single Dose', 'Once per Day', 'BID (2x/day)', 'TID (3x/day)',
@@ -10,8 +11,56 @@ const FREQUENCY_OPTIONS = [
 ];
 const DIRECTION_OPTIONS = ['Scheduled', 'As Needed (PRN)', 'As Directed'];
 const DRUG_FORMS = ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Drops', 'Inhaler', 'Patch', 'Suppository', 'Other'];
-const DURATION_UNITS = ['Days', 'Weeks', 'Months', 'Years'];
 const RX_STATUSES = ['active', 'completed', 'cancelled', 'expired'];
+
+const INJECTION_ROUTES = ['IV (Intravenous)', 'IM (Intramuscular)', 'SC (Subcutaneous)', 'ID (Intradermal)'];
+const SUPPOSITORY_ROUTES = ['Rectal', 'Vaginal'];
+const DROP_SITES = ['Left Eye', 'Right Eye', 'Both Eyes', 'Left Ear', 'Right Ear', 'Both Ears', 'Nose'];
+const PATCH_INTERVALS = ['Every 24 Hours', 'Every 48 Hours', 'Every 72 Hours', 'Weekly (7 Days)'];
+
+const DURATION_OPTIONS = [
+  { label: '1 Day',       group: 'Days' },
+  { label: '1–2 Days',    group: 'Days' },
+  { label: '2–3 Days',    group: 'Days' },
+  { label: '3–4 Days',    group: 'Days' },
+  { label: '4–5 Days',    group: 'Days' },
+  { label: '5–6 Days',    group: 'Days' },
+  { label: '6–7 Days',    group: 'Days' },
+  { label: '1 Week',      group: 'Weeks' },
+  { label: '1–2 Weeks',   group: 'Weeks' },
+  { label: '2–3 Weeks',   group: 'Weeks' },
+  { label: '3–4 Weeks',   group: 'Weeks' },
+  { label: '1 Month',     group: 'Months' },
+  { label: '1–2 Months',  group: 'Months' },
+  { label: '2–3 Months',  group: 'Months' },
+  { label: '3–4 Months',  group: 'Months' },
+  { label: '4–6 Months',  group: 'Months' },
+  { label: '6–9 Months',  group: 'Months' },
+  { label: '9–12 Months', group: 'Months' },
+  { label: '1 Year',      group: 'Years' },
+  { label: '1–2 Years',   group: 'Years' },
+  { label: '2–3 Years',   group: 'Years' },
+  { label: '3+ Years',    group: 'Years' },
+];
+
+const DURATION_GROUPS = DURATION_OPTIONS.reduce((acc, opt) => {
+  (acc[opt.group] = acc[opt.group] || []).push(opt.label);
+  return acc;
+}, {});
+
+function getDosagePlaceholder(drugForm) {
+  switch (drugForm) {
+    case 'Syrup':       return 'Volume (e.g. 5ml, 10ml, 2 tsp)';
+    case 'Injection':   return 'Dose (e.g. 1ml, 0.5ml, 2ml)';
+    case 'Cream':       return 'Amount (e.g. thin layer, pea-sized)';
+    case 'Drops':       return 'Number of drops (e.g. 2 drops)';
+    case 'Inhaler':     return 'Puffs (e.g. 1 puff, 2 puffs)';
+    case 'Patch':       return 'Patch count (e.g. 1 patch)';
+    case 'Suppository': return 'Dose (e.g. 1 suppository)';
+    case 'Capsule':     return 'Dosage (e.g. 1 capsule)';
+    default:            return 'Dosage (e.g. 1 tablet)';
+  }
+}
 
 const INTERACTION_PAIRS = [
   ['warfarin', 'aspirin'], ['metformin', 'alcohol'], ['ssri', 'maoi'],
@@ -40,11 +89,24 @@ function generatePrescriptionRef() {
 
 const EMPTY_MED = {
   name: '', strength: '', drugForm: 'Tablet', dosage: '', frequency: 'Once per Day',
-  direction: 'Scheduled', duration: '', durationUnit: 'Days', specialInstructions: '',
+  direction: 'Scheduled', duration: '', specialInstructions: '',
   prn: { indication: '', maxPerDay: '', interval: '' },
   refill: { allowed: false, count: '0', expiryDate: '' },
   schedule: [],
+  // Form-specific extras
+  route: '', injectionSite: '', applicationSite: '', dropSite: '',
+  volumeUnit: 'ml', shakeWell: false,
+  spacerRequired: false, rinseAfter: false,
+  changeInterval: '', rotationRequired: false,
 };
+
+// Shared styling for the per-drug-form detail blocks
+const formSpecificBox = {
+  background: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 8,
+  padding: '0.75rem', marginTop: '0.5rem', marginBottom: '0.5rem',
+};
+const formSpecificTitle = { margin: '0 0 0.5rem', fontSize: '0.78rem', fontWeight: 700, color: '#0369a1' };
+const toggleLabel = { display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#0f172a' };
 
 const STATUS_META = {
   active:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8' },
@@ -92,6 +154,7 @@ export default function DoctorPrescriptions({ profile }) {
   const [altApprovalRx, setAltApprovalRx] = useState(null); // full rx object
   const [altApprovalSaving, setAltApprovalSaving] = useState(false);
   const [viewingRx, setViewingRx] = useState(null);
+  const [showRxAllDetails, setShowRxAllDetails] = useState(false);
   const [reassignRx, setReassignRx] = useState(null);
   const [reassignBranchId, setReassignBranchId] = useState('');
   const [reassignSaving, setReassignSaving] = useState(false);
@@ -262,6 +325,11 @@ export default function DoctorPrescriptions({ profile }) {
   };
 
   const openEdit = (rx) => {
+    // A delivered prescription is a closed record — it is never edited afterwards.
+    if (isRxDelivered(rx)) {
+      alert('This prescription has been delivered by the pharmacy and can no longer be edited.');
+      return;
+    }
     setEditing(rx);
     setForm({
       patientId: rx.patientId || '',
@@ -326,11 +394,18 @@ export default function DoctorPrescriptions({ profile }) {
           name: m.name.trim(), strength: m.strength?.trim() || '', drugForm: m.drugForm || 'Tablet',
           dosage: m.dosage?.trim() || '', frequency: m.frequency || 'Once per Day',
           direction: m.direction || 'Scheduled', duration: m.duration?.trim() || '',
-          durationUnit: m.durationUnit || 'Days', specialInstructions: m.specialInstructions?.trim() || '',
+          specialInstructions: m.specialInstructions?.trim() || '',
           prn: m.direction === 'As Needed (PRN)' ? { indication: m.prn?.indication || '', maxPerDay: m.prn?.maxPerDay || '', interval: m.prn?.interval || '' } : null,
           refill: m.refill?.allowed ? { allowed: true, count: parseInt(m.refill.count) || 0, expiryDate: m.refill.expiryDate || '' } : { allowed: false },
           schedule: m.schedule || [],
           drugStatus: m.drugStatus || 'pending',
+          ...(m.drugForm === 'Syrup' && { volumeUnit: m.volumeUnit || 'ml', shakeWell: m.shakeWell || false }),
+          ...(m.drugForm === 'Injection' && { route: m.route || '', injectionSite: m.injectionSite?.trim() || '' }),
+          ...(m.drugForm === 'Cream' && { applicationSite: m.applicationSite?.trim() || '' }),
+          ...(m.drugForm === 'Drops' && { dropSite: m.dropSite || '' }),
+          ...(m.drugForm === 'Inhaler' && { spacerRequired: m.spacerRequired || false, rinseAfter: m.rinseAfter || false }),
+          ...(m.drugForm === 'Patch' && { applicationSite: m.applicationSite?.trim() || '', changeInterval: m.changeInterval || '', rotationRequired: m.rotationRequired || false }),
+          ...(m.drugForm === 'Suppository' && { route: m.route || '' }),
         })),
         updatedAt: serverTimestamp(),
       };
@@ -363,6 +438,11 @@ export default function DoctorPrescriptions({ profile }) {
   };
 
   const handleDelete = async (id) => {
+    const target = prescriptions.find(r => r.id === id);
+    if (isRxDelivered(target)) {
+      alert('This prescription has been delivered by the pharmacy and can no longer be deleted.');
+      return;
+    }
     if (!window.confirm('Delete this prescription?')) return;
     try {
       await deleteDoc(doc(db, 'doctorPrescriptions', id));
@@ -697,7 +777,7 @@ export default function DoctorPrescriptions({ profile }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <div className="doctor-form-group" style={{ marginBottom: 0 }}>
                     <label style={{ fontSize: '0.75rem' }}>Dosage</label>
-                    <input className="doctor-form-input" placeholder="e.g. 1 tablet" value={med.dosage}
+                    <input className="doctor-form-input" placeholder={getDosagePlaceholder(med.drugForm)} value={med.dosage}
                       onChange={e => updateMed(i, 'dosage', e.target.value)} />
                   </div>
                   <div className="doctor-form-group" style={{ marginBottom: 0 }}>
@@ -717,13 +797,18 @@ export default function DoctorPrescriptions({ profile }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <div className="doctor-form-group" style={{ marginBottom: 0 }}>
                     <label style={{ fontSize: '0.75rem' }}>Duration</label>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <input className="doctor-form-input" placeholder="e.g. 7" type="number" value={med.duration}
-                        onChange={e => updateMed(i, 'duration', e.target.value)} style={{ flex: 1 }} />
-                      <select className="doctor-form-select" value={med.durationUnit} onChange={e => updateMed(i, 'durationUnit', e.target.value)} style={{ flex: 1 }}>
-                        {DURATION_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
+                    <select className="doctor-form-select" value={med.duration || ''} onChange={e => updateMed(i, 'duration', e.target.value)}>
+                      <option value="">Select Duration</option>
+                      {/* Keep a legacy value (e.g. "7" + unit) selectable so editing an old Rx doesn't silently clear it */}
+                      {med.duration && !DURATION_OPTIONS.some(o => o.label === med.duration) && (
+                        <option value={med.duration}>{med.duration}{med.durationUnit ? ` ${med.durationUnit}` : ''}</option>
+                      )}
+                      {Object.entries(DURATION_GROUPS).map(([group, labels]) => (
+                        <optgroup key={group} label={group}>
+                          {labels.map(l => <option key={l} value={l}>{l}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
                   </div>
                   {/* Refill */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -766,6 +851,124 @@ export default function DoctorPrescriptions({ profile }) {
                     <label style={{ fontSize: '0.75rem' }}>Special Instructions</label>
                     <textarea className="doctor-form-textarea" rows={2} placeholder="Instructions for patient..."
                       value={med.specialInstructions} onChange={e => updateMed(i, 'specialInstructions', e.target.value)} />
+                  </div>
+                )}
+
+                {/* ── FORM-SPECIFIC FIELDS (mirrors the mobile Rx form) ── */}
+                {med.drugForm === 'Syrup' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Syrup Details</p>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a', display: 'block', marginBottom: '0.35rem' }}>Volume Unit</label>
+                    <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                      {['ml', 'tsp', 'tbsp'].map(unit => (
+                        <button key={unit} type="button" onClick={() => updateMed(i, 'volumeUnit', unit)}
+                          style={{
+                            padding: '0.3rem 0.75rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                            border: `1.5px solid ${med.volumeUnit === unit ? '#1e6bb8' : '#e2e8f0'}`,
+                            background: med.volumeUnit === unit ? '#eff6ff' : '#fff',
+                            color: med.volumeUnit === unit ? '#1d4ed8' : '#64748b',
+                          }}>{unit}</button>
+                      ))}
+                    </div>
+                    <label style={toggleLabel}>
+                      <input type="checkbox" checked={med.shakeWell || false} onChange={e => updateMed(i, 'shakeWell', e.target.checked)} />
+                      Shake well before use
+                    </label>
+                  </div>
+                )}
+
+                {med.drugForm === 'Injection' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Injection Details</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                      <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '0.75rem' }}>Route of Administration</label>
+                        <select className="doctor-form-select" value={med.route || ''} onChange={e => updateMed(i, 'route', e.target.value)}>
+                          <option value="">Select Route</option>
+                          {INJECTION_ROUTES.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+                      <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '0.75rem' }}>Injection Site</label>
+                        <input className="doctor-form-input" placeholder="e.g. Left arm, Abdomen, Thigh"
+                          value={med.injectionSite || ''} onChange={e => updateMed(i, 'injectionSite', e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {med.drugForm === 'Cream' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Cream Details</p>
+                    <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '0.75rem' }}>Application Site</label>
+                      <input className="doctor-form-input" placeholder="e.g. Affected area, Right forearm, Scalp"
+                        value={med.applicationSite || ''} onChange={e => updateMed(i, 'applicationSite', e.target.value)} />
+                    </div>
+                  </div>
+                )}
+
+                {med.drugForm === 'Drops' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Drops Details</p>
+                    <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '0.75rem' }}>Administration Site</label>
+                      <select className="doctor-form-select" value={med.dropSite || ''} onChange={e => updateMed(i, 'dropSite', e.target.value)}>
+                        <option value="">Select Site</option>
+                        {DROP_SITES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {med.drugForm === 'Inhaler' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Inhaler Details</p>
+                    <label style={{ ...toggleLabel, marginBottom: '0.4rem' }}>
+                      <input type="checkbox" checked={med.spacerRequired || false} onChange={e => updateMed(i, 'spacerRequired', e.target.checked)} />
+                      Spacer device required
+                    </label>
+                    <label style={toggleLabel}>
+                      <input type="checkbox" checked={med.rinseAfter || false} onChange={e => updateMed(i, 'rinseAfter', e.target.checked)} />
+                      Rinse mouth after use
+                    </label>
+                  </div>
+                )}
+
+                {med.drugForm === 'Patch' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Patch Details</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                      <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '0.75rem' }}>Application Site</label>
+                        <input className="doctor-form-input" placeholder="e.g. Upper arm, Chest, Lower back"
+                          value={med.applicationSite || ''} onChange={e => updateMed(i, 'applicationSite', e.target.value)} />
+                      </div>
+                      <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: '0.75rem' }}>Change Interval</label>
+                        <select className="doctor-form-select" value={med.changeInterval || ''} onChange={e => updateMed(i, 'changeInterval', e.target.value)}>
+                          <option value="">Select Change Interval</option>
+                          {PATCH_INTERVALS.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <label style={toggleLabel}>
+                      <input type="checkbox" checked={med.rotationRequired || false} onChange={e => updateMed(i, 'rotationRequired', e.target.checked)} />
+                      Rotate application site
+                    </label>
+                  </div>
+                )}
+
+                {med.drugForm === 'Suppository' && (
+                  <div style={formSpecificBox}>
+                    <p style={formSpecificTitle}>Suppository Details</p>
+                    <div className="doctor-form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: '0.75rem' }}>Route</label>
+                      <select className="doctor-form-select" value={med.route || ''} onChange={e => updateMed(i, 'route', e.target.value)}>
+                        <option value="">Select Route</option>
+                        {SUPPOSITORY_ROUTES.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -838,7 +1041,7 @@ export default function DoctorPrescriptions({ profile }) {
                   0,
                 );
                 return (
-                  <tr key={rx.id} style={{ cursor: 'pointer' }} onClick={() => setViewingRx(rx)}>
+                  <tr key={rx.id} style={{ cursor: 'pointer' }} onClick={() => { setShowRxAllDetails(false); setViewingRx(rx); }}>
                     <td style={{ fontWeight: 600 }}>{rx.patientName || 'Patient'}</td>
                     <td style={{ maxWidth: 140, fontSize: '0.85rem' }}>{rx.diagnosis || '—'}</td>
                     <td style={{ fontSize: '0.8rem' }}>
@@ -887,7 +1090,7 @@ export default function DoctorPrescriptions({ profile }) {
                     <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{rx.date || '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={(e) => { e.stopPropagation(); openEdit(rx); }}>Edit</button>
+                        <button className="doctor-btn doctor-btn-sm doctor-btn-outline" disabled={isRxDelivered(rx)} title={isRxDelivered(rx) ? 'Delivered — locked' : 'Edit'} onClick={(e) => { e.stopPropagation(); openEdit(rx); }}>Edit</button>
                         {hasUnavailable && (
                           <button
                             className="doctor-btn doctor-btn-sm doctor-btn-outline"
@@ -902,7 +1105,7 @@ export default function DoctorPrescriptions({ profile }) {
                           </button>
                         )}
                         <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={(e) => { e.stopPropagation(); handlePrint(rx); }} title="Print"><Printer size={12} /></button>
-                        <button className="doctor-btn doctor-btn-sm doctor-btn-danger" onClick={(e) => { e.stopPropagation(); handleDelete(rx.id); }}><Trash2 size={12} /></button>
+                        <button className="doctor-btn doctor-btn-sm doctor-btn-danger" disabled={isRxDelivered(rx)} title={isRxDelivered(rx) ? 'Delivered — locked' : 'Delete'} onClick={(e) => { e.stopPropagation(); handleDelete(rx.id); }}><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>
@@ -1016,21 +1219,97 @@ export default function DoctorPrescriptions({ profile }) {
           </div>
         </div>
       )}
-      {viewingRx && (
+      {viewingRx && (() => {
+        const sm = STATUS_META[viewingRx.status] || STATUS_META.active;
+        const pm = viewingRx.pharmacyStatus ? (PHARMACY_STATUS_META[viewingRx.pharmacyStatus] || null) : null;
+        const rxDate = viewingRx.date
+          || (viewingRx.createdAt?.seconds ? new Date(viewingRx.createdAt.seconds * 1000).toLocaleDateString() : '—');
+        const summaryRows = [
+          ['Diagnosis', viewingRx.diagnosis || '—'],
+          ['Date', rxDate],
+          ['Follow-up', viewingRx.followUpDate || '—'],
+          ['Pharmacy', viewingRx.pharmacyName || '—'],
+          ['Branch', viewingRx.branchName || '—'],
+          ['Reference', viewingRx.prescriptionRef || '—'],
+        ];
+        const medFieldRows = (m) => ([
+          ['Strength', m.strength],
+          ['Form', m.drugForm],
+          ['Dosage', m.dosage],
+          ['Frequency', m.frequency],
+          ['Direction', m.direction],
+          ['Duration', m.duration ? `${m.duration} ${m.durationUnit || ''}`.trim() : ''],
+          ['Route', m.route],
+          ['Injection site', m.injectionSite],
+          ['Application site', m.applicationSite],
+          ['Administration site', m.dropSite],
+          ['Volume unit', m.drugForm === 'Syrup' ? m.volumeUnit : ''],
+          ['Shake well', m.drugForm === 'Syrup' ? (m.shakeWell ? 'Yes' : 'No') : ''],
+          ['Spacer required', m.drugForm === 'Inhaler' ? (m.spacerRequired ? 'Yes' : 'No') : ''],
+          ['Rinse after use', m.drugForm === 'Inhaler' ? (m.rinseAfter ? 'Yes' : 'No') : ''],
+          ['Change interval', m.changeInterval],
+          ['Rotate site', m.drugForm === 'Patch' ? (m.rotationRequired ? 'Yes' : 'No') : ''],
+          ['Special instructions', m.specialInstructions],
+          ['PRN indication', m.prn?.indication],
+          ['PRN max/day', m.prn?.maxPerDay],
+          ['PRN interval', m.prn?.interval],
+          ['Refill allowed', m.refill ? (m.refill.allowed ? 'Yes' : 'No') : ''],
+          ['Refill count', m.refill?.count],
+          ['Refill expiry', m.refill?.expiryDate],
+          ['Schedule', Array.isArray(m.schedule) && m.schedule.length ? m.schedule.join(', ') : ''],
+          ['Drug status', m.drugStatus],
+        ].filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== ''));
+        return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.58)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 998, padding: '1rem' }}
           onClick={() => setViewingRx(null)}>
-          <div style={{ background: '#fff', borderRadius: 18, padding: '1.25rem', width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 22px 60px rgba(2,6,23,0.28)', border: '1px solid #e2e8f0' }}
+          <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 22px 60px rgba(2,6,23,0.28)', border: '1px solid #e2e8f0', overflow: 'hidden' }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', paddingBottom: '0.65rem', borderBottom: '1px solid #eef2f7' }}>
-              <h2 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: '#0f172a' }}>Prescription Details</h2>
-              <button onClick={() => setViewingRx(null)} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.38rem 0.78rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', color: '#475569' }}>Close</button>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', padding: '1.15rem 1.25rem', borderBottom: '1px solid #eef2f7', background: 'linear-gradient(180deg,#f8fbff,#ffffff)' }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>{viewingRx.patientName || 'Patient'}</h2>
+                <p style={{ margin: '0.2rem 0 0', color: '#64748b', fontSize: '0.82rem' }}>{viewingRx.diagnosis || 'Prescription'} · {rxDate}</p>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.55rem' }}>
+                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, background: sm.bg, border: `1px solid ${sm.border}`, color: sm.color }}>
+                    {(viewingRx.status || 'active').charAt(0).toUpperCase() + (viewingRx.status || 'active').slice(1)}
+                  </span>
+                  {pm && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, background: '#eff6ff', border: '1px solid #bfdbfe', color: pm.color }}>{pm.label}</span>
+                  )}
+                  {viewingRx.prescriptionRef && (
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', fontFamily: 'monospace', letterSpacing: '0.04em' }}>{viewingRx.prescriptionRef}</span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setViewingRx(null)} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.38rem 0.78rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', color: '#475569', flexShrink: 0 }}>Close</button>
             </div>
-            <p style={{ margin: '0 0 0.3rem', color: '#0f172a', fontWeight: 700 }}>{viewingRx.patientName || 'Patient'}</p>
-            <p style={{ margin: '0 0 0.75rem', color: '#64748b', fontSize: '0.85rem' }}>{viewingRx.diagnosis || '—'} · {viewingRx.date || '—'} {viewingRx.prescriptionRef ? `· ${viewingRx.prescriptionRef}` : ''}</p>
+
+            {/* Body */}
+            <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>
+            {showRxAllDetails && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '0.5rem 1rem', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 10, padding: '0.85rem 1rem', marginBottom: '0.9rem' }}>
+                {summaryRows.map(([k, v]) => (
+                  <div key={k}>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#0f172a', wordBreak: 'break-word' }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             {(viewingRx.medications || []).map((m, i) => (
               <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.8rem', marginBottom: '0.55rem' }}>
                 <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>{m.name || 'Medication'}{m.strength ? ` (${m.strength})` : ''}</p>
                 <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#64748b' }}>{[m.dosage, m.frequency, m.duration].filter(Boolean).join(' · ') || '—'}</p>
+                {showRxAllDetails && medFieldRows(m).length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '0.35rem 0.9rem', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px dashed #e2e8f0' }}>
+                    {medFieldRows(m).map(([k, v]) => (
+                      <div key={k}>
+                        <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{k}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#334155', wordBreak: 'break-word' }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {m.alternativeSuggested ? (
                   <p style={{ margin: '5px 0 0', fontSize: '0.8rem', color: m.drugStatus === 'approved_replacement' ? '#166534' : '#7c3aed', fontWeight: 700 }}>
                     🔁 {m.alternativeSuggested} · {m.drugStatus === 'approved_replacement'
@@ -1077,9 +1356,28 @@ export default function DoctorPrescriptions({ profile }) {
               </div>
             ))}
             {viewingRx.instructions ? <p style={{ margin: '0.6rem 0 0', color: '#374151', fontSize: '0.85rem' }}><b>Instructions:</b> {viewingRx.instructions}</p> : null}
+            </div>
+
+            {/* Footer actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem', padding: '0.85rem 1.25rem', borderTop: '1px solid #eef2f7', background: '#fbfdff', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowRxAllDetails(v => !v)}
+                className="doctor-btn doctor-btn-outline doctor-btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <ChevronDown size={14} style={{ transform: showRxAllDetails ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                {showRxAllDetails ? 'Hide details' : 'View all'}
+              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button onClick={() => handlePrint(viewingRx)} className="doctor-btn doctor-btn-outline doctor-btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Printer size={14} /> Print
+                </button>
+                <button onClick={() => setViewingRx(null)} className="doctor-btn doctor-btn-primary doctor-btn-sm">Close</button>
+              </div>
+            </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

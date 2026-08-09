@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import './Resources.css';
 import { 
   collection, 
@@ -10,7 +10,7 @@ import {
   doc,
   updateDoc,
   serverTimestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { 
   BookOpen, 
   FileText, 
@@ -32,7 +32,16 @@ import {
   Target,
   AlertCircle
 } from 'lucide-react';
-import jsPDF from 'jspdf';
+import { downloadNotePdf, downloadResourcePdf } from '../../../utils/brandedPdf';
+import { hydrateBookContent } from '../../../utils/noteSections';
+import ResourceMedia from '../../Common/ResourceMedia';
+
+/** Tags may be an array or a comma-separated string, depending on where saved. */
+function toTagList(tags) {
+  if (Array.isArray(tags)) return tags.filter(Boolean);
+  if (typeof tags === 'string') return tags.split(',').map((t) => t.trim()).filter(Boolean);
+  return [];
+}
 
 export default function ClientResources() {
   const navigate = useNavigate();
@@ -50,6 +59,8 @@ export default function ClientResources() {
   const [worksheetResponses, setWorksheetResponses] = useState({});
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [selectedNote, setSelectedNote] = useState(null);
+  const [showResourceModal, setShowResourceModal] = useState(false);
+  const [selectedResource, setSelectedResource] = useState(null);
 
   const currentUser = auth.currentUser;
 
@@ -160,7 +171,12 @@ export default function ClientResources() {
           assignedWorksheets = worksheetsSnapshot.docs
             .filter(doc => {
               const data = doc.data();
-              return data.status === 'active';
+              // Worksheets are saved as 'assigned' (and 'submitted'/'completed'
+              // once worked on). Requiring 'active' — a status nothing ever
+              // writes — meant the client saw none of them. Exclude only the
+              // states that genuinely shouldn't reach a client.
+              const status = String(data.status || 'assigned').toLowerCase();
+              return !['template', 'archived', 'deleted'].includes(status);
             })
             .sort((a, b) => {
               const dateA = a.data().dateCreated?.toDate ? a.data().dateCreated.toDate() : new Date(a.data().dateCreated);
@@ -228,28 +244,16 @@ export default function ClientResources() {
           const therapyBooksQuery = query(collection(db, 'therapyBooks'));
           const therapyBooksSnapshot = await getDocs(therapyBooksQuery);
           
+          // No client-side audience filter here any more. It tested
+          // `book.targetAudience` and `book.assignedClients`, and a REST book has
+          // neither — targetAudience lives inside the `content` JSON and the field
+          // is `assignedClientIds` — so every book failed the check and the shelf
+          // was always empty. The endpoint already returns exactly what this
+          // client may see (shared-with-all + assigned-to-them, drafts excluded).
           const therapyBooks = therapyBooksSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(book => {
-              // Check target audience filtering
-              if (book.targetAudience === 'all') {
-                return true;
-              }
-              
-              if (book.targetAudience === 'specific' && book.assignedClients?.includes(assignedClientId)) {
-                return true;
-              }
-              
-              // For individual/teen/couples, we need to check client's therapy type
-              // This would require fetching client data - for now, we'll include all
-              if (['individuals', 'teen', 'couples'].includes(book.targetAudience)) {
-                return true;
-              }
-              
-              return false;
-            })
+            .map(doc => ({ ...doc.data(), id: doc.id }))
             .map(book => ({
-              ...book,
+              ...hydrateBookContent(book),
               type: 'note',
               noteType: 'therapyBook'
             }));
@@ -395,10 +399,30 @@ export default function ClientResources() {
   };
 
   // Check if worksheet is completed by current client
+  // `clientResponses` is a Firestore-era map the API never returns, so every
+  // check against it was undefined: a finished worksheet never showed as
+  // complete, and the submit button never locked. The API carries the real state
+  // on the worksheet itself — `status` and `latestResponse`.
   const isWorksheetCompleted = (worksheet) => {
+    if (!worksheet) return false;
+    // `submitted` (a client's answer) and `completed` both mean answered.
+    if (['completed', 'submitted'].includes(String(worksheet.status || '').toLowerCase())) return true;
     const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
     const clientResponse = worksheet.clientResponses?.[clientId];
     return clientResponse?.status === 'completed' && !clientResponse?.needsToCompleteNewFields;
+  };
+
+  /** Answers the client already submitted, if any. */
+  const savedWorksheetResponses = (worksheet) => {
+    if (!worksheet) return {};
+    if (worksheet.latestResponse) {
+      try {
+        const parsed = JSON.parse(worksheet.latestResponse);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch { /* not JSON */ }
+    }
+    const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
+    return worksheet.clientResponses?.[clientId]?.responses || {};
   };
 
   // Check if worksheet has new fields that need completion
@@ -463,741 +487,11 @@ export default function ClientResources() {
   };
 
   // Generate PDF for resources
-  const generateResourcePDF = (resource) => {
-    const pdf = new jsPDF();
-    const pageWidth = pdf.internal.pageSize.width;
-    const pageHeight = pdf.internal.pageSize.height;
-    let yPosition = 20;
-
-    // Add watermark
-    try {
-      pdf.setGState(new pdf.GState({opacity: 0.1}));
-      pdf.setFontSize(50);
-      pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-      pdf.text('NessaHub', pageWidth / 2, pageHeight / 2, { angle: 45, align: 'center' });
-      pdf.setGState(new pdf.GState({opacity: 1}));
-    } catch (error) {
-      // Fallback if GState is not supported
-      console.log('Watermark not supported');
-    }
-
-    // Reset text settings
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(12);
-
-    // Header
-    pdf.setFontSize(18);
-    pdf.setFont(undefined, 'bold');
-    pdf.text(resource.title, 20, yPosition);
-    yPosition += 15;
-
-    // Meta information
-    pdf.setFontSize(10);
-    pdf.setFont(undefined, 'normal');
-    pdf.text(`Created: ${formatDate(resource.createdAt)}`, 20, yPosition);
-    yPosition += 8;
-    
-    if (resource.category) {
-      pdf.text(`Category: ${resource.category}`, 20, yPosition);
-      yPosition += 8;
-    }
-
-    // Description
-    if (resource.description) {
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Description', 20, yPosition);
-      yPosition += 10;
-      
-      pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
-      const descriptionLines = pdf.splitTextToSize(resource.description, pageWidth - 40);
-      pdf.text(descriptionLines, 20, yPosition);
-      yPosition += descriptionLines.length * 5 + 10;
-    }
-
-    // Content
-    if (resource.content) {
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Content', 20, yPosition);
-      yPosition += 10;
-      
-      pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
-      const contentLines = pdf.splitTextToSize(resource.content, pageWidth - 40);
-      
-      for (let i = 0; i < contentLines.length; i++) {
-        if (yPosition > pageHeight - 30) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        pdf.text(contentLines[i], 20, yPosition);
-        yPosition += 6; // Increased line spacing for better readability
-      }
-    }
-
-    // Footer with page number
-    const pageCount = pdf.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      pdf.setPage(i);
-      pdf.setFontSize(8);
-      pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-      pdf.text(`Page ${i} of ${pageCount}`, pageWidth - 30, pageHeight - 10);
-      pdf.text('NessaHub', 20, pageHeight - 10);
-    }
-
-    pdf.save(`${resource.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
-  };
-
-  // Generate PDF for notes
-  const generateNotePDF = (note) => {
-    const pdf = new jsPDF();
-    const pageWidth = pdf.internal.pageSize.width;
-    const pageHeight = pdf.internal.pageSize.height;
-    let yPosition = 20;
-
-    // Add watermark to all pages
-    const addWatermark = (pageNum) => {
-      try {
-        pdf.setGState(new pdf.GState({opacity: 0.1}));
-        pdf.setFontSize(50);
-        pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-        pdf.text('NessaHub', pageWidth / 2, pageHeight / 2, { angle: 45, align: 'center' });
-        pdf.setGState(new pdf.GState({opacity: 1}));
-      } catch (error) {
-        console.log('Watermark not supported');
-      }
-    };
-
-    // Reset text settings with darker color for better visibility
-    pdf.setTextColor(0, 0, 0); // Pure black for maximum contrast
-    pdf.setFontSize(12);
-    
-    // Helper function to ensure text is always dark
-    const setDarkText = (r = 0, g = 0, b = 0) => {
-      pdf.setTextColor(r, g, b);
-    };
-    
-    // Override the text method to always use dark color and maintain current font size
-    const originalText = pdf.text;
-    pdf.text = function(text, x, y, options) {
-      pdf.setTextColor(0, 0, 0); // Always set to black before text
-      // Don't change font size here to avoid conflicts
-      return originalText.call(this, text, x, y, options);
-    };
-    
-    // Override splitTextToSize to ensure it also uses dark color
-    const originalSplitTextToSize = pdf.splitTextToSize;
-    pdf.splitTextToSize = function(text, maxWidth, options) {
-      pdf.setTextColor(0, 0, 0); // Always set to black before splitting text
-      return originalSplitTextToSize.call(this, text, maxWidth, options);
-    };
-    
-    // Override setFont to always reset text color to black and maintain font size
-    const originalSetFont = pdf.setFont;
-    pdf.setFont = function(fontName, fontStyle, fontSize) {
-      const result = originalSetFont.call(this, fontName, fontStyle, fontSize);
-      pdf.setTextColor(0, 0, 0); // Always set to black after font change
-      // Don't override font size here to avoid conflicts
-      return result;
-    };
-
-    if (note.noteType === 'therapyBook') {
-      // Therapy Book PDF Generation
-      
-      // Cover Page
-      addWatermark(1);
-      pdf.setFontSize(24);
-      pdf.setFont(undefined, 'bold');
-      pdf.setTextColor(0, 0, 0); // Ensure dark color
-      pdf.text(note.bookTitle || 'Therapy Book', 20, yPosition);
-      yPosition += 20;
-
-      if (note.author) {
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text(`By: ${note.author}`, 20, yPosition);
-        yPosition += 15;
-      }
-
-      if (note.description) {
-        yPosition += 10;
-        pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text('Description', 20, yPosition);
-        yPosition += 10;
-        
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-        const descriptionLines = pdf.splitTextToSize(note.description, pageWidth - 40);
-        pdf.text(descriptionLines, 20, yPosition);
-        yPosition += descriptionLines.length * 5 + 10;
-      }
-
-      // Meta information
-      if (note.targetAudience || note.difficultyLevel || note.estimatedReadingTime) {
-        yPosition += 10;
-        pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text('Book Information', 20, yPosition);
-        yPosition += 10;
-        
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        if (note.targetAudience) {
-          pdf.text(`Target Audience: ${note.targetAudience}`, 20, yPosition);
-          yPosition += 8;
-        }
-        if (note.difficultyLevel) {
-          pdf.text(`Difficulty Level: ${note.difficultyLevel}`, 20, yPosition);
-          yPosition += 8;
-        }
-        if (note.estimatedReadingTime) {
-          pdf.text(`Estimated Reading Time: ${note.estimatedReadingTime}`, 20, yPosition);
-          yPosition += 8;
-        }
-      }
-
-      // Table of Contents
-      if (note.tableOfContents) {
-        pdf.addPage();
-        addWatermark(2);
-        yPosition = 20;
-        
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text('Table of Contents', 20, yPosition);
-        yPosition += 15;
-        
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-        const tocLines = pdf.splitTextToSize(note.tableOfContents, pageWidth - 40);
-        pdf.text(tocLines, 20, yPosition);
-        yPosition += tocLines.length * 5 + 15;
-      }
-
-      // Chapters Content
-      if (note.chapters) {
-        pdf.addPage();
-        addWatermark(3);
-        yPosition = 20;
-        
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text('Chapters', 20, yPosition);
-        yPosition += 15;
-        
-        // Parse and format chapters content with better structure
-        let chaptersContent = note.chapters;
-        
-        // Split content into lines for better processing
-        const lines = chaptersContent.split('\n');
-        let currentChapter = '';
-        let currentContent = [];
-        
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          
-          if (!line) {
-            // Empty line - add to current content if we have any
-            if (currentContent.length > 0) {
-              currentContent.push('');
-            }
-            continue;
-          }
-          
-          // Check if this line is a chapter header
-          const isChapterHeader = /^(Chapter \d+|CHAPTER \d+|chapter \d+)/i.test(line) || 
-                                 /^\*\*.*\*\*$/.test(line) || // Markdown bold
-                                 (line.length < 80 && line === line.toUpperCase() && line.includes('Chapter'));
-          
-          if (isChapterHeader) {
-            // Process previous chapter if exists
-            if (currentChapter && currentContent.length > 0) {
-              // Add chapter header
-              if (yPosition > pageHeight - 40) {
-                pdf.addPage();
-                addWatermark(pdf.internal.getNumberOfPages());
-                yPosition = 20;
-              }
-              
-              pdf.setFontSize(14);
-              pdf.setFont(undefined, 'bold');
-              pdf.setTextColor(0, 0, 0); // Ensure dark color
-              pdf.text(currentChapter, 20, yPosition);
-              yPosition += 18; // Increased spacing for 14pt bold chapter headers
-              
-              // Add chapter content
-              const contentText = currentContent.join('\n');
-              if (contentText.trim()) {
-                pdf.setFontSize(10);
-                pdf.setFont(undefined, 'normal');
-                pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-                const contentLines = pdf.splitTextToSize(contentText, pageWidth - 40);
-                
-                for (let j = 0; j < contentLines.length; j++) {
-                  if (yPosition > pageHeight - 30) {
-                    pdf.addPage();
-                    addWatermark(pdf.internal.getNumberOfPages());
-                    yPosition = 20;
-                  }
-                  pdf.setFontSize(10); // Ensure correct font size
-                  pdf.setFont(undefined, 'normal');
-                  pdf.setTextColor(0, 0, 0); // Force black color before each line
-                  pdf.text(contentLines[j], 20, yPosition);
-                  yPosition += 6; // Increased line spacing for 10pt font
-                }
-              }
-              
-              yPosition += 20; // Increased space between chapters
-            }
-            
-            // Start new chapter
-            currentChapter = line.replace(/\*\*/g, ''); // Remove markdown bold markers
-            currentContent = [];
-          } else {
-            // This is content for current chapter
-            currentContent.push(line);
-          }
-        }
-        
-        // Process the last chapter
-        if (currentChapter && currentContent.length > 0) {
-          // Add chapter header
-          if (yPosition > pageHeight - 40) {
-            pdf.addPage();
-            addWatermark(pdf.internal.getNumberOfPages());
-            yPosition = 20;
-          }
-          
-          pdf.setFontSize(14);
-          pdf.setFont(undefined, 'bold');
-          pdf.setTextColor(0, 0, 0); // Ensure dark color
-          pdf.text(currentChapter, 20, yPosition);
-          yPosition += 18; // Increased spacing for 14pt bold chapter headers
-          
-          // Add chapter content
-          const contentText = currentContent.join('\n');
-          if (contentText.trim()) {
-            pdf.setFontSize(10);
-            pdf.setFont(undefined, 'normal');
-            pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-            const contentLines = pdf.splitTextToSize(contentText, pageWidth - 40);
-            
-            for (let j = 0; j < contentLines.length; j++) {
-              if (yPosition > pageHeight - 30) {
-                pdf.addPage();
-                addWatermark(pdf.internal.getNumberOfPages());
-                yPosition = 20;
-              }
-              pdf.setFontSize(10); // Ensure correct font size
-              pdf.setFont(undefined, 'normal');
-              pdf.setTextColor(0, 0, 0); // Force black color before each line
-              pdf.text(contentLines[j], 20, yPosition);
-              yPosition += 6; // Increased line spacing for 10pt font
-            }
-          }
-        }
-        
-        // If no chapters were found, format as regular content
-        if (!currentChapter) {
-          pdf.setFontSize(10);
-          pdf.setFont(undefined, 'normal');
-          pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-          const contentLines = pdf.splitTextToSize(chaptersContent, pageWidth - 40);
-          
-          for (let i = 0; i < contentLines.length; i++) {
-            if (yPosition > pageHeight - 30) {
-              pdf.addPage();
-              addWatermark(pdf.internal.getNumberOfPages());
-              yPosition = 20;
-            }
-            pdf.setFontSize(10); // Ensure correct font size
-            pdf.setFont(undefined, 'normal');
-            pdf.setFontSize(10); // Ensure correct font size
-            pdf.setFont(undefined, 'normal');
-            pdf.setTextColor(0, 0, 0); // Force black color before each line
-            pdf.text(contentLines[i], 20, yPosition);
-            yPosition += 6; // Increased line spacing for better readability
-          }
-        }
-      }
-
-      // Key Topics
-      if (note.keyTopics) {
-        pdf.addPage();
-        addWatermark(pdf.internal.getNumberOfPages());
-        yPosition = 20;
-        
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text('Key Topics', 20, yPosition);
-        yPosition += 15;
-        
-        // Format key topics with better structure
-        const topicsContent = note.keyTopics;
-        
-        // Check if content has bullet points or numbered lists
-        const hasBullets = topicsContent.includes('•') || topicsContent.includes('-') || topicsContent.includes('*');
-        const hasNumbers = /\d+\./.test(topicsContent);
-        
-        if (hasBullets || hasNumbers) {
-          // Split by bullet points or numbers
-          const items = topicsContent.split(/(?=•|-\s|\*\s|\d+\.)/).filter(item => item.trim());
-          
-          for (let item of items) {
-            if (item.trim()) {
-              // Check if this item looks like a heading (short, all caps)
-              const isHeading = item.trim().length < 100 && 
-                               (item.trim() === item.trim().toUpperCase() || 
-                                /^\d+\./.test(item.trim()));
-              
-              if (isHeading) {
-                // Format as heading
-                if (yPosition > pageHeight - 30) {
-                  pdf.addPage();
-                  addWatermark(pdf.internal.getNumberOfPages());
-                  yPosition = 20;
-                }
-                
-                pdf.setFontSize(12);
-                pdf.setFont(undefined, 'bold');
-                pdf.setTextColor(0, 0, 0); // Ensure dark color
-                pdf.text(item.trim(), 20, yPosition);
-                yPosition += 14; // Increased spacing for 12pt bold text
-              } else {
-                // Format as regular item
-                pdf.setFontSize(10);
-                pdf.setFont(undefined, 'normal');
-                pdf.setTextColor(0, 0, 0); // Ensure dark color
-                const itemText = pdf.splitTextToSize(item.trim(), pageWidth - 40);
-                
-                for (let i = 0; i < itemText.length; i++) {
-                  if (yPosition > pageHeight - 30) {
-                    pdf.addPage();
-                    addWatermark(pdf.internal.getNumberOfPages());
-                    yPosition = 20;
-                  }
-                  pdf.setFontSize(10); // Ensure correct font size
-                  pdf.setFont(undefined, 'normal');
-                  pdf.setTextColor(0, 0, 0); // Force black color before each line
-                  pdf.text(itemText[i], 20, yPosition);
-                  yPosition += 6; // Increased line spacing for better readability
-                }
-              }
-              
-              yPosition += 10; // Increased space between items
-            }
-          }
-        } else {
-          // Format as regular paragraphs
-          const paragraphs = topicsContent.split(/\n\s*\n/);
-          
-          for (let paragraph of paragraphs) {
-            if (paragraph.trim()) {
-              pdf.setFontSize(10);
-              pdf.setFont(undefined, 'normal');
-              pdf.setTextColor(0, 0, 0); // Ensure dark color
-              const paragraphText = pdf.splitTextToSize(paragraph.trim(), pageWidth - 40);
-              
-              for (let i = 0; i < paragraphText.length; i++) {
-                if (yPosition > pageHeight - 30) {
-                  pdf.addPage();
-                  addWatermark(pdf.internal.getNumberOfPages());
-                  yPosition = 20;
-                }
-                pdf.setFontSize(10); // Ensure correct font size
-                pdf.setFont(undefined, 'normal');
-                pdf.setTextColor(0, 0, 0); // Force black color before each line
-                pdf.text(paragraphText[i], 20, yPosition);
-                yPosition += 6; // Increased line spacing for better readability
-              }
-              
-              yPosition += 10; // Increased space between paragraphs
-            }
-          }
-        }
-      }
-
-      // Exercises & Activities
-      if (note.exercises) {
-        pdf.addPage();
-        addWatermark(pdf.internal.getNumberOfPages());
-        yPosition = 20;
-        
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text('Exercises & Activities', 20, yPosition);
-        yPosition += 15;
-        
-        // Format exercises with better structure
-        const exercisesContent = note.exercises;
-        
-        // Check if content has structured format (bullet points, numbers, etc.)
-        const hasBullets = exercisesContent.includes('•') || exercisesContent.includes('-') || exercisesContent.includes('*');
-        const hasNumbers = /\d+\./.test(exercisesContent);
-        const hasExerciseMarkers = /Exercise|EXERCISE|Activity|ACTIVITY/i.test(exercisesContent);
-        
-        if (hasExerciseMarkers) {
-          // Split by exercise/activity markers
-          const exerciseSections = exercisesContent.split(/(?=Exercise \d+|EXERCISE \d+|Activity \d+|ACTIVITY \d+)/i);
-          
-          for (let section of exerciseSections) {
-            if (section.trim()) {
-              const isExerciseHeader = /^(Exercise \d+|EXERCISE \d+|Activity \d+|ACTIVITY \d+)/i.test(section.trim());
-              
-              if (isExerciseHeader) {
-                // Format as exercise header
-                const lines = section.trim().split('\n');
-                const headerLine = lines[0];
-                const contentLines = lines.slice(1).join('\n');
-                
-                if (yPosition > pageHeight - 40) {
-                  pdf.addPage();
-                  addWatermark(pdf.internal.getNumberOfPages());
-                  yPosition = 20;
-                }
-                
-                pdf.setFontSize(12);
-                pdf.setFont(undefined, 'bold');
-                pdf.text(headerLine, 20, yPosition);
-                yPosition += 12;
-                
-                // Add exercise content
-                if (contentLines.trim()) {
-                  pdf.setFontSize(10);
-                  pdf.setFont(undefined, 'normal');
-                  const contentText = pdf.splitTextToSize(contentLines, pageWidth - 40);
-                  
-                  for (let i = 0; i < contentText.length; i++) {
-                    if (yPosition > pageHeight - 30) {
-                      pdf.addPage();
-                      addWatermark(pdf.internal.getNumberOfPages());
-                      yPosition = 20;
-                    }
-                    pdf.text(contentText[i], 20, yPosition);
-                    yPosition += 6; // Increased line spacing for better readability
-                  }
-                }
-                
-                yPosition += 10; // Space between exercises
-              } else {
-                // Regular content
-                pdf.setFontSize(10);
-                pdf.setFont(undefined, 'normal');
-                const contentText = pdf.splitTextToSize(section, pageWidth - 40);
-                
-                for (let i = 0; i < contentText.length; i++) {
-                  if (yPosition > pageHeight - 30) {
-                    pdf.addPage();
-                    addWatermark(pdf.internal.getNumberOfPages());
-                    yPosition = 20;
-                  }
-                  pdf.text(contentText[i], 20, yPosition);
-                  yPosition += 6; // Increased line spacing for better readability
-                }
-                
-                yPosition += 6; // Increased line spacing for better readability
-              }
-            }
-          }
-        } else if (hasBullets || hasNumbers) {
-          // Format as bulleted or numbered list
-          const items = exercisesContent.split(/(?=•|-\s|\*\s|\d+\.)/).filter(item => item.trim());
-          
-          for (let item of items) {
-            if (item.trim()) {
-              pdf.setFontSize(10);
-              pdf.setFont(undefined, 'normal');
-              const itemText = pdf.splitTextToSize(item.trim(), pageWidth - 40);
-              
-              for (let i = 0; i < itemText.length; i++) {
-                if (yPosition > pageHeight - 30) {
-                  pdf.addPage();
-                  addWatermark(pdf.internal.getNumberOfPages());
-                  yPosition = 20;
-                }
-                pdf.text(itemText[i], 20, yPosition);
-                yPosition += 6; // Increased line spacing for better readability
-              }
-              
-              yPosition += 10; // Increased space between items
-            }
-          }
-        } else {
-          // Format as regular paragraphs
-          const paragraphs = exercisesContent.split(/\n\s*\n/);
-          
-          for (let paragraph of paragraphs) {
-            if (paragraph.trim()) {
-              pdf.setFontSize(10);
-              pdf.setFont(undefined, 'normal');
-              const paragraphText = pdf.splitTextToSize(paragraph.trim(), pageWidth - 40);
-              
-              for (let i = 0; i < paragraphText.length; i++) {
-                if (yPosition > pageHeight - 30) {
-                  pdf.addPage();
-                  addWatermark(pdf.internal.getNumberOfPages());
-                  yPosition = 20;
-                }
-                pdf.setFontSize(10); // Ensure correct font size
-                pdf.setFont(undefined, 'normal');
-                pdf.setTextColor(0, 0, 0); // Force black color before each line
-                pdf.text(paragraphText[i], 20, yPosition);
-                yPosition += 6; // Increased line spacing for better readability
-              }
-              
-              yPosition += 10; // Increased space between paragraphs
-            }
-          }
-        }
-      }
-
-      // Additional Resources
-      if (note.resources) {
-        pdf.addPage();
-        addWatermark(pdf.internal.getNumberOfPages());
-        yPosition = 20;
-        
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Additional Resources', 20, yPosition);
-        yPosition += 15;
-        
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        const resourceLines = pdf.splitTextToSize(note.resources, pageWidth - 40);
-        pdf.text(resourceLines, 20, yPosition);
-        yPosition += resourceLines.length * 5 + 15;
-      }
-
-      // Bibliography
-      if (note.bibliography) {
-        pdf.addPage();
-        addWatermark(pdf.internal.getNumberOfPages());
-        yPosition = 20;
-        
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Bibliography & References', 20, yPosition);
-        yPosition += 15;
-        
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        const bibLines = pdf.splitTextToSize(note.bibliography, pageWidth - 40);
-        pdf.text(bibLines, 20, yPosition);
-      }
-
-    } else {
-      // Clinical Note PDF Generation
-      addWatermark(1);
-      
-      // Header
-      pdf.setFontSize(18);
-      pdf.setFont(undefined, 'bold');
-      pdf.setTextColor(0, 0, 0); // Ensure dark color
-      pdf.text(note.noteType ? `${note.noteType.charAt(0).toUpperCase() + note.noteType.slice(1)} Note` : 'Session Note', 20, yPosition);
-      yPosition += 15;
-
-      // Meta information
-      pdf.setFontSize(10);
-      pdf.setFont(undefined, 'normal');
-      pdf.setTextColor(0, 0, 0); // Ensure dark color
-      pdf.text(`Date: ${formatDate(note.createdAt)}`, 20, yPosition);
-      yPosition += 8;
-      
-      if (note.therapistName) {
-        pdf.text(`Therapist: ${note.therapistName}`, 20, yPosition);
-        yPosition += 8;
-      }
-
-      if (note.sessionDate) {
-        pdf.setTextColor(0, 0, 0); // Ensure dark color
-        pdf.text(`Session Date: ${formatDate(note.sessionDate)}`, 20, yPosition);
-        yPosition += 8;
-      }
-
-      // Note content fields
-      const noteFields = ['subjective', 'objective', 'assessment', 'plan', 'interventions', 'clientResponse', 'moodRating', 'riskAssessment', 'nextSteps'];
-      
-      for (const field of noteFields) {
-        if (note[field]) {
-          pdf.addPage();
-          addWatermark(pdf.internal.getNumberOfPages());
-          yPosition = 20;
-          
-          pdf.setFontSize(14);
-          pdf.setFont(undefined, 'bold');
-          pdf.setTextColor(0, 0, 0); // Ensure dark color for headers
-          pdf.text(field.charAt(0).toUpperCase() + field.slice(1), 20, yPosition);
-          yPosition += 12;
-          
-          pdf.setFontSize(10);
-          pdf.setFont(undefined, 'normal');
-          pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-          const contentLines = pdf.splitTextToSize(note[field], pageWidth - 40);
-          
-          for (let i = 0; i < contentLines.length; i++) {
-            if (yPosition > pageHeight - 30) {
-              pdf.addPage();
-              addWatermark(pdf.internal.getNumberOfPages());
-              yPosition = 20;
-            }
-            pdf.setFontSize(10); // Ensure correct font size
-            pdf.setFont(undefined, 'normal');
-            pdf.setTextColor(0, 0, 0); // Force black color before each line
-            pdf.text(contentLines[i], 20, yPosition);
-            yPosition += 6; // Increased line spacing for better readability
-          }
-        }
-      }
-
-      // Signature
-      if (note.signature) {
-        pdf.addPage();
-        addWatermark(pdf.internal.getNumberOfPages());
-        yPosition = 20;
-        
-        pdf.setFontSize(12);
-        pdf.setFont(undefined, 'bold');
-        pdf.setTextColor(0, 0, 0); // Ensure dark color for headers
-        pdf.text('Digital Signature', 20, yPosition);
-        yPosition += 10;
-        
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-        pdf.text(note.signature, 20, yPosition);
-      }
-    }
-
-    // Footer with page number for all pages
-    const pageCount = pdf.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      pdf.setPage(i);
-      pdf.setFontSize(8);
-      pdf.setTextColor(0, 0, 0); // Pure black for maximum visibility
-      pdf.text(`Page ${i} of ${pageCount}`, pageWidth - 30, pageHeight - 10);
-      pdf.text('NessaHub', 20, pageHeight - 10);
-    }
-
-    const fileName = note.noteType === 'therapyBook' 
-      ? `${note.bookTitle?.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'therapy_book'}`
-      : `note_${note.noteType || 'session_note'}`;
-    
-    pdf.save(`${fileName}.pdf`);
-  };
+  // PDF export lives in utils/brandedPdf.js. The two builders that used to sit
+  // here read note.subjective / note.objective / … as top-level fields, but REST
+  // notes keep those inside `structuredData`, so every download came out with
+  // headings and no content. The shared builder reads the same sections the
+  // on-screen note view does, and applies the NessaHub header/watermark.
 
   // Handle download
   const handleViewNote = (note) => {
@@ -1206,9 +500,9 @@ export default function ClientResources() {
 
   const handleDownload = (item) => {
     if (item.type === 'note') {
-      generateNotePDF(item);
+      downloadNotePdf(item);
     } else if (item.type === 'resource' || item.type === 'assigned' || item.type === 'public') {
-      generateResourcePDF(item);
+      downloadResourcePdf(item);
     }
   };
 
@@ -1384,9 +678,12 @@ export default function ClientResources() {
                   </div>
                 )}
                 
-                {item.tags && item.tags.length > 0 && (
+                {/* `tags` is saved as a comma-separated string, so calling .map()
+                    on it threw "item.tags.map is not a function" and took the whole
+                    screen down. Accept either shape. */}
+                {toTagList(item.tags).length > 0 && (
                   <div className="resource-tags">
-                    {item.tags.map((tag, index) => (
+                    {toTagList(item.tags).map((tag, index) => (
                       <span key={index} className="tag">
                         {tag}
                       </span>
@@ -1481,15 +778,28 @@ export default function ClientResources() {
                       </button>
                     </>
                   ) : item.type === 'resource' || item.type === 'assigned' || item.type === 'public' ? (
-                    <button 
-                      className="btn-primary" 
-                      onClick={() => handleDownload(item)}
-                      data-tooltip="Download PDF"
-                      title="Download PDF"
-                    >
-                      <Download size={16} />
-                      <span>Download PDF</span>
-                    </button>
+                    <>
+                      {/* Download-only meant an image, audio clip or video could
+                          never actually be opened. View shows the attachment. */}
+                      <button
+                        className="btn-secondary"
+                        onClick={() => { setSelectedResource(item); setShowResourceModal(true); }}
+                        data-tooltip="Open resource"
+                        title="Open resource"
+                      >
+                        <Eye size={16} />
+                        <span>View</span>
+                      </button>
+                      <button
+                        className="btn-primary"
+                        onClick={() => handleDownload(item)}
+                        data-tooltip="Download PDF"
+                        title="Download PDF"
+                      >
+                        <Download size={16} />
+                        <span>Download PDF</span>
+                      </button>
+                    </>
                   ) : item.category === 'videos' ? (
                     <button 
                       className="btn-primary"
@@ -1621,10 +931,16 @@ export default function ClientResources() {
                         const hasNewFields = clientResponse?.needsToCompleteNewFields === true;
                         const fieldResponse = worksheetResponses[index];
                         
-                        // Field is editable if:
-                        // 1. No existing response for this field, OR
-                        // 2. There are new fields and this field is beyond the original field count
-                        const isEditable = !hasExistingResponse || (hasNewFields && index >= (Object.keys(clientResponse?.responses || {}).length));
+                        // Editability follows the WORKSHEET'S STATUS, not whether an
+                        // old answer exists. `clientResponses` is rebuilt from the
+                        // last submission, so it survives the therapist reopening the
+                        // worksheet — every field stayed read-only and the client
+                        // could never answer the updated version.
+                        const worksheetLocked = ['completed', 'submitted']
+                          .includes(String(selectedWorksheet.status || '').toLowerCase());
+                        const isEditable = !worksheetLocked
+                          || !hasExistingResponse
+                          || (hasNewFields && index >= (Object.keys(clientResponse?.responses || {}).length));
                         const isNewField = hasNewFields && index >= (Object.keys(clientResponse?.responses || {}).length);
                         
                         return (
@@ -1870,10 +1186,11 @@ export default function ClientResources() {
                 const clientId = localStorage.getItem('th.clientId') || currentUser.uid;
                 const clientResponse = selectedWorksheet.clientResponses?.[clientId];
                 const hasNewFields = clientResponse?.needsToCompleteNewFields === true;
-                const hasExistingResponse = clientResponse?.responses && Object.keys(clientResponse.responses).length > 0;
-                
-                // Show submit button if there are no existing responses OR if there are new fields to complete
-                if (!hasExistingResponse || hasNewFields) {
+                // A completed worksheet is read-only until the therapist edits it
+                // (which reopens it server-side); anything else is answerable.
+                const locked = isWorksheetCompleted(selectedWorksheet) && !hasNewFields;
+
+                if (!locked) {
                   return (
                     <button 
                       className="btn-primary"
@@ -1892,6 +1209,35 @@ export default function ClientResources() {
       )}
 
       {/* Note View Modal */}
+      {/* Resource viewer — renders the attachment itself (image, audio player,
+          video, file download or link) rather than only offering a PDF. */}
+      {showResourceModal && selectedResource && (
+        <div className="modal-overlay" onClick={() => setShowResourceModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedResource.title || 'Resource'}</h2>
+              <button className="close-btn" onClick={() => setShowResourceModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {selectedResource.description && (
+                <p className="resource-description">{selectedResource.description}</p>
+              )}
+
+              <ResourceMedia resource={selectedResource} />
+
+              {selectedResource.content && (
+                <p className="resource-content-text">{selectedResource.content}</p>
+              )}
+
+              <button className="btn-primary" onClick={() => handleDownload(selectedResource)}>
+                <Download size={16} />
+                <span>Download PDF</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showNoteModal && selectedNote && (
         <div className="modal-overlay" onClick={() => setShowNoteModal(false)}>
           <div className="modal-content large" onClick={(e) => e.stopPropagation()}>

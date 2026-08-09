@@ -1,5 +1,5 @@
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../component/Auth/firebaseConfig';
+import { doc, getDoc } from '../services/firestoreShim';
+import { db } from '../services/firestoreShim';
 
 /** Resolve generic "Patient" / missing names via `auth/{uid}` */
 export async function enrichPatientNames(patMap) {

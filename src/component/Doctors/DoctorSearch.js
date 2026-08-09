@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { db } from '../Auth/firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../services/firestoreShim';
+import { collection, getDocs } from '../../services/firestoreShim';
 import './DoctorSearch.css';
 
 const SPECIALTIES = [

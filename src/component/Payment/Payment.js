@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Payment.css';
 import TherapistSelectionModal from '../Match/TherapistSelectionModal';
+import { auth } from '../../services/firestoreShim';
+import { api, getStoredUserId } from '../../services/apiClient';
 import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
 import {
   loadCouple,
@@ -16,6 +18,10 @@ export default function Payment() {
   const location = useLocation();
   const isCouple = location.state?.therapyType === 'couples' || !!location.state?.coupleId;
   const coupleIdParam = location.state?.coupleId;
+  // Individual therapy now picks a therapist BEFORE paying, so the amount due is
+  // that therapist's own session rate rather than a fixed subscription tier.
+  const selectedTherapist = location.state?.therapist || null;
+  const therapistFee = Number(selectedTherapist?.sessionRate) || null;
 
   const data = useMemo(() => {
     try {
@@ -64,8 +70,10 @@ export default function Payment() {
     localStorage.setItem(
       'th.subscription',
       JSON.stringify({
-        plan,
-        price: prices[plan],
+        plan: selectedTherapist ? 'per-session' : plan,
+        price: therapistFee ?? prices[plan],
+        therapistId: selectedTherapist?.id || null,
+        therapistName: selectedTherapist?.name || null,
         activatedAt: new Date().toISOString(),
       }),
     );
@@ -77,6 +85,33 @@ export default function Payment() {
         navigate('/match-therapist', { state: { coupleId, therapyType: 'couples' }, replace: true });
       } catch (err) {
         alert(err.message || 'Could not record payment.');
+      }
+      return;
+    }
+
+    // Therapist already chosen → record the assignment now that payment is done.
+    //
+    // This must hit /client-select-therapist. The previous version wrote
+    // assignedTherapistId onto the client doc and then setDoc'd
+    // therapists/{id}/clients/{clientId} — but the shim no-ops subcollection
+    // writes and nothing maps that field into therapist_client_assignments_v2,
+    // so the therapist never actually gained the client. (/assignments is the
+    // therapist-side endpoint and 403s for a client.)
+    //
+    // clientId must be the authenticated user id — the endpoint guards
+    // requireSelfOrAdmin(clientId), and `th.clientId` is a different namespace.
+    if (selectedTherapist?.id) {
+      try {
+        const clientId = getStoredUserId() || auth.currentUser?.uid;
+        if (clientId) {
+          await api('/api/v1/therapy-management/client-select-therapist', {
+            method: 'POST',
+            body: { clientId, therapistId: selectedTherapist.id },
+          });
+        }
+        navigate('/dashboard', { replace: true });
+      } catch (err) {
+        alert(err.message || 'Payment recorded, but we could not assign your therapist.');
       }
       return;
     }
@@ -100,13 +135,33 @@ export default function Payment() {
 
   return (
     <div className="payment-container">
-      <h1 className="payment-title">{isCouple ? 'Couple therapy plan' : 'Choose your plan'}</h1>
+      <h1 className="payment-title">
+        {selectedTherapist ? 'Confirm and pay' : isCouple ? 'Couple therapy plan' : 'Choose your plan'}
+      </h1>
       <p className="payment-subtitle">
-        {isCouple
-          ? 'One subscription covers both partners. Billed monthly — cancel anytime.'
-          : 'Weekly subscription billed monthly. Cancel anytime.'}
+        {selectedTherapist
+          ? `You are booking ${selectedTherapist.name}. This is their session rate.`
+          : isCouple
+            ? 'One subscription covers both partners. Billed monthly — cancel anytime.'
+            : 'Weekly subscription billed monthly. Cancel anytime.'}
       </p>
 
+      {/* Therapist-first flow: show who was chosen and what they charge, instead of
+          the generic subscription tiers. */}
+      {selectedTherapist ? (
+        <div className="pricing-card featured therapist-charge-card">
+          <div className="pricing-name">{selectedTherapist.name}</div>
+          {selectedTherapist.specialization ? (
+            <div className="pricing-features"><span>{selectedTherapist.specialization}</span></div>
+          ) : null}
+          <div className="pricing-price">
+            {therapistFee != null ? `GHS ${therapistFee.toFixed(2)}` : 'Rate not set'}
+          </div>
+          <div className="pricing-features">
+            <span>{therapistFee != null ? 'per session' : 'This therapist has not published a rate yet.'}</span>
+          </div>
+        </div>
+      ) : (
       <div className="pricing-grid">
         {[
           { key: 'basic', title: 'Basic', price: prices.basic, features: ['Messaging', 'Monthly live session'] },
@@ -128,6 +183,7 @@ export default function Payment() {
           </div>
         ))}
       </div>
+      )}
 
       <div className="payment-form">
         <h3>Payment details</h3>

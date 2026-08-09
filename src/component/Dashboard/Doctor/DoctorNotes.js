@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Plus, Search, Save, Trash2, ChevronDown, Layers } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, orderBy, serverTimestamp } from '../../../services/firestoreShim';
 
 const NOTE_TEMPLATES = [
   {

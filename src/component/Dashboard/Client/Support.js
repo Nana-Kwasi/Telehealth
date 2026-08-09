@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
+import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
 import './Support.css';
 import { 
   collection, 
@@ -12,7 +13,7 @@ import {
   doc,
   getDoc,
   serverTimestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { 
   Star, 
   MessageSquare, 
@@ -130,8 +131,13 @@ export default function ClientSupport() {
           setClientData({ id: clientDoc.id, ...clientProfile });
           
           // Fetch assigned therapist
-          if (clientProfile.assignedTherapistId) {
-            const therapistDoc = await getDoc(doc(db, 'therapists', clientProfile.assignedTherapistId));
+          // assignedTherapistId is never written by the REST backend — resolve from
+          // the assignments table when it's absent.
+          const supportTherapistId = clientProfile.assignedTherapistId
+            || clientProfile.assignedTherapist
+            || (await fetchAssignedTherapist(clientProfile.id || clientProfile.clientId))?.id;
+          if (supportTherapistId) {
+            const therapistDoc = await getDoc(doc(db, 'therapists', supportTherapistId));
             if (therapistDoc.exists()) {
               setTherapistData({ id: therapistDoc.id, ...therapistDoc.data() });
             }

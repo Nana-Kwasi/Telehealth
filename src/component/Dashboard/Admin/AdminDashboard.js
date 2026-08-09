@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth, db } from '../../Auth/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { signOut } from '../../../services/authShim';
+import { auth, db } from '../../../services/firestoreShim';
+import { doc, getDoc } from '../../../services/firestoreShim';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import './AdminDashboard.css';
@@ -83,9 +83,9 @@ export default function AdminDashboard({ profile }) {
             <span className="admin-logo-badge">Admin</span>
           </div>
           <div className="admin-user-info">
-            <div className="admin-avatar">{profile?.name?.[0]?.toUpperCase() || 'A'}</div>
+            <div className="admin-avatar">{(profile?.name || profile?.fullName)?.[0]?.toUpperCase() || 'A'}</div>
             <div>
-              <p className="admin-user-name">{profile?.name || 'Admin'}</p>
+              <p className="admin-user-name">{profile?.name || profile?.fullName || 'Admin'}</p>
               <p className="admin-user-role">Super Admin</p>
               <SidebarSavedLocation profile={profile} />
             </div>

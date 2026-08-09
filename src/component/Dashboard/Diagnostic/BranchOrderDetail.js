@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../Auth/firebaseConfig';
+import { doc, getDoc } from '../../../services/firestoreShim';
+import { db } from '../../../services/firestoreShim';
 import { getDoctorDisplayName } from '../../../utils/doctorDisplayName';
 
 function fmtTs(ts) {

@@ -5,11 +5,11 @@ import {
   AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
   UserX, UserCheck, Activity, FlaskConical, Minus,
 } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, addDoc, updateDoc, deleteDoc,
   doc, setDoc, getDoc, serverTimestamp,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { hasPatientPharmacy, patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 
 const TODAY = new Date().toISOString().split('T')[0];
@@ -95,20 +95,25 @@ export default function DoctorPatientDetail({ profile }) {
       const appts = apptsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       appts.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-      // Derive patient info from appointments, then enrich from auth collection
+      // Derive patient info from appointments, then enrich from the patient profile.
+      // NOTE: the patient's /auth doc is self-or-admin only (a doctor viewing another
+      // user gets 403 → the extended info silently failed to load). /patients/{id} is
+      // doctor-readable and returns name/email/phone plus metadata (dob, blood type,
+      // allergies), so source the header from there instead.
       let patientName = appts[0]?.clientName || '';
       let patientEmail = appts[0]?.clientEmail || '';
       let bloodType = '', allergies = '', dob = '', phone = '';
+      let pd = null;
       try {
-        const authSnap = await getDoc(doc(db, 'auth', patientId));
-        if (authSnap.exists()) {
-          const d = authSnap.data();
-          patientName = d.name || d.displayName || patientName || 'Patient';
-          patientEmail = d.email || patientEmail;
-          bloodType = d.bloodType || '';
-          allergies = d.allergies || '';
-          dob = d.dob || '';
-          phone = d.phone || '';
+        const profSnap = await getDoc(doc(db, 'patientProfiles', patientId));
+        if (profSnap.exists()) {
+          pd = profSnap.data();
+          patientName = pd.name || pd.fullName || pd.displayName || patientName || 'Patient';
+          patientEmail = pd.email || patientEmail;
+          bloodType = pd.bloodType || '';
+          allergies = pd.allergies || '';
+          dob = pd.dob || pd.dateOfBirth || '';
+          phone = pd.phone || '';
         }
       } catch (_) {}
       setPatient({ id: patientId, name: patientName || 'Patient', email: patientEmail, bloodType, allergies, dob, phone });
@@ -127,18 +132,15 @@ export default function DoctorPatientDetail({ profile }) {
         setNotes(noteList);
       } catch (e) { console.error('Error loading notes:', e); }
 
-      // Load extended patient profile (insurance, emergency contact, health records, vitals, pharmacies)
-      try {
-        const profSnap = await getDoc(doc(db, 'patientProfiles', patientId));
-        if (profSnap.exists()) {
-          const pd = profSnap.data();
-          setPatientProfile(pd);
-          setLatestVitals(pd.vitals?.latest || null);
-          setPharmacies(pd.pharmacies || []);
-          setPatientStatus(pd.status || 'active');
-          setDataSharing(pd.privacy?.dataSharing || {});
-        }
-      } catch (_) {}
+      // Extended patient profile (insurance, emergency contact, health records,
+      // vitals, pharmacies) — reuse the profile fetched above for the header.
+      if (pd) {
+        setPatientProfile(pd);
+        setLatestVitals(pd.vitals?.latest || null);
+        setPharmacies(pd.pharmacies || []);
+        setPatientStatus(pd.status || 'active');
+        setDataSharing(pd.privacy?.dataSharing || {});
+      }
 
       // Load prescriptions
       const rxQ = query(

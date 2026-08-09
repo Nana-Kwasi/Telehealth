@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, query, where } from '../../../services/firestoreShim';
 import { downloadNessaHubPharmacyOperationalPdf } from '../../../utils/nessahubOperationalPdf';
 import {
   RX_STATUSES,
@@ -47,14 +47,18 @@ export default function PharmacyReports({ profile }) {
   const [rangeError, setRangeError] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Branches/prescriptions are keyed by the organization id (≠ user id for
+  // admin-onboarded pharmacies). Prefer it so the branch dropdown actually loads.
+  const orgId = profile?.organizationId || profile?.id;
+
   useEffect(() => {
     const load = async () => {
-      if (!profile?.id) return;
+      if (!orgId) return;
       setLoading(true);
       try {
         const [branchSnap, rxSnap] = await Promise.all([
-          getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', profile.id))),
-          getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile.id))),
+          getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', orgId))),
+          getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', orgId))),
         ]);
         setBranches(branchSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         setPrescriptions(rxSnap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -65,7 +69,7 @@ export default function PharmacyReports({ profile }) {
       }
     };
     load();
-  }, [profile?.id]);
+  }, [orgId]);
 
   const filteredRx = useMemo(() => {
     if (!reportGenerated || !appliedFrom || !appliedTo) return [];
@@ -97,12 +101,12 @@ export default function PharmacyReports({ profile }) {
   };
 
   const downloadPdf = useCallback(async () => {
-    if (!reportGenerated || !profile?.id) return;
+    if (!reportGenerated || !orgId) return;
     setPdfLoading(true);
     try {
       let activityLogRows = [];
       try {
-        const evSnap = await getDocs(query(collection(db, 'pharmacyRxEvents'), where('pharmacyId', '==', profile.id)));
+        const evSnap = await getDocs(query(collection(db, 'pharmacyRxEvents'), where('pharmacyId', '==', orgId)));
         const { startMs, endMs } = parseRangeBounds(appliedFrom, appliedTo);
         activityLogRows = evSnap.docs
           .map(d => ({ id: d.id, ...d.data() }))

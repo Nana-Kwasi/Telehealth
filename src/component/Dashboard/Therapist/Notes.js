@@ -22,7 +22,7 @@ import {
   Users,
   Settings
 } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import { 
   collection, 
   query, 
@@ -36,7 +36,7 @@ import {
   doc, 
   getDocs,
   serverTimestamp 
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import './Notes.css';
 
 export default function TherapistNotes() {
@@ -95,9 +95,17 @@ export default function TherapistNotes() {
   const currentUser = auth.currentUser;
   const fileInputRef = useRef(null);
 
+  // Notes whose clientName backfill has already been attempted. This runs from an
+  // onSnapshot callback that re-fires on every poll, so without it a note that
+  // cannot be patched (a finalised note rejects PATCH with "Signed notes can only
+  // be modified by an admin") was retried every few seconds forever, hammering the
+  // API with failing requests for as long as the screen stayed open.
+  const backfilledRef = useRef(new Set());
+
   // Function to update existing notes with missing clientName
   const updateExistingNotesWithClientName = async (notes) => {
     const notesToUpdate = notes.filter(note => {
+      if (backfilledRef.current.has(note.id)) return false;
       if (note.noteType === 'therapyBook') {
         // For therapy books, update if they don't have clientName
         // If targetAudience is 'specific', they should have assignedClients
@@ -110,9 +118,11 @@ export default function TherapistNotes() {
     });
     
     for (const note of notesToUpdate) {
+      // Mark before attempting — one try per note per mount, success or failure.
+      backfilledRef.current.add(note.id);
       try {
         let clientName = 'Unknown Client';
-        
+
         if (note.noteType === 'therapyBook') {
           // For therapy books, get the name of the first assigned client
           if (note.assignedClients && note.assignedClients.length > 0) {
@@ -890,8 +900,16 @@ export default function TherapistNotes() {
                         checked={noteForm.visibleToClient}
                         onChange={(e) => setNoteForm(prev => ({ ...prev, visibleToClient: e.target.checked }))}
                       />
-                      Make visible to client
+                      Share this note with the client
                     </label>
+                    {/* "Make visible to client" read as a vague permission flag.
+                        Spell out the consequence — clinical notes are private by
+                        default and this is the switch that exposes one. */}
+                    <p className="note-visibility-hint">
+                      {noteForm.visibleToClient
+                        ? 'The client will be able to read this note in their Resources.'
+                        : 'Private — only you and other therapists on this case can read it.'}
+                    </p>
                   </div>
                 )}
 

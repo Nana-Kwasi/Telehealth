@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import './Billing.css';
 import { 
   collection, 
@@ -10,7 +10,7 @@ import {
   limit,
   doc,
   getDoc
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { 
   CreditCard, 
   DollarSign, 

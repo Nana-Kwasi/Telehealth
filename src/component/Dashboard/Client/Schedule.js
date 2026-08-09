@@ -10,9 +10,10 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
-import { 
-  collection, 
+import { auth, db } from '../../../services/firestoreShim';
+import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
+import {
+  collection,
   query, 
   where, 
   getDocs,
@@ -22,7 +23,7 @@ import {
   doc,
   getDoc,
   serverTimestamp 
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import './Schedule.css';
 
 export default function ClientSchedule() {
@@ -31,6 +32,8 @@ export default function ClientSchedule() {
   const [appointments, setAppointments] = useState([]);
   const [clientData, setClientData] = useState(null);
   const [therapistData, setTherapistData] = useState(null);
+  // Sessions on the clicked day, shown in a detail dialog.
+  const [dayDetail, setDayDetail] = useState(null);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
     date: '',
@@ -76,6 +79,24 @@ export default function ClientSchedule() {
   };
 
   // Get appointments for a specific date
+  // Clicking a day shows its sessions; clicking a free future day starts booking
+  // with the assigned therapist on that date.
+  const handleDayClick = (day, dayAppointments) => {
+    if (dayAppointments.length > 0) { setDayDetail({ date: day, appointments: dayAppointments }); return; }
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (day < startOfToday) return;
+    if (!therapistData) {
+      alert('You need an assigned therapist before you can schedule a session.');
+      return;
+    }
+    setScheduleForm((prev) => ({
+      ...prev,
+      date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`,
+    }));
+    setShowScheduleForm(true);
+  };
+
   const getAppointmentsForDate = (date) => {
     const dateStr = date.toISOString().split('T')[0];
     return appointments.filter(apt => {
@@ -150,7 +171,11 @@ export default function ClientSchedule() {
               }
             }
           } else {
-            console.log('No assigned therapist in client profile');
+            // `assignedTherapist` is never written by the REST backend — the real
+            // record is the assignments table. Without this fallback a client who
+            // has a therapist still can't schedule with them.
+            const assigned = await fetchAssignedTherapist(clientDoc.id);
+            if (assigned) setTherapistData(assigned);
           }
         }
       } catch (error) {
@@ -249,7 +274,9 @@ export default function ClientSchedule() {
         notes: scheduleForm.notes || '',
         status: 'pending', // Client requests are pending approval
         createdAt: serverTimestamp(),
-        createdBy: 'client'
+        // The requester's user id — `created_by` is a uuid column, so the literal
+        // "client" 500'd. See the same fix in VideoCall.js.
+        createdBy: clientData.id
       };
 
       await addDoc(collection(db, 'scheduledCalls'), appointmentData);
@@ -387,9 +414,13 @@ export default function ClientSchedule() {
             const isTodayDay = isToday(day);
             
             return (
-              <div 
-                key={index} 
-                className={`client-schedule-day ${!isCurrentMonthDay ? 'client-schedule-other-month' : ''} ${isTodayDay ? 'client-schedule-today' : ''}`}
+              <div
+                key={index}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleDayClick(day, dayAppointments)}
+                onKeyDown={(e) => e.key === 'Enter' && handleDayClick(day, dayAppointments)}
+                className={`client-schedule-day client-schedule-day-clickable ${!isCurrentMonthDay ? 'client-schedule-other-month' : ''} ${isTodayDay ? 'client-schedule-today' : ''}`}
               >
                 <div className="client-schedule-day-number">{day.getDate()}</div>
                 <div className="client-schedule-day-appointments">
@@ -418,11 +449,98 @@ export default function ClientSchedule() {
         </div>
       </div>
 
+      {/* Day detail dialog — sessions booked on the clicked day. */}
+      {dayDetail && (
+        <div className="tc-detail-overlay" onClick={() => setDayDetail(null)}>
+          <div className="tc-detail" onClick={(e) => e.stopPropagation()}>
+            <div className="tc-detail-head">
+              <div>
+                <p className="tc-detail-date">
+                  {dayDetail.date.toLocaleDateString(undefined, {
+                    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                  })}
+                </p>
+                <p className="tc-detail-count">
+                  {dayDetail.appointments.length === 1
+                    ? '1 session'
+                    : `${dayDetail.appointments.length} sessions`}
+                </p>
+              </div>
+              <button className="tc-detail-close" onClick={() => setDayDetail(null)}>&times;</button>
+            </div>
+
+            <div className="tc-detail-body">
+              {dayDetail.appointments.map((apt, i) => {
+                const type = appointmentTypes[apt.sessionType] || appointmentTypes.individual;
+                const TypeIcon = type.icon;
+                return (
+                  <div key={apt.id || i} className="tc-detail-card" style={{ borderLeftColor: type.color }}>
+                    <div className="tc-detail-row">
+                      <Calendar size={16} />
+                      <span className="tc-detail-time">
+                        {new Date(apt.scheduledTime?.toDate?.() || apt.scheduledTime)
+                          .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      </span>
+                      <span className="tc-detail-chip" style={{ background: `${type.color}1A`, color: type.color }}>
+                        {type.name}
+                      </span>
+                    </div>
+                    <div className="tc-detail-row">
+                      <TypeIcon size={16} />
+                      <span>{apt.therapistName || therapistData?.name || 'Your therapist'}</span>
+                    </div>
+                    {apt.durationMinutes || apt.duration ? (
+                      <div className="tc-detail-row">
+                        <CheckCircle size={16} />
+                        <span>{apt.durationMinutes || apt.duration} minutes</span>
+                      </div>
+                    ) : null}
+                    {apt.status && (
+                      <div className="tc-detail-row">
+                        <AlertCircle size={16} />
+                        <span className="tc-detail-status">{apt.status}</span>
+                      </div>
+                    )}
+                    {apt.notes && <p className="tc-detail-notes">{apt.notes}</p>}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="tc-detail-actions">
+              <button className="tc-detail-secondary" onClick={() => setDayDetail(null)}>Close</button>
+              {therapistData && (
+                <button
+                  className="tc-detail-primary"
+                  onClick={() => {
+                    const d = dayDetail.date;
+                    setDayDetail(null);
+                    handleDayClick(d, []);
+                  }}
+                >
+                  <Plus size={15} /> Book another
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating Action Button */}
-      <button 
+      {/* No assigned therapist → nobody to schedule with. The modal submits
+          against therapistData, so without one it can only fail. */}
+      <button
         className="client-schedule-fab"
-        onClick={() => setShowScheduleForm(true)}
-        title="Schedule meeting with your therapist"
+        onClick={() => {
+          if (!therapistData) {
+            alert('You need an assigned therapist before you can schedule a session.');
+            return;
+          }
+          setShowScheduleForm(true);
+        }}
+        disabled={!therapistData}
+        title={therapistData ? 'Schedule meeting with your therapist' : 'No therapist assigned yet'}
+        style={!therapistData ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
       >
         <Plus size={24} />
       </button>

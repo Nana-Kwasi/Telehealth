@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../Auth/firebaseConfig';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { getAuth, createUserWithEmailAndPassword } from '../../../services/authShim';
+import { doc, setDoc, serverTimestamp } from '../../../services/firestoreShim';
+import { db } from '../../../services/firestoreShim';
 import {
   NURSE_ACCOUNT_STATUS,
   NURSE_PRESENCE,
@@ -21,12 +21,20 @@ const _firebaseConfig = {
 const secondaryApp = getApps().find((a) => a.name === 'secondary') || initializeApp(_firebaseConfig, 'secondary');
 const secondaryAuth = getAuth(secondaryApp);
 
+// Auto-generate a temporary password (unambiguous alphabet, no O/0/I/l/1) so the
+// admin never has to invent one — matches the pharmacy/lab onboarding flow.
+function generatePassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let pw = '';
+  for (let i = 0; i < 12; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
 const INITIAL = {
   fullName: '',
   email: '',
   username: '',
   phone: '',
-  password: '',
   specialty: 'General Nursing',
   licenseNumber: '',
   gender: '',
@@ -40,25 +48,23 @@ export default function AdminOnboardHomeCareNurse() {
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [credentials, setCredentials] = useState(null);
   const [form, setForm] = useState(INITIAL);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
   const submit = async (e) => {
     e?.preventDefault();
-    if (!form.fullName.trim() || !form.email.trim() || !form.password || !form.username.trim()) {
-      setErrorMsg('Full name, email, username, and password are required.');
-      return;
-    }
-    if (form.password.length < 6) {
-      setErrorMsg('Password must be at least 6 characters.');
+    if (!form.fullName.trim() || !form.email.trim() || !form.username.trim()) {
+      setErrorMsg('Full name, email, and username are required.');
       return;
     }
     setSaving(true);
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password);
+      const tempPassword = generatePassword();
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), tempPassword);
       const uid = cred.user.uid;
 
       await setDoc(doc(db, 'homeCareNurses', uid), {
@@ -94,7 +100,13 @@ export default function AdminOnboardHomeCareNurse() {
         updatedAt: serverTimestamp(),
       });
 
-      setSuccessMsg(`Nurse account created. UID: ${uid}. They can sign in with email or username and will be prompted to change their password.`);
+      setCredentials({
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        username: form.username.trim(),
+        tempPassword,
+      });
+      setSuccessMsg('Nurse account created. Share the temporary password below — they will be prompted to change it on first login.');
       setForm(INITIAL);
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
@@ -119,6 +131,26 @@ export default function AdminOnboardHomeCareNurse() {
 
       {successMsg ? <div className="hc-onboard-alert hc-onboard-alert--success">{successMsg}</div> : null}
       {errorMsg ? <div className="hc-onboard-alert hc-onboard-alert--error">{errorMsg}</div> : null}
+
+      {credentials ? (
+        <div className="hc-onboard-alert hc-onboard-alert--success" style={{ display: 'grid', gap: '0.4rem' }}>
+          <strong>Auto-generated credentials — share securely</strong>
+          <div>Nurse: <b>{credentials.fullName}</b></div>
+          <div>Email: <b>{credentials.email}</b></div>
+          <div>Username: <b>{credentials.username}</b></div>
+          <div>Temp password: <b style={{ fontFamily: 'monospace', letterSpacing: '0.5px' }}>{credentials.tempPassword}</b></div>
+          <button
+            type="button"
+            className="hc-onboard-btn"
+            style={{ justifySelf: 'start', marginTop: '0.3rem' }}
+            onClick={() => navigator.clipboard?.writeText(
+              `Email: ${credentials.email}\nUsername: ${credentials.username}\nPassword: ${credentials.tempPassword}`,
+            )}
+          >
+            Copy credentials
+          </button>
+        </div>
+      ) : null}
 
       <form className="hc-onboard-form" onSubmit={submit}>
         <div className="hc-onboard-sections">
@@ -163,15 +195,9 @@ export default function AdminOnboardHomeCareNurse() {
                 />
               </div>
               <div className="hc-onboard-field">
-                <label>Password <span className="req">*</span></label>
-                <input
-                  type="password"
-                  placeholder="Min. 6 characters"
-                  value={form.password}
-                  onChange={(e) => set('password', e.target.value)}
-                  required
-                />
-                <span className="hc-onboard-hint">Nurse must change on first login</span>
+                <label>Password</label>
+                <input type="text" value="Auto-generated on creation" disabled readOnly />
+                <span className="hc-onboard-hint">A temporary password is generated and shown after creation; the nurse must change it on first login.</span>
               </div>
             </div>
           </section>

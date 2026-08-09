@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Video, Phone, Clock, Calendar, Search, ExternalLink } from 'lucide-react';
-import { db, functions, httpsCallable } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, functions, httpsCallable } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from '../../../services/firestoreShim';
 
 const generateDoctorToken = httpsCallable(functions, 'generateDoctorToken');
 

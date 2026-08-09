@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, getDoc, doc, query, where } from '../../../services/firestoreShim';
 
 const PANEL_TABS = ['All', 'Active', 'Inactive', 'Discharged'];
 

@@ -1,730 +1,323 @@
-import { auth, db } from './firebaseConfig';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { ensureVanessaAdmin } from './adminSeed';
+// ─── NessaHub Web — Auth Service (REST) ──────────────────────────────────────
+// Replaces the Firebase auth + Firestore role-resolution layer with calls to
+// the Spring Boot backend.  All exported function signatures are identical to
+// the previous Firebase version so no component needs to change its imports.
 
-// Comprehensive user login logging system
-async function logUserLoginData(userId, userRole, profile, success, errorMessage = null) {
-  try {
-    const sessionId = sessionStorage.getItem('sessionId') || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    if (!sessionStorage.getItem('sessionId')) {
-      sessionStorage.setItem('sessionId', sessionId);
-    }
+import {
+  api,
+  API_BASE,
+  storeSession,
+  clearSession,
+  getStoredToken,
+  getStoredRefreshToken,
+  getStoredUserId,
+  getStoredProfile,
+  hasActiveSession,
+} from '../../services/apiClient';
 
-    // Get device and browser information
-    const deviceInfo = {
-      userAgent: navigator.userAgent,
-      platform: navigator.platform,
-      language: navigator.language,
-      languages: navigator.languages,
-      cookieEnabled: navigator.cookieEnabled,
-      onLine: navigator.onLine,
-      screenResolution: `${window.screen.width}x${window.screen.height}`,
-      colorDepth: window.screen.colorDepth,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      url: window.location.href,
-      referrer: document.referrer,
-      sessionId: sessionId
-    };
+// ── Internal auth-state observer (mimics Firebase onAuthStateChanged) ─────────
 
-    // Get user profile data based on role
-    let userProfileData = {};
-    let assignments = [];
-    let relatedData = {};
+let _authListeners = [];
 
-    if (success && profile) {
-      userProfileData = {
-        id: profile.id || userId,
-        name: profile.name || profile.displayName || 'Unknown',
-        email: profile.email || 'Unknown',
-        role: userRole,
-        ...profile
-      };
-
-      // Get role-specific data
-      if (userRole === 'doctor') {
-        try {
-          console.log(`🔍 Fetching assigned patients for doctor: ${userId}`);
-
-          // Get assigned patients
-          const patientsQuery = query(collection(db, 'doctors', userId, 'patients'));
-          const patientsSnapshot = await getDocs(patientsQuery);
-
-          console.log(`📊 Found ${patientsSnapshot.docs.length} patients assigned to doctor ${userId}`);
-
-          assignments = patientsSnapshot.docs.map(d => {
-            const patientData = { patientId: d.data().patientId, ...d.data() };
-            return patientData;
-          });
-
-          // Get doctor profile
-          const doctorDoc = await getDoc(doc(db, 'doctors', userId));
-          if (doctorDoc.exists()) {
-            relatedData.doctorProfile = doctorDoc.data();
-          }
-        } catch (error) {
-          console.error('❌ Error fetching doctor data:', error);
-        }
-      } else if (userRole === 'therapist' || userRole === 'admin') {
-        try {
-          console.log(`🔍 Fetching assigned clients for therapist: ${userId}`);
-          
-          // Get assigned clients
-          const clientsQuery = query(collection(db, 'therapists', userId, 'clients'));
-          const clientsSnapshot = await getDocs(clientsQuery);
-          
-          console.log(`📊 Found ${clientsSnapshot.docs.length} clients assigned to therapist ${userId}`);
-          
-          assignments = clientsSnapshot.docs.map(doc => {
-            const clientData = {
-              clientId: doc.data().clientId,
-              assignedAt: doc.data().assignedAt,
-              ...doc.data()
-            };
-            console.log(`👤 Client assigned:`, {
-              clientId: clientData.clientId,
-              assignedAt: clientData.assignedAt,
-              documentId: doc.id
-            });
-            return clientData;
-          });
-
-          console.log(`📋 Complete client assignments for therapist ${userId}:`, assignments);
-
-          // Get therapist-specific data
-          const therapistDoc = await getDoc(doc(db, 'therapists', userId));
-          if (therapistDoc.exists()) {
-            relatedData.therapistProfile = therapistDoc.data();
-            console.log(`👨‍⚕️ Therapist profile data:`, relatedData.therapistProfile);
-          }
-        } catch (error) {
-          console.error('❌ Error fetching therapist data:', error);
-        }
-      } else if (userRole === 'client') {
-        try {
-          // Get client profile data
-          const clientDoc = await getDoc(doc(db, 'clients', profile.clientId || userId));
-          if (clientDoc.exists()) {
-            relatedData.clientProfile = clientDoc.data();
-          }
-
-          // Get assigned therapist
-          const therapistQuery = query(collection(db, 'therapists'), where('clients', 'array-contains', userId));
-          const therapistSnapshot = await getDocs(therapistQuery);
-          if (!therapistSnapshot.empty) {
-            const therapistData = therapistSnapshot.docs[0].data();
-            assignments = [{
-              therapistId: therapistSnapshot.docs[0].id,
-              assignedAt: therapistData.assignedAt,
-              ...therapistData
-            }];
-          }
-        } catch (error) {
-          console.error('Error fetching client data:', error);
-        }
-      }
-
-      // Get recent activity data
-      try {
-        console.log(`📞 Fetching recent calls for ${userRole}: ${userId}`);
-        const recentCallsQuery = query(
-          collection(db, 'scheduledCalls'),
-          where(userRole === 'client' ? 'clientId' : 'therapistId', '==', userId)
-        );
-        const recentCallsSnapshot = await getDocs(recentCallsQuery);
-        relatedData.recentCalls = recentCallsSnapshot.docs.slice(0, 5).map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        console.log(`📞 Found ${relatedData.recentCalls.length} recent calls for ${userRole}:`, relatedData.recentCalls);
-      } catch (error) {
-        console.error('❌ Error fetching recent calls:', error);
-      }
-
-      // Get message activity - messages are in subcollections
-      try {
-        console.log(`💬 Fetching recent messages for ${userRole}: ${userId}`);
-        
-        if (userRole === 'therapist' || userRole === 'admin') {
-          // For therapists, fetch from client_chats/{clientId}/messages - BOTH directions
-          const allMessages = [];
-          
-          // Get assigned clients first
-          const therapistClientsCol = collection(db, 'therapists', userId, 'clients');
-          const clientsSnapshot = await getDocs(therapistClientsCol);
-          const assignedClientIds = clientsSnapshot.docs.map(doc => doc.data().clientId);
-          
-          for (const clientId of assignedClientIds) {
-            try {
-              // Fetch from client_chats/{clientId}/messages - BOTH directions
-              const clientMessagesRef = collection(db, 'client_chats', clientId, 'messages');
-              const clientMessagesSnap = await getDocs(clientMessagesRef);
-              const clientMessages = clientMessagesSnap.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(msg => msg.from === userId || msg.to === userId);
-              allMessages.push(...clientMessages);
-              
-              // Fetch from therapist_chats/{therapistId}/messages - BOTH directions
-              const therapistMessagesRef = collection(db, 'therapist_chats', userId, 'messages');
-              const therapistMessagesSnap = await getDocs(therapistMessagesRef);
-              const therapistMessages = therapistMessagesSnap.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(msg => msg.to === clientId || msg.from === clientId);
-              allMessages.push(...therapistMessages);
-            } catch (error) {
-              console.error(`Error fetching messages for client ${clientId}:`, error);
-            }
-          }
-          
-          // Fetch therapist-to-therapist messages
-          try {
-            const therapistChatsRef = collection(db, 'therapist_chats');
-            const therapistChatsSnap = await getDocs(therapistChatsRef);
-            const therapistToTherapistMessages = therapistChatsSnap.docs
-              .map(doc => ({ id: doc.id, ...doc.data() }))
-              .filter(chat => chat.from === userId || chat.to === userId);
-            allMessages.push(...therapistToTherapistMessages);
-          } catch (error) {
-            console.error('Error fetching therapist-to-therapist messages:', error);
-          }
-          
-          relatedData.recentMessages = allMessages.slice(0, 10);
-        } else {
-          // For clients, fetch from client_chats/{clientId}/messages where to = clientId
-          const clientMessagesRef = collection(db, 'client_chats', userId, 'messages');
-          const messagesSnapshot = await getDocs(clientMessagesRef);
-          relatedData.recentMessages = messagesSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(msg => msg.to === userId)
-            .slice(0, 10);
-        }
-        
-        console.log(`💬 Found ${relatedData.recentMessages.length} recent messages for ${userRole}:`, relatedData.recentMessages);
-      } catch (error) {
-        console.error('❌ Error fetching recent messages:', error);
-      }
-    }
-
-    const comprehensiveLoginLog = {
-      // Basic login info
-      userId,
-      userRole,
-      success,
-      errorMessage,
-      timestamp: serverTimestamp(),
-      
-      // Device and session info
-      deviceInfo,
-      
-      // User profile data
-      userProfile: userProfileData,
-      
-      // Assignments and relationships
-      assignments,
-      
-      // Related data
-      relatedData,
-      
-      // Login metadata
-      loginMetadata: {
-        loginTime: new Date().toISOString(),
-        sessionDuration: 0, // Will be updated on logout
-        loginSource: 'web_app',
-        authenticationMethod: 'email_password'
-      }
-    };
-
-    await addDoc(collection(db, 'userLoginLogs'), comprehensiveLoginLog);
-    console.log('✅ Comprehensive user login data logged for:', userId);
-    
-    // Summary log for provider login
-    if (userRole === 'doctor') {
-      console.log(`🎯 DOCTOR LOGIN SUMMARY:`);
-      console.log(`   🩺 Doctor ID: ${userId}`);
-      console.log(`   👥 Total Patients: ${assignments.length}`);
-      console.log(`   📋 Patient List:`, assignments.map(p => ({
-        patientId: p.patientId
-      })));
-    } else if (userRole === 'therapist' || userRole === 'admin') {
-      console.log(`🎯 THERAPIST LOGIN SUMMARY:`);
-      console.log(`   👨‍⚕️ Therapist ID: ${userId}`);
-      console.log(`   👥 Total Clients Assigned: ${assignments.length}`);
-      console.log(`   📋 Client List:`, assignments.map(client => ({
-        clientId: client.clientId,
-        assignedAt: client.assignedAt
-      })));
-      console.log(`   📞 Recent Calls: ${relatedData.recentCalls?.length || 0}`);
-      console.log(`   💬 Recent Messages: ${relatedData.recentMessages?.length || 0}`);
-    }
-    
-    // Store login time for session duration calculation
-    if (success) {
-      sessionStorage.setItem('loginTime', new Date().toISOString());
-    }
-    
-    // Also create a simplified login log for backward compatibility
-    const simpleLoginLog = {
-      userId,
-      userRole,
-      success,
-      errorMessage,
-      timestamp: serverTimestamp(),
-      ipAddress: 'System',
-      userAgent: navigator.userAgent,
-      sessionId: sessionId
-    };
-    await addDoc(collection(db, 'loginLogs'), simpleLoginLog);
-    
-  } catch (error) {
-    console.error('Error creating comprehensive login log:', error);
-  }
+/**
+ * Synthetic "user" object, matching the parts of the Firebase shape screens use.
+ *
+ * Mostly that is `.uid`, but the video screen also calls `getIdToken()` to
+ * re-check the session before joining a call. That method did not exist here, so
+ * the call threw and the screen reported it as "Authentication token is invalid.
+ * Please log in again." The REST session token stands in for the ID token.
+ */
+function _makeAuthUser(user) {
+  const uid = typeof user === 'string' ? user : user?.uid;
+  if (!uid) return null;
+  return {
+    ...(typeof user === 'object' ? user : {}),
+    uid,
+    getIdToken: async () => {
+      const token = sessionStorage.getItem('nessa.token');
+      if (!token) throw new Error('No active session');
+      return token;
+    },
+  };
 }
 
-// Legacy function for backward compatibility
-async function logLoginAttempt(userId, userRole, success, errorMessage = null) {
-  return logUserLoginData(userId, userRole, null, success, errorMessage);
+let _authUser = _makeAuthUser(sessionStorage.getItem('nessa.userId'));
+
+function _setAuthUser(user) {
+  _authUser = _makeAuthUser(user);
+  _authListeners.forEach(cb => cb(_authUser));
 }
 
-// Log user logout (must run while Firebase Auth session is still active)
-export async function logUserLogout(userId, userRole, profile) {
-  try {
-    if (!auth.currentUser) {
-      sessionStorage.removeItem('sessionId');
-      sessionStorage.removeItem('loginTime');
-      return;
-    }
-
-    const sessionId = sessionStorage.getItem('sessionId');
-    const loginTime = sessionStorage.getItem('loginTime');
-    
-    if (sessionId) {
-      const logoutLog = {
-        userId,
-        userRole,
-        profile: profile || {},
-        sessionId,
-        logoutTime: new Date().toISOString(),
-        loginTime: loginTime || 'Unknown',
-        sessionDuration: loginTime ? 
-          Math.floor((new Date().getTime() - new Date(loginTime).getTime()) / 1000) : 0,
-        timestamp: serverTimestamp(),
-        logoutSource: 'web_app',
-        deviceInfo: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          url: window.location.href
-        }
-      };
-
-      await addDoc(collection(db, 'userLogoutLogs'), logoutLog);
-      console.log('User logout logged for:', userId);
-      
-      // Clear session data
-      sessionStorage.removeItem('sessionId');
-      sessionStorage.removeItem('loginTime');
-    }
-  } catch (error) {
-    console.error('Error logging user logout:', error);
-  }
+/**
+ * Re-resolve the current user's role/profile and push it to all observers
+ * (App.js → session state). Call after a profile edit so dashboards reflect the
+ * change without a full page reload.
+ */
+export function refreshSession() {
+  const uid = getStoredUserId();
+  if (uid) _setAuthUser({ uid });
 }
 
-/** Log logout then sign out — call this instead of signOut() directly. */
-export async function performLogout({ userId, role, profile, clearCoupleKeys = false } = {}) {
-  const uid = userId || auth.currentUser?.uid;
-  if (uid && auth.currentUser) {
-    await logUserLogout(uid, role, profile);
-  }
-  sessionStorage.removeItem('previousSession');
-  if (clearCoupleKeys && typeof localStorage !== 'undefined') {
-    localStorage.removeItem('th.coupleId');
-    localStorage.removeItem('th.couplePartnerRole');
-    localStorage.removeItem('th.coupleInviteToken');
-    localStorage.removeItem('th.coupleMyIntakeComplete');
-  }
-  await signOut(auth);
+/**
+ * Drop-in for firebase/auth's onAuthStateChanged.
+ * Accepts both forms: onAuthStateChanged(callback) and
+ * onAuthStateChanged(authObj, callback) so App.js doesn't need to change.
+ */
+export function onAuthStateChanged(authOrCallback, maybeCallback) {
+  const cb = typeof authOrCallback === 'function' ? authOrCallback : maybeCallback;
+  _authListeners.push(cb);
+  // Immediately fire with current state (mirrors Firebase behaviour)
+  cb(_authUser);
+  return () => {
+    _authListeners = _authListeners.filter(l => l !== cb);
+  };
 }
 
-// Sign-in that accepts email OR username
-export async function signInWithEmailOrUsername(identifier, password) {
-  let userRole = null;
-  let userId = null;
-  
-  try {
-    // If identifier looks like an email, try email sign-in directly first
-    const looksLikeEmail = /@/.test(identifier);
-    if (looksLikeEmail) {
-      try {
-        const res = await signInWithEmailAndPassword(auth, identifier, password);
-        const roleResult = await resolveRole(res.user.uid);
-        userRole = roleResult.role;
-        userId = res.user.uid;
-        
-        // Log successful login
-        await logLoginAttempt(userId, userRole, true);
-        
-        return roleResult;
-      } catch (e) {
-        // Log failed login attempt
-        await logLoginAttempt(identifier, 'unknown', false, e.message);
-        // fallthrough to username scan
-      }
-    }
-    
-    // Search username in both collections
-    const userDoc = await findUserByUsernameOrEmail(identifier);
-    if (!userDoc) {
-      // Seed Vanessa (first admin) on-demand
-      if (identifier === 'nessa1' || identifier === 'franciskontoh4@gmail.com') {
-        await ensureVanessaAdmin();
-        const res = await signInWithEmailAndPassword(auth, 'franciskontoh4@gmail.com', password);
-        const roleResult = await resolveRole(res.user.uid);
-        userRole = roleResult.role;
-        userId = res.user.uid;
-        
-        // Log successful login
-        await logLoginAttempt(userId, userRole, true);
-        
-        return roleResult;
-      }
-      
-      // Log failed login attempt
-      await logLoginAttempt(identifier, 'unknown', false, 'User not found');
-      throw new Error('User not found');
-    }
-    
-    const { email } = userDoc;
-    const res = await signInWithEmailAndPassword(auth, email, password);
-    const roleResult = await resolveRole(res.user.uid);
-    userRole = roleResult.role;
-    userId = res.user.uid;
-    
-    // Log successful login with comprehensive data
-    await logUserLoginData(userId, userRole, roleResult.profile, true);
-    
-    return roleResult;
-  } catch (error) {
-    // Log failed login attempt if not already logged
-    if (!userRole) {
-      await logLoginAttempt(identifier, 'unknown', false, error.message);
-    }
-    throw error;
-  }
+// ── Role normalisation ────────────────────────────────────────────────────────
+// The backend returns Java enum-flavoured strings for some roles;
+// normalise them to the strings the web components expect.
+
+function normaliseRole(raw) {
+  if (!raw) return raw;
+  const map = {
+    home_care_nurse: 'homecare_nurse', // backend uses underscore, web uses camel
+    homecare_nurse:  'homecare_nurse',
+    client:          'client',
+    patient:         'client',         // PATIENT role treated as client on web
+    CLIENT:          'client',
+    PATIENT:         'client',
+  };
+  return map[raw] ?? raw.toLowerCase();
 }
+
+// ── resolveRole ───────────────────────────────────────────────────────────────
+// Called by App.js after onAuthStateChanged fires with a user object.
 
 export async function resolveRole(uid) {
-  console.log('Resolving role for UID:', uid);
+  try {
+    const data = await api(`/api/v1/auth/mobile/resolve-role/${uid}`, {
+      authenticated: hasActiveSession(), // use token if available, else public
+    });
+    if (!data || data.role === 'guest') return { role: 'guest', profile: null };
 
-  // Check pharmacies — by doc ID first (new: setDoc uses uid as ID), then by uid field (legacy addDoc)
-  try {
-    const pharmacySnap = await getDoc(doc(db, 'pharmacies', uid));
-    if (pharmacySnap.exists()) {
-      const data = pharmacySnap.data();
-      return { role: 'pharmacy', profile: { id: pharmacySnap.id, ...data, role: 'pharmacy' } };
-    }
-  } catch (_) {}
-  try {
-    const phFallback = await getDocs(query(collection(db, 'pharmacies'), where('uid', '==', uid)));
-    if (!phFallback.empty) {
-      const d = phFallback.docs[0].data();
-      return { role: 'pharmacy', profile: { id: phFallback.docs[0].id, ...d, role: 'pharmacy' } };
-    }
-  } catch (_) {}
+    const role    = normaliseRole(data.role);
+    // `uid` is the Firebase-era identifier a lot of shared components still read
+    // (VideoCall does `user.uid` throughout). resolve-role only returns `id`, so
+    // without this alias those screens saw `undefined` and silently rendered
+    // empty — the therapist Video Call page showed "No clients assigned yet" and
+    // "No scheduled calls yet" even with an assigned client and a booked call.
+    const rawProfile = data.profile || {};
+    const profile = { ...rawProfile, role, uid: rawProfile.uid || rawProfile.id || uid };
 
-  // Check pharmacy branches
-  try {
-    const branchSnap = await getDoc(doc(db, 'pharmacyBranches', uid));
-    if (branchSnap.exists()) {
-      const data = branchSnap.data();
-      return { role: 'branch_user', profile: { id: branchSnap.id, ...data, role: 'branch_user' } };
+    // Account status check — mirror the Firebase version's blocked-status logic
+    const blockedStatuses = ['inactive', 'discharged', 'on_hold', 'suspended', 'disabled'];
+    if (blockedStatuses.includes(String(profile.status || '').toLowerCase())) {
+      const status = String(profile.status).toLowerCase();
+      const msgs = {
+        inactive:   'Your account has been deactivated. Please contact support for assistance.',
+        discharged: 'Your account has been discharged. Please contact support for assistance.',
+        on_hold:    'Your account is currently on hold. Please contact support for assistance.',
+      };
+      throw new Error(msgs[status] || 'Your account is not active. Please contact support for assistance.');
     }
-  } catch (_) {}
-  try {
-    const brFallback = await getDocs(query(collection(db, 'pharmacyBranches'), where('uid', '==', uid)));
-    if (!brFallback.empty) {
-      const d = brFallback.docs[0].data();
-      return { role: 'branch_user', profile: { id: brFallback.docs[0].id, ...d, role: 'branch_user' } };
-    }
-  } catch (_) {}
 
-  // Check lab parent accounts
-  try {
-    const labSnap = await getDoc(doc(db, 'labs', uid));
-    if (labSnap.exists()) {
-      const data = labSnap.data();
-      return { role: 'lab', profile: { id: labSnap.id, ...data, role: 'lab' } };
+    // Persist refreshed profile so session restore is always up-to-date
+    storeSession({ role, profile });
+    return { role, profile };
+  } catch (err) {
+    if (err.message?.includes('not active') || err.message?.includes('deactivated') ||
+        err.message?.includes('discharged') || err.message?.includes('on hold')) {
+      throw err;
     }
-  } catch (_) {}
-  try {
-    const labFallback = await getDocs(query(collection(db, 'labs'), where('uid', '==', uid)));
-    if (!labFallback.empty) {
-      const d = labFallback.docs[0].data();
-      return { role: 'lab', profile: { id: labFallback.docs[0].id, ...d, role: 'lab' } };
-    }
-  } catch (_) {}
-
-  // Check scan parent accounts
-  try {
-    const scanSnap = await getDoc(doc(db, 'scanCenters', uid));
-    if (scanSnap.exists()) {
-      const data = scanSnap.data();
-      return { role: 'scan', profile: { id: scanSnap.id, ...data, role: 'scan' } };
-    }
-  } catch (_) {}
-  try {
-    const scanFallback = await getDocs(query(collection(db, 'scanCenters'), where('uid', '==', uid)));
-    if (!scanFallback.empty) {
-      const d = scanFallback.docs[0].data();
-      return { role: 'scan', profile: { id: scanFallback.docs[0].id, ...d, role: 'scan' } };
-    }
-  } catch (_) {}
-
-  // Check lab branches
-  try {
-    const labBranchSnap = await getDoc(doc(db, 'labBranches', uid));
-    if (labBranchSnap.exists()) {
-      const data = labBranchSnap.data();
-      return { role: 'lab_branch', profile: { id: labBranchSnap.id, ...data, role: 'lab_branch' } };
-    }
-  } catch (_) {}
-  try {
-    const lbFallback = await getDocs(query(collection(db, 'labBranches'), where('uid', '==', uid)));
-    if (!lbFallback.empty) {
-      const d = lbFallback.docs[0].data();
-      return { role: 'lab_branch', profile: { id: lbFallback.docs[0].id, ...d, role: 'lab_branch' } };
-    }
-  } catch (_) {}
-
-  // Home-care nurses
-  try {
-    const nurseSnap = await getDoc(doc(db, 'homeCareNurses', uid));
-    if (nurseSnap.exists()) {
-      const data = nurseSnap.data();
-      return { role: 'homecare_nurse', profile: { id: nurseSnap.id, ...data, role: 'homecare_nurse' } };
-    }
-  } catch (_) {}
-
-  // Check scan branches
-  try {
-    const scanBranchSnap = await getDoc(doc(db, 'scanBranches', uid));
-    if (scanBranchSnap.exists()) {
-      const data = scanBranchSnap.data();
-      return { role: 'scan_branch', profile: { id: scanBranchSnap.id, ...data, role: 'scan_branch' } };
-    }
-  } catch (_) {}
-  try {
-    const sbFallback = await getDocs(query(collection(db, 'scanBranches'), where('uid', '==', uid)));
-    if (!sbFallback.empty) {
-      const d = sbFallback.docs[0].data();
-      return { role: 'scan_branch', profile: { id: sbFallback.docs[0].id, ...d, role: 'scan_branch' } };
-    }
-  } catch (_) {}
-
-  // Check admin collection (standalone admins separate from therapists)
-  const adminRef = doc(db, 'admins', uid);
-  const adminSnap = await getDoc(adminRef);
-  if (adminSnap.exists()) {
-    const data = adminSnap.data();
-    return {
-      role: 'admin',
-      profile: { id: adminSnap.id, ...data, role: 'admin' },
-    };
+    console.warn('resolveRole failed, falling back to stored session:', err?.message);
+    // Fall back to what's in sessionStorage so a network blip doesn't log out the user
+    const profile = getStoredProfile();
+    const role    = profile?.role || null;
+    return { role, profile };
   }
-
-  // Check doctors collection first
-  const doctorRef = doc(db, 'doctors', uid);
-  const doctorSnap = await getDoc(doctorRef);
-
-  if (doctorSnap.exists()) {
-    const doctorData = doctorSnap.data();
-    console.log('Found doctor data:', doctorData);
-
-    return {
-      role: 'doctor',
-      profile: {
-        id: doctorSnap.id,
-        ...doctorData,
-        role: 'doctor'
-      }
-    };
-  }
-
-  // Check therapists collection
-  const therapistRef = doc(db, 'therapists', uid);
-  const therapistSnap = await getDoc(therapistRef);
-
-  if (therapistSnap.exists()) {
-    const therapistData = therapistSnap.data();
-    console.log('Found therapist data:', therapistData);
-
-    // Admin therapist: therapist portal shell + extra admin tools (not platform super admin).
-    const isAdminTherapist =
-      therapistData.role === 'admin' || therapistData.type === 'Administrator';
-
-    return {
-      role: 'therapist',
-      profile: {
-        id: therapistSnap.id,
-        ...therapistData,
-        role: isAdminTherapist ? 'admin' : therapistData.role || 'user',
-        isAdminTherapist,
-      },
-    };
-  }
-
-  // Check auth collection for clients
-  const authRef = doc(db, 'auth', uid);
-  const authSnap = await getDoc(authRef);
-
-  if (authSnap.exists()) {
-    const authData = authSnap.data();
-    console.log('Found auth data:', authData);
-
-    // Check client status in both auth and clients collections
-    let clientStatus = authData.status || 'active';
-
-    let clientData = null;
-    const clientDocId = authData.clientId || uid;
-    try {
-      const clientSnap = await getDoc(doc(db, 'clients', clientDocId));
-      if (clientSnap.exists()) {
-        clientData = clientSnap.data();
-        clientStatus = clientData.status || clientStatus;
-      } else if (clientDocId !== uid) {
-        const altSnap = await getDoc(doc(db, 'clients', uid));
-        if (altSnap.exists()) {
-          clientData = altSnap.data();
-          clientStatus = clientData.status || clientStatus;
-        }
-      }
-    } catch (error) {
-      console.log('Error checking clients collection:', error);
-    }
-
-    const blocked = ['inactive', 'discharged', 'on_hold', 'suspended', 'disabled'];
-    if (blocked.includes(String(clientStatus).toLowerCase())) {
-      let errorMessage = 'Your account is not active. Please contact support for assistance.';
-      if (clientStatus === 'inactive') {
-        errorMessage = 'Your account has been deactivated. Please contact support for assistance.';
-      } else if (clientStatus === 'discharged') {
-        errorMessage = 'Your account has been discharged. Please contact support for assistance.';
-      } else if (clientStatus === 'on_hold') {
-        errorMessage = 'Your account is currently on hold. Please contact support for assistance.';
-      }
-      throw new Error(errorMessage);
-    }
-
-    return {
-      role: 'client',
-      profile: {
-        id: authSnap.id,
-        ...authData,
-        ...(clientData || {}),
-        userIntent: authData.userIntent || clientData?.userIntent,
-        name: authData.name || clientData?.clientName || clientData?.displayName,
-        status: clientStatus,
-        role: 'client',
-      },
-    };
-  }
-
-  console.log('No user data found, returning guest role');
-  return { role: 'guest', profile: null };
 }
+
+// ── findUserByUsernameOrEmail ─────────────────────────────────────────────────
 
 export async function findUserByUsernameOrEmail(identifier) {
-  // Check pharmacies by username
-  const phQ = query(collection(db, 'pharmacies'), where('username', '==', identifier));
-  const phR = await getDocs(phQ);
-  if (!phR.empty) return { id: phR.docs[0].id, ...phR.docs[0].data() };
-
-  // Check pharmacies by email
-  const phQE = query(collection(db, 'pharmacies'), where('email', '==', identifier));
-  const phRE = await getDocs(phQE);
-  if (!phRE.empty) return { id: phRE.docs[0].id, ...phRE.docs[0].data() };
-
-  // Check pharmacy branches by username
-  const brQ = query(collection(db, 'pharmacyBranches'), where('username', '==', identifier));
-  const brR = await getDocs(brQ);
-  if (!brR.empty) return { id: brR.docs[0].id, ...brR.docs[0].data() };
-
-  // Check pharmacy branches by email
-  const brQE = query(collection(db, 'pharmacyBranches'), where('email', '==', identifier));
-  const brRE = await getDocs(brQE);
-  if (!brRE.empty) return { id: brRE.docs[0].id, ...brRE.docs[0].data() };
-
-  // Check labs by username/email
-  const lQ = query(collection(db, 'labs'), where('username', '==', identifier));
-  const lR = await getDocs(lQ);
-  if (!lR.empty) return { id: lR.docs[0].id, ...lR.docs[0].data() };
-  const lQE = query(collection(db, 'labs'), where('email', '==', identifier));
-  const lRE = await getDocs(lQE);
-  if (!lRE.empty) return { id: lRE.docs[0].id, ...lRE.docs[0].data() };
-
-  // Check scan centers by username/email
-  const sQ = query(collection(db, 'scanCenters'), where('username', '==', identifier));
-  const sR = await getDocs(sQ);
-  if (!sR.empty) return { id: sR.docs[0].id, ...sR.docs[0].data() };
-  const sQE = query(collection(db, 'scanCenters'), where('email', '==', identifier));
-  const sRE = await getDocs(sQE);
-  if (!sRE.empty) return { id: sRE.docs[0].id, ...sRE.docs[0].data() };
-
-  // Check lab branches by username/email
-  const lbQ = query(collection(db, 'labBranches'), where('username', '==', identifier));
-  const lbR = await getDocs(lbQ);
-  if (!lbR.empty) return { id: lbR.docs[0].id, ...lbR.docs[0].data() };
-  const lbQE = query(collection(db, 'labBranches'), where('email', '==', identifier));
-  const lbRE = await getDocs(lbQE);
-  if (!lbRE.empty) return { id: lbRE.docs[0].id, ...lbRE.docs[0].data() };
-
-  // Check scan branches by username/email
-  const sbQ = query(collection(db, 'scanBranches'), where('username', '==', identifier));
-  const sbR = await getDocs(sbQ);
-  if (!sbR.empty) return { id: sbR.docs[0].id, ...sbR.docs[0].data() };
-  const sbQE = query(collection(db, 'scanBranches'), where('email', '==', identifier));
-  const sbRE = await getDocs(sbQE);
-  if (!sbRE.empty) return { id: sbRE.docs[0].id, ...sbRE.docs[0].data() };
-
-  const hnQ = query(collection(db, 'homeCareNurses'), where('username', '==', identifier));
-  const hnR = await getDocs(hnQ);
-  if (!hnR.empty) return { id: hnR.docs[0].id, ...hnR.docs[0].data() };
-  const hnQE = query(collection(db, 'homeCareNurses'), where('email', '==', identifier));
-  const hnRE = await getDocs(hnQE);
-  if (!hnRE.empty) return { id: hnRE.docs[0].id, ...hnRE.docs[0].data() };
-
-  // Check admins
-  const adQ = query(collection(db, 'admins'), where('username', '==', identifier));
-  const adR = await getDocs(adQ);
-  if (!adR.empty) return { id: adR.docs[0].id, ...adR.docs[0].data() };
-
-  // Check doctors collection
-  const dQ = query(collection(db, 'doctors'), where('username', '==', identifier));
-  const dR = await getDocs(dQ);
-  if (!dR.empty) return { id: dR.docs[0].id, ...dR.docs[0].data() };
-
-  const dQE = query(collection(db, 'doctors'), where('email', '==', identifier));
-  const dRE = await getDocs(dQE);
-  if (!dRE.empty) return { id: dRE.docs[0].id, ...dRE.docs[0].data() };
-
-  // Check therapists collection
-  const tQ = query(collection(db, 'therapists'), where('username', '==', identifier));
-  const tR = await getDocs(tQ);
-  if (!tR.empty) return { id: tR.docs[0].id, ...tR.docs[0].data() };
-
-  // Check therapists by email
-  const tQE = query(collection(db, 'therapists'), where('email', '==', identifier));
-  const tRE = await getDocs(tQE);
-  if (!tRE.empty) return { id: tRE.docs[0].id, ...tRE.docs[0].data() };
-
-  // Check auth collection for clients
-  const cQ = query(collection(db, 'auth'), where('username', '==', identifier));
-  const cR = await getDocs(cQ);
-  if (!cR.empty) return { id: cR.docs[0].id, ...cR.docs[0].data() };
-
-  const cQE = query(collection(db, 'auth'), where('email', '==', identifier));
-  const cRE = await getDocs(cQE);
-  if (!cRE.empty) return { id: cRE.docs[0].id, ...cRE.docs[0].data() };
-
-  return null;
+  try {
+    const res = await api(
+      `/api/v1/auth/mobile/find-user?identifier=${encodeURIComponent(identifier)}`,
+      { authenticated: false },
+    );
+    // Backend returns { id, email, source }
+    return res ? { id: res.id, email: res.email } : null;
+  } catch {
+    return null;
+  }
 }
 
+// ── signInWithEmailOrUsername ─────────────────────────────────────────────────
+// Main login entry point — called by Login.js.
 
+export async function signInWithEmailOrUsername(identifier, password) {
+  const looksLikeEmail = /@/.test(identifier.trim());
+  let email = looksLikeEmail ? identifier.trim() : null;
+
+  // Username path: resolve to email first
+  if (!email) {
+    const found = await findUserByUsernameOrEmail(identifier.trim());
+    if (!found?.email) {
+      _logLoginActivity({ identifier, success: false, errorMessage: 'User not found' });
+      throw new Error('User not found');
+    }
+    email = found.email;
+  }
+
+  // Authenticate
+  let loginData;
+  try {
+    loginData = await api('/api/v1/auth/login', {
+      method:        'POST',
+      authenticated: false,
+      body:          { email, password },
+    });
+  } catch (err) {
+    _logLoginActivity({ identifier, success: false, errorMessage: err.message });
+    throw err;
+  }
+
+  const { token, refreshToken, userId, role: rawRole } = loginData;
+
+  // Persist tokens immediately so resolveRole's api() call is authenticated
+  storeSession({ token, refreshToken, userId });
+
+  // Resolve full role + profile
+  let roleResult;
+  try {
+    roleResult = await resolveRole(userId);
+  } catch (err) {
+    // Blocked account — clear partial session and re-throw
+    clearSession();
+    _logLoginActivity({ userId, role: rawRole, success: false, errorMessage: err.message });
+    throw err;
+  }
+
+  const { role, profile } = roleResult;
+
+  // Persist complete session
+  storeSession({ role, profile });
+  sessionStorage.setItem(
+    'previousSession',
+    JSON.stringify({ userId, role, profile }),
+  );
+
+  // Notify observers — App.js will react and set the session state
+  _setAuthUser({ uid: userId });
+
+  // Best-effort login activity log
+  _logLoginActivity({ userId, role, success: true });
+
+  return { role, profile };
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+
+export async function logUserLogout(userId, userRole, profile) {
+  const sessionId  = sessionStorage.getItem('sessionId');
+  const loginTime  = sessionStorage.getItem('loginTime');
+  if (!sessionId) return;
+  const payload = {
+    userId:      userId || getStoredUserId(),
+    userRole:    userRole || null,
+    profile:     profile || null,
+    logoutTime:  new Date().toISOString(),
+    loginTime:   loginTime || null,
+    logoutSource: 'web_app',
+    deviceInfo: {
+      userAgent: navigator.userAgent,
+      platform:  navigator.platform,
+      url:       window.location.href,
+    },
+  };
+  api('/api/v1/auth/mobile/logout-logs', {
+    method:        'POST',
+    authenticated: false,
+    body:          payload,
+  }).catch(() => {});
+}
+
+export async function performLogout({ userId, role, profile } = {}) {
+  const uid = userId || getStoredUserId();
+
+  // Log the logout event (best-effort)
+  if (uid) {
+    await logUserLogout(uid, role, profile).catch(() => {});
+  }
+
+  // Revoke tokens on the backend (best-effort — don't block the UX)
+  const token        = getStoredToken();
+  const refreshToken = getStoredRefreshToken();
+  api('/api/v1/auth/logout', {
+    method:        'POST',
+    authenticated: false,
+    body:          { refreshToken },
+  }).catch(() => {});
+
+  // Clear couple session if present
+  try {
+    const { clearCoupleLocalSession } = await import('../../services/coupleTherapyService');
+    clearCoupleLocalSession();
+  } catch { /* ignore */ }
+
+  clearSession();
+  _setAuthUser(null);
+}
+
+// ── Post-registration session setup ──────────────────────────────────────────
+// Called by SignUp.js after a successful /auth/register call so the app
+// enters an authenticated state without requiring a second login round-trip.
+
+export async function completeRegistrationSession(loginData) {
+  const { token, refreshToken, userId } = loginData;
+  storeSession({ token, refreshToken, userId });
+  try {
+    const { role, profile } = await resolveRole(userId);
+    storeSession({ role, profile });
+    sessionStorage.setItem('previousSession', JSON.stringify({ userId, role, profile }));
+    _setAuthUser({ uid: userId });
+    return { role, profile };
+  } catch {
+    _setAuthUser({ uid: userId });
+    return { role: 'client', profile: { id: userId, role: 'client' } };
+  }
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function _logLoginActivity({ userId, role, success, errorMessage, identifier } = {}) {
+  const sessionId = sessionStorage.getItem('sessionId') ||
+    `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  if (!sessionStorage.getItem('sessionId')) sessionStorage.setItem('sessionId', sessionId);
+  if (success) sessionStorage.setItem('loginTime', new Date().toISOString());
+
+  const payload = {
+    userId:      userId || null,
+    userRole:    role   || null,
+    success:     !!success,
+    errorMessage: errorMessage || null,
+    loginTime:   new Date().toISOString(),
+    loginSource: 'web_app',
+    deviceInfo: {
+      userAgent:        navigator.userAgent,
+      platform:         navigator.platform,
+      language:         navigator.language,
+      screenResolution: `${window.screen.width}x${window.screen.height}`,
+      timezone:         Intl.DateTimeFormat().resolvedOptions().timeZone,
+      url:              window.location.href,
+      sessionId,
+    },
+  };
+
+  // Fire-and-forget — never block login on analytics
+  api('/api/v1/auth/mobile/login-logs', {
+    method:        'POST',
+    authenticated: false,
+    body:          payload,
+  }).catch(() => {});
+}

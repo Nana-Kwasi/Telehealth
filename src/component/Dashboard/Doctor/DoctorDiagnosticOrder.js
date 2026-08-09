@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Check, MapPin, AlertCircle, Search, Plus, Trash2 } from 'lucide-react';
-import { db, auth } from '../../Auth/firebaseConfig';
+import { db, auth } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, addDoc, serverTimestamp, doc, deleteDoc, getDoc,
   onSnapshot,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { useLocation } from 'react-router-dom';
 import { enrichPatientNames } from '../../../utils/enrichPatientNames';
 
@@ -55,7 +55,9 @@ export default function DoctorDiagnosticOrder({ profile }) {
 
   const [step, setStep] = useState(1);
   const [orderType, setOrderType] = useState(null);
-  const [selectedTest, setSelectedTest] = useState('');
+  const [selectedTests, setSelectedTests] = useState([]);
+  const toggleTest = (test) =>
+    setSelectedTests(prev => prev.includes(test) ? prev.filter(t => t !== test) : [...prev, test]);
   const [patients, setPatients] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [branches, setBranches] = useState([]);
@@ -171,8 +173,35 @@ export default function DoctorDiagnosticOrder({ profile }) {
     setBranches([]);
     setSearchPhase({ message: 'Loading registered centers…', sub: null });
     try {
-      const snap = await getDocs(collection(db, orderType === 'lab' ? 'labBranches' : 'scanBranches'));
-      let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Branches can't be listed globally — the REST branch endpoint is scoped per
+      // organization (GET /organizations/{orgId}/branches), so the shim returns an
+      // empty set for an unscoped getDocs(collection('labBranches')). Enumerate the
+      // parent centers first, then collect each one's branches (mirrors the doctor
+      // prescription pharmacy directory).
+      const parentCol = orderType === 'lab' ? 'labs' : 'scanCenters';
+      const branchCol = orderType === 'lab' ? 'labBranches' : 'scanBranches';
+      const parentKey = orderType === 'lab' ? 'labId' : 'scanId';
+      const parentSnap = await getDocs(collection(db, parentCol));
+      const parents = parentSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(o => { const s = String(o.status || '').toLowerCase(); return s !== 'rejected' && s !== 'suspended' && s !== 'deleted'; });
+      const branchLists = await Promise.all(parents.map(async (org) => {
+        const orgName = org.labName || org.scanCenterName || org.centerName || org.name || '';
+        try {
+          const brSnap = await getDocs(query(collection(db, branchCol), where(parentKey, '==', org.id)));
+          return brSnap.docs.map(d => {
+            const br = { id: d.id, ...d.data() };
+            return {
+              ...br,
+              [parentKey]: org.id,
+              centerName: br.centerName || orgName,
+              branchName: br.branchName || br.name || orgName || 'Branch',
+              address: br.address || [br.city, br.country].filter(Boolean).join(', '),
+            };
+          });
+        } catch { return []; }
+      }));
+      let list = branchLists.flat();
       list = list.filter((b) => {
         const s = b.status;
         return s === undefined || s === null || String(s).toLowerCase() === 'active';
@@ -257,7 +286,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
 
   const handleTypeSelect = (type) => {
     setOrderType(type);
-    setSelectedTest('');
+    setSelectedTests([]);
     setSelectedBranch(null);
     setBranches([]);
     setSearchRingKm(null);
@@ -266,7 +295,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
 
   const canNext = () => {
     if (step === 1) return !!orderType;
-    if (step === 2) return !!selectedTest;
+    if (step === 2) return selectedTests.length > 0;
     if (step === 3) return !!selectedPatient;
     if (step === 4) return !!selectedBranch;
     return false;
@@ -283,7 +312,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
       });
       setCustomLabel('');
       setShowCustomModal(false);
-      setSelectedTest(label);
+      setSelectedTests(prev => prev.includes(label) ? prev : [...prev, label]);
     } catch {
       alert('Could not save your custom entry.');
     }
@@ -293,45 +322,56 @@ export default function DoctorDiagnosticOrder({ profile }) {
     if (!window.confirm(`Remove "${entry.label}" from your list?`)) return;
     try {
       await deleteDoc(doc(db, 'doctors', auth.currentUser.uid, 'diagnosticCustomEntries', entry.id));
-      if (selectedTest === entry.label) setSelectedTest('');
+      setSelectedTests(prev => prev.filter(t => t !== entry.label));
     } catch {
       alert('Could not delete.');
     }
   };
 
   const handleSubmit = async () => {
-    if (!orderType || !selectedTest || !selectedPatient || !selectedBranch) return;
+    if (!orderType || selectedTests.length === 0 || !selectedPatient || !selectedBranch) return;
     setSubmitting(true);
     try {
-      const orderId = generateOrderId();
-      await addDoc(collection(db, 'diagnosticOrders'), {
-        orderId,
-        doctorId: auth.currentUser.uid,
-        doctorName: profile.name || 'Doctor',
-        patientId: selectedPatient.id,
+      // One order per selected test/scan so each is tracked independently by the
+      // lab/scan center, but they share the branch, patient and notes.
+      const created = [];
+      for (const test of selectedTests) {
+        const orderId = generateOrderId();
+        await addDoc(collection(db, 'diagnosticOrders'), {
+          orderId,
+          doctorId: auth.currentUser.uid,
+          doctorName: profile.name || 'Doctor',
+          patientId: selectedPatient.id,
+          patientName: selectedPatient.name,
+          patientNameLower: (selectedPatient.name || '').toLowerCase(),
+          centerType: orderType,
+          branchId: selectedBranch.id,
+          centerId: selectedBranch.labId || selectedBranch.scanId || selectedBranch.id,
+          centerName: selectedBranch.branchName || selectedBranch.centerName || selectedBranch.labName || 'Center',
+          testType: test,
+          notes: notes.trim(),
+          status: 'PENDING',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        await addDoc(collection(db, 'patientTimeline'), {
+          patientId: selectedPatient.id,
+          type: orderType === 'lab' ? 'LAB_ORDER' : 'SCAN_ORDER',
+          title: `${orderType === 'lab' ? 'Lab' : 'Scan'} order: ${test}`,
+          status: 'PENDING',
+          relatedId: orderId,
+          actor: { role: 'DOCTOR', name: profile.name || 'Doctor' },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+        created.push({ orderId, test });
+      }
+      setSubmitted({
         patientName: selectedPatient.name,
-        patientNameLower: (selectedPatient.name || '').toLowerCase(),
-        centerType: orderType,
-        branchId: selectedBranch.id,
-        centerId: selectedBranch.labId || selectedBranch.scanId || selectedBranch.id,
-        centerName: selectedBranch.branchName || selectedBranch.centerName || selectedBranch.labName || 'Center',
-        testType: selectedTest,
-        notes: notes.trim(),
-        status: 'PENDING',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        tests: selectedTests,
+        orders: created,
+        orderId: created.length === 1 ? created[0].orderId : null,
       });
-      await addDoc(collection(db, 'patientTimeline'), {
-        patientId: selectedPatient.id,
-        type: orderType === 'lab' ? 'LAB_ORDER' : 'SCAN_ORDER',
-        title: `${orderType === 'lab' ? 'Lab' : 'Scan'} order: ${selectedTest}`,
-        status: 'PENDING',
-        relatedId: orderId,
-        actor: { role: 'DOCTOR', name: profile.name || 'Doctor' },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }).catch(() => {});
-      setSubmitted({ orderId, patientName: selectedPatient.name, testType: selectedTest });
     } catch (e) {
       console.error(e);
       alert('Could not submit order. Please try again.');
@@ -342,7 +382,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
     setSubmitted(null);
     setStep(1);
     setOrderType(null);
-    setSelectedTest('');
+    setSelectedTests([]);
     setSelectedPatient(preselectedPatientId ? selectedPatient : null);
     setSelectedBranch(null);
     setNotes('');
@@ -404,12 +444,23 @@ export default function DoctorDiagnosticOrder({ profile }) {
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#f0fdf4', border: '2px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
             <Check size={32} color="#16a34a" />
           </div>
-          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>Order Submitted</h2>
+          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+            {submitted.orders?.length > 1 ? `${submitted.orders.length} Orders Submitted` : 'Order Submitted'}
+          </h2>
           <p style={{ margin: '0 0 0.25rem', color: '#64748b' }}>Patient: <strong>{submitted.patientName}</strong></p>
-          <p style={{ margin: '0 0 1.5rem', color: '#64748b' }}>Test: <strong>{submitted.testType}</strong></p>
-          <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: '1rem 1.5rem', marginBottom: '1.25rem', textAlign: 'left', maxWidth: 320, margin: '0 auto 1.5rem' }}>
-            <p style={{ margin: '0 0 0.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Order Reference</p>
-            <p style={{ margin: 0, fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 800, color: '#16a34a', letterSpacing: '0.1em' }}>{submitted.orderId}</p>
+          <p style={{ margin: '0 0 1.5rem', color: '#64748b' }}>
+            {submitted.orders?.length > 1 ? 'Tests: ' : 'Test: '}<strong>{(submitted.tests || []).join(', ')}</strong>
+          </p>
+          <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: '1rem 1.5rem', marginBottom: '1.25rem', textAlign: 'left', maxWidth: 360, margin: '0 auto 1.5rem' }}>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {submitted.orders?.length > 1 ? 'Order References' : 'Order Reference'}
+            </p>
+            {(submitted.orders || []).map(o => (
+              <div key={o.orderId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '0.2rem 0' }}>
+                {submitted.orders.length > 1 && <span style={{ fontSize: '0.78rem', color: '#475569', textAlign: 'left' }}>{o.test}</span>}
+                <span style={{ fontFamily: 'monospace', fontSize: submitted.orders.length > 1 ? '0.95rem' : '1.3rem', fontWeight: 800, color: '#16a34a', letterSpacing: '0.08em' }}>{o.orderId}</span>
+              </div>
+            ))}
           </div>
           <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.6, marginBottom: '1.5rem' }}>
             The patient will be notified. They must present their National ID at the center.
@@ -486,36 +537,45 @@ export default function DoctorDiagnosticOrder({ profile }) {
             {/* STEP 2 — Select Test */}
             {step === 2 && (
               <div>
-                <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-                  Select {orderType === 'lab' ? 'Lab Test' : 'Scan Type'}
+                <h3 style={{ margin: '0 0 0.35rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                  Select {orderType === 'lab' ? 'Lab Test(s)' : 'Scan Type(s)'}
                 </h3>
+                <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: '#64748b' }}>
+                  Choose one or more — {selectedTests.length} selected.
+                </p>
                 <button type="button" className="doctor-btn doctor-btn-primary doctor-btn-sm" style={{ marginBottom: '1rem', background: '#059669', borderColor: '#059669' }}
                   onClick={() => setShowCustomModal(true)}>
                   <Plus size={14} /> Add my own {orderType === 'lab' ? 'test' : 'scan type'}
                 </button>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '0.65rem' }}>
-                  {(orderType === 'lab' ? LAB_TESTS : SCAN_TYPES).map(test => (
-                    <button key={test} type="button" onClick={() => setSelectedTest(test)}
+                  {(orderType === 'lab' ? LAB_TESTS : SCAN_TYPES).map(test => {
+                    const on = selectedTests.includes(test);
+                    return (
+                    <button key={test} type="button" onClick={() => toggleTest(test)}
                       style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
                         padding: '0.85rem 1rem', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
                         fontSize: '0.875rem', fontWeight: 600, transition: 'all 0.15s',
-                        background: selectedTest === test ? accentBg : '#f8fafc',
-                        border: `1.5px solid ${selectedTest === test ? accentBorder : '#e2e8f0'}`,
-                        color: selectedTest === test ? accent : '#0f172a',
+                        background: on ? accentBg : '#f8fafc',
+                        border: `1.5px solid ${on ? accentBorder : '#e2e8f0'}`,
+                        color: on ? accent : '#0f172a',
                       }}>
-                      {test}
+                      <span>{test}</span>
+                      {on && <Check size={15} color={accent} style={{ flexShrink: 0 }} />}
                     </button>
-                  ))}
-                  {customEntries.filter(c => c.category === orderType).map(c => (
+                    );
+                  })}
+                  {customEntries.filter(c => (c.category || c.entryType) === orderType).map(c => (
                     <div key={c.id} style={{
                       display: 'flex', alignItems: 'center', gap: '0.35rem',
                       padding: '0.35rem 0.35rem 0.35rem 0.85rem', borderRadius: 10,
-                      background: selectedTest === c.label ? accentBg : '#f8fafc',
-                      border: `1.5px solid ${selectedTest === c.label ? accentBorder : '#e2e8f0'}`,
+                      background: selectedTests.includes(c.label) ? accentBg : '#f8fafc',
+                      border: `1.5px solid ${selectedTests.includes(c.label) ? accentBorder : '#e2e8f0'}`,
                     }}>
-                      <button type="button" onClick={() => setSelectedTest(c.label)}
-                        style={{ flex: 1, textAlign: 'left', padding: '0.5rem 0', border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: selectedTest === c.label ? accent : '#0f172a' }}>
-                        {c.label}
+                      <button type="button" onClick={() => toggleTest(c.label)}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', textAlign: 'left', padding: '0.5rem 0', border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: selectedTests.includes(c.label) ? accent : '#0f172a' }}>
+                        <span>{c.label}</span>
+                        {selectedTests.includes(c.label) && <Check size={15} color={accent} style={{ flexShrink: 0 }} />}
                       </button>
                       <button type="button" title="Remove" onClick={() => deleteCustomEntry(c)}
                         style={{ padding: '0.45rem', border: 'none', background: '#fef2f2', borderRadius: 8, cursor: 'pointer', color: '#b91c1c' }}>
@@ -622,7 +682,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
                 <div style={{ background: '#f8fafc', borderRadius: 12, border: '1.5px solid #e2e8f0', padding: '1.25rem', marginBottom: '1.25rem' }}>
                   {[
                     ['Order Type', orderType === 'lab' ? '🧪 Laboratory Test' : '🩻 Imaging / Scan'],
-                    ['Test / Scan', selectedTest],
+                    [selectedTests.length > 1 ? 'Tests / Scans' : 'Test / Scan', selectedTests.join(', ')],
                     ['Patient', selectedPatient?.name],
                     ['Center', selectedBranch?.branchName || selectedBranch?.centerName || selectedBranch?.labName],
                     ['Address', selectedBranch?.address],

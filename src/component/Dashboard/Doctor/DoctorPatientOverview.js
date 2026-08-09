@@ -4,10 +4,10 @@ import {
   ChevronLeft, Calendar, Pill, FileText, FlaskConical, Activity, MessageSquare,
   Clock, ChevronRight, Store,
 } from 'lucide-react';
-import { db, auth } from '../../Auth/firebaseConfig';
+import { db, auth } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, getDoc, doc, setDoc, serverTimestamp,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 
 export default function DoctorPatientOverview({ profile }) {
   const { patientId } = useParams();
@@ -29,8 +29,12 @@ export default function DoctorPatientOverview({ profile }) {
       setLoading(true);
       try {
         const uid = auth.currentUser.uid;
-        const [authSnap, ppSnap, apptSnap, rxSnap, notesSnap, ordSnap, tlSnap] = await Promise.all([
-          getDoc(doc(db, 'auth', patientId)),
+        // NOTE: the patient's /auth doc is self-or-admin only, so a doctor reading
+        // another user got 403 → name fell back to "Patient" and the Email line never
+        // rendered. /patients/{id} (patientProfiles) is doctor-readable and returns
+        // name + email, so source the header from there with the appointment as a
+        // fallback — same approach DoctorPatientDetail already uses.
+        const [ppSnap, apptSnap, rxSnap, notesSnap, ordSnap, tlSnap] = await Promise.all([
           getDoc(doc(db, 'patientProfiles', patientId)),
           getDocs(query(collection(db, 'doctorAppointments'), where('doctorId', '==', uid), where('clientId', '==', patientId))),
           getDocs(query(collection(db, 'doctorPrescriptions'), where('doctorId', '==', uid), where('patientId', '==', patientId))),
@@ -39,17 +43,19 @@ export default function DoctorPatientOverview({ profile }) {
           getDocs(query(collection(db, 'patientTimeline'), where('patientId', '==', patientId))),
         ]);
         if (cancelled) return;
-        const ad = authSnap.exists() ? authSnap.data() : {};
+        const appts = apptSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        const pd = ppSnap.exists() ? ppSnap.data() : null;
         setPatient({
-          name: ad.name || ad.displayName || 'Patient',
-          email: ad.email || '',
+          name: pd?.name || pd?.fullName || pd?.displayName || appts[0]?.clientName || 'Patient',
+          email: pd?.email || appts[0]?.clientEmail || '',
         });
-        if (ppSnap.exists()) {
-          const pd = ppSnap.data();
+        if (pd) {
           setProfileData(pd);
           setStatus(pd.status || 'active');
         }
-        setAppointments(apptSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+        setAppointments(appts);
         setPrescriptions(rxSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         setNotes(notesSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         setOrders(ordSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.doctorId === uid).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));

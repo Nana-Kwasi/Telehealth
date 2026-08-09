@@ -553,3 +553,49 @@
     max-width: 85%;
   }
 }
+
+/* Attachment card — a real link, so the receiver can save it and the sender can
+   open what they sent. Previously an inert icon + filename. */
+.message-document {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  text-decoration: none;
+  color: inherit;
+  max-width: 280px;
+  transition: background 0.15s ease;
+}
+
+.message-document:hover { background: rgba(255, 255, 255, 0.24); }
+
+.message.received .message-document,
+.message-received .message-document {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.message.received .message-document:hover,
+.message-received .message-document:hover { background: #e2e8f0; }
+
+.message-document .file-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+
+.message-document .file-size {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.message-document .file-download-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}

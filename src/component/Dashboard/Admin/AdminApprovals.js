@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../../Auth/firebaseConfig';
+import { db } from '../../../services/firestoreShim';
 import {
   collection, doc, updateDoc, serverTimestamp, onSnapshot,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { NURSE_ACCOUNT_STATUS, NURSE_PRESENCE } from '../../../constants/homeCareConstants';
 
 const QUEUES = [

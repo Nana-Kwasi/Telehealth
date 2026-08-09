@@ -13,7 +13,7 @@ import {
   Search,
   RefreshCw
 } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import { 
   collection, 
   query, 
@@ -22,7 +22,7 @@ import {
   onSnapshot, 
   getDocs,
   Timestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import jsPDF from 'jspdf';
 import './Logs.css';
 

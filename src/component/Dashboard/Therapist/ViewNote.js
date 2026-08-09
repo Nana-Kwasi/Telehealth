@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc, collection, getDocs } from '../../../services/firestoreShim';
 import { ArrowLeft, Edit } from 'lucide-react';
 import './ViewNote.css';
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 
 export default function AdminAppointments() {
   const [appointments, setAppointments] = useState([]);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc, setDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { SUPPORTED_COUNTRIES, getFlags } from '../../../utils/featureFlags';
 
 const FEATURE_META = {
@@ -60,7 +60,7 @@ const DEFAULT_SETTINGS = {
     adminEmail:           { label: 'Admin Alert Email', type: 'email', value: '', desc: 'Email address for admin emergency alerts' },
   },
   security: {
-    sessionTimeoutMinutes:    { label: 'Session Timeout (minutes)', type: 'number', value: 60, desc: 'Auto-logout after inactivity' },
+    sessionTimeoutMinutes:    { label: 'Session Timeout (minutes)', type: 'number', value: 60, min: 1, max: 35791, desc: 'Auto-logout after inactivity (1–35791 minutes / ~24.8 days max)' },
     requireEmailVerification: { label: 'Require Email Verification', type: 'toggle', value: true, desc: 'Users must verify email before accessing platform' },
     twoFactorAuth:            { label: 'Two-Factor Authentication', type: 'toggle', value: false, desc: 'Require 2FA for all admin logins' },
     maxLoginAttempts:         { label: 'Max Failed Login Attempts', type: 'number', value: 5, desc: 'Lock account after this many failed logins' },
@@ -199,7 +199,17 @@ export default function AdminSystemConfig() {
         <input
           type={cfg.type || 'text'}
           value={val}
+          min={cfg.type === 'number' && cfg.min !== undefined ? cfg.min : undefined}
+          max={cfg.type === 'number' && cfg.max !== undefined ? cfg.max : undefined}
           onChange={e => updateSetting(section, key, cfg.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
+          onBlur={e => {
+            if (cfg.type !== 'number' || e.target.value === '') return;
+            let n = Number(e.target.value);
+            if (Number.isNaN(n)) n = cfg.min !== undefined ? cfg.min : 0;
+            if (cfg.min !== undefined) n = Math.max(cfg.min, n);
+            if (cfg.max !== undefined) n = Math.min(cfg.max, n);
+            if (n !== val) updateSetting(section, key, n);
+          }}
           style={{ padding: '0.5rem 0.75rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.85rem', minWidth: 240, boxSizing: 'border-box' }} />
       </div>
     );

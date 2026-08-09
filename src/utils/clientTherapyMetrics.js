@@ -7,8 +7,8 @@ import {
   doc,
   orderBy,
   limit,
-} from 'firebase/firestore';
-import { db } from '../component/Auth/firebaseConfig';
+} from '../services/firestoreShim';
+import { db } from '../services/firestoreShim';
 import { steps, phq9Questions } from '../component/Questionnaire/steps';
 
 /** PHQ-9 frequency scale (standard 0–3); stored as numbers in Firestore */

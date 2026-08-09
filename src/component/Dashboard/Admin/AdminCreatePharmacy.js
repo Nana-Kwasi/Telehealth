@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { db, auth } from '../../Auth/firebaseConfig';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
+import { db, auth } from '../../../services/firestoreShim';
+import { doc, setDoc, serverTimestamp } from '../../../services/firestoreShim';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from '../../../services/authShim';
 import { SUPPORTED_COUNTRIES, isEnabled } from '../../../utils/featureFlags';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 

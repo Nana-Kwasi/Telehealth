@@ -84,11 +84,18 @@ export function resolveDashboardHub({ role, profile, pathname = '' }) {
       typeof localStorage !== 'undefined' ? localStorage.getItem('userIntent') : '',
     ).toLowerCase();
 
+    // An authoritative profile intent wins over a stale localStorage flag: a
+    // medical patient (profile intent 'medical') must never be pulled into the
+    // home-care hub just because a 'homecare' flag leaked into localStorage.
+    if (intent === 'medical' || path.startsWith('/medical') || path.startsWith('/doctors')) {
+      return { label: 'Medical dashboard', path: '/dashboard' };
+    }
+
     if (path.startsWith('/home-care') || intent === 'homecare' || stored === 'homecare') {
       return { label: 'My Home Care', path: '/home-care' };
     }
 
-    if (intent === 'medical' || stored === 'medical' || path.startsWith('/medical') || path.startsWith('/doctors')) {
+    if (stored === 'medical') {
       return { label: 'Medical dashboard', path: '/dashboard' };
     }
 

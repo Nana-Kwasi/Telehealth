@@ -252,6 +252,38 @@ async function assertPlatformSuperAdmin(uid) {
   throw new CallableHttpsError("permission-denied", "Only platform administrators can reset passwords this way.");
 }
 
+/** Resolve Firebase Auth UID from Firestore profile (doc id is not always the Auth uid). */
+async function resolveFirebaseAuthUid(entityCollection, entityDocId, snapData = {}) {
+  const uidField = snapData.uid && String(snapData.uid).trim();
+  const authUidField = snapData.authUid && String(snapData.authUid).trim();
+  if (authUidField) return authUidField;
+  if (uidField) return uidField;
+
+  if (entityCollection === "clients") {
+    const authSnap = await db.collection("auth").where("clientId", "==", entityDocId).limit(1).get();
+    if (!authSnap.empty) {
+      return authSnap.docs[0].id;
+    }
+    const email = snapData.email && String(snapData.email).trim().toLowerCase();
+    if (email) {
+      try {
+        const user = await admin.auth().getUserByEmail(email);
+        return user.uid;
+      } catch (_) {
+        /* no auth account for this email */
+      }
+    }
+    return null;
+  }
+
+  if (entityCollection === "auth") {
+    return entityDocId;
+  }
+
+  // doctors, therapists, pharmacies, branches: document id is typically the Auth uid
+  return entityDocId;
+}
+
 /**
  * adminSetTemporaryPassword — 1st gen callable (same name / region as web SDK) to avoid Gen2
  * Cloud Run invoker issues that surface as functions/internal from the client.
@@ -282,8 +314,14 @@ exports.adminSetTemporaryPassword = functionsV1.region("us-central1").https.onCa
       throw new CallableHttpsError("not-found", "User record not found");
     }
     const snapData = snap.data() || {};
-    const fromDoc = snapData.uid && String(snapData.uid).trim();
-    const targetUid = (fromDoc || entityDocId).trim();
+    const targetUid = await resolveFirebaseAuthUid(entityCollection, entityDocId, snapData);
+
+    if (!targetUid) {
+      throw new CallableHttpsError(
+        "failed-precondition",
+        "This profile exists in the database but has no linked Firebase login. The user must complete sign-up (or an admin must create their Auth account) before a password can be reset.",
+      );
+    }
 
     if (targetUid === context.auth.uid) {
       throw new CallableHttpsError("failed-precondition", "You cannot reset your own account this way.");
@@ -292,7 +330,10 @@ exports.adminSetTemporaryPassword = functionsV1.region("us-central1").https.onCa
     try {
       await admin.auth().getUser(targetUid);
     } catch (e) {
-      throw new CallableHttpsError("failed-precondition", "No Firebase Auth user matches this account.");
+      throw new CallableHttpsError(
+        "failed-precondition",
+        "No Firebase Auth user matches this account. The client record may exist without a completed sign-up.",
+      );
     }
 
     const flagPayload = {
@@ -303,7 +344,14 @@ exports.adminSetTemporaryPassword = functionsV1.region("us-central1").https.onCa
 
     const temporaryPassword = generateOneTimeTemporaryPassword();
     await admin.auth().updateUser(targetUid, { password: temporaryPassword });
-    await ref.update(flagPayload);
+    const profileUpdate = { ...flagPayload };
+    if (entityCollection === "clients" && !snapData.authUid) {
+      profileUpdate.authUid = targetUid;
+    }
+    if (!snapData.uid) {
+      profileUpdate.uid = targetUid;
+    }
+    await ref.update(profileUpdate);
 
     if (entityCollection === "clients") {
       const authSnap = await db.collection("auth").where("clientId", "==", entityDocId).get();

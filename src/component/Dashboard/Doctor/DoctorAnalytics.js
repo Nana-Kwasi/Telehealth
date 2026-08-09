@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, DollarSign, Users, Calendar, Star, Clock } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, doc, getDoc } from '../../../services/firestoreShim';
 
 export default function DoctorAnalytics({ profile }) {
   const [loading, setLoading] = useState(true);
@@ -23,18 +23,28 @@ export default function DoctorAnalytics({ profile }) {
       const apptsSnap = await getDocs(apptsQ);
       const appts = apptsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      // Fetch patients
-      const patientsSnap = await getDocs(collection(db, 'doctors', profile.id, 'patients'));
+      // Distinct patients from the appointments themselves (the doctor/patients
+      // subcollection isn't always populated).
+      const patientCount = new Set(appts.map(a => a.clientId || a.patientId).filter(Boolean)).size;
 
       // Fetch reviews
       const reviewsQ = query(collection(db, 'doctorReviews'), where('doctorId', '==', profile.id));
       const reviewsSnap = await getDocs(reviewsQ);
       const reviews = reviewsSnap.docs.map(d => d.data());
 
+      // The doctor's consultation fee (appointment rows don't carry a fee).
+      let fee = 0;
+      try {
+        const docSnap = await getDoc(doc(db, 'doctors', profile.id));
+        const dd = docSnap.exists() ? docSnap.data() : {};
+        fee = Number(dd.consultationFee);
+        if (!Number.isFinite(fee)) fee = Number(JSON.parse(dd.metadataJson || '{}').consultationFee) || 0;
+      } catch { fee = 0; }
+
       // Compute stats
       const completed = appts.filter(a => a.status === 'completed');
       const cancelled = appts.filter(a => a.status === 'cancelled');
-      const totalEarnings = completed.reduce((sum, a) => sum + (Number(a.consultationFee) || 0), 0);
+      const totalEarnings = completed.length * fee;
       const avgRating = reviews.length > 0
         ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length
         : 0;
@@ -47,7 +57,7 @@ export default function DoctorAnalytics({ profile }) {
         const month = a.date.substring(0, 7); // YYYY-MM
         monthMap[month] = (monthMap[month] || 0) + 1;
         if (a.status === 'completed') {
-          earningsMap[month] = (earningsMap[month] || 0) + (Number(a.consultationFee) || 0);
+          earningsMap[month] = (earningsMap[month] || 0) + fee;
         }
       });
 
@@ -73,7 +83,7 @@ export default function DoctorAnalytics({ profile }) {
         totalAppointments: appts.length,
         completedAppointments: completed.length,
         cancelledAppointments: cancelled.length,
-        totalPatients: patientsSnap.size,
+        totalPatients: patientCount,
         avgRating: avgRating.toFixed(1),
         totalReviews: reviews.length,
         appointmentsByMonth,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Calendar, MessageSquare, Video, Star, X } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, onSnapshot, doc, updateDoc, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, onSnapshot, doc, updateDoc, orderBy, limit, serverTimestamp } from '../../../services/firestoreShim';
 
 export default function NotificationBell({ userId }) {
   const [notifications, setNotifications] = useState([]);

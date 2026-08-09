@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { UserPlus, Save, Upload } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '../../../services/firestoreShim';
+import { doc, setDoc, serverTimestamp } from '../../../services/firestoreShim';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { getAuth, createUserWithEmailAndPassword } from '../../../services/authShim';
+import { getStorage, ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 // Secondary Firebase app — creates accounts WITHOUT signing out the current admin session

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, Search, Phone, Video, Mic, MicOff, Paperclip, Download, FileText } from 'lucide-react';
-import { db, storage } from '../../Auth/firebaseConfig';
+import { db, storage } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, addDoc, getDoc, doc,
   orderBy, onSnapshot, serverTimestamp, setDoc,
-} from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+} from '../../../services/firestoreShim';
+import { ref as storageRef, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 
 function getInitials(name) {
   if (!name) return 'P';
@@ -24,8 +24,14 @@ function fmtConvTime(ts) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 function fmtLastSeen(ts) {
-  if (!ts?.toDate) return 'Offline';
-  const d = ts.toDate(), diff = Date.now() - d;
+  // Accept a Firestore Timestamp (.toDate), an ISO string, millis, or a Date.
+  let d = null;
+  if (ts?.toDate) d = ts.toDate();
+  else if (typeof ts === 'string') d = new Date(ts);
+  else if (typeof ts === 'number') d = new Date(ts);
+  else if (ts instanceof Date) d = ts;
+  if (!d || isNaN(d.getTime())) return 'Offline';
+  const diff = Date.now() - d.getTime();
   if (diff < 60000) return 'Online';
   if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `Last seen today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -61,14 +67,18 @@ export default function DoctorMessages({ profile }) {
   const presenceUnsubRef = useRef(null);
   const seenUnsubRef = useRef(null);
 
-  // ── Own presence: set online on mount, offline on unmount ──
+  // ── Own presence: heartbeat every 25s while the tab is open (keeps the
+  // backend's 40s "online" window alive), offline on unmount/unload ──
   useEffect(() => {
     if (!profile?.id) return;
     const presenceRef = doc(db, 'userPresence', profile.id);
-    setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    const beat = () => setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    beat();
+    const hb = setInterval(beat, 25000);
     const handleUnload = () => setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
     window.addEventListener('beforeunload', handleUnload);
     return () => {
+      clearInterval(hb);
       window.removeEventListener('beforeunload', handleUnload);
       setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
     };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import { 
   collection, 
   query, 
@@ -9,7 +9,7 @@ import {
   doc,
   orderBy,
   where
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { 
   Flag, 
   Eye, 

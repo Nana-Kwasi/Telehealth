@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs } from '../../../services/firestoreShim';
 
 export default function AdminReports() {
   const [data, setData]       = useState(null);

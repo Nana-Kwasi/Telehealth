@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, addDoc, onSnapshot, orderBy, query,
   serverTimestamp, doc, updateDoc, where, getDocs
-} from 'firebase/firestore';
-import { Send, X, Phone, Video, MoreVertical, Smile, Paperclip, Check, CheckCheck } from 'lucide-react';
+} from '../../../services/firestoreShim';
+import { Send, X, Phone, Video, MoreVertical, Smile, Paperclip, Image as ImageIcon, Check, CheckCheck } from 'lucide-react';
+import { uploadFile } from '../../../services/apiClient';
+import ChatImage from '../../Common/ChatImage';
+import VoiceNote from '../../Common/VoiceNote';
+import { mediaUrlOf, fileNameOf, fileSizeOf } from '../../../utils/chatMedia';
+import { downloadFile } from '../../../utils/downloadFile';
 
 export default function ChatModal({ target, type, onClose }) {
   const [messages, setMessages] = useState([]);
@@ -13,11 +18,17 @@ export default function ChatModal({ target, type, onClose }) {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const currentUser = auth.currentUser;
 
   const getCollectionPath = () => {
     if (type === 'therapist') {
-      const sortedUids = [currentUser.uid, target.uid].sort();
+      // `uid` is the Firestore-era name and is undefined on the REST therapist
+      // list — fall back to `id` or the pair endpoint gets 'undefined' as userB.
+      const sortedUids = [currentUser.uid, target.uid || target.id].sort();
       return `therapist_chats/${sortedUids[0]}_${sortedUids[1]}/messages`;
     }
     return `client_chats/${target.id}/messages`;
@@ -62,7 +73,7 @@ export default function ChatModal({ target, type, onClose }) {
         fromName: currentUser.displayName || auth.currentUser?.displayName || 'Therapist',
         fromType: 'therapist',
         senderId: currentUser.uid,
-        to: type === 'therapist' ? target.uid : target.id,
+        to: type === 'therapist' ? (target.uid || target.id) : target.id,
         toName: target.name || 'Client',
         toType: type === 'therapist' ? 'therapist' : 'client',
         createdAt: serverTimestamp(),
@@ -74,6 +85,52 @@ export default function ChatModal({ target, type, onClose }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── Attachments ──────────────────────────────────────────────────────────
+  // This composer was text-only while every other conversation view could send
+  // images, files and emoji.
+  const sendAttachment = async (file, kind) => {
+    if (!file || !target) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file, {
+        domain: 'client-chats',
+        fileName: file.name,
+        ownerId: currentUser.uid,
+      });
+      if (!url) throw new Error('Upload failed');
+      await addDoc(collection(db, getCollectionPath()), {
+        type: kind,
+        text: '',
+        mediaUrl: url,
+        fileUrl: url,
+        fileName: file.name,
+        mimeType: file.type || null,
+        fileSize: file.size || null,
+        content: { url, name: file.name, type: file.type || null, size: file.size || null },
+        from: currentUser.uid,
+        fromName: currentUser.displayName || auth.currentUser?.displayName || 'Therapist',
+        fromType: 'therapist',
+        senderId: currentUser.uid,
+        to: type === 'therapist' ? (target.uid || target.id) : target.id,
+        toName: target.name || 'Client',
+        toType: type === 'therapist' ? 'therapist' : 'client',
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+    } catch (err) {
+      console.error('Attachment send failed:', err);
+      alert(err.message || 'Could not send that attachment.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onPickFile = (e, kind) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';           // allow re-picking the same file
+    if (file) sendAttachment(file, kind);
   };
 
   const handleKeyDown = (e) => {
@@ -132,9 +189,12 @@ export default function ChatModal({ target, type, onClose }) {
       background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
     }} onClick={onClose}>
       <div style={{
-        width: '100%', maxWidth: 560, height: '88vh', maxHeight: 720,
-        background: '#fff', borderRadius: 20, display: 'flex', flexDirection: 'column',
-        boxShadow: '0 32px 80px rgba(0,0,0,0.22)', overflow: 'hidden',
+        // Full screen, matching every other conversation view in the app — this
+        // used to be a narrow 560px panel that clipped long messages and had no
+        // room for attachments.
+        width: '100vw', maxWidth: '100vw', height: '100vh', maxHeight: '100vh',
+        background: '#fff', borderRadius: 0, display: 'flex', flexDirection: 'column',
+        boxShadow: 'none', overflow: 'hidden',
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       }} onClick={e => e.stopPropagation()}>
 
@@ -224,7 +284,7 @@ export default function ChatModal({ target, type, onClose }) {
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', maxWidth: '72%' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', maxWidth: 'min(72%, 620px)' }}>
                         {/* Sender name for group context */}
                         {!isMine && isFirst && (
                           <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600, marginBottom: 2, marginLeft: 4 }}>
@@ -245,7 +305,35 @@ export default function ChatModal({ target, type, onClose }) {
                           lineHeight: 1.5,
                           fontSize: '0.875rem',
                         }}>
-                          {getMsgText(msg)}
+                          {/* Attachments render as media, not as a raw link. */}
+                          {msg.type === 'image' ? (
+                            <ChatImage src={mediaUrlOf(msg)} name={fileNameOf(msg)} />
+                          ) : msg.type === 'audio' ? (
+                            <VoiceNote
+                              src={mediaUrlOf(msg)}
+                              mimeType={msg.content?.type}
+                              duration={msg.content?.duration}
+                              isOwn={isMine}
+                            />
+                          ) : (msg.type === 'file' || msg.type === 'document') ? (
+                            <a
+                              href={mediaUrlOf(msg)}
+                              onClick={(e) => { e.preventDefault(); downloadFile(mediaUrlOf(msg), fileNameOf(msg)); }}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                                color: 'inherit', textDecoration: 'none',
+                              }}
+                              title={`Download ${fileNameOf(msg)}`}
+                            >
+                              <Paperclip size={16} />
+                              <span style={{ fontWeight: 600 }}>{fileNameOf(msg)}</span>
+                              {fileSizeOf(msg) && (
+                                <small style={{ opacity: 0.75 }}>{fileSizeOf(msg)}</small>
+                              )}
+                            </a>
+                          ) : (
+                            getMsgText(msg)
+                          )}
                         </div>
 
                         {/* Timestamp + read receipt */}
@@ -276,7 +364,76 @@ export default function ChatModal({ target, type, onClose }) {
           padding: '0.85rem 1rem', borderTop: '1px solid #e8ecf2',
           background: '#fff', flexShrink: 0,
         }}>
+          {/* Emoji picker */}
+          {showEmoji && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
+              padding: '0.6rem', marginBottom: '0.6rem',
+              background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12,
+              maxHeight: 160, overflowY: 'auto',
+            }}>
+              {['😊','😂','❤️','👍','🙏','🎉','🔥','😢','😡','😴','🤔','💪','✨','🌟','💯','🫂','👋','🙌','😌','🥲']
+                .map((emo) => (
+                  <button
+                    key={emo}
+                    type="button"
+                    onClick={() => { setNewMessage((m) => m + emo); setShowEmoji(false); inputRef.current?.focus(); }}
+                    style={{
+                      border: 'none', background: 'transparent', fontSize: '1.35rem',
+                      cursor: 'pointer', lineHeight: 1, padding: '0.2rem 0.3rem', borderRadius: 8,
+                    }}
+                  >
+                    {emo}
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {uploading && (
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: '#4f46e5', fontWeight: 600 }}>
+              Uploading attachment…
+            </p>
+          )}
+
+          {/* Hidden pickers driven by the toolbar buttons below. */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => onPickFile(e, 'image')}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={(e) => onPickFile(e, 'file')}
+          />
+
           <form onSubmit={sendMessage} style={{ display: 'flex', alignItems: 'flex-end', gap: '0.6rem' }}>
+            {/* Attach + emoji, matching the other conversation views. */}
+            {[
+              { Icon: Smile, title: 'Emoji', onClick: () => setShowEmoji((v) => !v) },
+              { Icon: ImageIcon, title: 'Send an image', onClick: () => imageInputRef.current?.click() },
+              { Icon: Paperclip, title: 'Send a file', onClick: () => fileInputRef.current?.click() },
+            ].map(({ Icon, title, onClick }) => (
+              <button
+                key={title}
+                type="button"
+                title={title}
+                onClick={onClick}
+                disabled={uploading}
+                style={{
+                  width: 38, height: 38, borderRadius: '50%', border: '1px solid #e2e8f0',
+                  background: '#fff', color: '#64748b',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, opacity: uploading ? 0.5 : 1,
+                }}
+              >
+                <Icon size={17} />
+              </button>
+            ))}
             <div style={{
               flex: 1, display: 'flex', alignItems: 'center',
               background: '#f4f6fb', borderRadius: 24, border: '1.5px solid #e2e8f0',

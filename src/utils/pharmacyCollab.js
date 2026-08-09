@@ -1,5 +1,5 @@
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from '../component/Auth/firebaseConfig';
+import { addDoc, collection, serverTimestamp } from '../services/firestoreShim';
+import { db } from '../services/firestoreShim';
 
 export async function logPharmacyRxEvent({
   rxId,

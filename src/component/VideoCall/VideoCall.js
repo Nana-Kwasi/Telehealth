@@ -1,8 +1,8 @@
 // import React, { useState, useEffect } from 'react';
-// import { collection, query, where, getDocs, addDoc, orderBy, onSnapshot, Timestamp, doc, getDoc } from 'firebase/firestore';
-// import { db, functions, httpsCallable, auth } from '../Auth/firebaseConfig';
+// import { collection, query, where, getDocs, addDoc, orderBy, onSnapshot, Timestamp, doc, getDoc } from '../../services/firestoreShim';
+// import { db, functions, httpsCallable, auth } from '../../services/firestoreShim';
 // import { Phone, Calendar, Clock, User } from 'lucide-react';
-// import { onAuthStateChanged } from 'firebase/auth';
+// import { onAuthStateChanged } from '../../services/authShim';
 // import './VideoCall.css';
 
 // const VideoCall = ({ user }) => {
@@ -275,7 +275,7 @@
 //         localStorage.setItem('videoCallInfo', JSON.stringify({
 //           roomName,
 //           participantName,
-//           token: result.data.token,
+//           token: result.token,
 //           targetPerson
 //         }));
         
@@ -342,14 +342,14 @@
 //       });
       
 //       // Open video call in new window
-//       const callUrl = `${window.location.origin}/video-call/${call.roomName}/${encodeURIComponent(participantName)}`;
+//       const callUrl = `${window.location.origin}/video-call/${roomName}/${encodeURIComponent(participantName)}`;
 //       const newWindow = window.open(callUrl, '_blank', 'width=1400,height=900,scrollbars=no,resizable=yes');
       
 //       if (newWindow) {
 //         localStorage.setItem('videoCallInfo', JSON.stringify({
 //           roomName: call.roomName,
 //           participantName,
-//           token: result.data.token,
+//           token: result.token,
 //           targetPerson: null
 //         }));
 //       } else {
@@ -619,10 +619,13 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, orderBy, onSnapshot, Timestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db, functions, httpsCallable, auth } from '../Auth/firebaseConfig';
+import { collection, query, where, getDocs, addDoc, orderBy, onSnapshot, Timestamp, doc, getDoc, updateDoc, deleteDoc } from '../../services/firestoreShim';
+// `functions` / `httpsCallable` dropped — the only thing they were used for here
+// was the token callable, which now goes through twilioVideoService directly.
+import { db, auth } from '../../services/firestoreShim';
+import { generateVideoToken, roomNameForCall } from '../../services/twilioVideoService';
 import { Phone, Calendar, Clock, User, MoreVertical, Edit, Trash2 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged } from '../../services/authShim';
 import './VideoCall.css';
 
 // Call Logging System
@@ -966,15 +969,15 @@ const VideoCall = ({ user }) => {
       }
       
       console.log('Generating Twilio token...');
-      
-      // Generate Twilio access token
-      const generateToken = httpsCallable(functions, 'generateTwilioToken');
-      
-      const result = await generateToken({
-        roomName,
-        participantName,
-        participantRole: user.role
-      });
+
+      // Token comes from our own backend now. This used to be a Firebase Cloud
+      // Function ('generateTwilioToken') that no longer exists — the app is off
+      // Firebase — so every web call was asking a dead endpoint for a token.
+      // Identity must be the authenticated user's id — TwilioIdentityPolicy
+      // rejects a display name with 400 "identity must match authenticated user".
+      const identity = authUser?.uid || user?.uid;
+
+      const result = await generateVideoToken({ roomName, participantName: identity });
       
       console.log('Token generated successfully');
       
@@ -985,7 +988,9 @@ const VideoCall = ({ user }) => {
       const callInfo = {
         roomName,
         participantName,
-        token: result.data.token,
+        identity,
+        displayNames: { [identity]: participantName },
+        token: result.token,
         targetPerson,
         callType: 'instant'
       };
@@ -1030,13 +1035,13 @@ const VideoCall = ({ user }) => {
 
       const participantName = user.name || user.displayName || user.email || `User-${user.uid.substr(0, 8)}`;
       
-      // Generate token for the existing room
-      const generateToken = httpsCallable(functions, 'generateTwilioToken');
-      
-      const result = await generateToken({
+      // Token for the existing room — see the note above; this was the second
+      // caller of the removed Firebase function.
+      const identity = authUser?.uid || user?.uid; // see note on identity above
+
+      const result = await generateVideoToken({
         roomName: notification.roomName,
-        participantName,
-        participantRole: user.role
+        participantName: identity,
       });
       
       // Update notification status
@@ -1050,7 +1055,9 @@ const VideoCall = ({ user }) => {
       const callInfo = {
         roomName: notification.roomName,
         participantName,
-        token: result.data.token,
+        identity,
+        displayNames: { [identity]: participantName },
+        token: result.token,
         targetPerson: { id: notification.callerId, name: notification.callerName },
         callType: 'incoming'
       };
@@ -1223,12 +1230,18 @@ const VideoCall = ({ user }) => {
 
       const participantName = user.name || user.displayName || user.email || `User-${user.uid.substr(0, 8)}`;
       
-      const generateToken = httpsCallable(functions, 'generateTwilioToken');
-      
-      const result = await generateToken({
-        roomName: call.roomName,
-        participantName,
-        participantRole: user.role
+      // Same replacement as the other two callers — the Firebase function this
+      // used is gone.
+      const roomName = roomNameForCall(call);
+      if (!roomName) throw new Error('This session has no room yet.');
+
+      // Identity must be the authenticated user's id; see TwilioIdentityPolicy.
+      const identity = authUser?.uid || user?.uid;
+      if (!identity) throw new Error('Your session expired. Please log in again.');
+
+      const result = await generateVideoToken({
+        roomName,
+        participantName: identity,
       });
       
       // Update call status
@@ -1243,13 +1256,19 @@ const VideoCall = ({ user }) => {
       }
       
       // Open video call
-      const callUrl = `${window.location.origin}/video-call/${call.roomName}/${encodeURIComponent(participantName)}`;
+      // `call.roomName` is null on every scheduled call, which opened the room at
+      // /video-call/null/… — it only worked because the page falls back to the
+      // stored call info. Use the derived name so the URL is valid on its own.
+      const callUrl = `${window.location.origin}/video-call/${roomName}/${encodeURIComponent(participantName)}`;
       
       const callInfo = {
-        roomName: call.roomName,
+        roomName,
         participantName,
-        token: result.data.token,
-        targetPerson: null,
+        identity,
+        displayNames: { [identity]: participantName },
+        token: result.token,
+        // Without a name here the client's video tile just read "Participant".
+        targetPerson: call.clientName || call.clientDisplayName || null,
         callType: 'scheduled',
         scheduledCall: call
       };

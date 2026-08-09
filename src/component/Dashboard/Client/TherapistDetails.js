@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc } from '../../../services/firestoreShim';
 import { ArrowLeft, User, Mail, Phone, MapPin, Award, Star, Languages, BookOpen } from 'lucide-react';
 import './TherapistDetails.css';
 

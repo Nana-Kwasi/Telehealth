@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { steps, phq9Questions } from './steps';
 import './Questionnaire.css';
-import { db } from '../Auth/firebaseConfig';
-import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../../services/firestoreShim';
+import { collection, addDoc } from '../../services/firestoreShim';
 import {
   buildTeenClientRecord,
   loadJson,
@@ -31,6 +31,15 @@ const getInitial = () => {
     return {};
   }
 };
+
+// Resolve the client's display name from the intake answers. Falls back to the
+// consent step's electronic signature (the only name the visitor actually types)
+// before the generic "Client" placeholder.
+const questionnaireDisplayName = (d = {}) =>
+  d.name
+  || [d.firstName, d.lastName].filter(Boolean).join(' ')
+  || String(d.consentSignature || '').trim()
+  || 'Client';
 
 export default function Questionnaire() {
   const navigate = useNavigate();
@@ -136,8 +145,11 @@ export default function Questionnaire() {
         completedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         status: 'active',
-        displayName: merged.name || [merged.firstName, merged.lastName].filter(Boolean).join(' ') || 'Client',
-        clientName: merged.name || [merged.firstName, merged.lastName].filter(Boolean).join(' ') || 'Client',
+        // The questionnaire collects no name field — the only name the visitor types
+        // is the consent step's electronic signature (full legal name). Prefer it so
+        // the stored client record isn't literally named "Client".
+        displayName: questionnaireDisplayName(merged),
+        clientName: questionnaireDisplayName(merged),
       };
 
       if (merged.therapyType === 'teen') {
@@ -152,8 +164,11 @@ export default function Questionnaire() {
       // Save the client document ID for later use
       localStorage.setItem('th.clientId', docRef.id);
       
-      // Navigate to signup
-      navigate('/signup');
+      // Navigate to signup, carrying the intake answers so the Full name field can
+      // pre-fill from the consent signature (SignUp reads clientData.name /
+      // .displayName). Without state the field rendered blank on web while mobile
+      // pre-filled it — the two flows now behave the same.
+      navigate('/signup', { state: { clientData: { ...clientData, id: docRef.id } } });
     } catch (error) {
       console.error('Error submitting questionnaire:', error);
       

@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { createUserWithEmailAndPassword, getAuth, signOut as fbSignOut } from 'firebase/auth';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { signOut, sendPasswordResetEmail } from '../../../services/authShim';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from '../../../services/firestoreShim';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { createUserWithEmailAndPassword, getAuth, signOut as fbSignOut } from '../../../services/authShim';
+import { auth, db } from '../../../services/firestoreShim';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';

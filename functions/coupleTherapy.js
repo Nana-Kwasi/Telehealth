@@ -119,26 +119,6 @@ async function resolvePartnerLinkKey(coupleId, couple, auth, claimAs) {
   if (email && normEmail(couple.partnerA?.email) === email) return "partnerA";
   if (email && normEmail(couple.partnerB?.email) === email) return "partnerB";
 
-  const profile = await loadAuthProfile(uid);
-  if (profile?.coupleId === coupleId) {
-    if (profile.couplePartnerRole === "partnerB") return "partnerB";
-    if (profile.couplePartnerRole === "partnerA") return "partnerA";
-    if (email && normEmail(couple.partnerA?.email) === email) return "partnerA";
-    if (email && normEmail(couple.partnerB?.email) === email) return "partnerB";
-  }
-
-  if (claimAs === "partnerA" && !readPartnerField(couple, "partnerA", "authUid")) return "partnerA";
-  if (
-    claimAs === "partnerB" &&
-    !readPartnerField(couple, "partnerB", "authUid") &&
-    (!couple.partnerB?.email || (email && couple.partnerB.email === email))
-  ) {
-    return "partnerB";
-  }
-
-  if (claimAs === "partnerA" && profile?.coupleId === coupleId) return "partnerA";
-  if (claimAs === "partnerB" && profile?.coupleId === coupleId) return "partnerB";
-
   return null;
 }
 
@@ -559,11 +539,9 @@ async function runClaimCoupleSession(data, auth) {
   let partnerKey = null;
 
   if (emailMatch) {
-    if (!hintId || hintId !== emailMatch.coupleId) {
-      coupleId = emailMatch.coupleId;
-      partnerKey = emailMatch.partnerKey;
-    }
-  } else if (!hintId) {
+    coupleId = emailMatch.coupleId;
+    partnerKey = emailMatch.partnerKey;
+  } else {
     return { linked: false, reason: "no_couple_for_email", signedInEmail: email };
   }
 

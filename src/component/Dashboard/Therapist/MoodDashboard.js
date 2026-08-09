@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, TrendingUp, TrendingDown, Minus, Search, ChevronLeft } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, orderBy, limit,
   doc, getDoc,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar,

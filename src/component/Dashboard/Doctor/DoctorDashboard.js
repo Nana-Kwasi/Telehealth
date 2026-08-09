@@ -17,10 +17,10 @@ import {
   FlaskConical,
   ClipboardList,
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../Auth/firebaseConfig';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { signOut } from '../../../services/authShim';
+import { auth } from '../../../services/firestoreShim';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc } from '../../../services/firestoreShim';
 import './DoctorDashboard.css';
 import '../DashboardShell.css';
 

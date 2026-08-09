@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
+import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import {
   collection,
   getDocs,
@@ -13,7 +13,7 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function PharmacyBranchDetail({ profile }) {
@@ -28,15 +28,21 @@ export default function PharmacyBranchDetail({ profile }) {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [actioning, setActioning] = useState(false);
+  const [pwReset, setPwReset] = useState({ busy: false, password: null });
   const [rxCount, setRxCount] = useState(null);
   const [branchRx, setBranchRx] = useState([]);
   const [branchEvents, setBranchEvents] = useState([]);
   const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
 
+  // Branches are keyed by the organization id, which equals the user id only for
+  // self-registered pharmacies. Prefer the org id so admin-onboarded pharmacies
+  // (user.id ≠ org.id) can still open and query their branches.
+  const orgId = profile?.organizationId || profile?.id;
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!branchId || !profile?.id) return;
+      if (!branchId || !orgId) return;
       setLoading(true);
       setError('');
       try {
@@ -46,7 +52,7 @@ export default function PharmacyBranchDetail({ profile }) {
           return;
         }
         const data = { id: snap.id, ...snap.data() };
-        if (data.pharmacyId !== profile.id) {
+        if (data.pharmacyId !== orgId) {
           if (!cancelled) setError('You do not have access to this branch.');
           return;
         }
@@ -81,14 +87,14 @@ export default function PharmacyBranchDetail({ profile }) {
     };
     load();
     return () => { cancelled = true; };
-  }, [branchId, profile?.id]);
+  }, [branchId, orgId]);
 
   useEffect(() => {
-    if (!branchId || !profile?.id) return undefined;
-    const qRx = query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile.id));
+    if (!branchId || !orgId) return undefined;
+    const qRx = query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', orgId));
     const qEvents = query(
       collection(db, 'pharmacyRxEvents'),
-      where('pharmacyId', '==', profile.id),
+      where('pharmacyId', '==', orgId),
       where('branchId', '==', branchId),
       orderBy('createdAt', 'desc'),
     );
@@ -111,7 +117,24 @@ export default function PharmacyBranchDetail({ profile }) {
       unsubRx();
       unsubEvents();
     };
-  }, [branchId, profile?.id]);
+  }, [branchId, orgId]);
+
+  // Roll up this branch's operational picture from the prescriptions touching it.
+  const metrics = useMemo(() => {
+    const m = { total: branchRx.length, delivered: 0, ready: 0, inProgress: 0, incoming: 0, transferredIn: 0, transferredOut: 0, medsTotal: 0 };
+    for (const rx of branchRx) {
+      const st = rx.pharmacyStatus || 'sent';
+      if (st === 'delivered') m.delivered += 1;
+      else if (st === 'ready') m.ready += 1;
+      else if (st === 'sent') m.incoming += 1;
+      else m.inProgress += 1;
+      const meds = Array.isArray(rx.medications) ? rx.medications : [];
+      m.medsTotal += meds.length;
+      if (meds.some(d => (d.transferBranchId || '') === branchId)) m.transferredIn += 1;
+      if (meds.some(d => (d.transferFromBranchId || '') === branchId || (d.transferRequestedByBranchId || '') === branchId)) m.transferredOut += 1;
+    }
+    return m;
+  }, [branchRx, branchId]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -194,6 +217,30 @@ export default function PharmacyBranchDetail({ profile }) {
       setError('Failed to delete branch.');
     } finally {
       setActioning(false);
+    }
+  };
+
+  const resetBranchPassword = async () => {
+    if (!branch) return;
+    const ok = window.confirm(`Generate a new one-time password for "${branch.branchName}"? The branch operator must change it on next login.`);
+    if (!ok) return;
+    setPwReset({ busy: true, password: null });
+    setError('');
+    try {
+      const fn = httpsCallable(functions, 'branchSetTemporaryPassword');
+      const res = await fn({ branchId: branch.id });
+      const password = res?.data?.temporaryPassword;
+      if (!password) {
+        setError('Could not generate a password. Please try again.');
+        setPwReset({ busy: false, password: null });
+        return;
+      }
+      setPwReset({ busy: false, password });
+      setBranch(prev => ({ ...prev, mustChangePassword: true }));
+    } catch (e) {
+      console.error('Branch password reset error:', e);
+      setError('Failed to reset branch password.');
+      setPwReset({ busy: false, password: null });
     }
   };
 
@@ -294,6 +341,14 @@ export default function PharmacyBranchDetail({ profile }) {
           >
             {branch.mfaRequired ? 'MFA Required: ON' : 'MFA Required: OFF'}
           </button>
+          <button
+            type="button"
+            className="branch-admin-btn branch-admin-btn--quiet"
+            disabled={pwReset.busy}
+            onClick={resetBranchPassword}
+          >
+            {pwReset.busy ? 'Resetting…' : 'Reset password'}
+          </button>
           {branch.status !== 'suspended' ? (
             <button type="button" className="branch-admin-btn branch-admin-btn--warn" disabled={actioning} onClick={() => changeStatus('suspended')}>Suspend branch</button>
           ) : (
@@ -304,6 +359,31 @@ export default function PharmacyBranchDetail({ profile }) {
       </header>
 
       {error && <div className="branch-admin-banner branch-admin-banner--error">{error}</div>}
+
+      {pwReset.password && (
+        <div className="branch-admin-newcreds">
+          <div className="branch-admin-newcreds-top">
+            <strong>One-time password — copy it now</strong>
+            <button type="button" className="branch-admin-newcreds-close" onClick={() => setPwReset({ busy: false, password: null })} aria-label="Dismiss">×</button>
+          </div>
+          <div className="branch-admin-newcreds-grid">
+            <div>
+              <div className="branch-admin-newcreds-l">New temporary password for {branch.branchName}</div>
+              <div className="branch-admin-newcreds-v">{pwReset.password}</div>
+            </div>
+          </div>
+          <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0.25rem 0 0.5rem' }}>
+            Share it with the branch operator securely. It is not shown again, and the operator must change it on next login.
+          </p>
+          <button
+            type="button"
+            className="branch-admin-btn branch-admin-btn--light"
+            onClick={() => navigator.clipboard.writeText(pwReset.password).catch(() => {})}
+          >
+            Copy password
+          </button>
+        </div>
+      )}
 
       <div className="branch-admin-sheet">
         <section className="branch-admin-block">
@@ -444,6 +524,30 @@ export default function PharmacyBranchDetail({ profile }) {
         <div className="branch-admin-rule" />
 
         <section className="branch-admin-block">
+          <h2 className="branch-admin-h2">Operations summary</h2>
+          <p className="branch-admin-lead">At-a-glance totals for every prescription routed to, or transferred through, this branch.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginTop: '0.75rem' }}>
+            {[
+              ['Total prescriptions', metrics.total, '#1d4ed8'],
+              ['Delivered', metrics.delivered, '#16a34a'],
+              ['Ready', metrics.ready, '#0d9488'],
+              ['In progress', metrics.inProgress, '#d97706'],
+              ['Incoming', metrics.incoming, '#7c3aed'],
+              ['Transferred in', metrics.transferredIn, '#0369a1'],
+              ['Transferred out', metrics.transferredOut, '#be123c'],
+              ['Medication lines', metrics.medsTotal, '#334155'],
+            ].map(([label, val, color]) => (
+              <div key={label} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.75rem 0.85rem', background: '#fff' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{val}</div>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="branch-admin-rule" />
+
+        <section className="branch-admin-block">
           <h2 className="branch-admin-h2">Live branch operations</h2>
           <p className="branch-admin-lead">Everything this branch is currently processing: direct prescriptions, transfers, and fulfillment states.</p>
           <div className="branch-admin-table-wrap">
@@ -471,7 +575,12 @@ export default function PharmacyBranchDetail({ profile }) {
                   }, {});
                   const statusText = Object.entries(statusMix).map(([k, v]) => `${k} (${v})`).join(', ') || '—';
                   return (
-                    <tr key={rx.id}>
+                    <tr
+                      key={rx.id}
+                      style={{ cursor: 'pointer' }}
+                      title="Open prescription operations"
+                      onClick={() => navigate(`/dashboard/prescriptions/${rx.id}`)}
+                    >
                       <td>{rx.prescriptionRef || rx.id.slice(0, 8)}</td>
                       <td>{rx.patientName || '—'}</td>
                       <td>{rx.pharmacyStatus || 'sent'}</td>

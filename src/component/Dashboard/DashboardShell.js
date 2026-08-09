@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { clientRoutes, therapistRoutes } from './routes';
 import './DashboardShell.css';
+import { avatarUrlOf, initialsOf } from '../../utils/profileImage';
 
 export default function DashboardShell({ role, profile }) {
   const routes = role === 'therapist' ? therapistRoutes : clientRoutes;
@@ -14,10 +15,14 @@ export default function DashboardShell({ role, profile }) {
         <div className="sidebar-header">
           <div className="sidebar-logo">NessaHub</div>
           <div className="sidebar-user">
-            {profile?.photoURL ? (
-              <img src={profile.photoURL} alt="avatar" className="user-avatar" />
+            {/* Reads every field name a saved picture might arrive under
+                (avatarUrl / photoURL / profilePhotoUrl), ignores stale blob: urls
+                and falls back to initials — so one saved image shows everywhere
+                instead of only on the screen that wrote it. */}
+            {avatarUrlOf(profile) ? (
+              <img src={avatarUrlOf(profile)} alt="avatar" className="user-avatar" />
             ) : (
-              <div className="user-avatar">{(profile?.name || 'N')[0]}</div>
+              <div className="user-avatar">{initialsOf(profile, 'N')}</div>
             )}
             <div className="user-info">
               <div className="user-name">{profile?.name || 'User'}</div>

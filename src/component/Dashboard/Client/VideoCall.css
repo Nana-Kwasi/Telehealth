@@ -1436,3 +1436,14 @@
     padding: 0.125rem 0.25rem;
   }
 }
+/* Shown in place of Join before the room opens. */
+.sessions-join-pending {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}

@@ -42,7 +42,17 @@ service cloud.firestore {
         isAdmin()
         || data.therapistId == request.auth.uid
         || data.clientId == request.auth.uid
+        || data.clientId == authLinkedClientDocId()
+        || ownsMoodClientId(data.clientId)
         || data.createdBy == request.auth.uid
+      );
+    }
+
+    function canReadClientNotification(data) {
+      return isSignedIn() && (
+        isAdmin()
+        || data.targetId == request.auth.uid
+        || (data.clientId != null && ownsMoodClientId(data.clientId))
       );
     }
     function isReporterOwner(data) {
@@ -209,14 +219,31 @@ service cloud.firestore {
       );
     }
 
+    function authLinkedClientDocId() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/auth/$(request.auth.uid))
+        && get(/databases/$(database)/documents/auth/$(request.auth.uid)).data.clientId is string
+        ? get(/databases/$(database)/documents/auth/$(request.auth.uid)).data.clientId
+        : request.auth.uid;
+    }
+
     function ownsMoodClientId(moodClientId) {
       return isSignedIn() && (
         moodClientId == request.auth.uid
+        || moodClientId == authLinkedClientDocId()
         || (
           exists(/databases/$(database)/documents/clients/$(moodClientId))
-          && get(/databases/$(database)/documents/clients/$(moodClientId)).data.authUid == request.auth.uid
+          && (
+            get(/databases/$(database)/documents/clients/$(moodClientId)).data.authUid == request.auth.uid
+            || get(/databases/$(database)/documents/clients/$(moodClientId)).data.uid == request.auth.uid
+          )
         )
       );
+    }
+
+    function therapistHasCaseloadClient(clientDocId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/therapists/$(request.auth.uid)/clients/$(clientDocId));
     }
 
     function canReadClientDailyMood(data) {
@@ -224,6 +251,7 @@ service cloud.firestore {
         isAdmin()
         || ownsMoodClientId(data.clientId)
         || data.assignedTherapistId == request.auth.uid
+        || therapistHasCaseloadClient(data.clientId)
       );
     }
 
@@ -242,6 +270,9 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         isAdmin()
         || (ownsClientDoc() && passesClientUpdatePolicy(request.resource.data, resource.data))
+        || (ownsClientDoc()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['coupleId', 'couplePartnerRole', 'updatedAt']))
       );
       allow delete: if request.auth != null && (isAdmin() || request.auth.uid == clientId);
 
@@ -255,6 +286,18 @@ service cloud.firestore {
       allow create: if request.auth != null;
       allow read: if canReadScheduledCall(resource.data);
       allow update, delete: if canReadScheduledCall(resource.data);
+    }
+
+    match /therapyNotes/{noteId} {
+      allow read: if isSignedIn() && (
+        isAdmin()
+        || ownsMoodClientId(resource.data.clientId)
+        || resource.data.therapistId == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.therapistId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (
+        isAdmin() || resource.data.therapistId == request.auth.uid
+      );
     }
 
     match /videoCalls/{callId} {
@@ -374,8 +417,7 @@ service cloud.firestore {
     // ── Notifications ────────────────────────────────────────────────────────
     match /notifications/{notifId} {
       allow create: if request.auth != null;
-      allow read, update: if isAdmin()
-        || (request.auth != null && resource.data.targetId == request.auth.uid);
+      allow read, update: if canReadClientNotification(resource.data);
     }
 
     match /callNotifications/{callId} {
@@ -567,9 +609,16 @@ service cloud.firestore {
       allow update: if isAdmin();
     }
 
-    match /notifications/{notifId} {
-      allow read, update: if isSignedIn() && resource.data.targetId == request.auth.uid;
-      allow create: if false;
+    match /notes/{noteId} {
+      allow read: if isSignedIn() && (
+        isAdmin()
+        || ownsMoodClientId(resource.data.clientId)
+        || resource.data.therapistId == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.therapistId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (
+        isAdmin() || resource.data.therapistId == request.auth.uid
+      );
     }
 
     // Mobile / web intro privacy acceptance (device log before sign-in)

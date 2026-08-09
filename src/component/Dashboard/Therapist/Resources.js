@@ -36,7 +36,8 @@ import {
   CheckCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
+import { uploadFile } from '../../../services/apiClient';
 import { 
   collection, 
   query, 
@@ -49,8 +50,9 @@ import {
   doc, 
   getDocs,
   serverTimestamp 
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import './Resources.css';
+import ActionButton from '../../Common/ActionButton';
 
 export default function TherapistResources() {
   const [activeTab, setActiveTab] = useState('resources');
@@ -69,6 +71,7 @@ export default function TherapistResources() {
   const [allTherapists, setAllTherapists] = useState([]);
   const [selectedTherapists, setSelectedTherapists] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [filePreview, setFilePreview] = useState('');
   const [therapistNames, setTherapistNames] = useState({});
   const [clientNames, setClientNames] = useState({});
@@ -552,28 +555,40 @@ export default function TherapistResources() {
   }, [currentUser]);
 
   // Handle file upload
+  // 10 MB for audio, 25 MB for anything else — these end up as bytes in Postgres.
+  const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+  const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
   const handleFileUpload = async (file) => {
+    if (!file) return;
+    const limit = file.type?.startsWith('audio/') ? MAX_AUDIO_BYTES : MAX_FILE_BYTES;
+    if (file.size > limit) {
+      alert(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Please choose one under ${limit / 1024 / 1024} MB.`);
+      return;
+    }
+
+    setIsUploadingFile(true);
     try {
-      // In a real implementation, you would upload to Firebase Storage
-      // For now, we'll store the file info
-      const fileInfo = {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: URL.createObjectURL(file) // Temporary URL for preview
-      };
-      
+      // This used to keep `URL.createObjectURL(file)` as the resource's fileUrl.
+      // A blob: URL only resolves inside the tab that created it and dies on
+      // refresh — nothing was ever uploaded, so every image/audio/video/document
+      // a therapist attached here was already broken by the time a client
+      // opened it. Send the bytes to the real file store instead.
+      const url = await uploadFile(file, { domain: 'resources', fileName: file.name });
       setSelectedFile(file);
-      setFilePreview(fileInfo.url);
+      setFilePreview(url);
       setResourceForm(prev => ({
         ...prev,
-        fileName: fileInfo.name,
-        fileSize: fileInfo.size,
-        fileUrl: fileInfo.url
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        fileUrl: url
       }));
     } catch (error) {
-      console.error('Error handling file:', error);
-      alert('Error processing file. Please try again.');
+      console.error('Error uploading file:', error);
+      alert(`Could not upload that file: ${error?.message || 'please try again.'}`);
+    } finally {
+      setIsUploadingFile(false);
     }
   };
 
@@ -673,10 +688,14 @@ export default function TherapistResources() {
   const handleDeleteResource = async (resourceId) => {
     if (window.confirm('Are you sure you want to delete this resource?')) {
       try {
-        await deleteDoc(doc(db, 'therapistResources', resourceId));
+        // deleteDoc reports failures rather than throwing, so an unchecked call
+        // looked successful while the card stayed on screen.
+        const res = await deleteDoc(doc(db, 'therapistResources', resourceId));
+        if (res?._failed) throw new Error(res._error);
+        setResources(prev => prev.filter(r => r.id !== resourceId));
       } catch (error) {
         console.error('Error deleting resource:', error);
-        alert('Error deleting resource. Please try again.');
+        alert(error.message || 'Error deleting resource. Please try again.');
       }
     }
   };
@@ -684,10 +703,12 @@ export default function TherapistResources() {
   const handleDeleteWorksheet = async (worksheetId) => {
     if (window.confirm('Are you sure you want to delete this worksheet?')) {
       try {
-        await deleteDoc(doc(db, 'worksheets', worksheetId));
+        const res = await deleteDoc(doc(db, 'worksheets', worksheetId));
+        if (res?._failed) throw new Error(res._error);
+        setWorksheets(prev => prev.filter(w => w.id !== worksheetId));
       } catch (error) {
         console.error('Error deleting worksheet:', error);
-        alert('Error deleting worksheet. Please try again.');
+        alert(error.message || 'Error deleting worksheet. Please try again.');
       }
     }
   };
@@ -1346,13 +1367,40 @@ export default function TherapistResources() {
     }));
   };
 
-  // Update worksheet field
+  // Field types whose answers come from a fixed list the therapist defines.
+  const CHOICE_FIELD_TYPES = ['select', 'radio', 'multiple-choice'];
+
+  // Short explanation of what the client will see, per field type.
+  const FIELD_TYPE_HINTS = {
+    text: 'A single-line answer box.',
+    textarea: 'A multi-line answer box for longer reflections.',
+    number: 'Numbers only.',
+    date: 'A date picker.',
+    select: 'Client picks ONE option from a dropdown.',
+    checkbox: 'A single yes/no tick box.',
+    radio: 'Client picks ONE option from visible buttons.',
+    rating: 'Client picks a score from 1 to 10.',
+    'multiple-choice': 'Client can pick SEVERAL options.',
+  };
+
+  // Update worksheet field. Changing the TYPE has to reshape the field, not just
+  // relabel it: choice types need an options list to edit (switching to Dropdown
+  // used to leave options empty, so the editor showed nothing to fill in), and
+  // non-choice types must drop any stale options so they aren't saved.
   const updateWorksheetField = (index, field, value) => {
     setWorksheetForm(prev => ({
       ...prev,
-      fields: prev.fields.map((f, i) => 
-        i === index ? { ...f, [field]: value } : f
-      )
+      fields: prev.fields.map((f, i) => {
+        if (i !== index) return f;
+        const next = { ...f, [field]: value };
+        if (field === 'type') {
+          const isChoice = CHOICE_FIELD_TYPES.includes(value);
+          const hadOptions = Array.isArray(f.options) && f.options.length > 0;
+          if (isChoice) next.options = hadOptions ? f.options : ['', ''];
+          else next.options = [];
+        }
+        return next;
+      }),
     }));
   };
 
@@ -2234,7 +2282,12 @@ export default function TherapistResources() {
                     <div className="file-upload-section">
                       <input
                         type="file"
-                        accept={resourceForm.type === 'video' ? 'video/*' : resourceForm.type === 'audio' ? 'audio/*' : 'image/*'}
+                        accept={
+                          resourceForm.type === 'video' ? 'video/*'
+                          : resourceForm.type === 'audio' ? 'audio/*'
+                          : resourceForm.type === 'image' ? 'image/*'
+                          : '*/*'
+                        }
                         onChange={(e) => {
                           const file = e.target.files[0];
                           if (file) {
@@ -2363,8 +2416,18 @@ export default function TherapistResources() {
                       checked={resourceForm.isPublic}
                       onChange={(e) => setResourceForm(prev => ({ ...prev, isPublic: e.target.checked }))}
                     />
-                    Make this resource public (visible to other therapists)
+                    Publish to clients
                   </label>
+                  {/* The old label said "visible to other therapists", which is the
+                      opposite of what this controls: the client Resources screen
+                      queries where('isPublic','==',true), so unchecking it hides the
+                      resource from clients entirely. Target audience then narrows
+                      WHICH clients see it. */}
+                  <p className="ws-field-hint">
+                    {resourceForm.isPublic
+                      ? 'Clients matching the target audience below will see this resource.'
+                      : 'Draft — no client can see this resource, whatever the target audience says.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -2381,12 +2444,12 @@ export default function TherapistResources() {
               >
                 Cancel
               </button>
-              <button 
-                className="btn-primary"
+              <ActionButton
                 onClick={showCreateModal ? handleCreateResource : handleUpdateResource}
+                busyLabel={showCreateModal ? 'Creating…' : 'Saving…'}
               >
                 {showCreateModal ? 'Create Resource' : 'Update Resource'}
-              </button>
+              </ActionButton>
             </div>
           </div>
         </div>
@@ -2646,19 +2709,30 @@ export default function TherapistResources() {
                 <p>Define the fields that clients will fill out in this worksheet.</p>
                 
                 {worksheetForm.fields.map((field, index) => (
-                  <div key={index} className="field-config">
-                    <div className="form-grid">
-                      <div className="form-group">
+                  <div key={index} className="ws-field-card">
+                    <div className="ws-field-head">
+                      <span className="ws-field-index">Field {index + 1}</span>
+                      <button
+                        type="button"
+                        className="ws-field-remove"
+                        onClick={() => removeWorksheetField(index)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="ws-field-grid">
+                      <div>
                         <label>Field Name *</label>
                         <input
                           type="text"
                           value={field.name}
                           onChange={(e) => updateWorksheetField(index, 'name', e.target.value)}
-                          placeholder="e.g., situation, automaticThoughts"
+                          placeholder="e.g., What was the situation?"
                           required
                         />
                       </div>
-                      <div className="form-group">
+                      <div>
                         <label>Field Type *</label>
                         <select
                           value={field.type}
@@ -2675,33 +2749,24 @@ export default function TherapistResources() {
                           <option value="multiple-choice">Multiple Choice</option>
                         </select>
                       </div>
-                      <div className="form-group">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={field.required}
-                            onChange={(e) => updateWorksheetField(index, 'required', e.target.checked)}
-                          />
-                          Required Field
-                        </label>
-                      </div>
-                      <div className="form-group">
-                        <button
-                          type="button"
-                          className="btn-danger small"
-                          onClick={() => removeWorksheetField(index)}
-                        >
-                          Remove
-                        </button>
-                      </div>
+                      <label className="ws-required">
+                        <input
+                          type="checkbox"
+                          checked={field.required}
+                          onChange={(e) => updateWorksheetField(index, 'required', e.target.checked)}
+                        />
+                        Required
+                      </label>
                     </div>
 
-                    {/* Field Options for select, radio, multiple-choice */}
-                    {(field.type === 'select' || field.type === 'radio' || field.type === 'multiple-choice') && (
-                      <div className="field-options">
-                        <label>Options:</label>
-                        {field.options && field.options.map((option, optIndex) => (
-                          <div key={optIndex} className="option-input">
+                    <p className="ws-field-hint">{FIELD_TYPE_HINTS[field.type]}</p>
+
+                    {/* Options editor — only for the choice types. */}
+                    {CHOICE_FIELD_TYPES.includes(field.type) && (
+                      <div className="ws-options">
+                        <label>Options the client can choose from</label>
+                        {(field.options || []).map((option, optIndex) => (
+                          <div key={optIndex} className="ws-option-row">
                             <input
                               type="text"
                               value={option}
@@ -2710,20 +2775,21 @@ export default function TherapistResources() {
                             />
                             <button
                               type="button"
-                              className="btn-danger small"
+                              className="ws-option-drop"
+                              title="Remove this option"
                               onClick={() => removeFieldOption(index, optIndex)}
-                              disabled={field.options.length <= 1}
+                              disabled={(field.options || []).length <= 2}
                             >
-                              ×
+                              &times;
                             </button>
                           </div>
                         ))}
                         <button
                           type="button"
-                          className="btn-secondary small"
+                          className="ws-option-add"
                           onClick={() => addFieldOption(index)}
                         >
-                          + Add Option
+                          + Add option
                         </button>
                       </div>
                     )}
@@ -2821,13 +2887,13 @@ export default function TherapistResources() {
               >
                 Cancel
               </button>
-              <button 
-                className={`btn-primary ${!isWorksheetFormValid() ? 'disabled' : ''}`}
+              <ActionButton
                 onClick={handleCreateWorksheet}
                 disabled={!isWorksheetFormValid()}
+                busyLabel="Creating…"
               >
                 Create Worksheet
-              </button>
+              </ActionButton>
             </div>
           </div>
         </div>

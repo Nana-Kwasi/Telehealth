@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { sendPasswordResetEmail } from '../../../services/authShim';
+import { doc, getDoc, serverTimestamp, updateDoc } from '../../../services/firestoreShim';
+import { auth, db } from '../../../services/firestoreShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function DiagnosticBranchSettings({ profile, type = 'lab' }) {

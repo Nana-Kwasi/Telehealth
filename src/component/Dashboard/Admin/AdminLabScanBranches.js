@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import '../Pharmacy/PharmacyDashboard.css';
-import { db } from '../../Auth/firebaseConfig';
+import { db } from '../../../services/firestoreShim';
 import {
   collection, query, getDocs, doc, setDoc,
   serverTimestamp, where,
-} from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
+} from '../../../services/firestoreShim';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from '../../../services/authShim';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI",

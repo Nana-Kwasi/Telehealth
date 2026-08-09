@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection,
   doc,
@@ -10,7 +10,7 @@ import {
   updateDoc,
   where,
   serverTimestamp,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -18,7 +18,7 @@ import {
   signOut,
   updateEmail,
   updatePassword,
-} from 'firebase/auth';
+} from '../../../services/authShim';
 import { SUPPORTED_COUNTRIES } from '../../../utils/featureFlags';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
@@ -95,16 +95,20 @@ export default function PharmacySettings({ profile }) {
   const [pwErr, setPwErr] = useState('');
   const [settingsTab, setSettingsTab] = useState('overview');
 
+  // The pharmacy org doc id = organization id, which equals the user id only for
+  // self-registered pharmacies. Prefer the org id so admin-onboarded ones resolve.
+  const orgId = profile?.organizationId || profile?.id;
+
   useEffect(() => {
     let c = false;
     (async () => {
-      if (!profile?.id) return;
+      if (!orgId) return;
       setLoading(true);
       try {
         const [snap, branchSnap, rxSnap] = await Promise.all([
-          getDoc(doc(db, 'pharmacies', profile.id)),
-          getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', profile.id))),
-          getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile.id))),
+          getDoc(doc(db, 'pharmacies', orgId)),
+          getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', orgId))),
+          getDocs(query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', orgId))),
         ]);
         if (!snap.exists() || c) return;
         const d = snap.data();
@@ -129,7 +133,7 @@ export default function PharmacySettings({ profile }) {
         setStoredTimezone(d.timezone || null);
         if (d.timezone !== detected) {
           try {
-            await updateDoc(doc(db, 'pharmacies', profile.id), {
+            await updateDoc(doc(db, 'pharmacies', orgId), {
               timezone: detected,
               timezoneSource: 'system',
               timezoneSyncedAt: serverTimestamp(),
@@ -182,7 +186,7 @@ export default function PharmacySettings({ profile }) {
     setBizErr('');
     setBizSaving(true);
     try {
-      await updateDoc(doc(db, 'pharmacies', profile.id), {
+      await updateDoc(doc(db, 'pharmacies', orgId), {
         pharmacyName: biz.pharmacyName.trim(),
         businessReg: biz.businessReg.trim(),
         phone: biz.phone.trim(),
@@ -222,7 +226,7 @@ export default function PharmacySettings({ profile }) {
     setPrefsMsg('');
     setTimezoneSyncing(true);
     try {
-      await updateDoc(doc(db, 'pharmacies', profile.id), {
+      await updateDoc(doc(db, 'pharmacies', orgId), {
         timezone: detected,
         timezoneSource: 'system',
         timezoneSyncedAt: serverTimestamp(),
@@ -259,7 +263,7 @@ export default function PharmacySettings({ profile }) {
 
   const exportProfile = async () => {
     try {
-      const snap = await getDoc(doc(db, 'pharmacies', profile.id));
+      const snap = await getDoc(doc(db, 'pharmacies', orgId));
       if (!snap.exists()) return;
       const d = snap.data();
       const safe = {
@@ -329,7 +333,7 @@ export default function PharmacySettings({ profile }) {
       const credential = EmailAuthProvider.credential(user.email, emailPw);
       await reauthenticateWithCredential(user, credential);
       await updateEmail(user, next);
-      await updateDoc(doc(db, 'pharmacies', profile.id), {
+      await updateDoc(doc(db, 'pharmacies', orgId), {
         email: next,
         updatedAt: serverTimestamp(),
       });
@@ -372,7 +376,7 @@ export default function PharmacySettings({ profile }) {
       const user = auth.currentUser;
       await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, pwCur));
       await updatePassword(user, pwNew);
-      await updateDoc(doc(db, 'pharmacies', profile.id), {
+      await updateDoc(doc(db, 'pharmacies', orgId), {
         mustChangePassword: false,
         updatedAt: serverTimestamp(),
       });

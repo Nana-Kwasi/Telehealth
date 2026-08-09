@@ -2093,3 +2093,69 @@
   transition: background 0.2s;
 }
 .emergency-close-btn:hover { background: #e5e7eb; }
+
+/* ─── Dashboard card layout hardening ────────────────────────────────────────
+   `.progress-card` is also declared in DashboardShell.css and in two therapist
+   stylesheets. Whichever loads last wins, and the card was ending up laid out as
+   a ROW — the "Your Progress" heading floated vertically centred on the left with
+   the metric bars stacked beside it. Pin the intended stacking here so the card
+   renders the same regardless of stylesheet order. */
+.dashboard-home .progress-card,
+.dashboard-home .activities-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  min-height: 0;
+}
+
+.dashboard-home .progress-card > .card-title,
+.dashboard-home .activities-card > .card-title {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin: 0 0 1rem;
+}
+
+.dashboard-home .progress-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.dashboard-home .progress-item {
+  width: 100%;
+}
+
+/* ─── Empty states ───────────────────────────────────────────────────────────
+   A new client saw blank cards and empty chart axes with no explanation, which
+   reads as "broken" rather than "nothing here yet". */
+.dashboard-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.dashboard-empty-icon {
+  font-size: 1.75rem;
+  opacity: 0.7;
+}
+
+.dashboard-empty-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.dashboard-empty-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  max-width: 30ch;
+}

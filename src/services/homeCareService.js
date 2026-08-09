@@ -13,9 +13,9 @@ import {
   orderBy,
   arrayUnion,
   increment,
-} from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage, functions, httpsCallable } from '../component/Auth/firebaseConfig';
+} from './firestoreShim';
+import { ref, uploadBytes, getDownloadURL } from './firestoreShim';
+import { auth, db, storage, functions, httpsCallable } from './firestoreShim';
 import {
   NURSE_ACCOUNT_STATUS,
   BOOKING_STATUS,
@@ -43,8 +43,40 @@ const NOTIFICATIONS = 'notifications';
 
 export { getCurrentLocationMobile, geocodeAddressMobile, reverseGeocodeMobile };
 
+/**
+ * `languages`, `specialties`, `fees` and `availability` are TEXT columns holding
+ * JSON, but the screens treat them as arrays/objects — the nurse profile page
+ * calls `nurse.languages.join(', ')` and threw "join is not a function", taking
+ * the page down. Parse them once here (mirrors the mobile hydrateNurse).
+ */
+function parseJsonField(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value !== 'string') return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed ?? fallback;
+  } catch {
+    return Array.isArray(fallback)
+      ? value.split(',').map((x) => x.trim()).filter(Boolean)
+      : fallback;
+  }
+}
+
+export function hydrateNurse(nurse) {
+  if (!nurse) return nurse;
+  const meta = parseJsonField(nurse.metadataJson, {});
+  return {
+    ...meta,
+    ...nurse,
+    languages: parseJsonField(nurse.languages, []),
+    specialties: parseJsonField(nurse.specialties, []),
+    fees: parseJsonField(nurse.fees, {}),
+    availability: parseJsonField(nurse.availability, {}),
+  };
+}
+
 export function mapNurseDoc(id, data) {
-  return { id, ...data };
+  return hydrateNurse({ id, ...data });
 }
 
 export async function fetchApprovedNurses(filters = {}) {

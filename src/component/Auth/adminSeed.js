@@ -1,6 +1,6 @@
-import { auth, db } from './firebaseConfig';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../services/firestoreShim';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../../services/authShim';
+import { doc, setDoc, getDoc } from '../../services/firestoreShim';
 
 // Creates Vanessa (admin) if not present. Use cautiously; call once from an admin-only control.
 export async function ensureVanessaAdmin() {

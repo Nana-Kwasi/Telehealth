@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, addDoc, query, where, serverTimestamp } from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, addDoc, query, where, serverTimestamp } from '../../../services/firestoreShim';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from '../../../services/authShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import { formatDashboardLocationLine } from '../../Common/LocationSummaryCard';
 
@@ -49,9 +49,15 @@ export default function PharmacyBranches({ profile }) {
 
   useEffect(() => { loadBranches(); }, []);
 
+  // Branches are stored under the organization id. For self-registered pharmacies
+  // that equals the user id, but admin-onboarded ones differ — so prefer the org id
+  // and fall back to the user id. Using the wrong key returns an empty list (the
+  // "branches vanish on reload" bug).
+  const orgId = profile.organizationId || profile.id;
+
   const loadBranches = async () => {
     try {
-      const snap = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', profile.id)));
+      const snap = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', orgId)));
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => (a.branchName || '').localeCompare(b.branchName || ''));
       setBranches(list);
@@ -84,7 +90,7 @@ export default function PharmacyBranches({ profile }) {
 
       const branchData = {
         uid,
-        pharmacyId: profile.id,
+        pharmacyId: orgId,
         pharmacyName: profile.pharmacyName || '',
         branchName: form.branchName.trim(),
         address: form.address.trim(),

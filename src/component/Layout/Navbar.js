@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../Auth/firebaseConfig';
+import { onAuthStateChanged } from '../../services/authShim';
+import { auth } from '../../services/firestoreShim';
 import { performLogout } from '../Auth/authService';
 import './Navbar.css';
 import { clearPatientSessionIntent } from '../../utils/patientSessionIntent';

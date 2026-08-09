@@ -1467,3 +1467,69 @@
   margin-bottom: 1.25rem;
   max-width: 800px;
 }
+
+/* ─── Appointments calendar ─────────────────────────────────────────────────── */
+/* Light-only, like the rest of this dashboard — no prefers-color-scheme here. */
+.mp-cal-card { padding: 1.25rem; }
+
+.mp-cal-nav { display: flex; align-items: center; gap: 0.5rem; }
+
+.mp-cal-nav-btn {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.mp-cal-nav-btn:hover { background: #f1f5f9; }
+
+.mp-cal-month { font-size: 0.9rem; font-weight: 600; color: #0f172a; min-width: 8.5rem; text-align: center; }
+
+.mp-cal-weekdays,
+.mp-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.mp-cal-weekdays {
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.mp-cal-weekdays span {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.mp-cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #1e293b;
+}
+
+.mp-cal-day--other { color: #cbd5e1; }
+.mp-cal-day--today { border: 1px solid #2563eb; }
+
+.mp-cal-day--booked {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+}
+
+.mp-cal-legend {
+  margin: 0.85rem 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}

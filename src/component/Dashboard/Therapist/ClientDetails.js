@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, getDoc, doc,
   addDoc, updateDoc, serverTimestamp, orderBy, limit
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import {
   ArrowLeft, User, Mail, Phone, Calendar, FileText,
   MessageSquare, Edit, UserX, UserCheck, TrendingUp,

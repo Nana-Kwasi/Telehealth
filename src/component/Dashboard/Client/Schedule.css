@@ -1114,3 +1114,162 @@
   color: #991b1b;
   border: 1px solid #ef4444;
 }
+/* Calendar days are interactive: click shows the day's sessions, or starts a
+   booking on a free future day. */
+.client-schedule-day-clickable {
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.client-schedule-day-clickable:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+/* ── Day detail dialog ────────────────────────────────────────────────────────
+   Opens when a calendar day with sessions is clicked. Sits above the calendar
+   and the schedule FAB. */
+.tc-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+  padding: 1rem;
+}
+
+.tc-detail {
+  background: #fff;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+.tc-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.4rem 1rem;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.tc-detail-date {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.tc-detail-count {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.tc-detail-close {
+  border: none;
+  background: #f1f5f9;
+  color: #475569;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tc-detail-close:hover { background: #e2e8f0; }
+
+.tc-detail-body {
+  padding: 1rem 1.4rem;
+  overflow-y: auto;
+}
+
+.tc-detail-card {
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #6366f1;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.75rem;
+  background: #f8fafc;
+}
+
+.tc-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.tc-detail-row svg { color: #94a3b8; flex-shrink: 0; }
+
+.tc-detail-time { font-size: 1rem; font-weight: 800; color: #0f172a; }
+
+.tc-detail-chip {
+  margin-left: auto;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
+
+.tc-detail-status { text-transform: capitalize; }
+
+.tc-detail-notes {
+  margin: 0.5rem 0 0;
+  font-size: 0.84rem;
+  font-style: italic;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.tc-detail-actions {
+  display: flex;
+  gap: 0.65rem;
+  padding: 1rem 1.4rem 1.25rem;
+  border-top: 1px solid #eef2f7;
+}
+
+.tc-detail-secondary,
+.tc-detail-primary {
+  flex: 1;
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.tc-detail-secondary {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+}
+
+.tc-detail-primary {
+  border: none;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.tc-detail-primary:hover { background: #4338ca; }

@@ -9,8 +9,8 @@ import {
   Shield,
   ClipboardList,
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../Auth/firebaseConfig';
+import { signOut } from '../../../services/authShim';
+import { auth } from '../../../services/firestoreShim';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { HomeCareNurseProvider, useHomeCareNurse } from './HomeCareNurseContext';

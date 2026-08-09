@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth } from '../Auth/firebaseConfig';
+import { auth } from '../../services/firestoreShim';
 import { fetchPatientBookings } from '../../services/homeCareService';
 import { statusLabel } from '../../utils/homeCareUtils';
 import './HomeCare.css';

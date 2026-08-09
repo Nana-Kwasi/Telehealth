@@ -48,7 +48,9 @@ export default function useAddressAutofill() {
         setLoading(false);
         setMessage('Location access helps us provide better services like nearby pharmacies, labs, and doctors. You can continue manually, but some features may be limited.');
       },
-      { enableHighAccuracy: true, timeout: 12000 }
+      // maximumAge:0 — never accept a cached position for an explicit "use my
+      // current location" action.
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
     );
   };
 

@@ -12,8 +12,8 @@ import {
   LogOut,
   User
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../Auth/firebaseConfig';
+import { signOut } from '../../../services/authShim';
+import { auth } from '../../../services/firestoreShim';
 import './ClientDashboard.css';
 import '../DashboardShell.css';
 

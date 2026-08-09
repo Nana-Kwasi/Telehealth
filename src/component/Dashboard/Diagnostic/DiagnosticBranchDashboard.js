@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../../Auth/firebaseConfig';
+import { signOut } from '../../../services/authShim';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from '../../../services/firestoreShim';
+import { ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
+import { auth, db, storage } from '../../../services/firestoreShim';
 import BranchOrderDetail from './BranchOrderDetail';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';

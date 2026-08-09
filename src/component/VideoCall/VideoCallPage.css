@@ -486,3 +486,118 @@
     right: 1rem;
   }
 }
+
+
+/* ── Keep the call controls on screen ──────────────────────────────────────────
+   A subscribed remote track has no bounded height here, so the moment someone
+   joined, the <video> rendered at its intrinsic size (measured: 692px tall in a
+   720px viewport) and pushed the Mute / Camera / Leave controls below the fold.
+   Flex and grid children default to min-height:auto, so nothing could shrink.
+   Letting the media area shrink keeps the controls visible instead. */
+.video-container {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.remote-videos {
+  min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.remote-participant {
+  min-height: 0;
+  height: 100%;
+}
+
+.local-video-container,
+.local-video {
+  min-height: 0;
+}
+
+.video-controls {
+  flex-shrink: 0;
+}
+
+/* The call page renders below the site navbar, so a flat 100vh overflowed the
+   window by exactly the navbar's height. --call-height is measured on mount. */
+.video-call-page {
+  height: var(--call-height, 100vh);
+}
+
+
+/* ── Call controls ────────────────────────────────────────────────────────────
+   The buttons had padding but no width/height, so each one stretched into a wide
+   oval. Fixed square sizes make them true circles in a compact bar. */
+.video-call-page .video-controls {
+  gap: 1rem;
+  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(12, 18, 28, 0.92);
+}
+
+.video-call-page .control-btn {
+  width: 52px;
+  height: 52px;
+  /* Beats the global `.control-btn { min-width: 200px }` from the dashboard's
+     stylesheet, which stretched every button into a wide oval. */
+  min-width: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+
+.video-call-page .control-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: none;
+}
+
+/* Toggled-off states read as "this is currently disabled", not as an accent. */
+.video-call-page .control-btn.muted,
+.video-call-page .control-btn.video-off {
+  background: rgba(248, 113, 113, 0.20);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+.video-call-page .control-btn.screen-sharing {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #e0f2fe;
+}
+
+/* Leave: wider than the round toggles so it reads as the primary action. */
+.video-call-page .control-btn.end-call {
+  width: 84px;
+  height: 52px;
+  min-width: 0;
+  border-radius: 26px;
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.video-call-page .control-btn.end-call:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .video-call-page .video-controls {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .video-call-page .control-btn {
+    width: 46px;
+    height: 46px;
+  }
+
+  .video-call-page .control-btn.end-call {
+    width: 72px;
+    height: 46px;
+  }
+}

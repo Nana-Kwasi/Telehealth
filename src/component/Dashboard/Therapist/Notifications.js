@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, auth } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit } from 'firebase/firestore';
+import { db, auth } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit } from '../../../services/firestoreShim';
 import { ArrowLeft, Bell, MessageSquare, Calendar, Video, AlertCircle, CheckCircle } from 'lucide-react';
 import './Notifications.css';
 

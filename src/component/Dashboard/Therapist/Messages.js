@@ -1,16 +1,37 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { auth, db } from '../../Auth/firebaseConfig';
-import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query } from 'firebase/firestore';
+import { auth, db } from '../../../services/firestoreShim';
+import { collection, onSnapshot, addDoc, serverTimestamp, orderBy, query, doc, setDoc } from '../../../services/firestoreShim';
 import { 
   MoreVertical, 
   Mic, 
   Send, 
   Paperclip, 
   Smile,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import UserModal from './UserModal';
+import VoiceNote from '../../Common/VoiceNote';
+import { mediaUrlOf, fileNameOf, fileSizeOf } from '../../../utils/chatMedia';
+import { downloadFile } from '../../../utils/downloadFile';
+import ChatImage from '../../Common/ChatImage';
 import './Messages.css';
+
+// Render a presence timestamp (Firestore Timestamp, ISO string, millis, or Date)
+// the WhatsApp way: "Online" / "Last seen Xm ago".
+function fmtLastSeen(ts) {
+  let d = null;
+  if (ts?.toDate) d = ts.toDate();
+  else if (typeof ts === 'string') d = new Date(ts);
+  else if (typeof ts === 'number') d = new Date(ts);
+  else if (ts instanceof Date) d = ts;
+  if (!d || isNaN(d.getTime())) return 'Offline';
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000) return 'Online';
+  if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `Last seen today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  return `Last seen ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
 
 export default function TherapistMessages() {
   const [therapists, setTherapists] = useState([]);
@@ -26,9 +47,11 @@ export default function TherapistMessages() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUserForModal, setSelectedUserForModal] = useState(null);
   const [modalMode, setModalMode] = useState(''); // 'view' or 'manage'
+  const [peerPresence, setPeerPresence] = useState(null); // { online, lastSeen }
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
+  const presenceUnsubRef = useRef(null);
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -39,10 +62,12 @@ export default function TherapistMessages() {
     const therapistsCol = collection(db, 'therapists');
     const therapistsUnsub = onSnapshot(therapistsCol, (snap) => {
       const therapistsData = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // Filter out current user and sort by name
+      // Filter out the current user — therapist docs are keyed by `id` (the user
+      // id); `uid` is usually absent, so check both or the logged-in therapist sees
+      // (and can chat) themselves.
       const filteredTherapists = therapistsData
-        .filter(t => t.uid !== u.uid)
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter(t => (t.id || t.uid) !== u.uid)
+        .sort((a, b) => String(a.name || a.fullName || '').localeCompare(String(b.name || b.fullName || '')));
       setTherapists(filteredTherapists);
       
       // Don't auto-select any therapist - let user choose
@@ -52,6 +77,36 @@ export default function TherapistMessages() {
       therapistsUnsub();
     };
   }, []);
+
+  // ── Own presence: heartbeat every 25s while the tab is open (keeps the
+  // backend's 40s "online" window alive), offline on unmount/unload ──
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const presenceRef = doc(db, 'userPresence', uid);
+    const beat = () => setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    beat();
+    const hb = setInterval(beat, 25000);
+    const handleUnload = () => setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      clearInterval(hb);
+      window.removeEventListener('beforeunload', handleUnload);
+      setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
+    };
+  }, []);
+
+  // ── Subscribe to the selected peer's presence ──
+  useEffect(() => {
+    presenceUnsubRef.current?.();
+    setPeerPresence(null);
+    const peerId = selectedTherapist?.uid || selectedTherapist?.id;
+    if (!peerId) return;
+    presenceUnsubRef.current = onSnapshot(doc(db, 'userPresence', peerId), snap => {
+      setPeerPresence(snap.exists() ? snap.data() : null);
+    });
+    return () => presenceUnsubRef.current?.();
+  }, [selectedTherapist]);
 
   useEffect(() => {
     if (!selectedTherapist) return;
@@ -96,7 +151,11 @@ export default function TherapistMessages() {
   }, [showEmojiPicker]);
 
   const getChatPath = (therapist) => {
-    const sortedUids = [currentUser.uid, therapist.uid].sort();
+    // The therapists list exposes `id`; `uid` is the Firestore-era name and is
+    // undefined here. Using it built ".../{me}_undefined/messages", so the pair
+    // endpoint rejected every read and write with "Invalid value for 'userB'".
+    const peerId = therapist?.uid || therapist?.id;
+    const sortedUids = [currentUser.uid, peerId].sort();
     return `therapist_chats/${sortedUids[0]}_${sortedUids[1]}/messages`;
   };
 
@@ -147,7 +206,7 @@ export default function TherapistMessages() {
         type, // text, image, document, audio
         from: currentUser.uid,
         fromName: currentUser.displayName || 'Therapist',
-        to: selectedTherapist.uid,
+        to: selectedTherapist.uid || selectedTherapist.id,
         toName: selectedTherapist.name,
         createdAt: serverTimestamp(),
         read: false
@@ -267,32 +326,45 @@ export default function TherapistMessages() {
         
         <div className="message-content">
           {message.type === 'text' && (
-            <div className="message-text">{message.content}</div>
+            <div className="message-text">
+              {typeof message.content === 'string' ? message.content : message.text}
+            </div>
           )}
-          
+
           {message.type === 'image' && (
             <div className="message-image">
-              <img src={message.content.url} alt="Shared image" />
+              <ChatImage src={mediaUrlOf(message)} name={fileNameOf(message)} />
             </div>
           )}
-          
-          {message.type === 'document' && (
-            <div className="message-document">
+
+          {(message.type === 'document' || message.type === 'file') && (
+            <a
+              className="message-document"
+              href={mediaUrlOf(message)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Download ${fileNameOf(message)}`}
+              onClick={(e) => {
+                // `download` is ignored cross-origin, so the plain link did
+                // nothing. Fetch the bytes and save them instead.
+                e.preventDefault();
+                downloadFile(mediaUrlOf(message), fileNameOf(message));
+              }}
+            >
               <FileText size={20} />
-              <span>{message.content.name}</span>
-            </div>
+              <span className="file-name">{fileNameOf(message)}</span>
+              {fileSizeOf(message) && <small className="file-size">{fileSizeOf(message)}</small>}
+              <Download size={16} className="file-download-icon" />
+            </a>
           )}
-          
+
           {message.type === 'audio' && (
-            <div className="message-audio">
-              <div className="audio-controls">
-                <audio controls className="audio-player">
-                  <source src={message.content.url} type="audio/webm" />
-                  Your browser does not support the audio element.
-                </audio>
-                <span className="audio-duration">{message.content.duration}s</span>
-              </div>
-            </div>
+            <VoiceNote
+              src={mediaUrlOf(message)}
+              mimeType={message.content?.type}
+              duration={message.content?.duration}
+              isOwn={isOwnMessage}
+            />
           )}
           
           <div className="message-time">{formatTime(message.createdAt)}</div>
@@ -395,7 +467,15 @@ export default function TherapistMessages() {
                 </div>
                 <div className="chat-details">
                   <h3 className="chat-name">{selectedTherapist.name}</h3>
-                  <p className="chat-role">{selectedTherapist.type}</p>
+                  {(() => {
+                    const isOnline = peerPresence?.online === true;
+                    const label = peerPresence ? (isOnline ? 'Online' : fmtLastSeen(peerPresence.lastSeen)) : (selectedTherapist.type || 'Offline');
+                    return (
+                      <p className="chat-role" style={{ color: isOnline ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>
+                        {isOnline ? '● Online' : label}
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
               

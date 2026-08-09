@@ -52,8 +52,8 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   fetchSignInMethodsForEmail,
-} from 'firebase/auth';
-import { auth, db, storage } from '../../Auth/firebaseConfig';
+} from '../../../services/authShim';
+import { auth, db, storage } from '../../../services/firestoreShim';
 import { 
   collection, 
   doc, 
@@ -64,14 +64,20 @@ import {
   addDoc,
   deleteDoc,
   serverTimestamp 
-} from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+} from '../../../services/firestoreShim';
+import { ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import './Settings.css';
+import { uploadAvatar } from '../../../utils/profileImage';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
 export default function TherapistSettings() {
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState({});
+  // The form starts as all-empty strings and is only filled once the profile has
+  // been read. Saving before that (or after a failed read) writes those blanks
+  // over the stored profile — which is how a published session rate came back as
+  // "Rate not published" on the client-facing therapist list.
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [settings, setSettings] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -109,6 +115,8 @@ export default function TherapistSettings() {
     ghanaDigitalAddress: '',
     latitude: null,
     longitude: null,
+    availabilityStatus: 'available',
+    sessionRate: '',
   });
 
   const [clinicalForm, setClinicalForm] = useState({
@@ -154,6 +162,7 @@ export default function TherapistSettings() {
         const profileDoc = await getDoc(doc(db, 'therapists', currentUser.uid));
         if (profileDoc.exists()) {
           const profileData = profileDoc.data();
+          setProfileLoaded(true);
           setProfile(profileData);
           setProfileForm({
             name: profileData.name || '',
@@ -173,6 +182,8 @@ export default function TherapistSettings() {
             ghanaDigitalAddress: profileData.ghanaDigitalAddress || '',
             latitude: profileData.latitude ?? profileData.locationMeta?.latitude ?? null,
             longitude: profileData.longitude ?? profileData.locationMeta?.longitude ?? null,
+            availabilityStatus: profileData.availabilityStatus || 'available',
+            sessionRate: profileData.sessionRate ?? '',
           });
         }
       } catch (error) {
@@ -200,7 +211,7 @@ export default function TherapistSettings() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!['profile', 'notifications', 'security'].includes(activeTab)) setActiveTab('profile');
+    if (!['profile', 'security', 'availability', 'notifications'].includes(activeTab)) setActiveTab('profile');
   }, [activeTab]);
 
   // Handle image upload
@@ -231,13 +242,15 @@ export default function TherapistSettings() {
     if (!selectedImage) return '';
 
     try {
-      const imageRef = ref(storage, `therapist-profiles/${currentUser.uid}/${selectedImage.name}`);
-      const snapshot = await uploadBytes(imageRef, selectedImage);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      return downloadURL;
+      // Was a Firebase Storage upload; the app no longer runs on Firebase. The
+      // picture is now saved on the user record — the therapist PATCH binds only
+      // six fields and none is a photo, so sending `photoURL` there was silently
+      // discarded and the image vanished on reload.
+      return await uploadAvatar(selectedImage, currentUser?.uid);
     } catch (error) {
       console.error('Error uploading image:', error);
-      return '';
+      // Surface it — returning '' quietly wiped the existing photo on save.
+      throw error;
     }
   };
 
@@ -360,6 +373,11 @@ export default function TherapistSettings() {
 
   // Save profile
   const handleSaveProfile = async () => {
+    if (!profileLoaded) {
+      setSaveMessage('Still loading your profile — please wait before saving.');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
     setIsLoading(true);
     setSaveMessage('Saving profile...');
 
@@ -470,10 +488,21 @@ export default function TherapistSettings() {
     }));
   };
 
+  // Kept in step with the mobile therapist Settings screen (Profile / Security /
+  // Availability / Notifications) so both platforms expose the same sections in the
+  // same order.
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
+    { id: 'availability', label: 'Availability', icon: Calendar },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+  ];
+
+  const AVAILABILITY_STATUSES = [
+    { id: 'available', label: 'Available', color: '#22c55e' },
+    { id: 'busy', label: 'Busy', color: '#ef4444' },
+    { id: 'away', label: 'Away', color: '#f59e0b' },
+    { id: 'offline', label: 'Offline', color: '#94a3b8' },
   ];
 
   return (
@@ -643,6 +672,22 @@ export default function TherapistSettings() {
                     placeholder="Years of experience"
                   />
                 </div>
+
+                <div className="form-group">
+                  <label>SESSION RATE (per session)</label>
+                  {/* Clients are charged this when they pick you, so it has to live
+                      on the therapist profile — nothing stored a therapist fee before. */}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="user-form-input"
+                    placeholder="e.g. 150.00"
+                    value={profileForm.sessionRate}
+                    onChange={(e) => setProfileForm(prev => ({ ...prev, sessionRate: e.target.value }))}
+                  />
+                  <small>Shown to clients when they choose a therapist.</small>
+                </div>
               </div>
 
               <div className="form-group">
@@ -692,6 +737,40 @@ export default function TherapistSettings() {
             </div>
           )}
 
+
+          {/* Availability Tab — mirrors the mobile Availability section */}
+          {activeTab === 'availability' && (
+            <div className="settings-section">
+              <h2>Current Status</h2>
+              <p className="section-hint">
+                Clients and schedulers see this status on your profile.
+              </p>
+
+              <div className="availability-options">
+                {AVAILABILITY_STATUSES.map(status => (
+                  <button
+                    key={status.id}
+                    type="button"
+                    className={`availability-option ${profileForm.availabilityStatus === status.id ? 'active' : ''}`}
+                    onClick={() => setProfileForm(prev => ({ ...prev, availabilityStatus: status.id }))}
+                  >
+                    <span className="availability-dot" style={{ backgroundColor: status.color }} />
+                    <span className="availability-label">{status.label}</span>
+                    {profileForm.availabilityStatus === status.id && <CheckCircle size={18} />}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                className="btn-primary"
+                onClick={handleSaveProfile}
+                disabled={isLoading}
+              >
+                <Save size={16} />
+                {isLoading ? 'Saving...' : 'Save Status'}
+              </button>
+            </div>
+          )}
 
           {/* Notifications Tab */}
           {activeTab === 'notifications' && (

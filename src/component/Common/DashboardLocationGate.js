@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../Auth/firebaseConfig';
+import { useEffect, useMemo, useRef } from 'react';
+import { doc, getDoc, serverTimestamp, setDoc } from '../../services/firestoreShim';
+import { auth, db } from '../../services/firestoreShim';
 import useAddressAutofill from '../../hooks/useAddressAutofill';
 
 function roleTarget(role, profile) {
@@ -29,142 +29,75 @@ function hasLocationData(data) {
   return !!(data?.country || data?.city || data?.area || data?.region || data?.street);
 }
 
+/**
+ * Silent location gate. On entering the dashboard it auto-detects the user's
+ * current location (once) and saves it to their profile — no modal, no manual
+ * step, no repeated prompts. If a location is already saved, or the browser
+ * blocks geolocation, it does nothing. Users can edit their address manually in
+ * their profile/settings screen.
+ */
 export default function DashboardLocationGate({ role, profile, activePath = '' }) {
-  const [checking, setChecking] = useState(true);
-  const [required, setRequired] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
-  const [form, setForm] = useState({
-    country: '', city: '', area: '', region: '', street: '', ghanaDigitalAddress: '', latitude: '', longitude: '',
-  });
-
+  const { detectAddress } = useAddressAutofill();
   const target = useMemo(() => roleTarget(role, profile), [role, profile]);
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    if (!role || !activePath.startsWith('/dashboard') || !target || ranRef.current) return;
+    ranRef.current = true;
     let cancelled = false;
+
     (async () => {
-      if (!role || !activePath.startsWith('/dashboard') || !target) {
-        setChecking(false);
-        setRequired(false);
-        return;
-      }
-      setChecking(true);
       try {
+        const flagKey = `loc.autosaved.${target.id}`;
+        if (sessionStorage.getItem(flagKey)) return;
+
         const snap = await getDoc(doc(db, target.collection, target.id));
         const data = snap.exists() ? snap.data() : {};
-        if (!cancelled) {
-          setForm((f) => ({
-            ...f,
-            country: data?.country || data?.locationMeta?.country || '',
-            city: data?.city || data?.locationMeta?.city || '',
-            area: data?.area || data?.locationMeta?.area || '',
-            region: data?.region || data?.locationMeta?.region || '',
-            street: data?.street || data?.locationMeta?.street || '',
-            ghanaDigitalAddress: data?.ghanaDigitalAddress || '',
-            latitude: data?.latitude ?? data?.locationMeta?.latitude ?? '',
-            longitude: data?.longitude ?? data?.locationMeta?.longitude ?? '',
-          }));
-          setRequired(!hasLocationData(data));
-        }
-      } catch {
-        if (!cancelled) setRequired(true);
-      } finally {
-        if (!cancelled) setChecking(false);
-      }
+        if (hasLocationData(data)) { sessionStorage.setItem(flagKey, '1'); return; }
+
+        // No location yet — detect and save silently.
+        detectAddress(async (loc) => {
+          if (cancelled || !loc) return;
+          const latitude = Number.isFinite(Number(loc.latitude)) ? Number(loc.latitude) : null;
+          const longitude = Number.isFinite(Number(loc.longitude)) ? Number(loc.longitude) : null;
+          if (latitude == null && !loc.city && !loc.countryCode && !loc.country) return;
+
+          const payload = {
+            country: loc.countryCode || loc.country || null,
+            city: loc.city || null,
+            area: loc.area || null,
+            region: loc.region || null,
+            street: loc.street || null,
+            latitude,
+            longitude,
+            locationMeta: {
+              country: loc.countryCode || loc.country || null,
+              city: loc.city || null,
+              area: loc.area || null,
+              region: loc.region || null,
+              street: loc.street || null,
+              latitude,
+              longitude,
+            },
+            updatedAt: serverTimestamp(),
+          };
+          try {
+            await setDoc(doc(db, target.collection, target.id), payload, { merge: true });
+            if (role === 'client' || profile?.userIntent === 'medical') {
+              const uid = auth.currentUser?.uid;
+              if (uid) {
+                await setDoc(doc(db, 'auth', uid), payload, { merge: true }).catch(() => {});
+                await setDoc(doc(db, 'patientProfiles', uid), payload, { merge: true }).catch(() => {});
+              }
+            }
+            sessionStorage.setItem(flagKey, '1');
+          } catch { /* best-effort; user can set it manually in settings */ }
+        });
+      } catch { /* ignore */ }
     })();
+
     return () => { cancelled = true; };
-  }, [role, target, activePath]);
+  }, [role, target, activePath, profile, detectAddress]);
 
-  const saveLocation = async () => {
-    if (!target) return;
-    setSaving(true);
-    setError('');
-    try {
-      const latitude = Number.isFinite(Number(form.latitude)) ? Number(form.latitude) : null;
-      const longitude = Number.isFinite(Number(form.longitude)) ? Number(form.longitude) : null;
-      const payload = {
-        country: form.country || null,
-        city: form.city || null,
-        area: form.area || null,
-        region: form.region || null,
-        street: form.street || null,
-        ghanaDigitalAddress: form.ghanaDigitalAddress || null,
-        latitude,
-        longitude,
-        locationMeta: {
-          country: form.country || null,
-          city: form.city || null,
-          area: form.area || null,
-          region: form.region || null,
-          street: form.street || null,
-          latitude,
-          longitude,
-        },
-        updatedAt: serverTimestamp(),
-      };
-      await setDoc(doc(db, target.collection, target.id), payload, { merge: true });
-      if (role === 'client' || profile?.userIntent === 'medical') {
-        const uid = auth.currentUser?.uid;
-        if (uid) {
-          await setDoc(doc(db, 'auth', uid), payload, { merge: true }).catch(() => {});
-          await setDoc(doc(db, 'patientProfiles', uid), payload, { merge: true }).catch(() => {});
-        }
-      }
-      setRequired(false);
-    } catch {
-      setError('Could not save location now. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (checking || !required) return null;
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div style={{ width: '100%', maxWidth: 620, background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '1rem 1rem 1.1rem' }}>
-        <h3 style={{ margin: '0 0 0.35rem', color: '#0f172a' }}>Complete Location Setup</h3>
-        <p style={{ margin: '0 0 0.65rem', color: '#64748b', fontSize: '0.85rem' }}>
-          Location access helps us provide better services like nearby pharmacies, labs, and doctors. You can continue manually, but some features may be limited.
-        </p>
-        <div style={{ marginBottom: '0.7rem', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" type="button" onClick={() => detectAddress((loc) => {
-            setForm((f) => ({
-              ...f,
-              country: loc.countryCode || f.country,
-              city: loc.city || f.city,
-              area: loc.area || f.area,
-              region: loc.region || f.region,
-              street: loc.street || f.street,
-              latitude: loc.latitude ?? f.latitude,
-              longitude: loc.longitude ?? f.longitude,
-            }));
-          })}>{locating ? 'Detecting…' : 'Use current location'}</button>
-          {locationMsg ? <span style={{ color: '#64748b', fontSize: '0.76rem' }}>{locationMsg}</span> : null}
-        </div>
-        <div className="admin-form-grid">
-          {[
-            ['Country', 'country', 'e.g. GH'],
-            ['City', 'city', 'e.g. Accra'],
-            ['Area / Locality', 'area', 'e.g. East Legon'],
-            ['Region / State', 'region', 'e.g. Greater Accra'],
-            ['Street', 'street', 'e.g. Liberation Road'],
-            ['Ghana Digital Address (optional)', 'ghanaDigitalAddress', 'e.g. GA-123-4567'],
-            ['Latitude', 'latitude', 'Auto-detected'],
-            ['Longitude', 'longitude', 'Auto-detected'],
-          ].map(([label, key, placeholder]) => (
-            <label key={key} className="admin-field">
-              <span>{label}</span>
-              <input value={form[key] ?? ''} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} />
-            </label>
-          ))}
-        </div>
-        {error ? <p style={{ margin: '0.55rem 0 0', color: '#b91c1c', fontSize: '0.8rem' }}>{error}</p> : null}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.8rem' }}>
-          <button className="btn btn-primary" onClick={saveLocation} disabled={saving}>{saving ? 'Saving…' : 'Save Location'}</button>
-        </div>
-      </div>
-    </div>
-  );
+  return null; // never renders UI
 }

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import { signOut, updatePassword } from 'firebase/auth';
-import { auth, db } from '../../Auth/firebaseConfig';
-import { doc, updateDoc } from 'firebase/firestore';
+import { signOut, updatePassword } from '../../../services/authShim';
+import { auth, db } from '../../../services/firestoreShim';
+import { doc, updateDoc } from '../../../services/firestoreShim';
 import './PharmacyDashboard.css';
 
 import PharmacyOverview from './PharmacyOverview';
 import PharmacyBranches from './PharmacyBranches';
 import PharmacyBranchDetail from './PharmacyBranchDetail';
 import PharmacyPrescriptions from './PharmacyPrescriptions';
+import PrescriptionOps from './PrescriptionOps';
 import PharmacyReports from './PharmacyReports';
 import PharmacySettings from './PharmacySettings';
 import GlobalReportForm from '../Common/GlobalReportForm';
@@ -157,6 +158,7 @@ export default function PharmacyDashboard({ profile }) {
           <Route path="/"              element={<PharmacyOverview      profile={profile} />} />
           <Route path="/branches/:branchId" element={<PharmacyBranchDetail profile={profile} />} />
           <Route path="/branches"      element={<PharmacyBranches      profile={profile} />} />
+          <Route path="/prescriptions/:rxId" element={<PrescriptionOps profile={profile} mode="parent" />} />
           <Route path="/prescriptions" element={<PharmacyPrescriptions profile={profile} />} />
           <Route path="/reports"       element={<PharmacyReports       profile={profile} />} />
           <Route path="/report-issue"  element={<GlobalReportForm profile={profile} reporterType="pharmacy_parent" />} />

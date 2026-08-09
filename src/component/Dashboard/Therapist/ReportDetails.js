@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { ArrowLeft, AlertTriangle, CheckCircle, Clock, XCircle, Flag, Eye } from 'lucide-react';
 import './ReportDetails.css';
 

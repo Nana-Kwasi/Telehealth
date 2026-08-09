@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Calendar as CalendarIcon, 
+import {
+  Calendar as CalendarIcon,
   Clock, 
   User, 
   Phone, 
@@ -31,21 +31,41 @@ import {
   Timestamp, 
   getDocs, 
   getDoc, 
-  doc, 
-  addDoc 
-} from 'firebase/firestore';
+  doc,
+  addDoc,
+  updateDoc
+} from '../../../services/firestoreShim';
+import ActionButton from '../../Common/ActionButton';
+import { calculateClientProgress } from '../../../utils/clientProgress';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { db, auth } from '../../Auth/firebaseConfig';
+import { db, auth } from '../../../services/firestoreShim';
 import './Calendar.css';
+
+// Scheduled times come back from the REST API as ISO strings, but this screen was
+// written against Firestore Timestamps and called `scheduledTime?.toDate()`. On a
+// string that is not a function: the calendar's day filter silently matched
+// nothing (so no session ever appeared) and the report/table rows threw outright.
+// Accept every shape — Timestamp, Date, ISO string, epoch seconds.
+const asDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value.toDate === 'function') return value.toDate();
+  if (typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
 
 const TherapistCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [scheduledCalls, setScheduledCalls] = useState([]);
+  const [respondingCallId, setRespondingCallId] = useState(null);
   const [therapyNotes, setTherapyNotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [activeTab, setActiveTab] = useState('calendar');
+  // Sessions on the day the therapist clicked, shown in a detail dialog.
+  const [dayDetail, setDayDetail] = useState(null);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
     date: '',
@@ -101,6 +121,31 @@ const TherapistCalendar = () => {
       setScheduledCalls(calls);
     } catch (error) {
       console.error('Error loading scheduled calls:', error);
+    }
+  };
+
+  // A client's booking arrives as `pending` and needs an answer; a declined one
+  // stays readable to the client but must not sit on the therapist's calendar.
+  const isPendingRequest = (call) => String(call?.status || '').toLowerCase() === 'pending';
+  const pendingRequests = scheduledCalls.filter(isPendingRequest);
+  const confirmedCalls = scheduledCalls.filter(
+    (c) => !isPendingRequest(c) && String(c.status || '').toLowerCase() !== 'declined'
+  );
+
+  const respondToRequest = async (call, accept) => {
+    setRespondingCallId(call.id);
+    try {
+      await updateDoc(doc(db, 'scheduledCalls', call.id), {
+        status: accept ? 'scheduled' : 'declined',
+        updatedBy: auth.currentUser.uid,
+      });
+      // Re-read so the accepted session moves straight onto the grid.
+      await loadScheduledCalls();
+    } catch (error) {
+      console.error('Error responding to session request:', error);
+      alert('Could not update the request. Please try again.');
+    } finally {
+      setRespondingCallId(null);
     }
   };
 
@@ -246,8 +291,8 @@ const TherapistCalendar = () => {
   };
 
   const getCallsForDate = (date) => {
-    return scheduledCalls.filter(call => {
-      const callDate = call.scheduledTime?.toDate();
+    return confirmedCalls.filter(call => {
+      const callDate = asDate(call.scheduledTime);
       if (!callDate) return false;
       return callDate.toDateString() === date.toDateString();
     });
@@ -333,7 +378,36 @@ const TherapistCalendar = () => {
     }
   };
 
+  // A therapist with no assigned clients has nobody to schedule with — the form's
+  // client picker would be empty and every submit would fail. Block it up front.
+  const canSchedule = clients.length > 0;
+
+  // Clicking a day shows what's booked; clicking an empty future day starts a
+  // booking on that date instead of only highlighting it.
+  const handleDayClick = (date, callsForDate) => {
+    setSelectedDate(date);
+    if (callsForDate.length > 0) { setDayDetail({ date, calls: callsForDate }); return; }
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (date < startOfToday) return;
+    if (!canSchedule) {
+      alert('You can schedule sessions once a client has been assigned to you.');
+      return;
+    }
+    setScheduleForm({
+      date: date.toISOString().split('T')[0],
+      time: '',
+      duration: '30',
+      notes: '',
+    });
+    setShowScheduleForm(true);
+  };
+
   const openScheduleForm = () => {
+    if (!canSchedule) {
+      alert('You can schedule sessions once a client has been assigned to you.');
+      return;
+    }
     setScheduleForm({
       date: selectedDate ? selectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       time: '',
@@ -431,8 +505,9 @@ const TherapistCalendar = () => {
         });
       
       const sessions = notes.length;
-      const progress = sessions > 0 ? 
-        Math.round((notes.reduce((sum, note) => sum + (note.moodRating || 5), 0) / sessions) * 10) : 0;
+      // Change from baseline across the client's readings — not the average mood
+      // level, and not a 5-per-missing-rating default that manufactured 50%.
+      const progress = calculateClientProgress([], notes)?.percent ?? null;
       
       totalSessions += sessions;
       totalProgress += progress;
@@ -528,7 +603,8 @@ const TherapistCalendar = () => {
         });
       
       totalNotes += notes.length;
-      totalMoodRating += notes.reduce((sum, note) => sum + (note.moodRating || 5), 0);
+      // Only rated notes contribute; an unrated note is missing data, not a 5.
+      totalMoodRating += notes.reduce((sum, note) => sum + (Number(note.moodRating) || 0), 0);
       
       for (const note of notes) {
         const clientDoc = await getDoc(doc(db, 'clients', clientId));
@@ -577,15 +653,17 @@ const TherapistCalendar = () => {
         const currentTherapistData = currentTherapistDoc.exists() ? currentTherapistDoc.data() : {};
         const therapistName = currentTherapistData.name || currentTherapistData.email || 'Unknown Therapist';
         
-        // Calculate progress percentage based on mood rating (1-10 scale)
-        const progressPercentage = Math.round(((note.moodRating || 5) / 10) * 100);
+        // A single session's mood is a reading, not progress, and `|| 5` invented
+        // a 50% score whenever the rating was missing. Report the reading itself.
+        const moodReading = Number(note.moodRating);
+        const progressPercentage = Number.isFinite(moodReading) ? Math.round((moodReading / 10) * 100) : null;
         
         allNotes.push({
           id: note.id,
           clientName: displayName,
           sessionDate: new Date(note.sessionDate).toLocaleDateString(),
           sessionFocus: note.sessionFocus || 'N/A',
-          moodRating: note.moodRating || 5,
+          moodRating: Number(note.moodRating) || null,
           interventionsUsed: note.interventionsUsed || 'N/A',
           progressAssessment: note.progressAssessment || 'N/A',
           progressPercentage: progressPercentage,
@@ -638,7 +716,8 @@ const TherapistCalendar = () => {
           });
         
         totalNotes += notes.length;
-        totalMoodRating += notes.reduce((sum, note) => sum + (note.moodRating || 5), 0);
+        // Only rated notes contribute; an unrated note is missing data, not a 5.
+      totalMoodRating += notes.reduce((sum, note) => sum + (Number(note.moodRating) || 0), 0);
         
         for (const note of notes) {
           const clientDoc = await getDoc(doc(db, 'clients', clientId));
@@ -685,15 +764,16 @@ const TherapistCalendar = () => {
           // Get therapist name
           const therapistName = therapistData.name || therapistData.email || 'Unknown Therapist';
           
-          // Calculate progress percentage based on mood rating (1-10 scale)
-          const progressPercentage = Math.round(((note.moodRating || 5) / 10) * 100);
+          // See above — a reading, not progress, and never a fabricated default.
+          const moodReading = Number(note.moodRating);
+          const progressPercentage = Number.isFinite(moodReading) ? Math.round((moodReading / 10) * 100) : null;
           
           allNotes.push({
             id: note.id,
             clientName: displayName,
             sessionDate: new Date(note.sessionDate).toLocaleDateString(),
             sessionFocus: note.sessionFocus || 'N/A',
-            moodRating: note.moodRating || 5,
+            moodRating: Number(note.moodRating) || null,
             interventionsUsed: note.interventionsUsed || 'N/A',
             progressAssessment: note.progressAssessment || 'N/A',
             progressPercentage: progressPercentage,
@@ -738,7 +818,7 @@ const TherapistCalendar = () => {
       totalCalls,
       completedCalls,
       pendingCalls,
-      calls: calls.sort((a, b) => a.scheduledTime?.toDate() - b.scheduledTime?.toDate()),
+      calls: calls.sort((a, b) => asDate(a.scheduledTime) - asDate(b.scheduledTime)),
       dateRange: { startDate, endDate }
     };
   };
@@ -915,7 +995,7 @@ const TherapistCalendar = () => {
       totalCalls,
       completedCalls,
       pendingCalls,
-      calls: enhancedCalls.sort((a, b) => a.scheduledTime?.toDate() - b.scheduledTime?.toDate()),
+      calls: enhancedCalls.sort((a, b) => asDate(a.scheduledTime) - asDate(b.scheduledTime)),
       dateRange: { startDate, endDate }
     };
   };
@@ -947,7 +1027,7 @@ const TherapistCalendar = () => {
           });
         
         totalSessions += notes.length;
-        totalProgress += notes.reduce((sum, note) => sum + (note.moodRating || 5), 0);
+        totalProgress += notes.reduce((sum, note) => sum + (Number(note.moodRating) || 0), 0);
       }
       
       const averageProgress = totalSessions > 0 ? Math.round((totalProgress / totalSessions) * 10) : 0;
@@ -1027,8 +1107,7 @@ const TherapistCalendar = () => {
         });
       
       const totalSessions = notes.length;
-      const progress = totalSessions > 0 ? 
-        Math.round((notes.reduce((sum, note) => sum + (note.moodRating || 5), 0) / totalSessions) * 10) : 0;
+      const progress = calculateClientProgress([], notes)?.percent ?? null;
       
       // Get client profile image if available
       let clientImage = null;
@@ -1208,7 +1287,7 @@ const TherapistCalendar = () => {
         
         // Process each session for detailed metrics
         notes.forEach(note => {
-          const moodRating = note.moodRating || 5;
+          const moodRating = Number(note.moodRating) || null;
           const sessionDuration = note.sessionDuration || 60;
           const sessionFocus = note.sessionFocus || 'General';
           const interventions = note.interventionsUsed || 'None';
@@ -1230,7 +1309,9 @@ const TherapistCalendar = () => {
       const therapistWorkload = {
         name: therapistData.name || therapistData.email || 'Unknown',
         sessions: therapistSessions,
-        progress: sessionCount > 0 ? Math.round((totalMoodRating / sessionCount) * 10) : 0,
+        // No per-client reading series is in scope here, and an average mood
+        // level is not progress — so this row reports volume, not outcome.
+        progress: null,
         clients: assignedClients.length,
         avgSessionsPerClient: assignedClients.length > 0 ? Math.round(therapistSessions / assignedClients.length) : 0,
         avgSessionDuration: sessionCount > 0 ? Math.round(totalSessionDuration / sessionCount) : 0,
@@ -1338,11 +1419,11 @@ const TherapistCalendar = () => {
           };
         }
         monthlyData[monthKey].sessions += 1;
-        monthlyData[monthKey].progress += note.moodRating || 5;
-        monthlyData[monthKey].moodRating += note.moodRating || 5;
+        monthlyData[monthKey].progress += (Number(note.moodRating) || 0);
+        monthlyData[monthKey].moodRating += (Number(note.moodRating) || 0);
         monthlyData[monthKey].duration += note.sessionDuration || 60;
         monthlyData[monthKey].uniqueClients.add(clientId);
-        monthlyData[monthKey].totalMoodRating += note.moodRating || 5;
+        monthlyData[monthKey].totalMoodRating += (Number(note.moodRating) || 0);
         monthlyData[monthKey].totalSessionDuration += note.sessionDuration || 60;
         
         // Track session types per month
@@ -1359,7 +1440,7 @@ const TherapistCalendar = () => {
           };
         }
         weeklyData[weekKey].sessions += 1;
-        weeklyData[weekKey].totalMood += note.moodRating || 5;
+        weeklyData[weekKey].totalMood += (Number(note.moodRating) || 0);
         weeklyData[weekKey].avgMood = Math.round((weeklyData[weekKey].totalMood / weeklyData[weekKey].sessions) * 10);
         
         // Session type categorization (using existing sessionType variable)
@@ -1368,7 +1449,7 @@ const TherapistCalendar = () => {
         // Enhanced mood trends with comprehensive data
         moodTrends.push({
           date: sessionDate.getTime(), // Convert to timestamp for scatter chart
-          mood: note.moodRating || 5,
+          mood: (Number(note.moodRating) || 0),
           client: authData.name || clientData.name || clientData.email || 'Unknown',
           sessionType: note.sessionFocus || 'General',
           sessionDuration: note.sessionDuration || 60,
@@ -1383,7 +1464,7 @@ const TherapistCalendar = () => {
           date: sessionDate.getTime(),
           client: authData.name || clientData.name || clientData.email || 'Unknown',
           sessionType: note.sessionFocus || 'General',
-          moodRating: note.moodRating || 5,
+          moodRating: Number(note.moodRating) || null,
           month: monthKey,
           week: weekKey
         });
@@ -1393,8 +1474,8 @@ const TherapistCalendar = () => {
           interventionStats[note.interventionsUsed] = (interventionStats[note.interventionsUsed] || 0) + 1;
         }
         
-        totalProgress += note.moodRating || 5;
-        totalMoodRating += note.moodRating || 5;
+        totalProgress += (Number(note.moodRating) || 0);
+        totalMoodRating += (Number(note.moodRating) || 0);
         totalDuration += note.sessionDuration || 60;
       });
       
@@ -1409,17 +1490,16 @@ const TherapistCalendar = () => {
           name: authData.name || clientData.name || clientData.email || 'Unknown',
           sessions: notes.length,
           retentionDays,
-          avgMood: Math.round((notes.reduce((sum, note) => sum + (note.moodRating || 5), 0) / notes.length) * 10)
+          avgMood: Math.round((notes.reduce((sum, note) => sum + ((Number(note.moodRating) || 0)), 0) / notes.length) * 10)
         });
       }
       
       // Client progress data
       if (notes.length > 0) {
-        const avgMood = notes.reduce((sum, note) => sum + (note.moodRating || 5), 0) / notes.length;
         clientProgressData.push({
           name: authData.name || clientData.name || clientData.email || 'Unknown',
           sessions: notes.length,
-          progress: Math.round(avgMood * 10),
+          progress: calculateClientProgress([], notes)?.percent ?? null,
           lastSession: notes[notes.length - 1]?.sessionDate
         });
       }
@@ -1430,7 +1510,7 @@ const TherapistCalendar = () => {
     totalCalls = calls.length;
     
     calls.forEach(call => {
-      const callDate = new Date(call.scheduledTime?.toDate());
+      const callDate = new Date(asDate(call.scheduledTime));
       if (callDate >= startDate && callDate <= endDate) {
         if (call.status === 'completed') completedCalls++;
         if (call.status === 'cancelled') cancelledCalls++;
@@ -1447,7 +1527,7 @@ const TherapistCalendar = () => {
     const monthlyChartData = Object.values(monthlyData).map(item => ({
       month: item.month,
       sessions: item.sessions,
-      progress: Math.round((item.progress / item.sessions) * 10),
+      progress: item.progress ?? null,
       moodRating: Math.round(item.moodRating / item.sessions),
       duration: Math.round(item.duration / item.sessions),
       uniqueClients: item.uniqueClients.size,
@@ -1760,8 +1840,8 @@ const TherapistCalendar = () => {
             tableHeaders = ['Client Name', 'Date', 'Time', 'Duration', 'Status', 'Therapist', 'Scheduled By'];
             tableData = reportData.calls.map(call => [
               call.clientName || 'Unknown',
-              call.scheduledTime?.toDate().toLocaleDateString() || 'N/A',
-              call.scheduledTime?.toDate().toLocaleTimeString() || 'N/A',
+              asDate(call.scheduledTime)?.toLocaleDateString() || 'N/A',
+              asDate(call.scheduledTime)?.toLocaleTimeString() || 'N/A',
               `${call.duration || 0} min`,
               call.status || 'N/A',
               call.therapistName || 'Unknown',
@@ -1771,8 +1851,8 @@ const TherapistCalendar = () => {
             tableHeaders = ['Client Name', 'Date', 'Time', 'Duration', 'Status'];
             tableData = reportData.calls.map(call => [
               call.clientName || 'Unknown',
-              call.scheduledTime?.toDate().toLocaleDateString() || 'N/A',
-              call.scheduledTime?.toDate().toLocaleTimeString() || 'N/A',
+              asDate(call.scheduledTime)?.toLocaleDateString() || 'N/A',
+              asDate(call.scheduledTime)?.toLocaleTimeString() || 'N/A',
               `${call.duration || 0} min`,
               call.status || 'N/A'
             ]);
@@ -1973,8 +2053,8 @@ const TherapistCalendar = () => {
         reportText += `CALL DETAILS:\n`;
         reportData.calls.forEach(call => {
           reportText += `- Client: ${call.clientName || 'Unknown'}\n`;
-          reportText += `  Date: ${call.scheduledTime?.toDate().toLocaleDateString()}\n`;
-          reportText += `  Time: ${call.scheduledTime?.toDate().toLocaleTimeString()}\n`;
+          reportText += `  Date: ${asDate(call.scheduledTime)?.toLocaleDateString()}\n`;
+          reportText += `  Time: ${asDate(call.scheduledTime)?.toLocaleTimeString()}\n`;
           reportText += `  Duration: ${call.duration} min\n`;
           reportText += `  Status: ${call.status}\n\n`;
         });
@@ -2063,6 +2143,49 @@ const TherapistCalendar = () => {
 
       {activeTab === 'calendar' ? (
         <>
+          {/* Sessions a client booked. They are requests, not appointments, until
+              the therapist answers — so they sit above the grid rather than being
+              buried in a day cell. */}
+          {pendingRequests.length > 0 && (
+            <div className="tc-requests">
+              <h3 className="tc-requests-title">
+                Session requests ({pendingRequests.length})
+              </h3>
+              {pendingRequests.map((call) => (
+                <div key={call.id} className="tc-request">
+                  <div className="tc-request-info">
+                    <strong>{call.clientName || 'Client'}</strong>
+                    <span className="tc-request-when">
+                      {asDate(call.scheduledTime)?.toLocaleString('en-US', {
+                        weekday: 'short', month: 'short', day: 'numeric',
+                        hour: 'numeric', minute: '2-digit',
+                      })}
+                      {' · '}{call.durationMinutes || 30} min
+                    </span>
+                    {call.notes && <span className="tc-request-notes">{call.notes}</span>}
+                  </div>
+                  <div className="tc-request-actions">
+                    {/* ActionButton drives its own spinner off the returned
+                        promise; `disabled` only stops the sibling being clicked
+                        while the other request is in flight. */}
+                    <ActionButton
+                      variant="secondary"
+                      disabled={respondingCallId === call.id}
+                      onClick={() => respondToRequest(call, false)}
+                    >
+                      Decline
+                    </ActionButton>
+                    <ActionButton
+                      disabled={respondingCallId === call.id}
+                      onClick={() => respondToRequest(call, true)}
+                    >
+                      Accept
+                    </ActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="calendar-main">
             <div className="therapist-calendar-grid">
               {/* Day headers */}
@@ -2081,7 +2204,7 @@ const TherapistCalendar = () => {
                   <div
                     key={index}
                     className={`therapist-calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''} ${!isCurrentMonth(date) ? 'other-month' : ''}`}
-                    onClick={() => setSelectedDate(date)}
+                    onClick={() => handleDayClick(date, callsForDate)}
                   >
                     <span className="day-number">{date.getDate()}</span>
                     {hasCalls && (
@@ -2093,7 +2216,7 @@ const TherapistCalendar = () => {
                                 Appointment with {call.clientName || 'Client'}
                               </div>
                               <div className="appointment-time">
-                                {call.scheduledTime?.toDate().toLocaleTimeString('en-US', { 
+                                {asDate(call.scheduledTime)?.toLocaleTimeString('en-US', { 
                                   hour: '2-digit', 
                                   minute: '2-digit',
                                   hour12: true
@@ -2113,8 +2236,80 @@ const TherapistCalendar = () => {
             </div>
           </div>
 
+          {/* Day detail dialog — sessions booked on the clicked day. */}
+          {dayDetail && (
+            <div className="tc-detail-overlay" onClick={() => setDayDetail(null)}>
+              <div className="tc-detail" onClick={(e) => e.stopPropagation()}>
+                <div className="tc-detail-head">
+                  <div>
+                    <p className="tc-detail-date">
+                      {dayDetail.date.toLocaleDateString(undefined, {
+                        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                      })}
+                    </p>
+                    <p className="tc-detail-count">
+                      {dayDetail.calls.length === 1 ? '1 session' : `${dayDetail.calls.length} sessions`}
+                    </p>
+                  </div>
+                  <button className="tc-detail-close" onClick={() => setDayDetail(null)}>&times;</button>
+                </div>
+
+                <div className="tc-detail-body">
+                  {dayDetail.calls.map((call, i) => (
+                    <div key={call.id || i} className="tc-detail-card">
+                      <div className="tc-detail-row">
+                        <Clock size={16} />
+                        <span className="tc-detail-time">{call.scheduledTime?.toDate?.().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) || '—'}</span>
+                        {call.channel && <span className="tc-detail-chip">{call.channel}</span>}
+                      </div>
+                      <div className="tc-detail-row">
+                        <User size={16} />
+                        <span>{call.clientName || 'Client'}</span>
+                      </div>
+                      {call.duration || call.durationMinutes ? (
+                        <div className="tc-detail-row">
+                          <Clock size={16} />
+                          <span>{call.duration || call.durationMinutes} minutes</span>
+                        </div>
+                      ) : null}
+                      {call.status && (
+                        <div className="tc-detail-row">
+                          <FileText size={16} />
+                          <span className="tc-detail-status">{call.status}</span>
+                        </div>
+                      )}
+                      {call.notes && <p className="tc-detail-notes">{call.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="tc-detail-actions">
+                  <button className="tc-detail-secondary" onClick={() => setDayDetail(null)}>Close</button>
+                  {canSchedule && (
+                    <button
+                      className="tc-detail-primary"
+                      onClick={() => {
+                        const d = dayDetail.date;
+                        setDayDetail(null);
+                        handleDayClick(d, []);
+                      }}
+                    >
+                      <Plus size={15} /> Add session
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Floating Action Button for Schedule Call */}
-          <button className="schedule-fab" onClick={openScheduleForm}>
+          <button
+            className="schedule-fab"
+            onClick={openScheduleForm}
+            disabled={!canSchedule}
+            title={canSchedule ? 'Schedule a call' : 'No clients assigned yet'}
+            style={!canSchedule ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+          >
             <Plus size={24} />
           </button>
 
@@ -2802,8 +2997,8 @@ const TherapistCalendar = () => {
                         {reportData.calls.map(call => (
                           <tr key={call.id}>
                             <td>{call.clientName || 'Unknown Client'}</td>
-                            <td>{call.scheduledTime?.toDate().toLocaleDateString()}</td>
-                            <td>{call.scheduledTime?.toDate().toLocaleTimeString()}</td>
+                            <td>{asDate(call.scheduledTime)?.toLocaleDateString()}</td>
+                            <td>{asDate(call.scheduledTime)?.toLocaleTimeString()}</td>
                             <td>{call.duration} min</td>
                             <td>
                               <span className={`status-badge status-${call.status}`}>
@@ -3057,10 +3252,10 @@ export default TherapistCalendar;
 //   getDoc, 
 //   doc, 
 //   addDoc 
-// } from 'firebase/firestore';
+// } from '../../../services/firestoreShim';
 // import jsPDF from 'jspdf';
 // import 'jspdf-autotable';
-// import { db, auth } from '../../Auth/firebaseConfig';
+// import { db, auth } from '../../../services/firestoreShim';
 // import './Calendar.css';
 
 // const TherapistCalendar = () => {
@@ -3552,7 +3747,8 @@ export default TherapistCalendar;
 //         });
       
 //       totalNotes += notes.length;
-//       totalMoodRating += notes.reduce((sum, note) => sum + (note.moodRating || 5), 0);
+//       // Only rated notes contribute; an unrated note is missing data, not a 5.
+//      totalMoodRating += notes.reduce((sum, note) => sum + (Number(note.moodRating) || 0), 0);
       
 //       for (const note of notes) {
 //         const clientDoc = await getDoc(doc(db, 'clients', clientId));
@@ -3609,7 +3805,7 @@ export default TherapistCalendar;
 //           clientName: displayName,
 //           sessionDate: new Date(note.sessionDate).toLocaleDateString(),
 //           sessionFocus: note.sessionFocus || 'N/A',
-//           moodRating: note.moodRating || 5,
+//           moodRating: Number(note.moodRating) || null,
 //           interventionsUsed: note.interventionsUsed || 'N/A',
 //           progressAssessment: note.progressAssessment || 'N/A',
 //           progressPercentage: progressPercentage,
@@ -3662,7 +3858,8 @@ export default TherapistCalendar;
 //           });
         
 //         totalNotes += notes.length;
-//         totalMoodRating += notes.reduce((sum, note) => sum + (note.moodRating || 5), 0);
+//         // Only rated notes contribute; an unrated note is missing data, not a 5.
+//      totalMoodRating += notes.reduce((sum, note) => sum + (Number(note.moodRating) || 0), 0);
         
 //         for (const note of notes) {
 //           const clientDoc = await getDoc(doc(db, 'clients', clientId));
@@ -3717,7 +3914,7 @@ export default TherapistCalendar;
 //             clientName: displayName,
 //             sessionDate: new Date(note.sessionDate).toLocaleDateString(),
 //             sessionFocus: note.sessionFocus || 'N/A',
-//             moodRating: note.moodRating || 5,
+//             moodRating: Number(note.moodRating) || null,
 //             interventionsUsed: note.interventionsUsed || 'N/A',
 //             progressAssessment: note.progressAssessment || 'N/A',
 //             progressPercentage: progressPercentage,
@@ -3971,7 +4168,7 @@ export default TherapistCalendar;
 //           });
         
 //         totalSessions += notes.length;
-//         totalProgress += notes.reduce((sum, note) => sum + (note.moodRating || 5), 0);
+//         totalProgress += notes.reduce((sum, note) => sum + (Number(note.moodRating) || 0), 0);
 //       }
       
 //       const averageProgress = totalSessions > 0 ? Math.round((totalProgress / totalSessions) * 10) : 0;
@@ -4257,7 +4454,7 @@ export default TherapistCalendar;
 //         clientProgressData.push({
 //           name: clientData.name || clientData.email || 'Unknown',
 //           sessions: notes.length,
-//           progress: Math.round(avgMood * 10),
+//           progress: calculateClientProgress([], clientNotes)?.percent ?? null,
 //           lastSession: notes[notes.length - 1]?.sessionDate
 //         });
 //       }
@@ -4285,7 +4482,7 @@ export default TherapistCalendar;
 //     const monthlyChartData = Object.values(monthlyData).map(item => ({
 //       month: item.month,
 //       sessions: item.sessions,
-//       progress: Math.round((item.progress / item.sessions) * 10),
+//       progress: item.progress ?? null,
 //       moodRating: Math.round(item.moodRating / item.sessions),
 //       duration: Math.round(item.duration / item.sessions)
 //     }));

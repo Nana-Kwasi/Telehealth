@@ -1,5 +1,5 @@
-import { db, auth } from '../component/Auth/firebaseConfig';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../services/firestoreShim';
+import { collection, addDoc, serverTimestamp } from '../services/firestoreShim';
 
 export const A = {
   LOGIN_SUCCESS:           'LOGIN_SUCCESS',

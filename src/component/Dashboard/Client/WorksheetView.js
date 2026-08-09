@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db, auth } from '../../Auth/firebaseConfig';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../../../services/firestoreShim';
+import { doc, getDoc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { ArrowLeft, Target, Clock } from 'lucide-react';
 import './WorksheetView.css';
 
@@ -22,13 +22,17 @@ export default function WorksheetView() {
           const data = { id: worksheetDoc.id, ...worksheetDoc.data() };
           setWorksheet(data);
           
+          // Previously answered? `clientResponses` is a Firestore-era map the REST
+          // backend has no equivalent for — the saved answers now arrive as
+          // `savedResponses` (the client's latest submission).
           const clientId = localStorage.getItem('th.clientId') || currentUser?.uid;
-          const clientResponse = data.clientResponses?.[clientId];
-          
-          if (clientResponse?.responses) {
+          const saved = data.savedResponses
+            || data.clientResponses?.[clientId]?.responses
+            || null;
+          if (saved) {
             const responses = {};
-            data.fields?.forEach((field, index) => {
-              responses[index] = clientResponse.responses[index] || '';
+            (data.fields || []).forEach((field, index) => {
+              responses[index] = saved[index] ?? '';
             });
             setWorksheetResponses(responses);
           }
@@ -134,7 +138,8 @@ export default function WorksheetView() {
 
   const clientId = localStorage.getItem('th.clientId') || currentUser?.uid;
   const clientResponse = worksheet.clientResponses?.[clientId];
-  const hasExistingResponse = clientResponse?.responses;
+  // `savedResponses` is the REST equivalent of the old clientResponses map.
+  const hasExistingResponse = worksheet.savedResponses || clientResponse?.responses;
 
   return (
     <div className="page-container worksheet-view-page">
@@ -191,7 +196,13 @@ export default function WorksheetView() {
                 // Field is editable if:
                 // 1. No existing response for this field, OR
                 // 2. There are new fields and this field is beyond the original field count
-                const isEditable = !hasExistingResponse || (hasNewFields && index >= (Object.keys(clientResponse?.responses || {}).length));
+                // A completed worksheet is read-only: the client can review what
+                // they submitted, but cannot answer again until the therapist
+                // edits the worksheet (which reopens it server-side).
+                // Once the therapist reopens the worksheet it is answerable again,
+                // even though the previous answers are still on file. Gating on
+                // `hasExistingResponse` kept every old field permanently locked.
+                const isEditable = !worksheet.isCompleted;
                 const isNewField = hasNewFields && index >= (Object.keys(clientResponse?.responses || {}).length);
                 const existingAnswer = hasExistingResponse ? clientResponse.responses[index] : undefined;
                 
@@ -441,8 +452,26 @@ export default function WorksheetView() {
           const hasExistingResponse = clientResponse?.responses && Object.keys(clientResponse.responses).length > 0;
           const hasResponses = Object.keys(worksheetResponses).length > 0;
           
-          // Show save button if there are responses AND (no existing response OR new fields to complete)
-          if (hasResponses && (!hasExistingResponse || hasNewFields)) {
+          // A completed worksheet shows a status line instead of a submit button —
+          // the client reviews their answers and waits for the therapist to reopen
+          // it by updating the worksheet.
+          if (worksheet.isCompleted && !hasNewFields) {
+            return (
+              <div className="worksheet-actions">
+                <p className="worksheet-completed-note">
+                  ✓ You&apos;ve completed this worksheet. Your therapist will let you
+                  know if anything needs updating.
+                </p>
+              </div>
+            );
+          }
+
+          // Show the button whenever the worksheet is answerable and the client has
+          // entered something. The old test required `!hasExistingResponse ||
+          // hasNewFields` — but `needsToCompleteNewFields` is a Firestore-era flag
+          // the API never sets, so after a first submission the button could never
+          // reappear, even once the therapist added a new question.
+          if (hasResponses) {
             return (
               <div className="worksheet-actions">
                 <button 

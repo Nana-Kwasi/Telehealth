@@ -1,0 +1,120 @@
+/* ─── ChatImage ─────────────────────────────────────────────────────────────── */
+
+.chat-image {
+  display: block;
+  max-width: 260px;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  border-radius: 12px;
+  cursor: pointer;
+  object-fit: cover;
+}
+
+/* Shown when the browser can't decode the format (HEIC from iPhone, mainly). */
+.chat-image-fallback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.7);
+  background: rgba(148, 163, 184, 0.12);
+  color: inherit;
+  cursor: pointer;
+  max-width: 260px;
+  text-align: left;
+  font: inherit;
+}
+
+.chat-image-fallback:hover {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.cif-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cif-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cif-hint {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+.cif-icon { flex-shrink: 0; opacity: 0.8; }
+
+/* ─── In-app lightbox ───────────────────────────────────────────────────────
+   Attachments open here rather than in a new browser tab — a new tab landed the
+   user on the raw API host with a "not secure" interstitial instead of a photo. */
+.ci-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(6, 10, 20, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4.5rem 1.5rem 2rem;
+  animation: ci-fade 0.14s ease-out;
+}
+
+@keyframes ci-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.ci-lightbox-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent);
+}
+
+.ci-lightbox-name {
+  color: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ci-lightbox-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+.ci-lightbox-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.ci-lightbox-btn:hover { background: rgba(255, 255, 255, 0.28); }
+
+.ci-lightbox-img {
+  max-width: min(92vw, 1100px);
+  max-height: 86vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}

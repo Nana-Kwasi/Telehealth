@@ -14,7 +14,7 @@ import {
   syncCoupleSessionFromProfile,
 } from '../../services/coupleTherapyService';
 import { resolveRole } from '../Auth/authService';
-import { auth } from '../Auth/firebaseConfig';
+import { auth } from '../../services/firestoreShim';
 import LocationSummaryCard from '../Common/LocationSummaryCard';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../utils/locationProfile';
 import './CoupleTherapyIntake.css';
@@ -43,6 +43,19 @@ export default function CoupleDashboard() {
 
   const refresh = useCallback(async () => {
     if (!coupleId) {
+      // Local storage is not the source of truth — a signed-in partner whose
+      // couple id is missing (cleared storage, different device) was told "No
+      // couple registration found" even though the server has one. Ask the
+      // server first; only fall back to the error if it really has none.
+      setLoading(true);
+      try {
+        const claimed = await ensureCouplePartnerLinked(undefined, 'partnerA');
+        if (claimed && claimed.ok && claimed.coupleId) {
+          localStorage.setItem(COUPLE_STORAGE_KEYS.coupleId, claimed.coupleId);
+          navigate(`/couple/dashboard`, { state: { coupleId: claimed.coupleId }, replace: true });
+          return;
+        }
+      } catch { /* fall through to the message below */ }
       setLoading(false);
       setError('No couple registration found. Start from the home page under Couples therapy.');
       setData(null);

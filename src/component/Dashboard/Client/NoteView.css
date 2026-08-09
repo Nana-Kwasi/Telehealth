@@ -132,3 +132,45 @@
 .btn-primary:hover {
   background: #2563eb;
 }
+
+/* ─── Structured note sections ──────────────────────────────────────────────── */
+/* Each SOAP/progress field gets its own labelled block instead of one blob. */
+.note-section {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.note-section:last-child { border-bottom: none; }
+
+.note-section-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* The card is always light — this page has no dark theme. An earlier
+   prefers-color-scheme block here flipped the text to near-white for anyone
+   whose browser was in dark mode, leaving the content invisible on white.
+   Colours are stated once, unconditionally. */
+.note-section .content-text {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 1rem;
+  color: #111827;
+  background: #f8fafc;
+  border: 1px solid #e8edf3;
+  border-left: 3px solid #6366f1;
+  border-radius: 8px;
+}
+
+.note-empty {
+  color: #6b7280;
+  font-style: italic;
+  background: transparent;
+  border: none;
+}

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X } from 'lucide-react';
 import './Home.css';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection,
   query,
@@ -15,7 +16,7 @@ import {
   getDoc,
   addDoc,
   serverTimestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -428,7 +429,13 @@ export default function ClientHome({ profile }) {
               }
             }
           } else {
-            console.log('❌ Home: No assigned therapist field in client data');
+            // `assignedTherapist` is a Firestore-era field the REST backend never
+            // writes, so it is empty even for a client who has picked and paid for
+            // a therapist. Fall back to the assignments table, which is the real
+            // record — otherwise the dashboard keeps offering "Find a Therapist"
+            // to someone who already has one.
+            const assigned = await fetchAssignedTherapist(clientId);
+            if (assigned) setTherapistData(assigned);
           }
         } else {
           console.log('❌ Home: Client document not found for ID:', clientId);
@@ -447,6 +454,11 @@ export default function ClientHome({ profile }) {
             setLocationProfile(mergeLocationProfile(profile, authData, fallbackClient));
             console.log('✅ Home: Using auth data as fallback');
           }
+          // A missing client document says nothing about whether a therapist was
+          // chosen — that lives in the assignments table. Check it here too, or
+          // this branch always shows the "Find a Therapist" prompt.
+          const assigned = await fetchAssignedTherapist(currentUser.uid);
+          if (assigned) setTherapistData(assigned);
         }
 
         // Fetch therapy notes for this client from the subcollection
@@ -553,8 +565,22 @@ export default function ClientHome({ profile }) {
         const activityChartData = await generateActivityData(clientId);
         setActivityData(activityChartData);
 
+        // Booked sessions are the client's most visible action, but recent
+        // activity was built only from notes and mood — so scheduling a call
+        // changed nothing on this screen.
+        let clientCalls = [];
+        try {
+          const callsSnap = await getDocs(query(
+            collection(db, 'scheduledCalls'),
+            where('clientId', '==', clientId),
+          ));
+          clientCalls = callsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (error) {
+          console.warn('Error fetching scheduled calls for activity:', error);
+        }
+
         // Generate recent activities
-        const activities = generateRecentActivities(notes, activityChartData);
+        const activities = generateRecentActivities(notes, activityChartData, clientCalls);
         setRecentActivities(activities);
 
         // Fetch next session
@@ -840,8 +866,27 @@ export default function ClientHome({ profile }) {
   };
 
   // Generate recent activities
-  const generateRecentActivities = (notes, activityData) => {
+  const generateRecentActivities = (notes, activityData, scheduledCalls = []) => {
     const activities = [];
+
+    // Sessions the client booked or had confirmed.
+    (scheduledCalls || []).slice(0, 5).forEach((call) => {
+      const raw = call.scheduledTime;
+      const when = raw?.toDate?.() || (raw ? new Date(raw) : null);
+      if (!when || Number.isNaN(when.getTime())) return;
+      const status = String(call.status || '').toLowerCase();
+      activities.push({
+        type: 'session',
+        text: status === 'pending'
+          ? 'Requested a session with your therapist'
+          : status === 'declined'
+            ? 'A session request was declined'
+            : `Session scheduled for ${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        time: getTimeAgo(call.createdAt?.toDate?.() || new Date(call.createdAt || when)),
+        sortAt: when.getTime(),
+        icon: '📅',
+      });
+    });
 
     // Add recent therapy sessions
     notes.slice(0, 3).forEach(note => {
@@ -856,23 +901,32 @@ export default function ClientHome({ profile }) {
       });
     });
 
-    // Add recent messages (simulated)
-    activities.push({
-      type: 'message',
-      text: 'Received message from therapist',
-      time: '1 day ago',
-      icon: '💬'
+    // Real activity only. These two entries used to be pushed unconditionally —
+    // literally labelled "simulated" — so a brand-new client was told they had
+    // received a message and completed a breathing exercise that never happened.
+    // Anything shown here now comes from data the client actually generated.
+    (moodHistory || []).slice(0, 3).forEach((m) => {
+      const when = m.createdAt?.toDate?.() || (m.createdAt ? new Date(m.createdAt) : null);
+      activities.push({
+        type: 'mood',
+        text: `Logged a check-in${m.mood ? ` — feeling ${String(m.mood).toLowerCase()}` : ''}`,
+        time: when ? getTimeAgo(when) : 'Recently',
+        icon: '🧘',
+      });
     });
 
-    // Add resource activities
-    activities.push({
-      type: 'resource',
-      text: 'Completed breathing exercise',
-      time: '2 days ago',
-      icon: '🧘'
-    });
+    if (nextSession) {
+      const when = nextSession.scheduledTime?.toDate?.()
+        || (nextSession.scheduledTime ? new Date(nextSession.scheduledTime) : null);
+      activities.push({
+        type: 'session',
+        text: `Session scheduled with ${nextSession.therapistName || 'your therapist'}`,
+        time: when ? when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Upcoming',
+        icon: '📅',
+      });
+    }
 
-    return activities.slice(0, 4);
+    return activities.slice(0, 5);
   };
 
   // Get time ago string
@@ -1153,7 +1207,12 @@ export default function ClientHome({ profile }) {
     
     // If no sleep mentions, use mood rating as proxy
     if (sleepMentions === 0) {
-      const avgMoodRating = notes.reduce((sum, note) => sum + (note.moodRating || 5), 0) / notes.length;
+      // Unrated notes are missing data, not a mid-scale 5 — averaging a
+      // fabricated 5 in made a client with no ratings look 'average'.
+      const ratedNotes = notes.filter((note) => Number.isFinite(Number(note.moodRating)));
+      const avgMoodRating = ratedNotes.length
+        ? ratedNotes.reduce((sum, note) => sum + Number(note.moodRating), 0) / ratedNotes.length
+        : null;
       sleepScore = Math.round(40 + (avgMoodRating * 5)); // Scale 1-10 to 40-90
     }
     
@@ -1350,7 +1409,7 @@ export default function ClientHome({ profile }) {
 
     // Count mood values in each category
     moodData.forEach(entry => {
-      const moodValue = entry.moodValue || 5;
+      const moodValue = Number(entry.moodValue) || null;
       Object.keys(moodCategories).forEach(category => {
         const range = moodCategories[category];
         if (moodValue >= range.min && moodValue <= range.max) {
@@ -1676,8 +1735,10 @@ export default function ClientHome({ profile }) {
       notifications.sort((a, b) => new Date(b.date) - new Date(a.date));
 
       if (notifications.length > 0) {
-        setNotificationQueue(notifications);
-        showNextNotification();
+        const seen = readSeenIds();
+        const unseen = notifications.filter((n) => !seen.has(n.id) && !isSnoozed(n.id));
+        setNotificationQueue(unseen);
+        showNextNotification(unseen);
       }
 
     } catch (error) {
@@ -1685,64 +1746,92 @@ export default function ClientHome({ profile }) {
     }
   };
 
-  const showNextNotification = () => {
-    if (notificationQueue.length > 0) {
-      const nextNotification = notificationQueue[0];
-      setCurrentNotification(nextNotification);
-      setShowNotificationPopup(true);
-      
-      // Auto-hide after 10 seconds if not interacted with
-      setTimeout(() => {
-        if (showNotificationPopup) {
-          handleRemindLater();
-        }
-      }, 10000);
-    }
+  // Notifications already shown. Kept in localStorage so a given item pops up
+  // exactly once — previously nothing recorded a dismissal, so every reload
+  // re-detected the same item as "new" and the popup came back forever.
+  const SEEN_KEY = 'th.seenNotificationIds';
+  const readSeenIds = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')); }
+    catch { return new Set(); }
+  };
+  // "Remind me later" — hidden for a day, then eligible again.
+  const SNOOZE_KEY = 'th.snoozedNotifications';
+  const SNOOZE_MS = 24 * 60 * 60 * 1000;
+  const readSnoozed = () => {
+    try { return JSON.parse(localStorage.getItem(SNOOZE_KEY) || '{}'); }
+    catch { return {}; }
+  };
+  const snoozeNotification = (id) => {
+    if (!id) return;
+    const map = readSnoozed();
+    map[id] = Date.now() + SNOOZE_MS;
+    try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+  };
+  const isSnoozed = (id) => {
+    const until = readSnoozed()[id];
+    return typeof until === 'number' && Date.now() < until;
+  };
+
+  const markNotificationSeen = (id) => {
+    if (!id) return;
+    const seen = readSeenIds();
+    seen.add(id);
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch { /* ignore */ }
+  };
+
+  // Pass the queue explicitly: calling this straight after setNotificationQueue
+  // read the OLD state (React hasn't re-rendered yet), so it showed nothing or a
+  // stale item.
+  const showNextNotification = (queue = notificationQueue) => {
+    const seen = readSeenIds();
+    const next = (queue || []).find((n) => !seen.has(n.id) && !isSnoozed(n.id));
+    if (!next) return;
+    setCurrentNotification(next);
+    setShowNotificationPopup(true);
   };
 
   const handleViewNow = () => {
-    if (currentNotification) {
-      // Update last seen timestamp for this content type
-      const newTimestamps = { ...lastSeenTimestamps };
-      newTimestamps[currentNotification.type + 's'] = new Date().toISOString();
-      saveLastSeenTimestamps(newTimestamps);
+    if (!currentNotification) return;
+    const { type, itemId, id } = currentNotification;
 
-      // Remove from queue
-      const updatedQueue = notificationQueue.filter(n => n.id !== currentNotification.id);
-      setNotificationQueue(updatedQueue);
+    const newTimestamps = { ...lastSeenTimestamps };
+    newTimestamps[type + 's'] = new Date().toISOString();
+    saveLastSeenTimestamps(newTimestamps);
+    markNotificationSeen(id);
 
-      // Close popup
-      setShowNotificationPopup(false);
-      setCurrentNotification(null);
+    const updatedQueue = notificationQueue.filter(n => n.id !== id);
+    setNotificationQueue(updatedQueue);
+    setShowNotificationPopup(false);
+    setCurrentNotification(null);
 
-      // Show next notification if any
-      if (updatedQueue.length > 0) {
-        setTimeout(() => showNextNotification(), 500);
-      }
-
-      // TODO: Navigate to the specific item
-      console.log(`Navigate to ${currentNotification.type}:`, currentNotification.itemId);
-    }
+    // Actually go to the item. This was a `// TODO` that only console.logged, so
+    // the button closed the popup and did nothing else.
+    if (type === 'worksheet' && itemId) navigate(`/dashboard/resources/worksheet/${itemId}`);
+    else if (type === 'note' && itemId) navigate(`/dashboard/resources/note/${itemId}`);
+    else navigate('/dashboard/resources');
   };
 
   const handleRemindLater = () => {
-    if (currentNotification) {
-      // Remove from queue
-      const updatedQueue = notificationQueue.filter(n => n.id !== currentNotification.id);
-      setNotificationQueue(updatedQueue);
+    if (!currentNotification) return;
+    // Snooze for a day rather than for ever: the button says "later", but it also
+    // must not re-fire on every reload, which is what made the popup feel stuck.
+    snoozeNotification(currentNotification.id);
 
-      // Close popup
-      setShowNotificationPopup(false);
-      setCurrentNotification(null);
+    const updatedQueue = notificationQueue.filter(n => n.id !== currentNotification.id);
+    setNotificationQueue(updatedQueue);
+    setShowNotificationPopup(false);
+    setCurrentNotification(null);
 
-      // Show next notification if any
-      if (updatedQueue.length > 0) {
-        setTimeout(() => showNextNotification(), 500);
-      }
+    if (updatedQueue.length > 0) {
+      setTimeout(() => showNextNotification(updatedQueue), 600);
     }
   };
 
   const handleDismissNotification = () => {
+    // Closing with X counts as seen — otherwise the same item returns on reload.
+    if (currentNotification) markNotificationSeen(currentNotification.id);
+    const updatedQueue = notificationQueue.filter(n => n.id !== currentNotification?.id);
+    setNotificationQueue(updatedQueue);
     setShowNotificationPopup(false);
     setCurrentNotification(null);
   };
@@ -1785,6 +1874,38 @@ export default function ClientHome({ profile }) {
           </p>
         </div>
       ) : null}
+
+      {/* No therapist yet → let them pick one from here, the same way a medical
+          patient who skipped doctor booking gets a "Find a Doctor" CTA on their
+          dashboard. Without this, a client who finished the questionnaire but
+          skipped therapist selection had no route back to it. */}
+      {!isLoading && !therapistData && !clientData?.assignedTherapist && !clientData?.coupleId && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '1rem', flexWrap: 'wrap',
+          margin: '0 0 1rem', padding: '1rem 1.25rem', borderRadius: 12,
+          background: 'linear-gradient(135deg,#eef2ff,#e0e7ff)', border: '1px solid #a5b4fc',
+        }}>
+          <div>
+            <strong style={{ color: '#3730a3' }}>You haven't chosen a therapist yet</strong>
+            <p style={{ margin: '0.35rem 0 0', color: '#4338ca', fontSize: '0.9rem' }}>
+              Browse therapists, see their session rates, and book the one that fits you.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/match-therapist')}
+            style={{
+              padding: '0.6rem 1.1rem', borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: '#4f46e5', color: '#fff', fontWeight: 700, fontSize: '0.875rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Find a Therapist
+          </button>
+        </div>
+      )}
+
       {/* Clean Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1984,15 +2105,25 @@ export default function ClientHome({ profile }) {
           <div className="activities-card">
             <h3 className="card-title">Recent Activities</h3>
             <div className="activities-list">
-              {recentActivities.map((activity, index) => (
-                <div key={index} className="activity-item">
-                  <div className="activity-icon">{activity.icon}</div>
-                  <div className="activity-content">
-                    <p className="activity-text">{activity.text}</p>
-                    <span className="activity-time">{activity.time}</span>
-                  </div>
+              {recentActivities.length === 0 ? (
+                <div className="dashboard-empty">
+                  <span className="dashboard-empty-icon">🌱</span>
+                  <p className="dashboard-empty-title">Nothing here yet</p>
+                  <p className="dashboard-empty-hint">
+                    Your check-ins, sessions and notes will appear here as you go.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                recentActivities.map((activity, index) => (
+                  <div key={index} className="activity-item">
+                    <div className="activity-icon">{activity.icon}</div>
+                    <div className="activity-content">
+                      <p className="activity-text">{activity.text}</p>
+                      <span className="activity-time">{activity.time}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

@@ -14,7 +14,7 @@ import {
   Users,
   Filter
 } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection,
   query,
@@ -29,7 +29,7 @@ import {
   getDoc,
   serverTimestamp,
   Timestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import './Schedule.css';
 
 export default function TherapistSchedule() {

@@ -1,0 +1,238 @@
+/* Therapist → Couple Cases. Tokens mirror the therapist Settings sheet so the
+   screen sits inside the existing dashboard without a separate visual language. */
+.cc-root {
+  --cc-indigo: #4f46e5;
+  --cc-text: #0f172a;
+  --cc-muted: #475569;
+  --cc-light: #94a3b8;
+  --cc-border: #e2e8f0;
+  --cc-surface: #ffffff;
+  --cc-subtle: #f8fafc;
+  padding: 2rem;
+  max-width: 1100px;
+}
+
+.cc-header h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--cc-text);
+  margin: 0 0 0.35rem;
+}
+
+.cc-sub {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: var(--cc-muted);
+}
+
+.cc-back,
+.cc-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  margin-bottom: 1rem;
+  background: var(--cc-surface);
+  border: 1px solid var(--cc-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--cc-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.cc-back:hover,
+.cc-refresh:hover:not(:disabled) {
+  border-color: var(--cc-indigo);
+  color: var(--cc-indigo);
+}
+
+.cc-refresh:disabled { opacity: 0.6; cursor: default; }
+
+/* ── List ── */
+.cc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.cc-card {
+  text-align: left;
+  background: var(--cc-surface);
+  border: 1px solid var(--cc-border);
+  border-radius: 14px;
+  padding: 1.1rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.cc-card:hover {
+  border-color: var(--cc-indigo);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.cc-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--cc-indigo);
+  margin-bottom: 0.6rem;
+}
+
+.cc-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cc-text);
+}
+
+.cc-card-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--cc-muted);
+}
+
+/* ── Case detail ── */
+.cc-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cc-meta > div {
+  background: var(--cc-subtle);
+  border: 1px solid var(--cc-border);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+
+.cc-meta span {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cc-light);
+  margin-bottom: 0.25rem;
+}
+
+.cc-meta strong {
+  font-size: 0.9rem;
+  color: var(--cc-text);
+  font-weight: 700;
+}
+
+.cc-privacy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1.5rem;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.cc-partner { margin-bottom: 1.75rem; }
+
+.cc-partner > h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--cc-text);
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--cc-border);
+}
+
+.cc-section {
+  background: var(--cc-surface);
+  border: 1px solid var(--cc-border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.cc-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.cc-section-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--cc-indigo);
+}
+
+.cc-when { font-size: 0.75rem; color: var(--cc-light); }
+
+.cc-kv { margin: 0; display: grid; gap: 0.4rem; }
+
+.cc-kv > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 32%) 1fr;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--cc-subtle);
+}
+
+.cc-kv > div:first-child { border-top: none; }
+
+.cc-kv dt { font-size: 0.82rem; font-weight: 600; color: var(--cc-muted); }
+.cc-kv dd { margin: 0; font-size: 0.82rem; color: var(--cc-text); overflow-wrap: anywhere; }
+
+/* ── States ── */
+.cc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 3rem 1rem;
+  color: var(--cc-muted);
+  text-align: center;
+}
+
+.cc-empty p { margin: 0; font-weight: 600; }
+.cc-empty span { font-size: 0.85rem; color: var(--cc-light); }
+
+.cc-empty-sm {
+  font-size: 0.83rem;
+  color: var(--cc-light);
+  padding: 0.5rem 0;
+}
+
+.cc-error {
+  margin-top: 1rem;
+  padding: 0.7rem 0.9rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  color: #991b1b;
+  font-size: 0.85rem;
+}
+
+/* ── Status pills ── */
+.cc-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.cc-pill-ok { background: #dcfce7; color: #166534; }
+.cc-pill-warn { background: #fef3c7; color: #92400e; }
+.cc-pill-muted { background: #e2e8f0; color: #475569; }
+
+@media (max-width: 640px) {
+  .cc-root { padding: 1rem; }
+  .cc-kv > div { grid-template-columns: 1fr; gap: 0.15rem; }
+}

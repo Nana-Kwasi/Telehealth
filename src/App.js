@@ -4,9 +4,9 @@ import Home from './component/Home/Home';
 import Questionnaire from './component/Questionnaire/Questionnaire';
 import Payment from './component/Payment/Payment';
 import Navbar from './component/Layout/Navbar';
-import { resolveRole } from './component/Auth/authService';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './component/Auth/firebaseConfig';
+import { resolveRole, onAuthStateChanged, performLogout } from './component/Auth/authService';
+import { hasActiveSession } from './services/apiClient';
+import { refreshCurrentLocation } from './services/liveLocation';
 import useSystemConfig, { cfg, useFeatureFlagsConfig } from './hooks/useSystemConfig';
 import { logAction, A } from './utils/auditLogger';
 import Login from './component/Auth/Login';
@@ -115,12 +115,20 @@ export default function App() {
     const ms = minutes * 60 * 1000;
     clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(async () => {
-      if (auth.currentUser) {
+      if (hasActiveSession()) {
         await logAction(A.LOGOUT, { reason: 'session_timeout', timeoutMinutes: minutes });
-        signOut(auth).catch(() => {});
+        performLogout().catch(() => {});
       }
     }, ms);
   }, [sysConfig]);
+
+  // Re-detect the user's current location whenever an authenticated session is
+  // established (i.e. on every app open / login). Best-effort and non-blocking —
+  // a denied permission keeps the last known location.
+  useEffect(() => {
+    if (!session.role || session.role === 'guest') return;
+    refreshCurrentLocation().catch(() => {});
+  }, [session.role]);
 
   useEffect(() => {
     if (!session.role) return;
@@ -134,11 +142,17 @@ export default function App() {
   }, [session.role, resetInactivityTimer]);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsub = onAuthStateChanged(async (u) => {
       if (!u) {
         const prev = sessionStorage.getItem('previousSession');
         if (prev) {
           sessionStorage.removeItem('previousSession');
+        }
+        try {
+          const { clearCoupleLocalSession } = await import('./services/coupleTherapyService');
+          clearCoupleLocalSession();
+        } catch {
+          /* ignore */
         }
         return setSession({ loading: false, role: null, profile: null });
       }
@@ -152,9 +166,19 @@ export default function App() {
           profile = retry.profile;
         }
         sessionStorage.setItem('previousSession', JSON.stringify({ userId: u.uid, role, profile }));
+        if (role === 'client') {
+          try {
+            const { isCoupleTherapyAccount, syncCoupleSessionFromProfile, clearCoupleLocalSession } =
+              await import('./services/coupleTherapyService');
+            if (isCoupleTherapyAccount(profile)) syncCoupleSessionFromProfile(profile);
+            else clearCoupleLocalSession();
+          } catch {
+            /* ignore */
+          }
+        }
         setSession({ loading: false, role, profile });
       } catch (err) {
-        auth.signOut().catch(() => {});
+        performLogout().catch(() => {});
         setSession({ loading: false, role: null, profile: null });
       }
     });
@@ -174,7 +198,7 @@ export default function App() {
           NessaHub is currently undergoing scheduled maintenance. Please check back shortly.
         </p>
         <button style={{ padding: '0.6rem 1.5rem', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
-          onClick={() => { import('firebase/auth').then(({ signOut }) => signOut(auth).catch(() => {})); }}>
+          onClick={() => performLogout().catch(() => {})}>
           Sign Out
         </button>
       </div>

@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { signInWithEmailOrUsername } from './authService';
 import { logAction, A } from '../../utils/auditLogger';
-import { ensureHomeCareIntent, homeCarePatientLandingPath, isHomeCarePatientIntent } from '../../utils/homeCarePatientIntent';
+import { ensureHomeCareIntent, homeCarePatientLandingPath } from '../../utils/homeCarePatientIntent';
+import { getStoredUserIntent, setUserIntent } from '../../utils/patientSessionIntent';
 import { resolveCoupleLandingPath } from '../../services/coupleTherapyService';
 import './Login.css';
+// NOTE: the assets folder is named "Images " — with a trailing space.
+import loginBackground from '../../Images /login.jpg';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,8 +25,26 @@ export default function Login() {
       const { role, profile } = await signInWithEmailOrUsername(id, password);
       await logAction(A.LOGIN_SUCCESS, { role, identifier: id }, role);
       const returnTo = location.state?.returnTo;
-      const homeCare = isHomeCarePatientIntent(profile);
-      if (homeCare) ensureHomeCareIntent();
+      // Home-care intent must come from authoritative signals — the flow the user
+      // logged in from (returnTo) or the resolved profile — NOT the sticky
+      // localStorage flag, which leaks 'homecare' into medical/therapy sessions
+      // (a patient who ever opened a home-care link would otherwise be routed to
+      // the home-care hub forever). Home-care logins set the flag fresh below.
+      const cameFromHomeCare = String(returnTo || '').startsWith('/home-care');
+      const profileIntent = String(profile?.userIntent || '').toLowerCase();
+      const metaIntent = String(profile?.metadata?.userIntent || '').toLowerCase();
+      const homeCare =
+        role === 'client' &&
+        (cameFromHomeCare || profileIntent === 'homecare' || metaIntent === 'homecare');
+      if (homeCare) {
+        ensureHomeCareIntent();
+      } else if (profileIntent === 'medical' && getStoredUserIntent() === 'homecare') {
+        // Authoritatively a medical patient — clear a stale home-care flag so the
+        // navbar/dashboard-hub resolver stops routing them to the home-care hub.
+        // (Therapy/home-care clients are indistinguishable at the profile level, so
+        // we only reconcile when the backend says 'medical' to avoid misrouting them.)
+        setUserIntent('medical');
+      }
       if (role === 'homecare_nurse') {
         navigate('/dashboard', { replace: true });
       } else if (role === 'client' && homeCare) {
@@ -54,7 +75,16 @@ export default function Login() {
     <div className="login-page">
 
       {/* ── Brand panel (visible ≥ 900px) ── */}
-      <div className="login-brand-panel">
+      <div
+        className="login-brand-panel"
+        style={{
+          // Scrim layered over the photo in the same background stack: the panel's
+          // ::before/::after already draw the decorative glows, so an overlay
+          // pseudo-element would collide. Keeps the white copy readable.
+          backgroundImage:
+            `linear-gradient(165deg, rgba(15,23,42,0.88) 0%, rgba(15,23,42,0.74) 55%, rgba(15,45,74,0.80) 100%), url(${loginBackground})`,
+        }}
+      >
         <div className="login-brand-content">
           <div className="login-brand-logo">
             <div className="login-brand-logo-mark">N</div>

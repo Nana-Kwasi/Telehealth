@@ -703,3 +703,149 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Client selection dialog ──────────────────────────────────────────────────
+   Opened FROM the worksheet/resource modal, but declared earlier in the JSX than
+   the worksheet modal. With both overlays at z-index 1000 the later one wins, so
+   the picker opened underneath the modal that launched it and looked like a
+   no-op. It is a child dialog, so it must sit above its parent. */
+.modal-overlay.client-selection-overlay {
+  z-index: 1200;
+}
+
+.client-selection-modal {
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Worksheet field builder ──────────────────────────────────────────────── */
+.ws-field-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 0.85rem;
+  background: #f8fafc;
+}
+
+.ws-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.ws-field-index {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.ws-field-remove {
+  border: 1px solid #fecdd3;
+  background: #fff1f2;
+  color: #dc2626;
+  border-radius: 8px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ws-field-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .ws-field-grid { grid-template-columns: 1fr; }
+}
+
+.ws-field-grid label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+  margin-bottom: 0.3rem;
+}
+
+.ws-required {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  padding-bottom: 0.55rem;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+/* Options editor — only shown for choice-based field types. */
+.ws-options {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.ws-option-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ws-option-row input {
+  flex: 1;
+}
+
+.ws-option-drop {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ws-option-drop:hover:not(:disabled) {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.ws-option-drop:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ws-option-add {
+  border: 1px dashed #94a3b8;
+  background: #fff;
+  color: #4f46e5;
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ws-option-add:hover {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.ws-field-hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+}

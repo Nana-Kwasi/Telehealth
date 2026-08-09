@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import {
   branchCanMarkLinePickup,
@@ -48,9 +48,10 @@ export function PharmacyWalkInVerifyPanel({ profile, embedded = false }) {
 
     try {
       const isBranchUser = (profile?.role || '').toLowerCase() === 'branch_user' || !!profile?.branchName;
+      const parentOrgId = profile?.organizationId || profile?.id;
       const scopeQ = isBranchUser
         ? query(collection(db, 'doctorPrescriptions'), where('branchId', '==', profile.id))
-        : query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', profile.id));
+        : query(collection(db, 'doctorPrescriptions'), where('pharmacyId', '==', parentOrgId));
       const snap = await getDocs(scopeQ);
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const rxMatches = list.filter(item => {
@@ -89,7 +90,7 @@ export function PharmacyWalkInVerifyPanel({ profile, embedded = false }) {
       if (isBranchStaff) return false;
       const ds = m.drugStatus || 'pending';
       if (!['available', 'approved_replacement'].includes(ds) || m.pickupDeliveredAt) return false;
-      return (rx.pharmacyId || '') === (profile?.id || '')
+      return (rx.pharmacyId || '') === (profile?.organizationId || profile?.id || '')
         && pickupResponsibleBranchId(m, rx) === (rx.branchId || '');
     };
     const nextMeds = meds.map((m) => {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Users, Calendar, MessageSquare, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, getDoc, doc, query, where } from '../../../services/firestoreShim';
 
 const PATIENT_TABS = ['All', 'Active'];
 
@@ -38,17 +38,26 @@ export default function DoctorPatients({ profile }) {
         patientMap.get(a.clientId).appointments.push(a);
       }
 
-      // Enrich names
+      // Enrich names AND emails.
+      // This used to run only when the name was missing, so any patient whose
+      // appointment already carried a name never had their email looked up and the
+      // Email column rendered "—". Appointments now also carry `clientEmail` from
+      // the backend, so this lookup is only a fallback for older records.
       for (const [uid, patient] of patientMap) {
-        if (!patient.name || patient.name === 'Patient') {
-          try {
-            const authSnap = await getDoc(doc(db, 'auth', uid));
-            if (authSnap.exists()) {
-              const d = authSnap.data();
-              patient.name = d.name || d.displayName || patient.name || 'Unknown Patient';
-              if (!patient.email && d.email) patient.email = d.email;
-            } else { patient.name = patient.name || 'Unknown Patient'; }
-          } catch (_) { patient.name = patient.name || 'Unknown Patient'; }
+        const needsName = !patient.name || patient.name === 'Patient';
+        const needsEmail = !patient.email;
+        if (!needsName && !needsEmail) continue;
+        try {
+          const authSnap = await getDoc(doc(db, 'auth', uid));
+          if (authSnap.exists()) {
+            const d = authSnap.data();
+            if (needsName) patient.name = d.name || d.displayName || patient.name || 'Unknown Patient';
+            if (needsEmail && d.email) patient.email = d.email;
+          } else if (needsName) {
+            patient.name = patient.name || 'Unknown Patient';
+          }
+        } catch (_) {
+          if (needsName) patient.name = patient.name || 'Unknown Patient';
         }
       }
 

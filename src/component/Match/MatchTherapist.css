@@ -151,3 +151,12 @@
     font-size: 2rem;
   }
 }
+
+/* Session rate on the therapist card — clients pay this exact amount on the
+   next screen, so it needs to read as a price, not a detail line. */
+.therapist-rate {
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+}

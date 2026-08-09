@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { auth } from '../../Auth/firebaseConfig';
+import { auth } from '../../../services/firestoreShim';
 import { uploadNurseDocument, fetchNurseProfile } from '../../../services/homeCareService';
 import { useHomeCareNurse } from './HomeCareNurseContext';
 import './HomeCareNurseDashboard.css';

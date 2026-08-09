@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, MessageSquare, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, AlertTriangle, Clock, CheckCircle, Activity } from 'lucide-react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, Timestamp
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import './Home.css';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import { api } from '../../../services/apiClient';
+import { calculateClientProgress, progressLabel } from '../../../utils/clientProgress';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
 import {
   enrichClientRecord,
@@ -255,7 +257,16 @@ export default function TherapistHome({ profile }) {
           if (!clientSnap.exists()) continue;
           const enriched = await enrichClientRecord(cid, { id: cid, ...clientSnap.data() });
           const noteCount = enriched.noteCount ?? 0;
-          const progress = Math.min(95, 20 + noteCount * 7);
+          // Was a function of how many notes the THERAPIST had written — it rose
+          // with admin activity and kept rising while a client deteriorated.
+          // Measure the change in the client's own wellbeing readings; null when
+          // there aren't enough to say anything honest.
+          const [moodRows, noteRows] = await Promise.all([
+            api(`/api/v1/patients/${cid}/daily-feelings`).catch(() => []),
+            api(`/api/v1/clinical-notes?clientId=${cid}`).catch(() => []),
+          ]);
+          const progressStat = calculateClientProgress(moodRows, noteRows);
+          const progress = progressStat ? progressStat.percent : null;
           const lastDt = toFirestoreDate(enriched.lastSession);
           const lastSession = lastDt
             ? lastDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -710,7 +721,13 @@ export default function TherapistHome({ profile }) {
           <div className="progress-grid">
             {clientProgress.map((c) => {
               const pct = c.progress;
-              const color = pct >= 70 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#4f46e5';
+              const hasData = pct !== null && pct !== undefined;
+              // Grey for "nothing measured yet" — a 0% bar in the same palette as
+              // a real score reads as failure rather than absence of data.
+              const color = !hasData ? '#94a3b8'
+                : pct >= 70 ? '#10b981'
+                : pct >= 40 ? '#f59e0b'
+                : '#4f46e5';
               return (
                 <div key={c.cid} className="client-progress-card">
                   <div className="client-header">
@@ -720,10 +737,10 @@ export default function TherapistHome({ profile }) {
                       </div>
                       <h4 className="client-name" style={{ margin:0 }}>{c.name}</h4>
                     </div>
-                    <span className="progress-percentage" style={{ color }}>{pct}%</span>
+                    <span className="progress-percentage" style={{ color }}>{hasData ? `${pct}%` : '—'}</span>
                   </div>
                   <div className="progress-bar" style={{ marginTop:'0.5rem' }}>
-                    <div className="progress-fill" style={{ width:`${pct}%`, background:`linear-gradient(90deg, ${color}, ${color}bb)`, transition:'width 0.6s ease' }} />
+                    <div className="progress-fill" style={{ width:`${pct || 0}%`, background:`linear-gradient(90deg, ${color}, ${color}bb)`, transition:'width 0.6s ease' }} />
                   </div>
                   <div className="client-sessions client-sessions-stacked" style={{ marginTop:'0.4rem' }}>
                     <span className="last-session">Therapy: {c.therapyType || '—'}</span>

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut, updatePassword } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../Auth/firebaseConfig';
+import { signOut, updatePassword } from '../../services/authShim';
+import { doc, updateDoc } from '../../services/firestoreShim';
+import { auth, db } from '../../services/firestoreShim';
 
 /**
  * Blocks dashboard until user replaces temp password. Clears mustChangePassword on the Firestore entity doc.

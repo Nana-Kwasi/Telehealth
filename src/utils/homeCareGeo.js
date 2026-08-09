@@ -74,7 +74,10 @@ export function getBrowserCoords() {
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
       () => resolve(null),
-      { timeout: 8000, maximumAge: 60000 },
+      // maximumAge:0 forbids a cached fix (60000 previously allowed a minute-old
+      // position, which is exactly why a moved user kept reporting the old spot);
+      // enableHighAccuracy forces GPS rather than a wifi/IP estimate.
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
     );
   });
 }

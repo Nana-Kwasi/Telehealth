@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { auth, db } from './firebaseConfig';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '../../services/firestoreShim';
+import { createUserWithEmailAndPassword } from '../../services/authShim';
 import './SignUp.css';
-import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc } from '../../services/firestoreShim';
 import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
+import { materializePendingBooking } from '../../utils/pendingDoctorBooking';
 import {
   createPartnerClientRecord,
   linkCouplePartnerAuth,
@@ -23,6 +24,9 @@ export default function SignUp() {
   const [form, setForm] = useState({
     name: clientData?.name || clientData?.displayName || '',
     email: clientData?.email || '',
+    // Collected on every signup so the admin user-detail screen has a phone for
+    // each account, and so care staff can reach the person.
+    phone: clientData?.phone || clientData?.phoneNumber || '',
     password: '',
   });
   const [loading, setLoading] = useState(false);
@@ -40,15 +44,35 @@ export default function SignUp() {
         throw new Error('You are currently offline. Please check your internet connection and try again.');
       }
 
+      // Determine user intent BEFORE registering — medical if they came through the
+      // doctor booking flow or skipped intake. The backend derives the account's
+      // intent from its role (PATIENT → medical, CLIENT → therapy) and resolve-role
+      // reports that back to App.js, which picks the dashboard. Registering every
+      // signup as CLIENT sent doctor-booking patients to the therapy dashboard.
+      const pendingBookingRaw = localStorage.getItem('th.pendingBooking');
+      const medicalSkip = localStorage.getItem('th.medicalSkip');
+      const homecareIntent = localStorage.getItem('userIntent') === 'homecare';
+      const earlyCoupleId = clientData?.coupleId || localStorage.getItem(COUPLE_STORAGE_KEYS.coupleId);
+      const isCouple = clientData?.therapyType === 'couples' || !!earlyCoupleId;
+      const userIntent = isCouple
+        ? 'therapy'
+        : homecareIntent
+          ? 'homecare'
+          : pendingBookingRaw || medicalSkip
+            ? 'medical'
+            : 'therapy';
+      const regRole = userIntent === 'medical' ? 'PATIENT' : 'CLIENT';
+
       // Create Firebase Auth user
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      // 4th/5th args are the shim's displayName + role passthroughs — without them
+      // the account is stored under the email's local-part and always as CLIENT.
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password, form.name, regRole, form.phone?.trim());
       const uid = cred.user.uid;
 
       let clientId = localStorage.getItem('th.clientId');
-      const coupleId = clientData?.coupleId || localStorage.getItem(COUPLE_STORAGE_KEYS.coupleId);
+      const coupleId = earlyCoupleId;
       const couplePartnerRole =
         clientData?.couplePartnerRole || localStorage.getItem(COUPLE_STORAGE_KEYS.partnerRole) || 'partnerA';
-      const isCouple = clientData?.therapyType === 'couples' || !!coupleId;
 
       if (isCouple && !clientId && coupleId) {
         clientId = await createPartnerClientRecord(
@@ -60,18 +84,6 @@ export default function SignUp() {
         );
         localStorage.setItem('th.clientId', clientId);
       }
-
-      // Determine user intent — medical if they came through doctor booking flow or skipped intake
-      const pendingBookingRaw = localStorage.getItem('th.pendingBooking');
-      const medicalSkip = localStorage.getItem('th.medicalSkip');
-      const homecareIntent = localStorage.getItem('userIntent') === 'homecare';
-      const userIntent = isCouple
-        ? 'therapy'
-        : homecareIntent
-          ? 'homecare'
-          : pendingBookingRaw || medicalSkip
-            ? 'medical'
-            : 'therapy';
 
       // Create user profile in auth collection
       const userProfile = {
@@ -89,21 +101,60 @@ export default function SignUp() {
       };
 
       await setDoc(doc(db, 'auth', uid), userProfile);
-      
-      // Update the client document with the auth UID and proper name
-      if (clientId) {
-        await setDoc(doc(db, 'clients', clientId), {
+
+      // Create the patient/client profile row. Without it GET /api/v1/patients/{id}
+      // answers 400 "Patient not found", which blanks the name/email on the doctor's
+      // patient screens and breaks the client dashboard's profile read. The PATCH
+      // creates the row when missing. Home care keeps its own onboarding.
+      //
+      // Always keyed by `uid`, never `clientId`: patients/{id} is addressed by USER
+      // id everywhere that reads it (fetchClientData, the doctor's patient screens),
+      // whereas th.clientId is a therapy-clients document id from a different
+      // namespace — writing under it created no usable profile at all.
+      if (!homecareIntent) {
+        try {
+          await setDoc(doc(db, 'patientProfiles', uid), {
+            fullName: form.name,
+            email: form.email.toLowerCase(),
+            status: 'active',
+          }, { merge: true });
+        } catch (profileErr) {
+          console.warn('Could not create patient profile:', profileErr?.message);
+        }
+      }
+
+      // Create/refresh the therapy client record. The intake questionnaire runs
+      // before the visitor has a token, so its answers were parked in
+      // `th.clientIntake`; write them now, keyed by the auth uid.
+      //
+      // The client profile is addressed by USER id, like patientProfiles. The old
+      // code keyed it by `th.clientId`, which the questionnaire had set to a
+      // throwaway `tmp_…` value — so this PATCH hit a non-existent record and the
+      // admin client screens showed a near-empty profile.
+      if (userIntent === 'therapy') {
+        let intake = {};
+        try { intake = JSON.parse(localStorage.getItem('th.clientIntake') || '{}'); } catch { /* ignore */ }
+        const clientDoc = {
+          ...intake,
           authUid: uid,
           displayName: form.name,
           clientName: form.name,
           name: form.name,
           email: form.email,
-          therapyType: isCouple ? 'couples' : undefined,
+          phone: form.phone?.trim() || intake.phone || '',
+          therapyType: isCouple ? 'couples' : (intake.therapyType || undefined),
           coupleId: isCouple ? coupleId : undefined,
           couplePartnerRole: isCouple ? couplePartnerRole : undefined,
           status: 'active',
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+          updatedAt: new Date().toISOString(),
+        };
+        try {
+          await setDoc(doc(db, 'clients', uid), clientDoc, { merge: true });
+          localStorage.setItem('th.clientId', uid);
+          localStorage.removeItem('th.clientIntake');
+        } catch (clientErr) {
+          console.warn('Could not save client intake:', clientErr?.message);
+        }
       }
 
       if (isCouple && coupleId) {
@@ -127,40 +178,19 @@ export default function SignUp() {
         return;
       }
       
-      // If there's a pending doctor booking, create it now and go straight to dashboard
+      // If there's a pending doctor booking, create it now and go straight to
+      // dashboard. `th.pendingBooking` is deliberately NOT cleared here — only
+      // materializePendingBooking clears it, and only once the appointment row
+      // exists. If this write fails the intent survives and the medical
+      // dashboard completes it on mount, instead of the patient silently
+      // arriving with no doctor and having to book all over again.
       if (pendingBookingRaw) {
         const booking = JSON.parse(pendingBookingRaw);
-        const apptData = {
-          doctorId: booking.doctorId,
-          doctorName: booking.doctorName || 'Doctor',
-          doctorSpecialization: booking.doctorSpecialization || '',
-          clientId: uid,
-          clientName: form.name,
-          clientEmail: form.email,
-          date: booking.date || '',
-          time: booking.time || '',
-          consultationType: booking.consultationType || 'video',
-          reason: booking.reason || '',
-          status: 'pending',
-          sourceSlot: 'pre-signup',
-          createdAt: serverTimestamp(),
-        };
-        await addDoc(collection(db, 'doctorAppointments'), apptData);
-        // Register patient in doctor's subcollection
-        await setDoc(doc(db, 'doctors', booking.doctorId, 'patients', uid), {
-          patientId: uid,
+        await materializePendingBooking(booking, {
+          userId: uid,
           name: form.name,
           email: form.email,
-          addedAt: serverTimestamp(),
-        }, { merge: true });
-        // Store doctor info for immediate display on dashboard home
-        sessionStorage.setItem('th.lastBookedDoctor', JSON.stringify({
-          doctorName: booking.doctorName,
-          specialization: booking.doctorSpecialization || '',
-          date: booking.date,
-          time: booking.time,
-        }));
-        localStorage.removeItem('th.pendingBooking');
+        });
         navigate('/dashboard');
       } else if (medicalSkip) {
         localStorage.removeItem('th.medicalSkip');
@@ -168,7 +198,9 @@ export default function SignUp() {
       } else if (homecareIntent) {
         navigate('/home-care');
       } else {
-        navigate('/payment');
+        // Therapy clients choose their therapist first, then pay that therapist's
+        // session rate on the payment screen.
+        navigate('/match-therapist');
       }
     } catch (e) {
       console.error('Sign up error:', e);
@@ -240,6 +272,11 @@ export default function SignUp() {
                 <label className="form-label" htmlFor="su-email">Email</label>
                 <input id="su-email" className="form-input" type="email" placeholder="you@example.com"
                   value={form.email} onChange={e => onChange('email', e.target.value)} required readOnly={lockEmail} />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="su-phone">Phone Number</label>
+                <input id="su-phone" className="form-input" type="tel" placeholder="e.g. 0243899834"
+                  value={form.phone} onChange={e => onChange('phone', e.target.value)} required />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="su-password">Password</label>

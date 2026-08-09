@@ -1,4 +1,4 @@
-import { auth } from '../component/Auth/firebaseConfig';
+import { auth } from '../services/firestoreShim';
 
 import { ensureHomeCareIntent } from './homeCarePatientIntent';
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs } from '../../../services/firestoreShim';
 
 const DRUG_STATUS_META = {
   pending:               { icon: '⏳', label: 'Pending',       color: '#d97706' },

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, query, where } from '../../../services/firestoreShim';
 import { downloadNessaHubPharmacyOperationalPdf } from '../../../utils/nessahubOperationalPdf';
 import {
   RX_STATUSES,
@@ -39,14 +39,19 @@ export default function BranchReports({ profile }) {
     mustChangePassword: profile?.mustChangePassword,
   }]), [profile]);
 
+  // A branch user's profile carries the parent org id as `organizationId` (and not
+  // always `pharmacyId`). Without this fallback the effect bailed early and never
+  // cleared `loading`, leaving the screen stuck on "Loading…" forever.
+  const parentOrgId = profile?.pharmacyId || profile?.organizationId;
+
   useEffect(() => {
     const load = async () => {
-      if (!profile?.pharmacyId) return;
+      if (!parentOrgId) { setLoading(false); return; }
       setLoading(true);
       try {
         const rxSnap = await getDocs(query(
           collection(db, 'doctorPrescriptions'),
-          where('pharmacyId', '==', profile.pharmacyId),
+          where('pharmacyId', '==', parentOrgId),
         ));
         setPrescriptions(rxSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (e) {
@@ -56,7 +61,7 @@ export default function BranchReports({ profile }) {
       }
     };
     load();
-  }, [profile?.pharmacyId]);
+  }, [parentOrgId]);
 
   const filteredRx = useMemo(() => {
     if (!reportGenerated || !appliedFrom || !appliedTo || !profile?.id) return [];

@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
 import './Profile.css';
 import { 
   doc, 
   getDoc, 
   setDoc, 
   updateDoc
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { 
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider
-} from 'firebase/auth';
+} from '../../../services/authShim';
 import { 
   User, 
   Mail, 

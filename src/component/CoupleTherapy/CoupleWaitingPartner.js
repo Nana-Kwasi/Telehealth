@@ -23,7 +23,27 @@ export default function CoupleWaitingPartner() {
   const [syncWarning, setSyncWarning] = useState('');
 
   const refresh = useCallback(async () => {
-    if (!coupleId) return;
+    if (!coupleId) {
+      // Bailing out while `loading` was still true left the screen stuck on
+      // "Loading…" forever, with no error and no way back, whenever the couple id
+      // was missing from local storage. Recover by asking the server which couple
+      // this account belongs to (claim works without a hint) before giving up.
+      setLoading(true);
+      try {
+        const claimed = await ensureCouplePartnerLinked(undefined, 'partnerA');
+        if (claimed && claimed.ok && claimed.coupleId) {
+          localStorage.setItem(COUPLE_STORAGE_KEYS.coupleId, claimed.coupleId);
+          navigate('/couple/waiting', { state: { coupleId: claimed.coupleId }, replace: true });
+          return;
+        }
+        setSyncWarning('We could not find your couple registration on this device. Sign in again with the email you used to start couple therapy.');
+      } catch (e) {
+        setSyncWarning(e?.message || 'Could not load your couple registration.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     setLoading(true);
     setSyncWarning('');
     try {

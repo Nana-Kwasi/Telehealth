@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { db } from '../Auth/firebaseConfig';
+import { db } from '../../services/firestoreShim';
 import {
   collection, doc, getDoc, getDocs, addDoc, setDoc,
   query, where, updateDoc, arrayUnion, serverTimestamp,
-} from 'firebase/firestore';
+} from '../../services/firestoreShim';
 import './DoctorProfilePage.css';
+import { savePendingBooking } from '../../utils/pendingDoctorBooking';
 
 function getInitials(name) {
   if (!name) return 'Dr';
@@ -129,14 +130,15 @@ export default function DoctorProfilePage({ session }) {
   const handleBook = async () => {
     // Auth check FIRST — redirect to signup immediately without requiring date/time
     if (!session?.role) {
-      localStorage.setItem('th.pendingBooking', JSON.stringify({
+      savePendingBooking({
         doctorId,
         doctorName: doctor.name,
+        doctorSpecialization: doctor.specialization || '',
         date: selectedDate,
         time: selectedSlot,
         consultationType: consultType,
         reason,
-      }));
+      });
       navigate('/signup');
       return;
     }

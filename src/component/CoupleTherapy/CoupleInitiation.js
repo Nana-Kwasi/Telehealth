@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../Auth/firebaseConfig';
+import { createUserWithEmailAndPassword } from '../../services/authShim';
+import { doc, setDoc } from '../../services/firestoreShim';
+import { auth, db } from '../../services/firestoreShim';
 import { RELATIONSHIP_TYPES, COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
 import {
   createCoupleRegistration,
@@ -73,16 +73,22 @@ export default function CoupleInitiation() {
     setLoading(true);
     setError('');
     try {
+      // The account must exist BEFORE the registration: POST /api/v1/couples is
+      // authenticated and takes partnerAId (the signed-in user). Creating the
+      // registration first meant it ran anonymously and the screen then crashed on
+      // `result.coupleId` of null. 4th arg carries the name through the shim.
+      const email = partnerAEmail.trim().toLowerCase();
+      const cred = await createUserWithEmailAndPassword(auth, email, password, partnerAName.trim());
+      const uid = cred.user.uid;
+
       const result = await createCoupleRegistration({
+        partnerAId: uid,
         relationshipType,
-        partnerA: { name: partnerAName.trim(), email: partnerAEmail.trim().toLowerCase() },
+        partnerA: { name: partnerAName.trim(), email },
         partnerB: { name: partnerBName.trim(), email: partnerBEmail.trim().toLowerCase() },
       });
 
       const coupleId = result.coupleId;
-      const email = partnerAEmail.trim().toLowerCase();
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
       const clientId = await createPartnerClientRecord(
         coupleId,
         'partnerA',

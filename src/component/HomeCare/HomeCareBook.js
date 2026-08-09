@@ -4,7 +4,7 @@ import { fetchNurseById, createBooking, resolveBookingCoords, fetchHomeCarePatie
 import { CARE_TYPES, DURATION_TYPES, BOOKING_FEE_DISCLAIMER, PACKAGE_DURATION_TYPES } from '../../constants/homeCareConstants';
 import { feeForDuration, formatGhs, isValidEmergencyPhone } from '../../utils/homeCareUtils';
 import HomeCareAddressField from './HomeCareAddressField';
-import { auth } from '../Auth/firebaseConfig';
+import { auth } from '../../services/firestoreShim';
 import './HomeCare.css';
 
 export default function HomeCareBook() {

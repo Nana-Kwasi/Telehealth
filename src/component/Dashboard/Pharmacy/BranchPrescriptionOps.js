@@ -1,14 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { db } from '../../Auth/firebaseConfig';
+import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from '../../../services/firestoreShim';
+import { db } from '../../../services/firestoreShim';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
+import RxFullDetails from './RxFullDetails';
 import {
   deriveRxStockStatus,
   branchCanMarkLinePickup,
   ownerDrugRowLockedForOps,
   allPickupsSatisfied,
   pickupResponsibleBranchId,
+  hasPendingDoctorNote,
+  awaitingDoctorDecision,
+  doctorDecisionReason,
 } from '../../../utils/pharmacyRxStatus';
 
 const DRUG_STATUS_META = {
@@ -371,6 +375,36 @@ export default function BranchPrescriptionOps({ profile }) {
     setShowClinicalNoteFor(prev => ({ ...prev, [i]: false }));
   };
 
+  /**
+   * The branch a drug was transferred TO confirms whether it actually has it.
+   *
+   * Confirming IS the availability confirmation — there is no separate "Available"
+   * click afterwards. The transferBranch* trail is deliberately kept so the sending
+   * branch can still see where the drug went and that it arrived; without it their
+   * transfer banner would vanish the moment the receiver confirmed.
+   */
+  const confirmTransferReceipt = async (i, received) => {
+    const med = (rx?.medications || [])[i];
+    if (!med) return;
+    const next = (rx.medications || []).map((m, idx) => (idx === i ? (received
+      ? {
+          ...m,
+          drugStatus: 'available',
+          transferOutcome: 'received',
+          transferReceivedAt: new Date().toISOString(),
+          transferReceivedByBranchId: profile?.id || null,
+          transferReceivedByBranchName: profile?.branchName || 'Branch',
+        }
+      : {
+          ...m,
+          drugStatus: 'not_available',
+          transferOutcome: 'not_received',
+          transferFailedByBranchId: profile?.id || null,
+          transferFailedByBranchName: profile?.branchName || 'Branch',
+        }) : m));
+    await persistMeds(next, received ? 'TRANSFER_RECEIVED' : 'TRANSFER_NOT_RECEIVED', { medIndex: i });
+  };
+
   const markLinePickupDelivered = async (i) => {
     if (!rx || rx.pharmacyStatus === 'delivered') return;
     const med = (rx.medications || [])[i];
@@ -451,6 +485,7 @@ export default function BranchPrescriptionOps({ profile }) {
       <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => navigate('/dashboard/prescriptions')}>← Back</button>
       <h1 className="pharmacy-page-title" style={{ marginTop: '0.75rem' }}>Prescription Operations</h1>
       <p className="pharmacy-page-sub">{rx.patientName} · Ref {rx.prescriptionRef || '—'}</p>
+      <RxFullDetails rx={rx} />
       {isFinalized && (
         <div style={{ marginBottom: '0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '0.75rem 0.9rem', color: '#166534', fontWeight: 700 }}>
           ✅ This prescription is delivered and marked done. Further status changes are locked.
@@ -475,6 +510,22 @@ export default function BranchPrescriptionOps({ profile }) {
         const canManageDrugRow = (isOwnerBranch && !ownerLocked) || isTransferredToMe;
         const canMarkPickupHere = branchCanMarkLinePickup(profile?.id, med, rx);
         const pickupRespId = pickupResponsibleBranchId(med, rx);
+        // Delivery is withheld on this line until the doctor signs off the note.
+        const awaitingNoteApproval = hasPendingDoctorNote(med)
+          && ['available', 'approved_replacement'].includes(med.drugStatus || '')
+          && !med.pickupDeliveredAt;
+        // Stock changes are frozen while the doctor still has to rule on this line.
+        const lockedPendingDoctor = awaitingDoctorDecision(med) && !med.pickupDeliveredAt;
+        // This branch is the destination of an approved transfer and has not yet said
+        // whether it actually has the drug.
+        const awaitingMyReceipt = med.drugStatus === 'transferred'
+          && (med.transferBranchId || '') === (profile?.id || '')
+          && !med.transferOutcome;
+        // Never re-offer the status a line is already in — that reads as a duplicate
+        // step (e.g. clicking "Available" right after confirming "We have it").
+        const alreadyAvailable = med.drugStatus === 'available';
+        const alreadyUnavailable = med.drugStatus === 'not_available';
+        const pendingDoctorReason = doctorDecisionReason(med);
         const handoverElsewhere = isOwnerBranch
           && ['available', 'approved_replacement'].includes(med.drugStatus || '')
           && !med.pickupDeliveredAt
@@ -491,9 +542,17 @@ export default function BranchPrescriptionOps({ profile }) {
                     Approved alternative: <b>{med.alternativeSuggested}</b>
                   </div>
                 )}
-                {med.drugStatus === 'transferred' && med.transferBranchName && (
-                  <div style={{ fontSize: '0.8rem', color: '#0369a1', marginTop: 4 }}>
-                    Transferred to: <b>{med.transferBranchName}</b>{med.transferBranchAddress ? ` · ${med.transferBranchAddress}` : ''}
+                {med.transferBranchName && med.transferOutcome !== 'not_received'
+                  && (med.transferBranchId || '') !== (profile?.id || '') && (
+                  <div style={{ fontSize: '0.8rem', color: med.transferOutcome === 'received' ? '#15803d' : '#0369a1', marginTop: 4, fontWeight: med.transferOutcome === 'received' ? 700 : 400 }}>
+                    {med.transferOutcome === 'received'
+                      ? `✅ ${med.transferReceivedByBranchName || med.transferBranchName} confirmed they have this drug — the patient can collect it there.`
+                      : `↔️ Transferred to ${med.transferBranchName}${med.transferBranchAddress ? ` · ${med.transferBranchAddress}` : ''} · awaiting their confirmation.`}
+                  </div>
+                )}
+                {med.transferOutcome === 'received' && (med.transferBranchId || '') === (profile?.id || '') && (
+                  <div style={{ fontSize: '0.8rem', color: '#15803d', marginTop: 4, fontWeight: 700 }}>
+                    ✓ Received from {med.transferFromBranchName || 'the sending branch'} and confirmed available here.
                   </div>
                 )}
                 {med.drugStatus === 'transfer_requested' && med.transferRequestBranchName && (
@@ -515,10 +574,10 @@ export default function BranchPrescriptionOps({ profile }) {
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ds.color }}>{ds.icon} {ds.label}</span>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-              <button className="doctor-btn doctor-btn-sm doctor-btn-outline" disabled={saving || isFinalized || !canManageDrugRow} onClick={() => setDrugStatus(i, 'available')}>Available</button>
+              <button className="doctor-btn doctor-btn-sm doctor-btn-outline" disabled={saving || isFinalized || !canManageDrugRow || lockedPendingDoctor || alreadyAvailable} onClick={() => setDrugStatus(i, 'available')}>Available</button>
               <button
                 className="doctor-btn doctor-btn-sm doctor-btn-danger"
-                disabled={saving || isFinalized || !canManageDrugRow}
+                disabled={saving || isFinalized || !canManageDrugRow || lockedPendingDoctor || alreadyUnavailable}
                 onClick={() => {
                   const reason = (partialFillReasonDraft[i] || med.partialFillReasoning || '').trim();
                   if (!reason) {
@@ -533,7 +592,7 @@ export default function BranchPrescriptionOps({ profile }) {
               </button>
               <button
                 className="doctor-btn doctor-btn-sm doctor-btn-outline"
-                disabled={saving || isFinalized || !canManageDrugRow || med.drugStatus !== 'not_available'}
+                disabled={saving || isFinalized || !canManageDrugRow || lockedPendingDoctor || med.drugStatus !== 'not_available'}
                 onClick={() => setBranchPickerFor(branchPickerFor === i ? null : i)}
               >
                 Transfer
@@ -552,6 +611,24 @@ export default function BranchPrescriptionOps({ profile }) {
                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 6, maxWidth: 420 }}>
                   Handover for this line only. Routing branch fills the Rx-level checklist at the bottom once every line is delivered.
                 </div>
+              </div>
+            )}
+            {awaitingMyReceipt && !isFinalized && (
+              <div style={{ marginTop: 8, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '0.6rem 0.75rem', maxWidth: 520 }}>
+                <div style={{ fontSize: '0.8rem', color: '#1e40af', marginBottom: 8 }}>
+                  Transferred to you from <b>{med.transferFromBranchName || 'another branch'}</b>. Confirm whether you can supply it — this also marks the drug available, so there is no second step.
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" className="doctor-btn doctor-btn-sm doctor-btn-outline" disabled={saving}
+                    onClick={() => confirmTransferReceipt(i, true)}>We have it</button>
+                  <button type="button" className="doctor-btn doctor-btn-sm doctor-btn-danger" disabled={saving}
+                    onClick={() => confirmTransferReceipt(i, false)}>Cannot supply</button>
+                </div>
+              </div>
+            )}
+            {(awaitingNoteApproval || lockedPendingDoctor) && (
+              <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#6d28d9', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '0.5rem 0.65rem', maxWidth: 480 }}>
+                ⏳ <b>Waiting for doctor approval</b> — this line is locked until {pendingDoctorReason || 'the prescribing doctor responds'}.
               </div>
             )}
             {handoverElsewhere && (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, query, where, orderBy, limit } from '../../../services/firestoreShim';
 import {
   isMedicalPatientAuthDoc,
   buildTherapyLinkedAuthUidSet,
@@ -22,7 +22,7 @@ const QUICK_ACTIONS = [
 export default function AdminOverview() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
-    patients: 0, doctors: 0, therapists: 0, nurses: 0, pharmacies: 0,
+    patients: 0, clients: 0, doctors: 0, therapists: 0, nurses: 0, pharmacies: 0,
     labs: 0, scanCenters: 0, prescriptions: 0, appointments: 0,
     doctorAppointments: 0, therapyScheduledCalls: 0, homeCareBookings: 0,
     labOrders: 0, scanOrders: 0,
@@ -222,6 +222,10 @@ export default function AdminOverview() {
       const therapyCount = therapyCalls.size;
       setStats({
         patients:      medicalAuthDocs.length,
+        // Therapy clients were already fetched (to classify medical patients) but
+        // the count was never surfaced — the dashboard showed every product line
+        // except therapy.
+        clients:       clientsSnap.size,
         doctors:       docs.size,
         therapists:    thers.docs.filter(d => (d.data()?.role || '') !== 'admin').length,
         nurses:        nurses.size,
@@ -331,6 +335,7 @@ export default function AdminOverview() {
 
   const STAT_CARDS = [
     { key: 'patients',      label: 'Medical Patients',     icon: '👥', bg: '#eff6ff', color: '#1d4ed8' },
+    { key: 'clients',       label: 'Therapy Clients',      icon: '🧘', bg: '#f5f3ff', color: '#7c3aed' },
     { key: 'doctors',       label: 'Doctors',              icon: '🩺', bg: '#f0fdf4', color: '#16a34a' },
     { key: 'therapists',    label: 'Therapists',           icon: '🧠', bg: '#fdf4ff', color: '#9333ea' },
     { key: 'nurses',        label: 'Home Care Nurses',     icon: '🏠', bg: '#f0fdfa', color: '#0d9488' },
@@ -602,18 +607,28 @@ export default function AdminOverview() {
             <p className="admin-table-title">Platform Breakdown</p>
           </div>
           <div style={{ padding: '0.75rem 1.1rem' }}>
-            {[
-              { label: 'Medical Patients', val: stats.patients, color: '#1d4ed8', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Home Care Nurses', val: stats.nurses, color: '#0d9488', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Doctors', val: stats.doctors, color: '#16a34a', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Therapists', val: stats.therapists, color: '#9333ea', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Pharmacies', val: stats.pharmacies, color: '#ea580c', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Lab Centers', val: stats.labs, color: '#065f46', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Imaging Centers', val: stats.scanCenters, color: '#7c3aed', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Therapy sessions', val: stats.therapyScheduledCalls, color: '#a855f7', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Doctor appointments', val: stats.doctorAppointments, color: '#ca8a04', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-              { label: 'Home care bookings', val: stats.homeCareBookings, color: '#0f766e', max: Math.max(stats.patients, stats.nurses, stats.appointments, 1) },
-            ].map(row => (
+            {/* The bar scale is the largest value ACROSS THESE ROWS. It used to be
+                max(patients, nurses, appointments) only — so whenever another row
+                (e.g. lab orders or prescriptions) was the biggest, every bar
+                clamped to 100% and the chart carried no information. */}
+            {(() => {
+              const rows = [
+                { label: 'Medical Patients',    val: stats.patients,              color: '#1d4ed8' },
+                { label: 'Therapy Clients',     val: stats.clients,               color: '#7c3aed' },
+                { label: 'Home Care Nurses',    val: stats.nurses,                color: '#0d9488' },
+                { label: 'Doctors',             val: stats.doctors,               color: '#16a34a' },
+                { label: 'Therapists',          val: stats.therapists,            color: '#9333ea' },
+                { label: 'Pharmacies',          val: stats.pharmacies,            color: '#ea580c' },
+                { label: 'Lab Centers',         val: stats.labs,                  color: '#065f46' },
+                { label: 'Imaging Centers',     val: stats.scanCenters,           color: '#7c3aed' },
+                { label: 'Therapy sessions',    val: stats.therapyScheduledCalls, color: '#a855f7' },
+                { label: 'Doctor appointments', val: stats.doctorAppointments,    color: '#ca8a04' },
+                { label: 'Home care bookings',  val: stats.homeCareBookings,      color: '#0f766e' },
+                { label: 'Prescriptions',       val: stats.prescriptions,         color: '#0891b2' },
+              ];
+              const scale = Math.max(1, ...rows.map(r => Number(r.val) || 0));
+              return rows.map(r => ({ ...r, val: Number(r.val) || 0, max: scale }));
+            })().map(row => (
               <div key={row.label} style={{ marginBottom: '0.85rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>{row.label}</span>

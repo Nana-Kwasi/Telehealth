@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
@@ -15,8 +15,8 @@ import {
   Activity,
   Heart,
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../Auth/firebaseConfig';
+import { signOut } from '../../../services/authShim';
+import { auth, db, doc, getDoc } from '../../../services/firestoreShim';
 import './TherapistDashboard.css';
 import '../DashboardShell.css';
 
@@ -26,11 +26,13 @@ import TherapistClients from './Clients';
 import TherapistMessages from './Messages';
 import TherapistVideoCall from './VideoCall';
 import TherapistCalendar from './Calendar';
+import TherapistAppointments from './Appointments';
 import TherapistSchedule from './Schedule';
 import TherapistNotes from './Notes';
 import TherapistResources from './Resources';
 import TherapistReports from './Reports';
 import TherapistSettings from './Settings';
+import CoupleCases from './CoupleCases';
 import TherapistLogs from './Logs';
 import MoodDashboard from './MoodDashboard';
 import ClientDetails from './ClientDetails';
@@ -45,16 +47,42 @@ export default function TherapistDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
   
+  // "Admin therapist" is a therapist-scoped privilege stored on the THERAPIST
+  // profile (therapists/{id}.role === 'admin'), not on the user account — an admin
+  // therapist is still role THERAPIST at login.
+  //
+  // So `profile` alone can never reveal it: `profile` comes from resolve-role,
+  // which reports the account role and always says "therapist". The promotion took
+  // effect nowhere in the UI because every gate here read only that. Read the
+  // therapist document too, the way Home.js already does.
+  const [therapistRole, setTherapistRole] = useState(null);
+
+  useEffect(() => {
+    const uid = profile?.id || profile?.uid || auth.currentUser?.uid;
+    if (!uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'therapists', uid));
+        if (!cancelled && snap.exists()) setTherapistRole(snap.data()?.role || null);
+      } catch { /* keep the account-level answer */ }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, profile?.uid]);
+
   const isAdmin =
     profile?.role === 'admin' ||
     profile?.type === 'Administrator' ||
-    profile?.isAdminTherapist === true;
+    profile?.isAdminTherapist === true ||
+    therapistRole === 'admin';
 
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: 'Home', component: TherapistHome },
     { path: '/dashboard/clients', icon: Users, label: 'Clients', component: TherapistClients },
+    { path: '/dashboard/couple-cases', icon: Heart, label: 'Couple Cases', component: CoupleCases },
     { path: '/dashboard/staff', icon: MessageSquare, label: 'Staff', component: TherapistMessages },
     { path: '/dashboard/video', icon: Video, label: 'Video Call', component: TherapistVideoCall },
+    { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: TherapistResources },
@@ -177,12 +205,14 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/clients" element={<TherapistClients profile={profile} />} />
           <Route path="/staff" element={<TherapistMessages />} />
           <Route path="/video" element={<TherapistVideoCall profile={profile} />} />
+          <Route path="/appointments" element={<TherapistAppointments />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/resources" element={<TherapistResources />} />
           <Route path="/mood" element={<MoodDashboard />} />
           <Route path="/reports" element={<TherapistReports />} />
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="therapist" />} />
+          <Route path="/couple-cases" element={<CoupleCases />} />
           <Route path="/settings" element={<TherapistSettings />} />
           <Route path="/clients/:clientId" element={<ClientDetails />} />
           <Route path="/notes/:noteId" element={<ViewNote />} />

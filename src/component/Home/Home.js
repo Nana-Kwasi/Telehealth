@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import './Home.css';
+// NOTE: the assets folder is named "Images " — with a trailing space.
+import heroBackground from '../../Images /main.png';
 import { NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
 import { beginTherapySession, beginHomeCareSession } from '../../utils/patientSessionIntent';
 import individualIcon from '../../../src/Images /v.jpg';
@@ -100,69 +102,14 @@ export default function Home() {
     <div className="page-container">
 
       {/* ── HERO ── */}
-      <section className="hero-section">
+      <section
+        className="hero-section"
+        style={{
+          // No overlay — the artwork carries its own headline and brightness.
+          backgroundImage: `url(${heroBackground})`,
+        }}
+      >
         <div className="home-container">
-
-          <div className="hero-eyebrow">
-            <span className="hero-eyebrow-dot" />
-            Therapy, Medical &amp; Home-Care
-          </div>
-
-          <h1 className="home-title">
-            Care that meets you<br />
-            <span className="title-highlight-therapy">where you are.</span>
-          </h1>
-
-          <p className="home-subtitle">
-            Access licensed therapists and medical doctors from the comfort of your home.
-            Mental health support and medical consultations, all in one place.
-          </p>
-
-          {/* ── 2-Choice Entry Cards ── */}
-          <div className="hero-service-choice">
-            <div
-              className={`hero-choice-card therapy ${selectedService === 'therapy' ? 'selected' : ''}`}
-              onClick={() => setSelectedService(selectedService === 'therapy' ? null : 'therapy')}
-            >
-              <div className="choice-card-icon">🧠</div>
-              <h3 className="choice-card-title">Mental Health Therapy</h3>
-              <p className="choice-card-desc">
-                Work with a licensed therapist for individual, couples, or teen therapy.
-                Flexible scheduling. Complete privacy.
-              </p>
-              <div className="choice-card-cta">
-                {selectedService === 'therapy' ? '▲ Choose your type below' : 'Find a therapist →'}
-              </div>
-            </div>
-
-            <div
-              className="hero-choice-card medical"
-              onClick={() => navigate('/medical')}
-            >
-              <div className="choice-card-icon">🩺</div>
-              <h3 className="choice-card-title">Medical Consultations</h3>
-              <p className="choice-card-desc">
-                Search and book licensed doctors for general practice, specialist
-                consultations, and prescriptions.
-              </p>
-              <div className="choice-card-cta">Find a doctor →</div>
-            </div>
-
-            <div
-              className="hero-choice-card homecare"
-              onClick={selectHomeCare}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectHomeCare(); }}
-            >
-              <div className="choice-card-icon">🏠</div>
-              <h3 className="choice-card-title">Home-Care</h3>
-              <p className="choice-card-desc">
-                At-home support and care services through NessaHub.
-              </p>
-              <div className="choice-card-cta">Find a nurse →</div>
-            </div>
-          </div>
 
           {/* ── Therapy Type Cards (revealed on Therapy click) ── */}
           {selectedService === 'therapy' && (
@@ -197,6 +144,52 @@ export default function Home() {
             </div>
           )}
 
+        </div>
+
+          {/* ── Module picker ──
+            Was three large frosted cards that covered the artwork. The image
+            already carries the headline and description, so this is just the
+            three entry points: icon + label, sitting under that copy. */}
+        <div className="hero-modules">
+          <button
+            type="button"
+            className={`hero-module ${selectedService === 'therapy' ? 'is-active' : ''}`}
+            onClick={() => setSelectedService(selectedService === 'therapy' ? null : 'therapy')}
+          >
+            <svg className="hero-module-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="26" cy="16" r="10" />
+              <path d="M8 56c0-11 8-19 18-19 3 0 6 .6 8 1.8" />
+              <path d="M45.5 34.2c2.6-2.7 6.9-2.7 9.5 0 2.6 2.7 2.6 7 0 9.7L45.5 54l-9.5-10.1c-2.6-2.7-2.6-7 0-9.7 2.6-2.7 6.9-2.7 9.5 0z" />
+            </svg>
+            <span className="hero-module-label">Therapy</span>
+          </button>
+
+          <button
+            type="button"
+            className="hero-module"
+            onClick={() => navigate('/medical')}
+          >
+            <svg className="hero-module-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M18 8v14c0 7.2 5.8 13 13 13s13-5.8 13-13V8" />
+              <path d="M14 8h8M40 8h8" />
+              <path d="M31 35v8c0 7.2 5.8 13 13 13s13-5.8 13-13v-5" />
+              <circle cx="57" cy="34" r="5" />
+            </svg>
+            <span className="hero-module-label">Medical Care</span>
+          </button>
+
+          <button
+            type="button"
+            className="hero-module"
+            onClick={selectHomeCare}
+          >
+            <svg className="hero-module-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M8 28L32 8l24 20" />
+              <path d="M14 27v27h36V27" />
+              <path d="M32 46l-7-7.2c-1.9-2-1.9-5.1 0-7.1 1.9-2 5-2 6.9 0l.1.1.1-.1c1.9-2 5-2 6.9 0 1.9 2 1.9 5.1 0 7.1z" />
+            </svg>
+            <span className="hero-module-label">Home Care</span>
+          </button>
         </div>
       </section>
 

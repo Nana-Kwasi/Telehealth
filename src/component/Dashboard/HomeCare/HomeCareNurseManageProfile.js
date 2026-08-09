@@ -8,11 +8,26 @@ import { isNurseProfileComplete } from '../../../utils/homeCareProfileComplete';
 import NursePhotoPicker from './NursePhotoPicker';
 import './HomeCareNurseDashboard.css';
 
+// Languages may arrive as an array, a JSON string ('["English"]'), a plain
+// comma-separated string, or null. Always render a comma-separated display
+// string — calling .join() on a non-array (e.g. a string) throws.
+function toLangDisplay(value) {
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'string' && value.trim()) {
+    const t = value.trim();
+    if (t.startsWith('[')) {
+      try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(', '); } catch { /* fall through */ }
+    }
+    return t;
+  }
+  return 'English';
+}
+
 export default function HomeCareNurseManageProfile({ embedded = false }) {
   const { profile, nurse, setNurse } = useHomeCareNurse();
   const [bio, setBio] = useState(nurse?.bio || '');
   const [specialty, setSpecialty] = useState(nurse?.specialty || '');
-  const [languages, setLanguages] = useState((nurse?.languages || ['English']).join(', '));
+  const [languages, setLanguages] = useState(toLangDisplay(nurse?.languages));
   const [yearsExperience, setYearsExperience] = useState(String(nurse?.yearsExperience ?? ''));
   const [phone, setPhone] = useState(nurse?.phone || '');
   const [licenseNumber, setLicenseNumber] = useState(nurse?.licenseNumber || '');
@@ -29,7 +44,7 @@ export default function HomeCareNurseManageProfile({ embedded = false }) {
     if (!nurse) return;
     setBio(nurse.bio || '');
     setSpecialty(nurse.specialty || '');
-    setLanguages((nurse.languages || ['English']).join(', '));
+    setLanguages(toLangDisplay(nurse.languages));
     setYearsExperience(String(nurse.yearsExperience ?? ''));
     setPhone(nurse.phone || '');
     setLicenseNumber(nurse.licenseNumber || '');

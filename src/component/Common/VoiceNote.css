@@ -1,0 +1,79 @@
+/* ─── VoiceNote ─────────────────────────────────────────────────────────────── */
+
+.vn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 210px;
+  max-width: 280px;
+  padding: 0.35rem 0.15rem;
+}
+
+.vn-missing {
+  font-size: 0.8rem;
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.vn-audio {
+  display: none;
+}
+
+.vn-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+.vn-btn:active { transform: scale(0.94); }
+
+/* Own bubbles are dark/tinted, peer bubbles are light — keep contrast on both. */
+.vn-own .vn-btn { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.vn-own .vn-btn:hover { background: rgba(255, 255, 255, 0.32); }
+.vn-peer .vn-btn { background: #4f46e5; color: #fff; }
+.vn-peer .vn-btn:hover { background: #4338ca; }
+
+.vn-wave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  cursor: pointer;
+  outline: none;
+}
+
+.vn-wave:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.vn-bar {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px;
+  transition: background 0.12s linear;
+}
+
+.vn-own .vn-bar { background: rgba(255, 255, 255, 0.38); }
+.vn-own .vn-bar-played { background: #ffffff; }
+.vn-peer .vn-bar { background: #cbd5e1; }
+.vn-peer .vn-bar-played { background: #4f46e5; }
+
+.vn-time {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.vn-own .vn-time { color: rgba(255, 255, 255, 0.9); }
+.vn-peer .vn-time { color: #64748b; }

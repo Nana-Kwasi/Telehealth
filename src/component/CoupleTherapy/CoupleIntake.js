@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../Auth/firebaseConfig';
+import { doc, setDoc } from '../../services/firestoreShim';
+import { auth, db } from '../../services/firestoreShim';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
 import CoupleSectionForm from './CoupleSectionForm';

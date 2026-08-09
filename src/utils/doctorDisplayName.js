@@ -1,4 +1,4 @@
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from '../services/firestoreShim';
 
 /** Resolve physician label from doctors/{id}; fixes orders saved with generic "Doctor". */
 export async function getDoctorDisplayName(db, doctorId, fallbacks = []) {

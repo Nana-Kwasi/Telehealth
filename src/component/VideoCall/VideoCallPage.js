@@ -1,8 +1,29 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { connect, createLocalTracks, createLocalVideoTrack } from 'twilio-video';
-import { useParams } from 'react-router-dom';
+import { connect, createLocalTracks, createLocalVideoTrack, LocalVideoTrack } from 'twilio-video';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Monitor, Square } from 'lucide-react';
 import './VideoCallPage.css';
+
+/**
+ * A readable label for a Twilio participant.
+ *
+ * Twilio identities are the authenticated user's id (a UUID), so using the raw
+ * identity puts a UUID on the video tile. The joining screen stores the names it
+ * already knows in `videoCallInfo`; fall back to the other party's name for a
+ * one-to-one session.
+ */
+function participantLabel(identity) {
+  if (!identity) return 'Participant';
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identity);
+  if (!isUuid) return identity;
+  try {
+    const info = JSON.parse(localStorage.getItem('videoCallInfo') || '{}');
+    return (info.displayNames && info.displayNames[identity]) || info.targetPerson || 'Participant';
+  } catch {
+    return 'Participant';
+  }
+}
+
 
 const VideoCallPage = () => {
   const { roomName, participantName } = useParams();
@@ -16,6 +37,83 @@ const VideoCallPage = () => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [error, setError] = useState(null);
+  const pageRef = useRef(null);
+  // The screen-share track, and the camera track it temporarily replaces.
+  const screenTrackRef = useRef(null);
+  const cameraTrackRef = useRef(null);
+  const navigate = useNavigate();
+
+  // window.close() only closes windows that were opened by script. The therapist
+  // joins via window.open (closable), but the client navigates in the same tab,
+  // where close() is a no-op — the "Close Window" button did nothing at all.
+  const canCloseWindow = typeof window !== 'undefined' && !!window.opener && !window.opener.closed;
+
+  const leaveCallScreen = () => {
+    if (canCloseWindow) {
+      window.close();
+      return;
+    }
+    navigate('/dashboard/video');
+  };
+
+
+  // Hold on to the camera track: screen sharing unpublishes it, and it has to be
+  // republished afterwards or the other side never sees the camera again.
+  useEffect(() => {
+    if (!room) return;
+    const publication = [...room.localParticipant.videoTracks.values()][0];
+    if (publication?.track) cameraTrackRef.current = publication.track;
+  }, [room]);
+
+  // Show the local camera preview.
+  //
+  // The local track was attached immediately after connect(), but at that point
+  // the component was still rendering the "Connecting to call..." view, so
+  // localVideoRef.current was null and the attach silently did nothing — the
+  // "You" tile stayed blank for the whole call. Attach once the room view is
+  // actually on screen.
+  useEffect(() => {
+    const container = localVideoRef.current;
+    if (!room || !container) return undefined;
+
+    // While sharing, the preview shows the shared screen — that is the only way
+    // to confirm the share is actually live.
+    const screenTrack = screenTrackRef.current;
+    const cameraTrack = [...room.localParticipant.videoTracks.values()]
+      .map((publication) => publication.track)
+      .find((track) => track && track !== screenTrack) || cameraTrackRef.current;
+
+    const track = (isScreenSharing && screenTrack) || cameraTrack;
+    if (!track) return undefined;
+
+    const el = track.attach();
+    el.style.width = '100%';
+    el.style.height = '100%';
+    // A shared screen must not be cropped the way a camera feed can be.
+    el.style.objectFit = isScreenSharing ? 'contain' : 'cover';
+    container.replaceChildren(el);
+
+    return () => {
+      try { track.detach(el); } catch { /* track already stopped */ }
+      el.remove();
+    };
+  }, [room, isConnected, isScreenSharing]);
+
+  // The page sits under the site navbar, so a flat 100vh ran past the bottom of
+  // the window and took the call controls with it. Measure the space actually
+  // left below the page's top edge and size to that.
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return undefined;
+    const fit = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.setProperty('--call-height', `${Math.max(360, window.innerHeight - top)}px`);
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  });
+
   const [callInfo, setCallInfo] = useState(null);
   const [localTracks, setLocalTracks] = useState([]);
   const [isAcquiringLocalTracks, setIsAcquiringLocalTracks] = useState(false);
@@ -52,7 +150,14 @@ const VideoCallPage = () => {
   // Cleanup function
   const cleanup = useCallback(() => {
     console.log('Starting cleanup...');
-    
+
+    // Stop the screen capture too, or the browser keeps showing "sharing your
+    // screen" after the call is over.
+    if (screenTrackRef.current) {
+      screenTrackRef.current.stop();
+      screenTrackRef.current = null;
+    }
+
     if (room) {
       console.log('Disconnecting from room...');
       room.disconnect();
@@ -182,7 +287,7 @@ const VideoCallPage = () => {
         participantDiv = document.createElement('div');
         participantDiv.id = `participant-${participant.sid}`;
         participantDiv.className = 'remote-participant';
-        participantDiv.innerHTML = `<div class="video-label">${participant.identity}</div>`;
+        participantDiv.innerHTML = `<div class="video-label">${participantLabel(participant.identity)}</div>`;
         
         // Add to remote videos container
         const remoteContainer = document.querySelector('.remote-videos');
@@ -272,29 +377,80 @@ const VideoCallPage = () => {
     setIsVideoOff(!isVideoOff);
   };
   
-  const toggleScreenShare = async () => {
-    if (!isScreenSharing) {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const screenTrack = stream.getVideoTracks()[0];
-        
-        // Replace local video track with screen share
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-        
-        setIsScreenSharing(true);
-      } catch (error) {
-        console.error('Error starting screen share:', error);
+  /**
+   * Stop sharing: drop the screen track and put the camera back on the room.
+   */
+  const stopScreenShare = useCallback(async () => {
+    const screenTrack = screenTrackRef.current;
+    screenTrackRef.current = null;
+
+    if (screenTrack) {
+      if (room) {
+        try { room.localParticipant.unpublishTrack(screenTrack); } catch { /* already gone */ }
       }
-    } else {
-      // Stop screen sharing
-      const videoTrack = localTracks.find(track => track.kind === 'video');
-      if (localVideoRef.current && videoTrack) {
-        videoTrack.attach(localVideoRef.current);
-      }
-      setIsScreenSharing(false);
+      screenTrack.detach().forEach((el) => el.remove());
+      screenTrack.stop();
     }
+
+    const camera = cameraTrackRef.current;
+    if (room && camera) {
+      try { await room.localParticipant.publishTrack(camera); } catch { /* already published */ }
+    }
+
+    setIsScreenSharing(false);
+  }, [room]);
+
+  /**
+   * Share the screen with the other participant.
+   *
+   * The previous version captured the display stream and assigned it to
+   * `localVideoRef.current.srcObject` — but that ref is a <div>, so nothing was
+   * shown locally, and the track was never published to the room, so the other
+   * participant never saw the screen at all. The share has to become a Twilio
+   * track and be published in the camera's place.
+   */
+  const toggleScreenShare = async () => {
+    if (!room) return;
+    if (isScreenSharing) {
+      await stopScreenShare();
+      return;
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    } catch {
+      return; // the picker was dismissed — not an error worth reporting
+    }
+
+    const mediaStreamTrack = stream.getVideoTracks()[0];
+    if (!mediaStreamTrack) return;
+
+    const screenTrack = new LocalVideoTrack(mediaStreamTrack, { name: 'screen' });
+    screenTrackRef.current = screenTrack;
+
+    const camera = cameraTrackRef.current;
+    if (camera) {
+      try { room.localParticipant.unpublishTrack(camera); } catch { /* already gone */ }
+    }
+
+    try {
+      await room.localParticipant.publishTrack(screenTrack);
+    } catch (error) {
+      console.error('Failed to publish screen share:', error);
+      screenTrackRef.current = null;
+      screenTrack.stop();
+      if (camera) {
+        try { await room.localParticipant.publishTrack(camera); } catch { /* ignore */ }
+      }
+      return;
+    }
+
+    // The browser's own "Stop sharing" bar ends the track without going through
+    // our button, so the UI has to follow that too.
+    mediaStreamTrack.addEventListener('ended', () => { stopScreenShare(); });
+
+    setIsScreenSharing(true);
   };
 
   
@@ -316,7 +472,9 @@ const VideoCallPage = () => {
       <div className="video-call-error">
         <h2>Error</h2>
         <p>{error}</p>
-        <button onClick={() => window.close()}>Close</button>
+        <button onClick={leaveCallScreen}>
+          {canCloseWindow ? 'Close' : 'Back to Dashboard'}
+        </button>
       </div>
     );
   }
@@ -327,13 +485,15 @@ const VideoCallPage = () => {
       <div className="video-call-disconnected">
         <h2>Call Ended</h2>
         <p>The video call has ended.</p>
-        <button onClick={() => window.close()}>Close Window</button>
+        <button onClick={leaveCallScreen}>
+          {canCloseWindow ? 'Close Window' : 'Back to Dashboard'}
+        </button>
       </div>
     );
   }
   
   return (
-    <div className="video-call-page">
+    <div className="video-call-page" ref={pageRef}>
       <div className="call-header">
         <h1>Video Call - {roomName}</h1>
         <p>Connected as: {participantName}</p>
@@ -349,7 +509,9 @@ const VideoCallPage = () => {
               width: '300px', 
               height: '200px', 
               position: 'relative',
-              transform: 'scaleX(-1)' // Mirror effect for local video
+              // Mirror the camera, but never the shared screen — mirrored text
+              // is unreadable.
+              transform: isScreenSharing ? 'none' : 'scaleX(-1)'
             }}
           />
           <div className="video-label">You {isVideoOff && '(Camera Off)'}</div>

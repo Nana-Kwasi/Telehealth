@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, addDoc, serverTimestamp, getDocs } from '../../../services/firestoreShim';
 
 const AUDIENCE_OPTIONS = [
   { value: 'all',         label: 'All Users',        icon: '👥' },

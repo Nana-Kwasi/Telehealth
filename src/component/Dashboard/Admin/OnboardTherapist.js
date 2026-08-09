@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { db, auth, storage } from '../../Auth/firebaseConfig';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
-import { collection, doc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../../../services/firestoreShim';
+import { initializeApp, getApps } from '../../../services/authShim';
+import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from '../../../services/authShim';
+import { collection, doc, setDoc } from '../../../services/firestoreShim';
+import { ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import { UserPlus, Upload, X, Plus, RefreshCw } from 'lucide-react';
 import './OnboardTherapist.css';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';

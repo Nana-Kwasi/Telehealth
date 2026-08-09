@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../Auth/firebaseConfig';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { db } from '../../services/firestoreShim';
+import { collection, doc, getDocs, setDoc } from '../../services/firestoreShim';
 import './TherapistSelectionModal.css';
 
 export default function TherapistSelectionModal() {

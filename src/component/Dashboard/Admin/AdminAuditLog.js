@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, query, orderBy, limit } from '../../../services/firestoreShim';
 import useSystemConfig, { cfg } from '../../../hooks/useSystemConfig';
 
 const ACTION_PALETTE = {

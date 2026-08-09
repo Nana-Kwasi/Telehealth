@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth, db } from '../Auth/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../services/firestoreShim';
+import { doc, getDoc } from '../../services/firestoreShim';
 import LocationSummaryCard from '../Common/LocationSummaryCard';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../utils/locationProfile';
 import {

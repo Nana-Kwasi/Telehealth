@@ -1,8 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, Trash2, Clock } from 'lucide-react';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, serverTimestamp } from '../../../services/firestoreShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import { refreshSession } from '../../Auth/authService';
+
+// Map a doctor record (session profile and/or the full /doctors/{id} document,
+// whose metadataJson-preserved fields are expanded by the shim) to the form shape.
+function mapDoctorToForm(src = {}) {
+  return {
+    name: src.name || src.fullName || src.displayName || '',
+    specialization: src.specialization || src.speciality || '',
+    bio: src.bio || src.about || '',
+    experience: src.experience ?? src.yearsExperience ?? '',
+    consultationFee: src.consultationFee ?? src.fee ?? '',
+    phone: src.phone || '',
+    location: typeof src.location === 'string' ? src.location : (src.location?.address || ''),
+    consultationTypes: src.consultationTypes || { video: true, chat: false, inPerson: false },
+    languages: Array.isArray(src.languages) ? src.languages.join(', ') : (src.languages || ''),
+    photoURL: src.photoURL || src.photoUrl || src.avatarUrl || '',
+    country: src.country || src.locationMeta?.country || '',
+    city: src.city || src.locationMeta?.city || '',
+    area: src.area || src.locationMeta?.area || '',
+    region: src.region || src.locationMeta?.region || '',
+    street: src.street || src.locationMeta?.street || '',
+    ghanaDigitalAddress: src.ghanaDigitalAddress || '',
+    latitude: src.latitude ?? src.locationMeta?.latitude ?? null,
+    longitude: src.longitude ?? src.locationMeta?.longitude ?? null,
+  };
+}
 
 export default function DoctorSettings({ profile }) {
   const [activeTab, setActiveTab] = useState('profile');
@@ -25,29 +51,25 @@ export default function DoctorSettings({ profile }) {
   const [loadingSlots, setLoadingSlots] = useState(true);
 
   useEffect(() => {
-    if (profile) {
-      setProfileForm({
-        name: profile.name || '',
-        specialization: profile.specialization || '',
-        bio: profile.bio || '',
-        experience: profile.experience || '',
-        consultationFee: profile.consultationFee || '',
-        phone: profile.phone || '',
-        location: profile.location || '',
-        consultationTypes: profile.consultationTypes || { video: true, chat: false, inPerson: false },
-        languages: Array.isArray(profile.languages) ? profile.languages.join(', ') : (profile.languages || ''),
-        photoURL: profile.photoURL || '',
-        country: profile.country || profile.locationMeta?.country || '',
-        city: profile.city || profile.locationMeta?.city || '',
-        area: profile.area || profile.locationMeta?.area || '',
-        region: profile.region || profile.locationMeta?.region || '',
-        street: profile.street || profile.locationMeta?.street || '',
-        ghanaDigitalAddress: profile.ghanaDigitalAddress || '',
-        latitude: profile.latitude ?? profile.locationMeta?.latitude ?? null,
-        longitude: profile.longitude ?? profile.locationMeta?.longitude ?? null,
-      });
-      loadAvailability();
-    }
+    if (!profile?.id) return;
+    // Seed immediately from the session profile so the form is never blank, then
+    // hydrate from the full doctor document — resolve-role only surfaces a handful
+    // of fields (name/specialization/phone/location/bio), while experience, fee,
+    // consultation types, languages and photo live in the doctor's metadataJson and
+    // only come back from GET /doctors/{id}.
+    setProfileForm(prev => ({ ...prev, ...mapDoctorToForm(profile) }));
+    loadAvailability();
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'doctors', profile.id));
+        if (snap.exists()) {
+          const full = snap.data();
+          setProfileForm(prev => ({ ...prev, ...mapDoctorToForm({ ...profile, ...full }) }));
+        }
+      } catch (error) {
+        console.error('Error loading doctor profile:', error);
+      }
+    })();
   }, [profile]);
 
   const loadAvailability = async () => {
@@ -108,6 +130,8 @@ export default function DoctorSettings({ profile }) {
         updatedAt: serverTimestamp(),
       };
       await updateDoc(doc(db, 'doctors', profile.id), data);
+      // Re-resolve the session so the sidebar/dashboard reflect the change now.
+      refreshSession();
       showSuccess('Profile updated successfully!');
     } catch (error) {
       console.error('Error saving profile:', error);

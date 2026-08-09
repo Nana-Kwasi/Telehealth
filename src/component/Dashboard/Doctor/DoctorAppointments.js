@@ -5,11 +5,11 @@ import {
   User, UserCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
+import { db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, doc, getDoc, updateDoc,
   setDoc, addDoc, serverTimestamp,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { logAction, A } from '../../../utils/auditLogger';
 import { getConfigOnce } from '../../../hooks/useSystemConfig';
 
@@ -74,6 +74,7 @@ export default function DoctorAppointments({ profile }) {
 
   // List
   const [filter, setFilter] = useState('all');
+  const [detailAppt, setDetailAppt] = useState(null);    // list-row detail modal
 
   // Reschedule
   const [rescheduleAppt, setRescheduleAppt] = useState(null);
@@ -89,7 +90,14 @@ export default function DoctorAppointments({ profile }) {
       const q = query(collection(db, 'doctorAppointments'), where('doctorId', '==', profile.id));
       const snap = await getDocs(q);
       const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      appts.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
+      // Current first: upcoming (today onward) soonest→latest, then past most-recent first.
+      appts.sort((a, b) => {
+        const ad = a.date || '', bd = b.date || '';
+        const aUp = ad >= TODAY, bUp = bd >= TODAY;
+        if (aUp !== bUp) return aUp ? -1 : 1;
+        if (aUp) return ad.localeCompare(bd) || (a.time || '').localeCompare(b.time || '');
+        return bd.localeCompare(ad);
+      });
 
       // Build unique patient list and enrich names missing or stored as "Patient"
       const seen = new Set();
@@ -135,6 +143,20 @@ export default function DoctorAppointments({ profile }) {
       }, { merge: true });
     }
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
+    setDetailAppt(prev => prev && prev.id === id ? { ...prev, status: newStatus } : prev);
+  };
+
+  // A doctor's patient list is built from people who have booked with them. With
+  // none, the schedule form's patient picker is empty and submitting can only ever
+  // fail on "Please select a patient" — say so up front instead.
+  const canSchedule = patients.length > 0;
+
+  const openScheduleDay = (dateStr) => {
+    if (!canSchedule) {
+      alert('You can schedule appointments once a patient has booked with you.');
+      return;
+    }
+    setScheduleDay(dateStr);
   };
 
   const handleScheduleNew = async () => {
@@ -188,6 +210,8 @@ export default function DoctorAppointments({ profile }) {
   };
 
   const openReschedule = (appt) => {
+    setDetailAppt(null);
+    setModalDay(null);
     setRescheduleAppt(appt);
     setRescheduleDate(appt.date || '');
     setRescheduleTime(appt.time || '');
@@ -380,7 +404,7 @@ export default function DoctorAppointments({ profile }) {
                     onClick={() => {
                       if (isPast && !hasAppts) return;
                       if (hasAppts) setModalDay(dateStr);
-                      else if (!isPast) setScheduleDay(dateStr);
+                      else if (!isPast) openScheduleDay(dateStr);
                     }}
                     style={{
                       minHeight: 88,
@@ -489,7 +513,7 @@ export default function DoctorAppointments({ profile }) {
                 <thead><tr><th>Patient</th><th>Date</th><th>Time</th><th>Type</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                   {filtered.map(appt => (
-                    <tr key={appt.id}>
+                    <tr key={appt.id} style={{ cursor: 'pointer' }} onClick={() => setDetailAppt(appt)} title="View appointment details">
                       <td style={{ fontWeight: 600 }}>{appt.clientName || 'Patient'}</td>
                       <td>{appt.date || '—'}</td>
                       <td>{appt.time || '—'}</td>
@@ -501,7 +525,7 @@ export default function DoctorAppointments({ profile }) {
                         {appt.reason ? `"${appt.reason.slice(0, 50)}${appt.reason.length > 50 ? '…' : ''}"` : '—'}
                       </td>
                       <td><StatusBadge status={appt.status} /></td>
-                      <td><ActionBtns appt={appt} /></td>
+                      <td onClick={e => e.stopPropagation()}><ActionBtns appt={appt} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -551,12 +575,71 @@ export default function DoctorAppointments({ profile }) {
               )}
             </div>
             <div className="da-modal-footer">
-              <button className="doctor-btn doctor-btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setModalDay(null); setScheduleDay(modalDay); }}>
+              <button
+                className="doctor-btn doctor-btn-outline"
+                style={{ flex: 1, justifyContent: 'center', ...(canSchedule ? {} : { opacity: 0.45, cursor: 'not-allowed' }) }}
+                disabled={!canSchedule}
+                title={canSchedule ? '' : 'No patients yet'}
+                onClick={() => { setModalDay(null); openScheduleDay(modalDay); }}
+              >
                 <Plus size={15} /> Add Appointment This Day
               </button>
               <button className="doctor-btn doctor-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setModalDay(null); navigate('/dashboard/video'); }}>
                 <Video size={15} /> Manage Video Calls
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════ APPOINTMENT DETAIL MODAL (list row) ══════════════ */}
+      {detailAppt && (
+        <div className="da-modal-overlay" onClick={() => setDetailAppt(null)}>
+          <div className="da-modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <div className="da-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div className="da-modal-appt-avatar">{getInitials(detailAppt.clientName)}</div>
+                <div>
+                  <h3>{detailAppt.clientName || 'Patient'}</h3>
+                  <p>{fmtLong(detailAppt.date)} {detailAppt.time ? `· ${detailAppt.time}` : ''}</p>
+                </div>
+              </div>
+              <button className="da-modal-close" onClick={() => setDetailAppt(null)}>✕</button>
+            </div>
+            <div className="da-modal-body">
+              <div style={{ marginBottom: '1rem' }}><StatusBadge status={detailAppt.status} /></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '0.75rem 1.25rem' }}>
+                {[
+                  ['Date', detailAppt.date || '—'],
+                  ['Time', detailAppt.time || '—'],
+                  ['Consultation', (detailAppt.consultationType || 'video').charAt(0).toUpperCase() + (detailAppt.consultationType || 'video').slice(1)],
+                  ['Status', (detailAppt.status || 'pending').charAt(0).toUpperCase() + (detailAppt.status || 'pending').slice(1)],
+                  ['Patient email', detailAppt.clientEmail || '—'],
+                  ['Patient phone', detailAppt.clientPhone || detailAppt.patientPhone || '—'],
+                  ['Booked on', detailAppt.createdAt?.seconds ? new Date(detailAppt.createdAt.seconds * 1000).toLocaleString() : (detailAppt.createdAt || '—')],
+                  ['Reference', detailAppt.prescriptionRef || detailAppt.appointmentRef || detailAppt.id || '—'],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k}</div>
+                    <div style={{ fontSize: '0.88rem', color: '#0f172a', wordBreak: 'break-word' }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {detailAppt.reason && (
+                <div style={{ marginTop: '1rem', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 10, padding: '0.75rem 0.9rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>Reason for visit</div>
+                  <div style={{ fontSize: '0.88rem', color: '#334155', fontStyle: 'italic' }}>"{detailAppt.reason}"</div>
+                </div>
+              )}
+              {detailAppt.notes && (
+                <div style={{ marginTop: '0.75rem', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 10, padding: '0.75rem 0.9rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>Notes</div>
+                  <div style={{ fontSize: '0.88rem', color: '#334155' }}>{detailAppt.notes}</div>
+                </div>
+              )}
+              <div className="da-modal-appt-actions" style={{ marginTop: '1.25rem' }}>
+                <ActionBtns appt={detailAppt} />
+              </div>
             </div>
           </div>
         </div>

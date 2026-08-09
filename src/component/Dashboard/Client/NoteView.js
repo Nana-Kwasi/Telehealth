@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../../services/firestoreShim';
+import { doc, getDoc } from '../../../services/firestoreShim';
 import { ArrowLeft } from 'lucide-react';
+import { getNoteSections, noteTypeLabel } from '../../../utils/noteSections';
 import './NoteView.css';
 
 export default function NoteView() {
@@ -49,6 +50,8 @@ export default function NoteView() {
     );
   }
 
+  const sections = getNoteSections(note);
+
   const getNoteDate = () => {
     if (note.createdAt?.toDate) {
       return note.createdAt.toDate().toLocaleDateString();
@@ -63,7 +66,7 @@ export default function NoteView() {
           <ArrowLeft size={20} />
           Back to Resources
         </button>
-        <h1 className="page-title">{note.title || 'Note'}</h1>
+        <h1 className="page-title">{note.title || noteTypeLabel(note)}</h1>
       </div>
 
       <div className="note-content">
@@ -71,6 +74,14 @@ export default function NoteView() {
           <div className="meta-item">
             <strong>Date:</strong> {getNoteDate()}
           </div>
+          <div className="meta-item">
+            <strong>Type:</strong> {noteTypeLabel(note)}
+          </div>
+          {note.therapistName && (
+            <div className="meta-item">
+              <strong>Therapist:</strong> {note.therapistName}
+            </div>
+          )}
           {note.category && (
             <div className="meta-item">
               <strong>Category:</strong> {note.category}
@@ -78,9 +89,20 @@ export default function NoteView() {
           )}
         </div>
 
-        {note.content && (
+        {/* The real content lives in structuredData, not `content` — rendering
+            only `content` left this page blank for every SOAP note. */}
+        {sections.length > 0 ? (
           <div className="note-body">
-            <div className="content-text">{note.content}</div>
+            {sections.map((s) => (
+              <section key={s.key} className="note-section">
+                <h3 className="note-section-label">{s.label}</h3>
+                <p className="content-text">{s.value}</p>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="note-body">
+            <p className="content-text note-empty">This note has no content yet.</p>
           </div>
         )}
 

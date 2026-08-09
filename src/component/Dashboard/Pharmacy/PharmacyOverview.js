@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from '../../Auth/firebaseConfig';
-import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { onAuthStateChanged } from '../../../services/authShim';
+import { db, auth } from '../../../services/firestoreShim';
+import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 
 const STATUS_LABEL = {
@@ -140,7 +140,7 @@ export default function PharmacyOverview({ profile }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const pharmacyId = profile?.id;
+        const pharmacyId = profile?.organizationId || profile?.id;
         if (!pharmacyId) return;
 
         const [branchSnap, rxSnap] = await Promise.all([

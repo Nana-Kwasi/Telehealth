@@ -1,0 +1,98 @@
+/* ─── Therapist Appointments ─────────────────────────────────────────────────
+   Light-only, matching the rest of the therapist dashboard. */
+
+.ta-page { padding: 1.5rem 2rem 3rem; max-width: 1100px; }
+.ta-loading { padding: 3rem; color: #64748b; }
+
+.ta-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.ta-header h1 { margin: 0; font-size: 1.6rem; font-weight: 800; color: #0f172a; }
+.ta-header p { margin: 0.35rem 0 0; font-size: 0.9rem; color: #64748b; }
+
+.ta-refresh {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 0.9rem; border-radius: 9px;
+  border: 1px solid #e2e8f0; background: #fff; color: #334155;
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.ta-refresh:hover { background: #f1f5f9; }
+
+.ta-error {
+  background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
+  padding: 0.7rem 0.9rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.88rem;
+}
+
+.ta-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
+.ta-filter {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 1rem; border-radius: 20px;
+  border: 1px solid #e2e8f0; background: #fff; color: #475569;
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.ta-filter.is-active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+.ta-badge {
+  min-width: 20px; padding: 0 6px; border-radius: 10px;
+  background: #f59e0b; color: #fff; font-size: 0.7rem; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.ta-list { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.ta-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem 1.1rem;
+  flex-wrap: wrap;
+}
+/* Amber, so a request never reads as an already-confirmed booking. */
+.ta-card.is-pending { background: #fffbeb; border-color: #fcd34d; }
+
+.ta-card-main { min-width: 0; flex: 1; }
+.ta-card-who { display: flex; align-items: center; gap: 0.6rem; }
+.ta-card-who strong { font-size: 1rem; color: #0f172a; }
+.ta-card-when {
+  display: flex; align-items: center; gap: 0.35rem;
+  font-size: 0.85rem; color: #64748b; margin-top: 0.3rem;
+}
+.ta-dot { color: #cbd5e1; }
+.ta-card-notes { margin: 0.45rem 0 0; font-size: 0.83rem; color: #475569; font-style: italic; }
+
+.ta-status {
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.04em;
+  padding: 0.2rem 0.5rem; border-radius: 7px; background: #dbeafe; color: #1d4ed8;
+}
+.ta-status--pending   { background: #fef3c7; color: #92400e; }
+.ta-status--declined,
+.ta-status--cancelled { background: #fee2e2; color: #b91c1c; }
+.ta-status--completed { background: #dcfce7; color: #15803d; }
+
+.ta-card-actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
+
+.ta-empty {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  padding: 3rem 1.5rem; text-align: center; color: #94a3b8;
+}
+.ta-empty h3 { margin: 0.75rem 0 0.35rem; color: #0f172a; font-size: 1.05rem; }
+.ta-empty p { margin: 0; font-size: 0.87rem; }
+
+.ta-modal-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 1.5rem; z-index: 1000;
+}
+.ta-modal {
+  background: #fff; border-radius: 16px; padding: 1.5rem;
+  width: 100%; max-width: 440px; box-shadow: 0 20px 50px rgba(2, 6, 23, 0.3);
+}
+.ta-modal-head { display: flex; align-items: center; justify-content: space-between; }
+.ta-modal-head h2 { margin: 0; font-size: 1.15rem; color: #0f172a; }
+.ta-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #94a3b8; cursor: pointer; }
+.ta-modal-sub { margin: 0.2rem 0 1rem; font-size: 0.88rem; color: #64748b; }
+
+.ta-label { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 0.35rem; }
+.ta-input {
+  width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #e2e8f0;
+  border-radius: 10px; font: inherit; color: #0f172a; margin-bottom: 0.9rem;
+}
+.ta-textarea { min-height: 84px; resize: vertical; }
+.ta-modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }

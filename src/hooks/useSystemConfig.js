@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../component/Auth/firebaseConfig';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firestoreShim';
+import { doc, onSnapshot } from '../services/firestoreShim';
 import { setFeatureFlagOverrides } from '../utils/featureFlags';
 
 // Module-level singleton — all components share one Firestore subscription
@@ -78,7 +78,7 @@ export function cfg(config, section, key, defaultValue) {
 // One-shot read (for enforcement inside async handlers without re-renders)
 export async function getConfigOnce() {
   if (_cache) return _cache;
-  const { getDoc } = await import('firebase/firestore');
+  const { getDoc } = await import('../services/firestoreShim');
   try {
     const snap = await getDoc(doc(db, 'systemConfig', 'settings'));
     _cache = snap.exists() ? snap.data() : {};
@@ -88,7 +88,7 @@ export async function getConfigOnce() {
 
 export async function getFeatureFlagsOnce() {
   if (_flagsCache && Object.keys(_flagsCache).length) return _flagsCache;
-  const { getDoc } = await import('firebase/firestore');
+  const { getDoc } = await import('../services/firestoreShim');
   try {
     const snap = await getDoc(doc(db, 'systemConfig', 'featureFlags'));
     _flagsCache = snap.exists() ? (snap.data()?.overrides || {}) : {};

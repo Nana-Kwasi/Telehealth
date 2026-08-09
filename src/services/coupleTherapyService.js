@@ -1,5 +1,5 @@
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db, functions, httpsCallable } from '../component/Auth/firebaseConfig';
+import { doc, setDoc, getDoc } from './firestoreShim';
+import { auth, db, functions, httpsCallable } from './firestoreShim';
 import { COUPLE_STATUSES, COUPLE_STORAGE_KEYS } from '../utils/coupleTherapyConfig';
 import { sectionsForPartner } from '../utils/coupleIntakeSections';
 import { validateAdultDateOfBirth } from '../utils/therapyAgeValidation';
@@ -317,6 +317,14 @@ export async function ensureCoupleSession(coupleIdHint, options = {}) {
     }
 
     if (!data?.linked) {
+      if (
+        coupleIdHint &&
+        (data?.reason === 'email_mismatch' ||
+          data?.reason === 'no_couple_for_email' ||
+          data?.reason === 'link_failed')
+      ) {
+        clearCoupleLocalSession();
+      }
       if (data?.reason === 'no_couple_for_email') {
         return {
           ok: false,
@@ -383,9 +391,32 @@ export function isCoupleIntakeDoneLocally() {
   );
 }
 
+/** Account route from onboarding: individual | teen | couples (not therapyTypes array). */
+export function profileHasCoupleMarkers(profile) {
+  // Any one of these is sufficient evidence. Relying on therapyType alone meant a
+  // profile that merely omitted it (which resolve-role used to do for every
+  // account) was read as "not a couple account", and the caller wiped the stored
+  // couple session on every session resolve.
+  return (
+    profile?.therapyType === 'couples' ||
+    !!profile?.coupleId ||
+    !!profile?.couplePartnerRole ||
+    profile?.metadata?.therapyType === 'couples' ||
+    !!profile?.metadata?.coupleId
+  );
+}
+
+export function isCoupleTherapyAccount(profile) {
+  return profileHasCoupleMarkers(profile);
+}
+
 /** Restore couple session keys from auth profile (e.g. after refresh). */
 export function syncCoupleSessionFromProfile(profile) {
   if (!profile || typeof localStorage === 'undefined') return;
+  if (!profileHasCoupleMarkers(profile)) {
+    clearCoupleLocalSession();
+    return;
+  }
   if (profile.coupleId) {
     localStorage.setItem(COUPLE_STORAGE_KEYS.coupleId, profile.coupleId);
   }
@@ -432,15 +463,7 @@ export function buildLocalWaitingFallback(coupleId) {
 }
 
 export function isCouplesClient(profile) {
-  if (profile?.therapyType === 'couples' || profile?.coupleId) return true;
-  if (typeof localStorage === 'undefined') return false;
-  try {
-    const onboard = JSON.parse(localStorage.getItem('th.onboard') || '{}');
-    if (onboard.therapyType === 'couples') return true;
-  } catch {
-    /* ignore */
-  }
-  return !!localStorage.getItem(COUPLE_STORAGE_KEYS.coupleId);
+  return profileHasCoupleMarkers(profile);
 }
 
 function coupleNavStateFromClaim(data) {
@@ -485,19 +508,22 @@ export function resolveCoupleFunnelPath(coupleId, partnerKey, navState) {
  * @returns {Promise<{path:string, state?:object}|null>}
  */
 export async function resolveCoupleLandingPath(profile) {
+  if (!profileHasCoupleMarkers(profile)) {
+    clearCoupleLocalSession();
+    return null;
+  }
+
   syncCoupleSessionFromProfile(profile);
   const hint =
     profile?.coupleId ||
     (typeof localStorage !== 'undefined' ? localStorage.getItem(COUPLE_STORAGE_KEYS.coupleId) : null);
 
-  if (!isCouplesClient(profile) && !hint) {
-    const probe = await ensureCoupleSession(undefined);
-    if (!probe.ok) return null;
-  }
-
   const session = await ensureCoupleSession(hint || undefined);
   if (!session.ok) {
-    if (!isCouplesClient(profile) && !hint && session.reason === 'no_couple_for_email') return null;
+    if (session.reason === 'no_couple_for_email' || session.reason === 'email_mismatch') {
+      clearCoupleLocalSession();
+    }
+    if (!profileHasCoupleMarkers(profile) && !hint && session.reason === 'no_couple_for_email') return null;
     const coupleId = hint || profile?.coupleId;
     if (coupleId) {
       return {
@@ -831,3 +857,21 @@ export async function navigateAfterCoupleIntake(navigate, coupleId, partnerKey, 
 }
 
 export { sectionsForPartner };
+
+// ─── Therapist-side couple case ──────────────────────────────────────────────
+// The therapist dashboard needs the couples assigned to them and, for one couple,
+// the full case (registration + both partners' intake sections).
+
+/** Couples assigned to the signed-in therapist (or the caller's own, for clients). */
+export async function listMyCouples() {
+  const fn = httpsCallable(functions, 'listMyCouples');
+  const { data } = await fn({});
+  return Array.isArray(data) ? data : [];
+}
+
+/** Full case for one couple — therapist/admin only, server-enforced. */
+export async function getCoupleCaseForTherapist(coupleId) {
+  const fn = httpsCallable(functions, 'getCoupleCaseForTherapist');
+  const { data } = await fn({ coupleId });
+  return data;
+}

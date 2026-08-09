@@ -10,8 +10,8 @@ import {
   HeartPulse,
   Shield,
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../Auth/firebaseConfig';
+import { signOut } from '../../services/authShim';
+import { auth } from '../../services/firestoreShim';
 import { fetchHomeCarePatientProfile, fetchPatientActiveBookings } from '../../services/homeCareService';
 import '../Dashboard/HomeCare/HomeCareNurseDashboard.css';
 import './HomeCarePatientShell.css';

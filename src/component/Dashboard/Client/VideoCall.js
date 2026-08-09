@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../../Auth/firebaseConfig';
+import { auth, db } from '../../../services/firestoreShim';
+import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
+import { generateVideoToken, roomNameForCall } from '../../../services/twilioVideoService';
+import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 import { 
   doc, 
   getDoc, 
@@ -11,7 +14,7 @@ import {
   addDoc, 
   updateDoc,
   serverTimestamp 
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { 
   Calendar, 
   Clock, 
@@ -47,6 +50,15 @@ const ClientVideoCall = ({ profile }) => {
     notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [joiningId, setJoiningId] = useState(null);
+  // Re-evaluated on a timer so a session that becomes joinable while the page is
+  // open reveals its Join button, instead of waiting for a manual refresh.
+  const [nowTick, setNowTick] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showTherapistCalendar, setShowTherapistCalendar] = useState(false);
   const [therapistBusyDates, setTherapistBusyDates] = useState([]);
@@ -111,21 +123,36 @@ const ClientVideoCall = ({ profile }) => {
           console.log('🔗 Assigned therapist field:', clientData.assignedTherapist);
           
           // Create a profile object with the role set to 'client'
+          // Spread FIRST. With `...clientData` last it overwrote every field above
+          // it — including `id`, which the clients endpoint returns as the
+          // client_profiles row id, not the users.id. Scheduling then posted a
+          // client_id with no matching user and the FK rejected it as a bare
+          // "Request conflicts with existing data."
           const clientProfile = {
+            ...clientData,
             id: clientDoc.id,
             uid: auth.currentUser.uid,
             role: 'client',
             name: clientData.name || clientData.displayName || auth.currentUser.displayName,
             email: clientData.email || auth.currentUser.email,
-            ...clientData
           };
           
           setClientProfile(clientProfile);
           console.log('👤 Client profile set:', clientProfile);
 
-          // Get assigned provider ID — support multiple field names
-          const assignedId = clientData.assignedTherapist || clientData.assignedTherapistId || clientData.assignedDoctor || clientData.assignedDoctorId || '';
-          const assignedName = clientData.assignedTherapistName || clientData.assignedDoctorName || '';
+          // Get assigned provider ID — support multiple field names, then fall back
+          // to the assignments table. None of the assigned* fields are written by
+          // the REST backend, so relying on them alone told a client with a
+          // therapist that they had none, and the call screen stayed locked.
+          let assignedId = clientData.assignedTherapist || clientData.assignedTherapistId || clientData.assignedDoctor || clientData.assignedDoctorId || '';
+          let assignedName = clientData.assignedTherapistName || clientData.assignedDoctorName || '';
+          if (!assignedId) {
+            const fromAssignments = await fetchAssignedTherapist(clientId);
+            if (fromAssignments) {
+              assignedId = fromAssignments.id;
+              assignedName = fromAssignments.name || assignedName;
+            }
+          }
 
           // Track whether client has an assigned provider (even if doc lookup fails later)
           if (assignedId) {
@@ -141,7 +168,9 @@ const ClientVideoCall = ({ profile }) => {
               try {
                 const snap = await getDoc(doc(db, col, assignedId));
                 if (snap.exists()) {
-                  setTherapistData({ id: snap.id, ...snap.data() });
+                  // Spread first — see the clientProfile note above; a payload `id`
+                  // must never win over the document id we looked up by.
+                  setTherapistData({ ...snap.data(), id: snap.id });
                   found = true;
                   break;
                 }
@@ -164,7 +193,14 @@ const ClientVideoCall = ({ profile }) => {
           const calls = callsSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
-          }));
+          })).sort((a, b) => {
+            // Newest first. The two reload paths already sorted; this one — the
+            // list rendered on first paint — did not, so a new booking appeared
+            // at the bottom until something else refreshed the screen.
+            const timeA = a.scheduledTime?.toDate ? a.scheduledTime.toDate() : new Date(a.scheduledTime || 0);
+            const timeB = b.scheduledTime?.toDate ? b.scheduledTime.toDate() : new Date(b.scheduledTime || 0);
+            return timeB - timeA;
+          });
           console.log('📅 Scheduled calls found:', calls.length);
           setScheduledCalls(calls);
         } else {
@@ -250,7 +286,11 @@ const ClientVideoCall = ({ profile }) => {
         notes: scheduleForm.notes || '',
         status: 'pending', // Client requests are pending approval
         createdAt: serverTimestamp(),
-        createdBy: 'client'
+        // Must be the requester's user id, not the literal role: `created_by` is a
+        // uuid column, and "client" failed to parse into one — which surfaced as an
+        // opaque "Internal server error" on the schedule dialog. `status: pending`
+        // already carries the "requested by the client" meaning.
+        createdBy: clientProfile.id
       };
 
       console.log('Preparing to submit call data:', callData);
@@ -311,15 +351,73 @@ const ClientVideoCall = ({ profile }) => {
   };
 
   const formatSessionTimeString = (scheduledTime) => {
+    if (!scheduledTime) return '';
     const date = scheduledTime.toDate ? scheduledTime.toDate() : new Date(scheduledTime);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
+  };
+
+  /**
+   * The sessions table renders `timeInfo.date` and `timeInfo.time` as separate
+   * lines, but it was handed the STRING above — reading `.date`/`.time` off a
+   * string gives undefined, which is why the Date & Time column was blank for
+   * every row. Return the two parts it actually renders.
+   */
+  /**
+   * Join a scheduled session: mint a Twilio token for the room, stash the call
+   * info the video page reads, and navigate there.
+   */
+  const handleJoinSession = async (session) => {
+    setJoiningId(session.id);
+    setMessage({ type: '', text: '' });
+    try {
+      const roomName = roomNameForCall(session);
+      if (!roomName) throw new Error('This session has no room yet.');
+      const participantName =
+        clientProfile?.name || clientProfile?.displayName || clientProfile?.email || 'Client';
+
+      // Twilio's identity must be the authenticated user's id — the backend
+      // rejects anything else (TwilioIdentityPolicy). The readable name is kept
+      // separately, for the room's on-screen labels.
+      const identity = auth.currentUser?.uid;
+      if (!identity) throw new Error('Your session expired. Please sign in again.');
+
+      const result = await generateVideoToken({ roomName, participantName: identity });
+
+      localStorage.setItem('videoCallInfo', JSON.stringify({
+        roomName,
+        participantName,
+        identity,
+        displayNames: { [identity]: participantName },
+        token: result.token,
+        targetPerson: session.therapistName || 'Therapist',
+        callType: 'scheduled',
+      }));
+      navigate(`/video-call/${roomName}/${encodeURIComponent(participantName)}`);
+    } catch (err) {
+      // Surface the reason (e.g. "Twilio is not configured") instead of leaving
+      // the button looking dead, which is how this behaved before.
+      setMessage({ type: 'error', text: err?.message || 'Could not join the call. Please try again.' });
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  const formatSessionDateParts = (scheduledTime) => {
+    if (!scheduledTime) return { date: '—', time: '' };
+    const d = scheduledTime.toDate ? scheduledTime.toDate() : new Date(scheduledTime);
+    if (Number.isNaN(d.getTime())) return { date: '—', time: '' };
+    return {
+      date: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }),
+      time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+    };
   };
 
   const getStatusIcon = (status) => {
@@ -826,10 +924,17 @@ const ClientVideoCall = ({ profile }) => {
               </thead>
               <tbody>
                 {scheduledCalls.map((session) => {
-                  const timeInfo = formatSessionTimeString(session.scheduledTime);
+                  const timeInfo = formatSessionDateParts(session.scheduledTime);
                   const sessionDate = session.scheduledTime?.toDate?.() || session.scheduledTime;
                   const isUpcoming = sessionDate > new Date();
                   const canEdit = isUpcoming && (sessionDate - new Date()) <= (24 * 60 * 60 * 1000); // 24 hours
+                  // Join only opens around the booked time — see sessionJoinWindow.
+                  const joinWindow = getJoinWindow(session, nowTick);
+                  // The therapist joining flips the call to `in_progress`. Gating
+                  // Join on `scheduled` alone therefore took the button away from
+                  // the client the moment the therapist arrived.
+                  const isJoinableStatus =
+                    session.status === 'scheduled' || session.status === 'in_progress';
                   
                   return (
                     <tr key={session.id} className="sessions-table-row">
@@ -876,11 +981,22 @@ const ClientVideoCall = ({ profile }) => {
                         )}
                       </td>
                       <td className="sessions-actions">
-                        {session.status === 'scheduled' && (
-                          <button className="sessions-join-button">
+                        {isJoinableStatus && joinWindow.canJoin && (
+                          /* This button had no onClick at all — it rendered and
+                             did nothing when clicked. */
+                          <button
+                            className="sessions-join-button"
+                            onClick={() => handleJoinSession(session)}
+                            disabled={joiningId === session.id}
+                          >
                             <Phone size={16} />
-                            Join
+                            {joiningId === session.id ? 'Joining…' : 'Join'}
                           </button>
+                        )}
+                        {isJoinableStatus && joinWindow.state === 'early' && (
+                          <span className="sessions-join-pending" title={`Opens ${joinWindow.opensAt.toLocaleString()}`}>
+                            Opens {joinWindow.waitLabel}
+                          </span>
                         )}
                         {canEdit && (
                           <button 

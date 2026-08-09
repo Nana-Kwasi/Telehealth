@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { db } from '../../Auth/firebaseConfig';
-import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { db } from '../../../services/firestoreShim';
+import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
 
@@ -69,6 +69,7 @@ const DRUG_STATUS_META = {
 };
 
 export default function PharmacyPrescriptions({ profile }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -124,13 +125,6 @@ export default function PharmacyPrescriptions({ profile }) {
       next.delete('rx');
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
-
-  const openRx = useCallback((rx) => {
-    setSelected(rx);
-    const next = new URLSearchParams(searchParams);
-    next.set('rx', rx.id);
-    setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
   const setFilter = useCallback((id) => {
@@ -285,7 +279,7 @@ export default function PharmacyPrescriptions({ profile }) {
       ) : (
         <div className="rx-list">
           {filtered.map(rx => (
-            <div key={rx.id} className="rx-card" onClick={() => openRx(rx)}>
+            <div key={rx.id} className="rx-card" onClick={() => navigate(`/dashboard/prescriptions/${rx.id}`)}>
               <div className="rx-card-header">
                 <div>
                   <div className="rx-patient">{rx.patientName || 'Patient'}</div>

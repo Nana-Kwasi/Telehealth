@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, FileText, X, Save, FlaskConical, Download } from 'lucide-react';
-import { db, auth } from '../../Auth/firebaseConfig';
-import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from '../../../services/firestoreShim';
 
 const TYPE_CFG = {
   lab:  { label: 'Lab Result',  emoji: '🧪', bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, Calendar, MessageSquare, FileText, Settings,
@@ -9,21 +9,41 @@ import {
   Mic, MicOff, Paperclip, Microscope, Minus,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
-import { signOut } from 'firebase/auth';
-import { auth, db, storage } from '../../Auth/firebaseConfig';
+import { signOut } from '../../../services/authShim';
+import { auth, db, storage } from '../../../services/firestoreShim';
+import { api } from '../../../services/apiClient';
 import {
   collection, query, where, getDocs, doc, getDoc, setDoc,
   addDoc, updateDoc, orderBy, onSnapshot, serverTimestamp,
-} from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+} from '../../../services/firestoreShim';
+import { ref as storageRef, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import './MedicalPatientDashboard.css';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
-import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
+import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import { readPendingBooking, materializePendingBooking } from '../../../utils/pendingDoctorBooking';
+
+/** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
+function ymdLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** The 6x7 grid for a month, padded with the surrounding days. */
+function getCalendarDays(monthDate) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+}
+
 
 function getInitials(name) {
   if (!name) return 'P';
@@ -46,6 +66,21 @@ function StatusBadge({ status }) {
 function MedPatHome({ profile }) {
   const navigate = useNavigate();
   const [appts, setAppts] = useState([]);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  // Days with an appointment. `date` is already a local YYYY-MM-DD string, so it
+  // is used as-is — parsing it through Date would shift the day across UTC.
+  const appointmentDates = useMemo(() => {
+    const set = new Set();
+    (appts || []).forEach((a) => {
+      if (String(a.status || '').toLowerCase() === 'cancelled') return;
+      const raw = a.date || a.scheduledAt || a.appointmentDate;
+      if (!raw) return;
+      if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) { set.add(raw.slice(0, 10)); return; }
+      const d = raw?.toDate ? raw.toDate() : new Date(raw);
+      if (!Number.isNaN(d.getTime())) set.add(ymdLocal(d));
+    });
+    return set;
+  }, [appts]);
   const [allAppts, setAllAppts] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
   const [moodHistory, setMoodHistory] = useState([]);
@@ -79,6 +114,26 @@ function MedPatHome({ profile }) {
   useEffect(() => {
     if (!profile?.id) return;
     (async () => {
+      // A doctor booked before signing up is parked in localStorage and turned
+      // into an appointment during signup. If that write didn't land (the shim
+      // swallows write errors, so signup can't tell), the intent is still here —
+      // complete it now, before reading the appointment list, so the doctor shows
+      // up on this first render instead of the patient having to re-book.
+      const pending = readPendingBooking();
+      if (pending) {
+        // Never let a leftover booking intent break the dashboard: this is a
+        // best-effort catch-up, not something the patient asked for right now.
+        try {
+          await materializePendingBooking(pending, {
+            userId: profile.id,
+            name: profile.name || profile.fullName || profile.displayName || '',
+            email: profile.email || '',
+          });
+        } catch (err) {
+          console.warn('Pending booking could not be completed:', err?.message);
+        }
+      }
+
       const [apptSnap, rxSnap, moodSnap] = await Promise.all([
         getDocs(query(collection(db, 'doctorAppointments'), where('clientId', '==', profile.id))),
         getDocs(query(collection(db, 'doctorPrescriptions'), where('patientId', '==', profile.id))),
@@ -509,6 +564,63 @@ function MedPatHome({ profile }) {
           </div>
         </div>
       )}
+
+      {/* Appointments calendar — the dashboard had no calendar, so a patient
+          could not see their scheduled dates without opening another page.
+          Mirrors the mobile medical home. */}
+      <div className="mp-card mp-cal-card">
+        <div className="mp-card-header">
+          <h3>My Appointments Calendar</h3>
+          <div className="mp-cal-nav">
+            <button
+              type="button"
+              className="mp-cal-nav-btn"
+              onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+              aria-label="Previous month"
+            >‹</button>
+            <span className="mp-cal-month">
+              {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </span>
+            <button
+              type="button"
+              className="mp-cal-nav-btn"
+              onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+              aria-label="Next month"
+            >›</button>
+          </div>
+        </div>
+
+        <div className="mp-cal-weekdays">
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <span key={d}>{d}</span>)}
+        </div>
+        <div className="mp-cal-grid">
+          {getCalendarDays(calendarMonth).map((day, i) => {
+            const key = ymdLocal(day);
+            const booked = appointmentDates.has(key);
+            const inMonth = day.getMonth() === calendarMonth.getMonth();
+            const isToday = ymdLocal(new Date()) === key;
+            return (
+              <div
+                key={i}
+                className={[
+                  'mp-cal-day',
+                  !inMonth ? 'mp-cal-day--other' : '',
+                  isToday ? 'mp-cal-day--today' : '',
+                  booked ? 'mp-cal-day--booked' : '',
+                ].filter(Boolean).join(' ')}
+                title={booked ? 'Appointment scheduled' : undefined}
+              >
+                {day.getDate()}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mp-cal-legend">
+          {appointmentDates.size > 0
+            ? 'Highlighted days have a scheduled appointment.'
+            : 'No appointments scheduled yet.'}
+        </p>
+      </div>
 
       {/* Quick Actions */}
       <div className="mp-card" style={{ padding: '1.25rem' }}>
@@ -1048,8 +1160,13 @@ function MedPatAppointments({ profile }) {
                   <button key={dateStr}
                     onClick={() => {
                       if (isPast && !hasAppts) return;
-                      if (hasAppts) setModalDay(dateStr);
-                      else if (!isPast) { setScheduleDay(dateStr); setConflict(null); setSForm(f => ({...f})); }
+                      if (hasAppts) { setModalDay(dateStr); return; }
+                      if (isPast) return;
+                      // A patient can only book with a doctor they already have.
+                      // With none, the modal's picker is empty and the booking can
+                      // never be submitted — send them to find a doctor instead.
+                      if (myDoctors.length === 0) { navigate('/doctors'); return; }
+                      setScheduleDay(dateStr); setConflict(null); setSForm(f => ({...f}));
                     }}
                     style={{ minHeight:82,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'0.5rem 0.3rem 0.3rem',borderRadius:12,border,background:bg,cursor:(isPast&&!hasAppts)?'default':'pointer',opacity:isPast&&!hasAppts?0.3:1,transition:'all 0.12s' }}
                     onMouseEnter={e => { if(!(isPast&&!hasAppts)) e.currentTarget.style.transform='translateY(-1px)'; }}
@@ -1644,22 +1761,32 @@ function MedPatMessages({ profile }) {
   };
   const fmtDuration = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   const fmtLastSeen = ts => {
-    if (!ts?.toDate) return 'Offline';
-    const d = ts.toDate(), diff = Date.now() - d;
+    // Accept a Firestore Timestamp (.toDate), an ISO string, millis, or a Date.
+    let d = null;
+    if (ts?.toDate) d = ts.toDate();
+    else if (typeof ts === 'string') d = new Date(ts);
+    else if (typeof ts === 'number') d = new Date(ts);
+    else if (ts instanceof Date) d = ts;
+    if (!d || isNaN(d.getTime())) return 'Offline';
+    const diff = Date.now() - d.getTime();
     if (diff < 60000) return 'Online';
     if (diff < 3600000) return `Last seen ${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `Last seen today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     return `Last seen ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   };
 
-  // Own presence
+  // Own presence — heartbeat every 25s so the backend's 40s "online" window
+  // never lapses while the tab is open (WhatsApp-style).
   useEffect(() => {
     if (!profile?.id) return;
     const presenceRef = doc(db, 'userPresence', profile.id);
-    setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    const beat = () => setDoc(presenceRef, { online: true, lastSeen: serverTimestamp() }, { merge: true });
+    beat();
+    const hb = setInterval(beat, 25000);
     const handleUnload = () => setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
     window.addEventListener('beforeunload', handleUnload);
     return () => {
+      clearInterval(hb);
       window.removeEventListener('beforeunload', handleUnload);
       setDoc(presenceRef, { online: false, lastSeen: serverTimestamp() }, { merge: true });
     };
@@ -1926,7 +2053,9 @@ function MedPatMessages({ profile }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>Dr. {activeDoctor.name}</p>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#16a34a', fontWeight: 600 }}>● {activeDoctor.specialization || 'Medical Doctor'} — Encrypted channel</p>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: isDrOnline ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>
+                    {isDrOnline ? '● Online' : drPresenceLabel}
+                  </p>
                 </div>
               </div>
 
@@ -3051,7 +3180,7 @@ function MedPatSettings({ profile }) {
     if (next !== confirm) { alert('Passwords do not match.'); return; }
     setChangingPwd(true);
     try {
-      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('../../../services/authShim');
       const user = auth.currentUser;
       await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, current));
       await updatePassword(user, next);
@@ -3084,7 +3213,7 @@ function MedPatSettings({ profile }) {
     if (!deletePwd) { alert('Enter your password.'); return; }
     setDeleting(true);
     try {
-      const { EmailAuthProvider, reauthenticateWithCredential, deleteUser } = await import('firebase/auth');
+      const { EmailAuthProvider, reauthenticateWithCredential, deleteUser } = await import('../../../services/authShim');
       const user = auth.currentUser;
       await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, deletePwd));
       await setDoc(doc(db, 'patientProfiles', user.uid), { deletedAt: new Date().toISOString(), status: 'deleted' }, { merge: true });
@@ -3758,36 +3887,13 @@ function MedPatEPharmacy({ profile }) {
     const key = `${rx.id}:${medIndex}:${approve ? 'approve' : 'reject'}`;
     setTransferActionKey(key);
     try {
-      const nextMeds = meds.map((m, i) => {
-        if (i !== medIndex) return m;
-        if (approve) {
-          return {
-            ...m,
-            drugStatus: 'transferred',
-            transferRequestStatus: 'approved_by_patient',
-            transferApprovedByPatientAt: new Date().toISOString(),
-            transferBranchId: m.transferRequestBranchId || null,
-            transferBranchName: m.transferRequestBranchName || null,
-            transferBranchAddress: m.transferRequestBranchAddress || null,
-          };
-        }
-        return {
-          ...m,
-          drugStatus: 'not_available',
-          transferRequestStatus: 'rejected_by_patient',
-          transferRejectedByPatientAt: new Date().toISOString(),
-          transferBranchId: null,
-          transferBranchName: null,
-          transferBranchAddress: null,
-          transferRequestBranchId: null,
-          transferRequestBranchName: null,
-          transferRequestBranchAddress: null,
-        };
-      });
-      await updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
-        medications: nextMeds,
-        pharmacyStatus: deriveRxStockStatus(nextMeds),
-        updatedAt: serverTimestamp(),
+      // The patient is not allowed to PATCH the prescription (that endpoint is for
+      // doctors/pharmacies), which made this fail with 403. The dedicated endpoint
+      // applies the transfer state machine server-side after confirming the line is
+      // genuinely awaiting THIS patient.
+      await api(`/api/v1/medical/prescriptions/${rx.id}/transfer-decision`, {
+        method: 'POST',
+        body: { medIndex, approve },
       });
     } catch {
       alert('Failed to process transfer decision. Please try again.');
@@ -3945,11 +4051,27 @@ function MedPatEPharmacy({ profile }) {
                         This drug ({m.name || 'Drug'}) is transfered to branch ({m.transferBranchName}{m.transferBranchAddress ? `, ${m.transferBranchAddress}` : ''}).
                       </div>
                     )}
+                    {m.transferRequestStatus === 'superseded' && (
+                      <div style={{ fontSize: '0.78rem', color: '#92400e', marginTop: 4, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '3px 8px' }}>
+                        An earlier transfer request for {m.name || 'this drug'} was withdrawn because you responded to a newer one. The pharmacy will follow up if it is still needed.
+                      </div>
+                    )}
                     {m.drugStatus === 'transfer_requested' && m.transferRequestStatus === 'pending_patient' && (
                       <div style={{ fontSize: '0.78rem', color: '#0f766e', marginTop: 4, background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 6, padding: '3px 8px', display: 'inline-block' }}>
                         Awaiting your approval to transfer this drug to {m.transferRequestBranchName || 'another branch'}{m.transferRequestBranchAddress ? ` (${m.transferRequestBranchAddress})` : ''}.
                       </div>
                     )}
+                    {/* Pharmacy notes reach the patient only once the doctor has approved them. */}
+                    {patientVisibleNotes(m).map((n, ni) => (
+                      <div key={ni} style={{ fontSize: '0.78rem', color: '#0f172a', marginTop: 4, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 8px' }}>
+                        💊 <b>{n.label || 'Pharmacy note'}</b>: {n.note}
+                        {n.requiresDoctorApproval && (
+                          <span style={{ color: '#15803d', fontWeight: 600 }}>
+                            {' '}· Approved{n.approvedByDoctorName ? ` · Dr. ${n.approvedByDoctorName}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ds.color, whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>{ds.icon} {ds.label}</span>
                 </div>

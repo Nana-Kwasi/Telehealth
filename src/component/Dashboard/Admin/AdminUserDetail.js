@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db, functions, httpsCallable } from '../../Auth/firebaseConfig';
+import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import {
   doc, getDoc, updateDoc, deleteDoc, serverTimestamp,
   collection, getDocs, query, where,
-} from 'firebase/firestore';
+} from '../../../services/firestoreShim';
 import { logAction, A } from '../../../utils/auditLogger';
 
 const EDITABLE_FIELDS = {
   auth:        ['name', 'email', 'phone', 'nationalId', 'ghanaCard', 'dateOfBirth', 'gender', 'address', 'bloodGroup'],
-  clients:     ['name', 'email', 'phone', 'dateOfBirth', 'gender', 'address'],
+  // Therapy client. These come from the intake questionnaire, which the backend
+  // stores whole in preferencesJson and the shim hoists back to flat fields — so
+  // they're editable here rather than being blank medical-patient fields.
+  clients:     ['name', 'email', 'phone', 'dateOfBirth', 'gender', 'address',
+                'therapyType', 'emergencyContact', 'preferredLanguage',
+                'previousTherapy', 'concerns', 'goals', 'medications', 'notes'],
   doctors:     ['name', 'email', 'phone', 'specialization', 'licenseNumber', 'consultationFee', 'yearsExperience', 'bio'],
   therapists:  ['name', 'email', 'phone', 'specialties', 'licenseNumber', 'consultationFee', 'yearsExperience', 'bio'],
   pharmacies:  ['pharmacyName', 'email', 'phone', 'address', 'country', 'businessReg'],
@@ -44,7 +49,21 @@ const FIELD_LABELS = {
   pharmacyName: 'Pharmacy Name', labName: 'Lab Name', scanCenterName: 'Center Name',
   country: 'Country', businessReg: 'Business Reg.', status: 'Status', accountStatus: 'Account status',
   role: 'Role',
+  // Therapy-client intake fields
+  therapyType: 'Therapy Type', emergencyContact: 'Emergency Contact',
+  preferredLanguage: 'Preferred Language', previousTherapy: 'Previous Therapy',
+  concerns: 'Main Concerns', goals: 'Therapy Goals', medications: 'Medications',
+  notes: 'Notes',
 };
+
+// Intake answers are not all strings — `concerns`/`goals` are arrays and `phq9`
+// is an object. Coerce to something a text field can show and round-trip.
+function asEditableText(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.join(', ');
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
 
 const THERAPIST_ROLE_OPTIONS = [
   { value: 'user', label: 'Therapist' },
@@ -168,7 +187,7 @@ export default function AdminUserDetail() {
   const [deleting, setDeleting]   = useState(false);
   const [pwModal, setPwModal] = useState({ open: false, branch: null, generatedPassword: null });
   const [pwActionBusy, setPwActionBusy] = useState(false);
-  const [related, setRelated]     = useState({ appointments: [], prescriptions: [], diagnostics: [] });
+  const [related, setRelated]     = useState({ appointments: [], prescriptions: [], diagnostics: [], notes: [] });
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [relatedLoaded, setRelatedLoaded] = useState(false);
   const [branches, setBranches]   = useState([]);
@@ -223,7 +242,15 @@ export default function AdminUserDetail() {
     setLoadingRelated(true);
     try {
       const promises = [];
-      if (col === 'auth' || col === 'clients') {
+      if (col === 'clients') {
+        // Therapy clients only. Prescriptions and diagnostic orders are medical-side
+        // concepts a therapy client can never have, so querying them just produced
+        // permanently-empty "Prescriptions (0)" cards on a therapy record.
+        promises.push(getDocs(query(collection(db, 'scheduledCalls'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Therapy Session' }))).catch(() => []));
+        promises.push(getDocs(query(collection(db, 'clinicalNotes'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Clinical Note' }))).catch(() => []));
+      } else if (col === 'auth') {
+        // An `auth` row can be either product line, so load both and let the
+        // role-type detection below decide what this account actually is.
         promises.push(getDocs(query(collection(db, 'doctorAppointments'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Doctor Appointment' }))).catch(() => []));
         promises.push(getDocs(query(collection(db, 'scheduledCalls'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Therapy Session' }))).catch(() => []));
         promises.push(getDocs(query(collection(db, 'doctorPrescriptions'), where('patientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Prescription' }))).catch(() => []));
@@ -240,6 +267,7 @@ export default function AdminUserDetail() {
         appointments:  all.filter(r => ['Doctor Appointment','Appointment','Therapy Session','Session'].includes(r._type)),
         prescriptions: all.filter(r => r._type === 'Prescription'),
         diagnostics:   all.filter(r => r._type === 'Diagnostic Order'),
+        notes:         all.filter(r => r._type === 'Clinical Note'),
       });
       if (col === 'auth') {
         const hasDr = all.some(r => r._type === 'Doctor Appointment');
@@ -298,10 +326,17 @@ export default function AdminUserDetail() {
         payload.statusUpdatedAt = serverTimestamp();
       }
       if (col === 'therapists' && editForm.role !== undefined) {
-        const nextRole = editForm.role === 'admin' ? 'admin' : 'user';
+        // 'admin' is the stored value the therapist screens gate on; a plain
+        // therapist is stored as 'therapist' so the backend's role hoist and the
+        // UI agree on one vocabulary ('user' matched neither).
+        const nextRole = editForm.role === 'admin' ? 'admin' : 'therapist';
         payload.role = nextRole;
-        if (nextRole === 'admin') payload.type = 'Administrator';
-        else if (user.type === 'Administrator') payload.type = 'Therapist';
+        payload.isAdminTherapist = nextRole === 'admin';
+        // Deliberately NOT writing `type`. On a therapist record `type` is the
+        // therapy modality the client match screens filter on — setting it to
+        // 'Administrator' matched no modality and removed the therapist from
+        // every client's "Choose your therapist" list.
+        if (user.type === 'Administrator') payload.type = null;
       }
       await updateDoc(doc(db, col, userId), payload);
       if (col === 'clients' && payload.status !== undefined && user.authUid) {
@@ -809,12 +844,15 @@ export default function AdminUserDetail() {
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#374151', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {FIELD_LABELS[field] || field}
                 </label>
-                {field === 'bio' ? (
-                  <textarea rows={3} value={editForm[field] || ''}
+                {/* Intake answers arrive as arrays (concerns, goals) or objects
+                    (phq9). Render them as readable text rather than
+                    "[object Object]". */}
+                {['bio', 'concerns', 'goals', 'notes', 'medications'].includes(field) ? (
+                  <textarea rows={3} value={asEditableText(editForm[field])}
                     onChange={e => setEditForm(f => ({ ...f, [field]: e.target.value }))}
                     style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.875rem', boxSizing: 'border-box', resize: 'vertical', gridColumn: '1 / -1' }} />
                 ) : (
-                  <input value={editForm[field] || ''}
+                  <input value={asEditableText(editForm[field])}
                     onChange={e => setEditForm(f => ({ ...f, [field]: e.target.value }))}
                     style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.875rem', boxSizing: 'border-box' }} />
                 )}
@@ -892,7 +930,28 @@ export default function AdminUserDetail() {
                 ))}
               </SectionCard>
 
-              {(col === 'auth' || col === 'clients' || col === 'doctors') && (
+              {/* Therapy clients have no prescriptions — that card belongs to the
+                  medical side only. They get clinical notes instead. */}
+              {col === 'clients' && (
+                <SectionCard title={`Clinical Notes (${related.notes.length})`} icon="📝">
+                  {!related.notes.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>No clinical notes recorded.</p>
+                    : related.notes.map(n => (
+                    <div key={n.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0891b2', marginTop: 5, flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>
+                          {n.title || n.noteType || 'Session note'}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
+                          {n.therapistName || '—'} · {fmtShort(n.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </SectionCard>
+              )}
+
+              {(col === 'auth' || col === 'doctors') && (
                 <SectionCard title={`Prescriptions (${related.prescriptions.length})`} icon="💊">
                   {!related.prescriptions.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>No prescriptions found.</p>
                     : related.prescriptions.map(rx => (

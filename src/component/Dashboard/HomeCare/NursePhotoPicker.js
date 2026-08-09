@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
-import { auth } from '../../Auth/firebaseConfig';
+import { auth } from '../../../services/firestoreShim';
 import { uploadNursePhoto } from '../../../services/homeCareService';
 import { useHomeCareNurse } from './HomeCareNurseContext';
 import NurseAvatar from './NurseAvatar';
