@@ -1368,7 +1368,13 @@ export default function TherapistResources() {
   };
 
   // Field types whose answers come from a fixed list the therapist defines.
-  const CHOICE_FIELD_TYPES = ['select', 'radio', 'multiple-choice'];
+  // Checkbox belongs here: "Do you drink?" as a tick box with nothing to tick is
+  // useless — the therapist has to be able to type what the boxes say.
+  const CHOICE_FIELD_TYPES = ['select', 'radio', 'multiple-choice', 'checkbox'];
+
+  // Checkbox is the one choice type that still makes sense with a single option
+  // (a lone "I agree" tick). The rest need at least two to be a choice at all.
+  const minOptionsFor = (type) => (type === 'checkbox' ? 1 : 2);
 
   // Short explanation of what the client will see, per field type.
   const FIELD_TYPE_HINTS = {
@@ -1377,11 +1383,21 @@ export default function TherapistResources() {
     number: 'Numbers only.',
     date: 'A date picker.',
     select: 'Client picks ONE option from a dropdown.',
-    checkbox: 'A single yes/no tick box.',
+    checkbox: 'Client can tick ANY number of the boxes you list below.',
     radio: 'Client picks ONE option from visible buttons.',
-    rating: 'Client picks a score from 1 to 10.',
+    rating: 'Client picks a score on the scale you set below.',
     'multiple-choice': 'Client can pick SEVERAL options.',
   };
+
+  // Heading over the options editor — says what the list actually becomes.
+  const OPTIONS_LABELS = {
+    select: 'Options in the dropdown',
+    radio: 'Options the client picks ONE of',
+    checkbox: 'Tick boxes the client will see',
+    'multiple-choice': 'Options the client can pick several of',
+  };
+
+  const DEFAULT_RATING_MAX = 10;
 
   // Update worksheet field. Changing the TYPE has to reshape the field, not just
   // relabel it: choice types need an options list to edit (switching to Dropdown
@@ -1396,8 +1412,17 @@ export default function TherapistResources() {
         if (field === 'type') {
           const isChoice = CHOICE_FIELD_TYPES.includes(value);
           const hadOptions = Array.isArray(f.options) && f.options.length > 0;
-          if (isChoice) next.options = hadOptions ? f.options : ['', ''];
-          else next.options = [];
+          if (isChoice) {
+            next.options = hadOptions
+              ? f.options
+              : Array(minOptionsFor(value)).fill('');
+          } else {
+            next.options = [];
+          }
+          // The scale only belongs to a rating field; drop it otherwise so it
+          // isn't saved onto a text box.
+          if (value === 'rating') next.max = Number(f.max) || DEFAULT_RATING_MAX;
+          else delete next.max;
         }
         return next;
       }),
@@ -1460,12 +1485,28 @@ export default function TherapistResources() {
     }));
   };
 
+  // Same reshape-on-type-change rule as the create form: switching a field to a
+  // choice type must hand the therapist boxes to type in, and switching away must
+  // drop the stale options/scale rather than saving them onto a text box.
   const updateEditWorksheetField = (index, field, value) => {
     setEditWorksheetForm(prev => ({
       ...prev,
-      fields: prev.fields.map((f, i) => 
-        i === index ? { ...f, [field]: value } : f
-      )
+      fields: prev.fields.map((f, i) => {
+        if (i !== index) return f;
+        const next = { ...f, [field]: value };
+        if (field === 'type') {
+          if (CHOICE_FIELD_TYPES.includes(value)) {
+            next.options = (Array.isArray(f.options) && f.options.length)
+              ? f.options
+              : Array(minOptionsFor(value)).fill('');
+          } else {
+            next.options = [];
+          }
+          if (value === 'rating') next.max = Number(f.max) || DEFAULT_RATING_MAX;
+          else delete next.max;
+        }
+        return next;
+      }),
     }));
   };
 
@@ -2743,9 +2784,9 @@ export default function TherapistResources() {
                           <option value="number">Number</option>
                           <option value="date">Date</option>
                           <option value="select">Dropdown</option>
-                          <option value="checkbox">Checkbox</option>
+                          <option value="checkbox">Checkboxes (tick any)</option>
                           <option value="radio">Radio Buttons</option>
-                          <option value="rating">Rating (1-10)</option>
+                          <option value="rating">Rating Scale</option>
                           <option value="multiple-choice">Multiple Choice</option>
                         </select>
                       </div>
@@ -2764,7 +2805,7 @@ export default function TherapistResources() {
                     {/* Options editor — only for the choice types. */}
                     {CHOICE_FIELD_TYPES.includes(field.type) && (
                       <div className="ws-options">
-                        <label>Options the client can choose from</label>
+                        <label>{OPTIONS_LABELS[field.type] || 'Options the client can choose from'}</label>
                         {(field.options || []).map((option, optIndex) => (
                           <div key={optIndex} className="ws-option-row">
                             <input
@@ -2778,7 +2819,7 @@ export default function TherapistResources() {
                               className="ws-option-drop"
                               title="Remove this option"
                               onClick={() => removeFieldOption(index, optIndex)}
-                              disabled={(field.options || []).length <= 2}
+                              disabled={(field.options || []).length <= minOptionsFor(field.type)}
                             >
                               &times;
                             </button>
@@ -2794,18 +2835,32 @@ export default function TherapistResources() {
                       </div>
                     )}
 
-                    {/* Rating field specific options */}
+                    {/* A rating's one setting is how far the scale runs. It used
+                        to be a fixed 1-10 picture the therapist could not change,
+                        so a 1-5 scale was impossible to ask for. */}
                     {field.type === 'rating' && (
                       <div className="rating-options">
-                        <label>Rating Scale:</label>
+                        <label htmlFor={`ws-scale-${index}`}>Highest score on the scale</label>
+                        <select
+                          id={`ws-scale-${index}`}
+                          value={Number(field.max) || DEFAULT_RATING_MAX}
+                          onChange={(e) => updateWorksheetField(index, 'max', Number(e.target.value))}
+                        >
+                          {[3, 4, 5, 7, 10].map(n => (
+                            <option key={n} value={n}>1 to {n}</option>
+                          ))}
+                        </select>
                         <div className="rating-scale-preview">
                           <span>1</span>
                           <div className="rating-dots">
-                            {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                            {Array.from(
+                              { length: Number(field.max) || DEFAULT_RATING_MAX },
+                              (_, i) => i + 1,
+                            ).map(num => (
                               <div key={num} className="rating-dot">{num}</div>
                             ))}
                           </div>
-                          <span>10</span>
+                          <span>{Number(field.max) || DEFAULT_RATING_MAX}</span>
                         </div>
                       </div>
                     )}
@@ -3441,10 +3496,10 @@ export default function TherapistResources() {
                       </div>
 
                       {/* Field Options */}
-                      {(field.type === 'select' || field.type === 'radio' || field.type === 'multiple-choice') && (
+                      {CHOICE_FIELD_TYPES.includes(field.type) && (
                         <div className="field-options">
-                          <label>Options:</label>
-                          {field.options?.map((option, optionIndex) => (
+                          <label>{OPTIONS_LABELS[field.type] || 'Options:'}</label>
+                          {(field.options || []).map((option, optionIndex) => (
                             <div key={optionIndex} className="option-input">
                               <input
                                 type="text"
@@ -3471,12 +3526,23 @@ export default function TherapistResources() {
                         </div>
                       )}
 
-                      {/* Rating Preview */}
+                      {/* Rating scale */}
                       {field.type === 'rating' && (
                         <div className="rating-preview">
-                          <span>Rating Scale (1-10):</span>
+                          <span>Highest score on the scale:</span>
+                          <select
+                            value={Number(field.max) || DEFAULT_RATING_MAX}
+                            onChange={(e) => updateEditWorksheetField(index, 'max', Number(e.target.value))}
+                          >
+                            {[3, 4, 5, 7, 10].map(n => (
+                              <option key={n} value={n}>1 to {n}</option>
+                            ))}
+                          </select>
                           <div className="rating-scale-preview">
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                            {Array.from(
+                              { length: Number(field.max) || DEFAULT_RATING_MAX },
+                              (_, i) => i + 1,
+                            ).map(num => (
                               <span key={num} className="rating-dot">{num}</span>
                             ))}
                           </div>

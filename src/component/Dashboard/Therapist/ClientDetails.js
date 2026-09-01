@@ -533,7 +533,10 @@ export default function ClientDetails() {
     .map((n) => Number(n.mood))
     .filter((m) => !Number.isNaN(m) && m > 0);
   const moodValues = [
-    ...moodEntries.map((e) => Number(e.mood || e.moodValue || e.value)).filter((m) => !Number.isNaN(m) && m > 0),
+    // Same trap as the cards below: `mood` is the label, not the score.
+    ...moodEntries
+      .map((e) => Number(e.moodValue ?? e.moodScore ?? e.value ?? e.rating))
+      .filter((m) => !Number.isNaN(m) && m > 0),
     ...moodFromNotes,
   ];
   const avgMood = moodValues.length
@@ -1014,9 +1017,20 @@ export default function ClientDetails() {
           ) : (
             <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
               {moodEntries.map(entry => {
-                const moodVal = Number(entry.mood || entry.moodValue || entry.value) || 0;
+                // `mood` holds the LABEL ("Sad", "😔"), not a number — and it is
+                // truthy, so it won this || chain and Number("Sad") gave NaN → 0.
+                // Every card therefore read "Unknown" and "0/10" even though the
+                // entry had a real score. Take the numeric field first.
+                const moodVal = Number(
+                  entry.moodValue ?? entry.moodScore ?? entry.value ?? entry.rating,
+                ) || 0;
                 const emoji = MOOD_EMOJI[moodVal] || '😐';
-                const label = MOOD_LABEL[moodVal] || entry.label || 'Unknown';
+                // Prefer the words the client actually chose; fall back to the
+                // score mapping. An emoji-only label has no letters, so it stays
+                // as the icon rather than becoming the title.
+                const rawMood = typeof entry.mood === 'string' ? entry.mood.trim() : '';
+                const wordMood = /[a-z]/i.test(rawMood) ? rawMood : '';
+                const label = wordMood || MOOD_LABEL[moodVal] || entry.label || 'Unknown';
                 const pct = Math.round((moodVal / 10) * 100);
                 const barColor = moodVal >= 7 ? '#10b981' : moodVal >= 5 ? '#f59e0b' : '#ef4444';
 

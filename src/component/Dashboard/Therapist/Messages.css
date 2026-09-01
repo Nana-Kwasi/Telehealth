@@ -610,3 +610,6 @@
 @media (max-width: 768px) {
   .message-content { max-width: 84%; }
 }
+
+/* Leading download glyph in a file bubble — see Client/Messages.css. */
+.message-document .file-lead-icon { flex-shrink: 0; }

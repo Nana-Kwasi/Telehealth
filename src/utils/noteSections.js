@@ -61,21 +61,34 @@ export function noteTypeLabel(note) {
  */
 export function hydrateBookContent(book) {
   if (!book) return book;
-  let extra = {};
-  if (typeof book.content === 'string' && book.content.trim().startsWith('{')) {
+
+  const parseObj = (raw) => {
+    if (!raw || typeof raw !== 'string') return null;
+    const t = raw.trim();
+    if (!t.startsWith('{') || !t.endsWith('}')) return null;
     try {
-      const parsed = JSON.parse(book.content);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) extra = parsed;
+      const parsed = JSON.parse(t);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
     } catch {
-      // Not JSON — leave `content` as the body text.
+      return null;
     }
-  }
+  };
+
+  // A book's author / audience / difficulty / contents / chapters / key topics /
+  // exercises / resources / bibliography now live in `metadataJson`. Older rows
+  // kept the same object inside `content` instead. The client's Resources modal
+  // renders each of these as its own section (selectedNote.author, .chapters, …),
+  // so without expanding them here every one of those sections rendered empty.
+  const fromMeta = parseObj(book.metadataJson) || {};
+  const fromContent = parseObj(book.content) || {};
+  const extra = { ...fromContent, ...fromMeta };
+
   return {
     ...extra,
     ...book,
     bookTitle: book.bookTitle || book.title,
     // Only drop `content` when it was the JSON envelope, never real prose.
-    content: Object.keys(extra).length ? '' : book.content,
+    content: Object.keys(fromContent).length ? '' : book.content,
   };
 }
 
@@ -107,6 +120,9 @@ export function getNoteSections(note) {
     if (raw === null || raw === undefined || raw === '') return out;
     const value = typeof raw === 'object' ? JSON.stringify(raw) : String(raw).trim();
     if (!value) return out;
+    // Never surface a raw JSON object as note text — some rows were saved with the
+    // whole document in `content`.
+    if (value.startsWith('{') && value.endsWith('}')) return out;
     out.push({ key, label: FIELD_LABELS[key] || key, value });
     return out;
   }, []);

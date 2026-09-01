@@ -202,9 +202,7 @@
   transform: scale(1.1);
 }
 
-.message.sent .message-time {
-  color: rgba(255, 255, 255, 0.8);
-}
+/* superseded below — see the note on .message.sent .message-document */
 
 .message.sent .status-sending,
 .message.sent .status-sent,
@@ -281,10 +279,31 @@
   background: #f8fafc;
 }
 
+/* A sent file bubble is a SIBLING of .message-text, not a child of it — so it sits
+   directly on the light page background, not on the blue speech bubble. Tinting it
+   with 20% white and painting the label white therefore produced white-on-near-white:
+   the client could not see the file they had just sent. Give it the same solid blue
+   as the sent text bubble so the white label has something to sit on. */
 .message.sent .message-document {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: transparent;
-  color: white;
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.message.sent .message-document:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+/* The size label is deliberately dimmed; keep it legible against the blue. */
+.message.sent .message-document .file-size {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Same trap: the timestamp under a sent message is not inside the blue bubble
+   either, so pure-white text vanished against the page. */
+.message.sent .message-time {
+  color: #64748b;
 }
 
 .message.sent .message-document:hover {
@@ -599,3 +618,7 @@
   flex-shrink: 0;
   opacity: 0.8;
 }
+
+/* Leading download glyph in a file bubble — the bubble is an action, so it opens
+   with the download icon rather than a generic document glyph. */
+.message-document .file-lead-icon { flex-shrink: 0; }

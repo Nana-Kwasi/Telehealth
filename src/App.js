@@ -102,9 +102,26 @@ function PrivateRoute({ children, session }) {
   return children;
 }
 
+// `th.clientId` is a Firestore-era key that ~40 client screens read as
+// `localStorage.getItem('th.clientId') || currentUser.uid`. The intake flow used to
+// store the shim's 'pending-intake' placeholder in it, and every one of those
+// screens then fetched /clients/pending-intake — a 400 — instead of the real
+// profile. Anything that is not a uuid is not a usable id, so drop it once at
+// startup; the `|| uid` fallback in each screen then resolves correctly. Existing
+// sessions carrying the bad value heal on next load without clearing storage.
+function purgeInvalidClientId() {
+  try {
+    const v = localStorage.getItem('th.clientId');
+    if (v && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
+      localStorage.removeItem('th.clientId');
+    }
+  } catch { /* storage unavailable — nothing to clean */ }
+}
+
 export default function App() {
   const location = useLocation();
   const [session, setSession] = useState({ loading: true, role: null, profile: null });
+  useEffect(() => { purgeInvalidClientId(); }, []);
   const sysConfig             = useSystemConfig();
   useFeatureFlagsConfig();
   const inactivityTimer       = useRef(null);

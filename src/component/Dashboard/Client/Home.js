@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X } from 'lucide-react';
+import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video } from 'lucide-react';
 import './Home.css';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
+import { buildProgressMetrics, overallProgressScore } from '../../../utils/clientDashboardMetrics';
 import { auth, db } from '../../../services/firestoreShim';
 import {
   collection,
@@ -33,6 +34,8 @@ import {
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
+import WeatherCard from '../../Common/WeatherCard';
+import { subscribeLocationUpdate, applyLocationPatch } from '../../../utils/locationBus';
 
 // Register Chart.js components
 ChartJS.register(
@@ -54,10 +57,19 @@ export default function ClientHome({ profile }) {
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [clientData, setClientData] = useState({});
   const [locationProfile, setLocationProfile] = useState(null);
+  // A location saved in Settings (or captured by the silent gate) has to reach
+  // the card and the weather here without a reload.
+  useEffect(
+    () => subscribeLocationUpdate(patch => setLocationProfile(p => applyLocationPatch(p || profile, patch))),
+    [profile],
+  );
   const [therapistData, setTherapistData] = useState(null);
   const [sessionsCompleted, setSessionsCompleted] = useState(0);
-  const [progressScore, setProgressScore] = useState(0);
+  const [progressScore, setProgressScore] = useState(null);
   const [goalsAchieved, setGoalsAchieved] = useState(0);
+  const [goalsTotal, setGoalsTotal] = useState(0);
+  const [clientGoals, setClientGoals] = useState([]);
+  const [allSessions, setAllSessions] = useState([]);
   const [daysActive, setDaysActive] = useState(0);
   const [therapyNotes, setTherapyNotes] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
@@ -208,28 +220,20 @@ export default function ClientHome({ profile }) {
     };
   };
 
-  const prepareMoodPieChartData = (therapyNotes) => {
-    const moodCounts = {};
-    therapyNotes.forEach(note => {
-      const mood = note.mood || 'Unknown';
-      moodCounts[mood] = (moodCounts[mood] || 0) + 1;
-    });
-
-    const colors = {
-      'Happy': '#10B981',
-      'Calm': '#3B82F6',
-      'Anxious': '#F59E0B',
-      'Sad': '#8B5CF6',
-      'Angry': '#EF4444',
-      'Unknown': '#6B7280'
-    };
-
+  // Mood Distribution renders the client's OWN mood check-ins, bucketed by
+  // intensity (Very Low … Very High). It used to read `note.mood` off the therapy
+  // notes — a field those notes never carry — so the pie was empty for every
+  // client even when they had logged moods. `moodChartData` is the same source the
+  // Daily Mood Progress donut beside it already uses, which is why that donut
+  // showed a value while this chart showed nothing.
+  const prepareMoodPieChartData = (buckets) => {
+    const data = Array.isArray(buckets) ? buckets.filter(b => b && b.count > 0) : [];
     return {
-      labels: Object.keys(moodCounts),
+      labels: data.map(b => b.category),
       datasets: [
         {
-          data: Object.values(moodCounts),
-          backgroundColor: Object.keys(moodCounts).map(mood => colors[mood] || '#6B7280'),
+          data: data.map(b => b.count),
+          backgroundColor: data.map(b => b.color || '#6B7280'),
           borderColor: '#ffffff',
           borderWidth: 2,
         }
@@ -505,20 +509,43 @@ export default function ClientHome({ profile }) {
         }
         setSessionsCompleted(completedSessionsSnapshot ? completedSessionsSnapshot.docs.length : 0);
 
-        // Calculate progress score from therapy notes
-        const progressScore = calculateProgressScore(notes);
-        setProgressScore(progressScore);
+        // All scheduled calls (not just completed) — the attendance ratio needs the
+        // denominator too.
+        try {
+          const allSessionsSnap = await getDocs(
+            query(collection(db, 'scheduledCalls'), where('clientId', '==', clientId)),
+          );
+          setAllSessions(allSessionsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (sessErr) {
+          console.warn('All sessions:', sessErr?.message);
+          setAllSessions([]);
+        }
 
-        // Calculate goals achieved from therapy notes
-        let achievedGoalsCount = 0;
-        notes.forEach(note => {
-          if (note.goalsReviewed && typeof note.goalsReviewed === 'string') {
-            // Count checkmarks (✔️) in the goalsReviewed string
-            const checkmarks = (note.goalsReviewed.match(/✔️/g) || []).length;
-            achievedGoalsCount += checkmarks;
-          }
-        });
-        setGoalsAchieved(achievedGoalsCount);
+        // Progress Score is now the mean of the dashboard metrics that actually
+        // have data (see utils/clientDashboardMetrics.js). It used to be scored from
+        // mood/progressAssessment fields that clinical notes do not carry, so web
+        // showed 0% while mobile's unrelated formula showed 3% for the same client.
+
+        // Goals come from the therapist's goal list (therapist_client_goals_v2),
+        // which has a real status and a 0-100 progress value.
+        //
+        // This used to count ✔️ EMOJI characters inside `note.goalsReviewed` — a
+        // field that does not exist on a therapy note — so the tile was incapable
+        // of ever showing anything but 0, for every client on the platform.
+        try {
+          const goalsSnap = await getDocs(collection(db, 'clients', clientId, 'goals'));
+          const goals = goalsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const achieved = goals.filter(g =>
+            String(g.status || '').toLowerCase() === 'completed' || Number(g.progress) >= 100
+          ).length;
+          setGoalsAchieved(achieved);
+          setGoalsTotal(goals.length);
+          setClientGoals(goals);
+        } catch (goalsErr) {
+          console.warn('Error fetching goals:', goalsErr?.message);
+          setGoalsAchieved(0);
+          setGoalsTotal(0);
+        }
 
         // Get current goal from latest therapy note
         if (notes.length > 0) {
@@ -1022,32 +1049,19 @@ export default function ClientHome({ profile }) {
     }
   ];
 
-  // Generate progress data from therapy notes
-  const generateProgressMetrics = () => {
-    if (therapyNotes.length === 0) {
-      return [
-        { label: 'Mood Improvement', value: 0, color: 'bg-green-500' },
-        { label: 'Stress Management', value: 0, color: 'bg-blue-500' },
-        { label: 'Sleep Quality', value: 0, color: 'bg-yellow-500' },
-        { label: 'Goal Achievement', value: 0, color: 'bg-purple-500' }
-      ];
-    }
+  // Progress bars, built from data somebody actually recorded. The previous
+  // version scored these by keyword-matching the free text of therapy notes, so a
+  // note that never used the word "stress" scored 100% stress management and a
+  // client with no ratings landed on a hard-coded 40% sleep quality. See
+  // utils/clientDashboardMetrics.js for the full account.
+  const generateProgressMetrics = () =>
+    buildProgressMetrics({
+      moodEntries: moodHistory,
+      notes: therapyNotes,
+      goals: clientGoals,
+      sessions: allSessions,
+    });
 
-    // Calculate metrics from therapy notes
-    const moodImprovement = calculateMoodImprovement(therapyNotes);
-    const stressManagement = calculateStressManagement(therapyNotes);
-    const sleepQuality = calculateSleepQuality(therapyNotes);
-    const goalAchievement = calculateGoalAchievement(therapyNotes);
-
-    return [
-      { label: 'Mood Improvement', value: moodImprovement, color: 'bg-green-500' },
-      { label: 'Stress Management', value: stressManagement, color: 'bg-blue-500' },
-      { label: 'Sleep Quality', value: sleepQuality, color: 'bg-yellow-500' },
-      { label: 'Goal Achievement', value: goalAchievement, color: 'bg-purple-500' }
-    ];
-  };
-
-  // Calculate mood improvement from client data
   const calculateMoodImprovementFromClientData = (clientData) => {
     if (!clientData) return 0;
     
@@ -1259,6 +1273,13 @@ export default function ClientHome({ profile }) {
   };
 
   const progressMetrics = generateProgressMetrics();
+
+  // Keep the headline KPI in step with the bars beneath it — same inputs, so the
+  // two can never disagree.
+  useEffect(() => {
+    setProgressScore(overallProgressScore(progressMetrics));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moodHistory, therapyNotes, clientGoals, allSessions]);
 
   // Mood tracking functions
   const moodEmojis = [
@@ -1975,21 +1996,82 @@ export default function ClientHome({ profile }) {
       </div>
 
 
-      {/* Emergency Banner */}
-      <div className="emergency-banner">
-        <div className="emergency-banner-left">
-          <AlertTriangle size={20} className="emergency-banner-icon" />
-          <span>In crisis? Get immediate help</span>
-        </div>
-        <div className="emergency-banner-actions">
-          <button className="book-session-btn" onClick={() => navigate('/dashboard/video')}>
+      {/* ── Today band ───────────────────────────────────────────────────────
+          Replaces the full-width red alarm bar. That banner shouted at every
+          client on every visit regardless of state, and pushed the actually
+          useful information below the fold. This band leads with what today
+          holds, keeps the daily check-in one click away, and still puts crisis
+          support in reach — calm, not alarming. */}
+      <div className="today-band">
+        {/* Next session */}
+        <div className="today-card today-next">
+          <div className="today-card-head">
+            <span className="today-eyebrow">Next session</span>
             <Calendar size={16} />
-            Book Session
+          </div>
+          {nextSession ? (() => {
+            const d = nextSession.scheduledTime?.toDate
+              ? nextSession.scheduledTime.toDate()
+              : new Date(nextSession.scheduledTime);
+            const valid = d instanceof Date && !Number.isNaN(d.getTime());
+            return (
+              <>
+                <p className="today-headline">
+                  {valid ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Scheduled'}
+                </p>
+                <p className="today-sub">
+                  {valid ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  {therapistData?.name ? ` · ${therapistData.name}` : ''}
+                </p>
+                <button className="today-cta today-cta-primary" onClick={() => navigate('/dashboard/video')}>
+                  <Video size={15} /> Join session
+                </button>
+              </>
+            );
+          })() : (
+            <>
+              <p className="today-headline">Nothing booked</p>
+              <p className="today-sub">Pick a time that suits you</p>
+              <button className="today-cta today-cta-primary" onClick={() => navigate('/dashboard/schedule')}>
+                <Calendar size={15} /> Book a session
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Daily check-in */}
+        <div className="today-card today-checkin">
+          <div className="today-card-head">
+            <span className="today-eyebrow">Daily check-in</span>
+            <Activity size={16} />
+          </div>
+          <p className="today-headline">How are you today?</p>
+          <p className="today-sub">
+            {moodHistory?.length
+              ? `${moodHistory.length} check-in${moodHistory.length > 1 ? 's' : ''} logged so far`
+              : 'Takes about a minute'}
+          </p>
+          <button className="today-cta today-cta-mood" onClick={() => setShowMoodModal(true)}>
+            <TrendingUp size={15} /> Log how you feel
           </button>
-          <button className="emergency-btn" onClick={() => setShowEmergencyModal(true)}>
-            <Phone size={16} />
-            Emergency Help
-          </button>
+        </div>
+
+        {/* Support */}
+        <div className="today-card today-support">
+          <div className="today-card-head">
+            <span className="today-eyebrow">Support</span>
+            <AlertTriangle size={16} />
+          </div>
+          <p className="today-headline">Need help now?</p>
+          <p className="today-sub">Ghana crisis lines, available 24/7</p>
+          <div className="today-support-actions">
+            <button className="today-cta today-cta-danger" onClick={() => setShowEmergencyModal(true)}>
+              <Phone size={15} /> Get help
+            </button>
+            <button className="today-cta today-cta-ghost" onClick={() => navigate('/dashboard/messages')}>
+              <MessageSquare size={15} /> Message
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2006,32 +2088,41 @@ export default function ClientHome({ profile }) {
             </div>
             <p className="emergency-modal-intro">You are not alone. Reach out immediately:</p>
             <div className="emergency-hotlines">
-              <a className="hotline-card" href="tel:988">
-                <div className="hotline-icon">📞</div>
-                <div>
-                  <div className="hotline-name">988 Suicide & Crisis Lifeline</div>
-                  <div className="hotline-desc">Call or text 988 — 24/7 free support</div>
-                </div>
-              </a>
-              <a className="hotline-card" href="sms:741741?body=HELLO">
-                <div className="hotline-icon">💬</div>
-                <div>
-                  <div className="hotline-name">Crisis Text Line</div>
-                  <div className="hotline-desc">Text HOME to 741741</div>
-                </div>
-              </a>
-              <a className="hotline-card" href="tel:911">
+              {/* Ghana national crisis and emergency lines. The previous list was
+                  US-only (988 / 741741 / 911), which is unreachable from Ghana. */}
+              <a className="hotline-card" href="tel:112">
                 <div className="hotline-icon">🚨</div>
                 <div>
-                  <div className="hotline-name">Emergency Services</div>
-                  <div className="hotline-desc">Call 911 for immediate danger</div>
+                  <div className="hotline-name">National Emergency — 112</div>
+                  <div className="hotline-desc">Police, ambulance & fire · 24/7 toll-free</div>
                 </div>
               </a>
-              <a className="hotline-card" href="tel:18002738255">
-                <div className="hotline-icon">🌈</div>
+              <a className="hotline-card" href="tel:+233509405480">
+                <div className="hotline-icon">📞</div>
                 <div>
-                  <div className="hotline-name">Trevor Project (LGBTQ+)</div>
-                  <div className="hotline-desc">1-800-273-8255</div>
+                  <div className="hotline-name">Mental Health Authority Helpline</div>
+                  <div className="hotline-desc">0509 405 480 · 24/7 crisis counselling</div>
+                </div>
+              </a>
+              <a className="hotline-card" href="tel:+233244846701">
+                <div className="hotline-icon">💚</div>
+                <div>
+                  <div className="hotline-name">Suicide Prevention (Ghana)</div>
+                  <div className="hotline-desc">0244 846 701 · trained volunteers</div>
+                </div>
+              </a>
+              <a className="hotline-card" href="tel:193">
+                <div className="hotline-icon">🚑</div>
+                <div>
+                  <div className="hotline-name">National Ambulance — 193</div>
+                  <div className="hotline-desc">Ambulance dispatch, nationwide</div>
+                </div>
+              </a>
+              <a className="hotline-card" href="tel:+233302666987">
+                <div className="hotline-icon">🏥</div>
+                <div>
+                  <div className="hotline-name">Accra Psychiatric Hospital</div>
+                  <div className="hotline-desc">030 266 6987 · emergency psychiatric care</div>
                 </div>
               </a>
             </div>
@@ -2052,8 +2143,8 @@ export default function ClientHome({ profile }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         {[
           { label: 'Sessions Completed', value: sessionsCompleted, icon: '✅', color: '#10b981', bg: '#f0fdf4' },
-          { label: 'Progress Score', value: `${progressScore}%`, icon: '📈', color: '#6366f1', bg: '#f0f7ff' },
-          { label: 'Goals Achieved', value: goalsAchieved, icon: '🎯', color: '#f59e0b', bg: '#fffbeb' },
+          { label: 'Progress Score', value: typeof progressScore === 'number' ? `${progressScore}%` : '—', icon: '📈', color: '#6366f1', bg: '#f0f7ff' },
+          { label: 'Goals Achieved', value: goalsTotal > 0 ? `${goalsAchieved}/${goalsTotal}` : '0', icon: '🎯', color: '#f59e0b', bg: '#fffbeb' },
           { label: 'Days Active', value: daysActive, icon: '🗓️', color: '#8b5cf6', bg: '#f5f3ff' },
           { label: 'Next Session', value: nextSession
               ? (() => { const d = nextSession.scheduledTime?.toDate ? nextSession.scheduledTime.toDate() : new Date(nextSession.scheduledTime); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); })()
@@ -2077,6 +2168,26 @@ export default function ClientHome({ profile }) {
         ))}
       </div>
 
+      {/* Quick Actions — the dashboard had no direct route to the things a client
+          actually opens every visit; everything went through the left nav. */}
+      <div className="client-quick-actions">
+        {[
+          { label: 'Book a session',  hint: 'Find a free slot',      icon: Calendar,      to: '/dashboard/schedule',  tone: 'emerald' },
+          { label: 'Message therapist', hint: 'Ask a question',      icon: MessageSquare, to: '/dashboard/messages',  tone: 'sky' },
+          { label: 'Join video call', hint: 'Enter your session',    icon: Video,         to: '/dashboard/video',     tone: 'violet' },
+          { label: 'Resources',       hint: 'Worksheets & reading',  icon: BookOpen,      to: '/dashboard/resources', tone: 'amber' },
+        ].map(({ label, hint, icon: Icon, to, tone }) => (
+          <button key={label} className={`quick-action quick-action-${tone}`} onClick={() => navigate(to)}>
+            <span className="quick-action-icon"><Icon size={19} /></span>
+            <span className="quick-action-text">
+              <span className="quick-action-label">{label}</span>
+              <span className="quick-action-hint">{hint}</span>
+            </span>
+            <ChevronRight size={16} className="quick-action-chevron" />
+          </button>
+        ))}
+      </div>
+
       {/* Progress and Activities Cards */}
       <div className="progress-activities-section">
         <div className="progress-activities-row">
@@ -2084,20 +2195,28 @@ export default function ClientHome({ profile }) {
           <div className="progress-card">
             <h3 className="card-title">Your Progress</h3>
             <div className="progress-items">
-              {progressMetrics.map((item, index) => (
-                <div key={index} className="progress-item">
-                  <div className="progress-header">
-                    <span className="progress-label">{item.label}</span>
-                    <span className="progress-percentage">{item.value}%</span>
+              {progressMetrics.map((item) => {
+                // `null` means nothing has been recorded for this metric. Show that
+                // plainly — a 0% bar reads as "you scored zero", which is a
+                // different and wrong claim.
+                const hasValue = typeof item.value === 'number';
+                return (
+                  <div key={item.key} className="progress-item">
+                    <div className="progress-header">
+                      <span className="progress-label">{item.label}</span>
+                      <span className="progress-percentage">{hasValue ? `${item.value}%` : '—'}</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill bg-green-500"
+                        style={{ width: `${hasValue ? item.value : 0}%` }}
+                      ></div>
+                    </div>
+                    {/* Name the source, so the number is auditable from the UI. */}
+                    <p className="progress-detail">{item.detail}</p>
                   </div>
-                  <div className="progress-bar">
-                    <div 
-                      className={`progress-fill ${item.color}`}
-                      style={{ width: `${item.value}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -2126,11 +2245,8 @@ export default function ClientHome({ profile }) {
               )}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Calendar and Progress Charts Row */}
-      <div className="calendar-progress-section">
+          {/* Calendar — moved up to share the row with Recent Activities */}
         <div className="calendar-widget">
           <div className="calendar-header">
             <h2 className="calendar-title">
@@ -2152,10 +2268,14 @@ export default function ClientHome({ profile }) {
           </div>
           </div>
           
+          {/* This block has been called the weather widget all along while
+              showing nothing but a clock. It now carries the real conditions
+              at the client's saved location, and follows it when it changes. */}
           <div className="weather-widget">
             <div className="weather-info">
               <div className="weather-time">{formatTime(currentTime)}</div>
-          </div>
+            </div>
+            <WeatherCard profile={locationProfile || mergeLocationProfile(profile, clientData)} compact />
           </div>
 
           <div className="calendar-grid">
@@ -2193,9 +2313,14 @@ export default function ClientHome({ profile }) {
             </div>
           </div>
         </div>
+        </div>
+      </div>
 
-        {/* Progress Charts Row */}
-        <div className="calendar-charts-row">
+
+      {/* Charts Section */}
+      <div className="charts-section">
+        <div className="charts-grid">
+          {/* Donuts moved here so every graph sits on one row */}
           {/* Overall Progress Chart */}
           <div className="chart-card">
             <h3 className="chart-title">Overall Progress</h3>
@@ -2259,12 +2384,6 @@ export default function ClientHome({ profile }) {
           </div>
         </div>
       </div>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="charts-section">
-        <div className="charts-grid">
           {/* Therapy Progress Line Chart */}
           <div className="chart-card">
             <h3 className="chart-title">Therapy Progress</h3>
@@ -2306,10 +2425,13 @@ export default function ClientHome({ profile }) {
           <div className="chart-card">
             <h3 className="chart-title">Mood Distribution</h3>
             <div className="chart-container">
-              <Pie 
-                data={prepareMoodPieChartData(therapyNotes)} 
-                options={pieChartOptions}
-              />
+              {moodChartData.length > 0 ? (
+                <Pie data={prepareMoodPieChartData(moodChartData)} options={pieChartOptions} />
+              ) : (
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center' }}>
+                  No mood check-ins yet — log one to see your distribution.
+                </p>
+              )}
             </div>
           </div>
 

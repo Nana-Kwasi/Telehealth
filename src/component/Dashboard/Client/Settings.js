@@ -996,24 +996,10 @@ export default function ClientSettings() {
                   />
                 </div>
 
-                <div className="settings-toggle-row">
-                  <div className="settings-toggle-info">
-                    <label>Allow anonymous data for research</label>
-                    <small>Contribute anonymised, de-identified data to mental health research</small>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="settings-toggle"
-                    checked={clientData?.allowAnonymousResearch === true}
-                    onChange={(e) => setClientData({ ...clientData, allowAnonymousResearch: e.target.checked })}
-                  />
-                </div>
-
                 <div className="settings-form-actions">
                   <button className="settings-btn-primary" onClick={() => handleSavePreferences({
                     profileVisibility: clientData?.profileVisibility || 'therapist-only',
                     shareProgressWithTherapist: clientData?.shareProgressWithTherapist !== false,
-                    allowAnonymousResearch: clientData?.allowAnonymousResearch === true,
                   })} disabled={saving}>
                     {saving ? 'Saving...' : 'Save Privacy Settings'}
                   </button>

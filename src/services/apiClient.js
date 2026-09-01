@@ -3,8 +3,24 @@
 // Session is kept in sessionStorage (tab-scoped, no cross-tab bleed — appropriate
 // for a healthcare app where each browser tab is an independent session).
 
-export const API_BASE =
-  process.env.REACT_APP_API_BASE || 'http://172.20.10.4:8085';
+// The backend runs on the same machine that serves this page, whose LAN address
+// changes every time it rejoins a network — a personal hotspot hands out a
+// different 172.20.10.x lease on each connect. A hardcoded literal here meant
+// every reconnect silently broke the whole dashboard: requests time out, the
+// `loading` flags never clear, and every card sits on "Loading…" forever.
+//
+// window.location.hostname is that same machine by definition — localhost when
+// opened locally, the LAN IP when opened from a phone on the network — so the
+// base URL re-derives itself instead of needing an edit.
+const API_PORT = 8085;
+
+function resolveApiBase() {
+  if (process.env.REACT_APP_API_BASE) return process.env.REACT_APP_API_BASE;
+  const host = (typeof window !== 'undefined' && window.location && window.location.hostname) || 'localhost';
+  return `http://${host}:${API_PORT}`;
+}
+
+export const API_BASE = resolveApiBase();
 
 const KEYS = {
   token:        'nessa.token',

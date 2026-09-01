@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { doc, getDoc, serverTimestamp, setDoc } from '../../services/firestoreShim';
 import { auth, db } from '../../services/firestoreShim';
 import useAddressAutofill from '../../hooks/useAddressAutofill';
+import { publishLocationUpdate } from '../../utils/locationBus';
 
 function roleTarget(role, profile) {
   const id = profile?.id || auth.currentUser?.uid || null;
@@ -91,6 +92,10 @@ export default function DashboardLocationGate({ role, profile, activePath = '' }
               }
             }
             sessionStorage.setItem(flagKey, '1');
+            // The dashboard is already on screen by the time this lands, so the
+            // cards holding a location have to be told, or the freshly detected
+            // address only appears after a reload.
+            publishLocationUpdate(payload);
           } catch { /* best-effort; user can set it manually in settings */ }
         });
       } catch { /* ignore */ }

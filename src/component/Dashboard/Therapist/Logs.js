@@ -23,8 +23,8 @@ import {
   getDocs,
   Timestamp
 } from '../../../services/firestoreShim';
-import jsPDF from 'jspdf';
 import './Logs.css';
+import { downloadLogsPdf } from '../../../utils/brandedPdf';
 
 export default function TherapistLogs() {
   const [selectedLogType, setSelectedLogType] = useState('all');
@@ -260,127 +260,28 @@ export default function TherapistLogs() {
   }, [logs, selectedLogType, searchQuery]);
 
   // Generate PDF report
+  //
+  // The report used to be built here with raw jsPDF calls — no header, no
+  // watermark, no footer and its own margins, so a downloaded log report looked
+  // nothing like the notes and resources the same system hands out. It now goes
+  // through the shared branded builder, which owns that livery in one place.
   const generatePDFReport = () => {
-    const pdf = new jsPDF();
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 20;
-    const contentWidth = pageWidth - (margin * 2);
-    let yPosition = margin;
+    const rangeLabel = dateRange.startDate && dateRange.endDate
+      ? `${dateRange.startDate} to ${dateRange.endDate}`
+      : 'All time';
+    const logTypeLabel = selectedLogType === 'all'
+      ? 'All logs'
+      : (logTypes[selectedLogType]?.name || selectedLogType);
 
-    // Title
-    pdf.setFontSize(20);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('System Logs Report', margin, yPosition);
-    yPosition += 20;
-
-    // Date range
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'normal');
-    const dateRangeText = dateRange.startDate && dateRange.endDate 
-      ? `Date Range: ${dateRange.startDate} to ${dateRange.endDate}`
-      : 'Date Range: All Time';
-    pdf.text(dateRangeText, margin, yPosition);
-    yPosition += 10;
-
-    // Log type
-    const logTypeText = selectedLogType === 'all' 
-      ? 'Log Type: All Logs'
-      : `Log Type: ${logTypes[selectedLogType]?.name || selectedLogType}`;
-    pdf.text(logTypeText, margin, yPosition);
-    yPosition += 10;
-
-    // Generated date
-    pdf.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
-    yPosition += 20;
-
-    // Log entries
-    pdf.setFontSize(10);
-    filteredLogs.forEach((log, index) => {
-      if (yPosition > pageHeight - 40) {
-        pdf.addPage();
-        yPosition = margin;
-      }
-
-      // Log type header
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(0, 0, 0);
-      pdf.text(`${logTypes[log.type]?.name || log.type.toUpperCase()} - Entry ${index + 1}`, margin, yPosition);
-      yPosition += 8;
-
-      // Log details
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(100, 100, 100);
-
-      const timestamp = log.timestamp?.toDate?.()?.toLocaleString() || new Date(log.timestamp).toLocaleString();
-      pdf.text(`Timestamp: ${timestamp}`, margin, yPosition);
-      yPosition += 6;
-
-      if (log.action) {
-        pdf.text(`Action: ${log.action}`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.adminName) {
-        pdf.text(`Admin: ${log.adminName} (${log.adminEmail})`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.userId) {
-        const userInfo = userNames[log.userId];
-        const userName = userInfo ? `${userInfo.name} (${userInfo.type})` : log.userId;
-        pdf.text(`User: ${userName}`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.userRole) {
-        pdf.text(`User Role: ${log.userRole}`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.clientId) {
-        const clientInfo = userNames[log.clientId];
-        const clientName = clientInfo ? clientInfo.name : (log.clientName || log.clientId);
-        pdf.text(`Client: ${clientName}`, margin, yPosition);
-        yPosition += 6;
-      } else if (log.clientName) {
-        pdf.text(`Client: ${log.clientName}`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.description) {
-        const descriptionLines = pdf.splitTextToSize(`Description: ${log.description}`, contentWidth);
-        pdf.text(descriptionLines, margin, yPosition);
-        yPosition += descriptionLines.length * 4;
-      }
-
-      if (log.success !== undefined) {
-        pdf.text(`Success: ${log.success ? 'Yes' : 'No'}`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.sessionDuration) {
-        pdf.text(`Session Duration: ${Math.round(log.sessionDuration / 60)} minutes`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.ipAddress) {
-        pdf.text(`IP Address: ${log.ipAddress}`, margin, yPosition);
-        yPosition += 6;
-      }
-
-      if (log.userAgent) {
-        const userAgentLines = pdf.splitTextToSize(`User Agent: ${log.userAgent}`, contentWidth);
-        pdf.text(userAgentLines, margin, yPosition);
-        yPosition += userAgentLines.length * 4;
-      }
-
-      yPosition += 10;
-    });
-
-    // Download the PDF
-    const fileName = `logs-report-${selectedLogType}-${new Date().toISOString().split('T')[0]}.pdf`;
-    pdf.save(fileName);
+    downloadLogsPdf(
+      filteredLogs.map(log => ({ ...log, typeLabel: logTypes[log.type]?.name || log.type })),
+      {
+        logTypeLabel,
+        rangeLabel,
+        generatedBy: currentUser?.displayName || currentUser?.email || '',
+        userNames,
+      },
+    );
   };
 
   // Format timestamp

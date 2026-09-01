@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from '../../../services/firestoreShim';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
 import './Support.css';
+import { api } from '../../../services/apiClient';
 import { 
   collection, 
   query, 
@@ -22,6 +23,7 @@ import {
   Clock, 
   User, 
   Send,
+  Mail,
   FileText,
   HelpCircle,
   ThumbsUp,
@@ -40,6 +42,7 @@ export default function ClientSupport() {
   const [therapistData, setTherapistData] = useState(null);
   const [recentSessions, setRecentSessions] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
+  const [emailingAdmin, setEmailingAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
   // Rating states
@@ -322,6 +325,38 @@ export default function ClientSupport() {
     }
   };
 
+  /**
+   * Email the administrators directly, in addition to filing the ticket.
+   *
+   * Same content as a ticket — the difference is that a person is emailed now
+   * rather than the message waiting in a queue. Identity comes from the auth
+   * token on the backend, so nothing identifying is sent from here.
+   */
+  const handleEmailAdmin = async () => {
+    if (!issueForm.title || !issueForm.description) {
+      alert('Please add a subject and a description first.');
+      return;
+    }
+    setEmailingAdmin(true);
+    try {
+      await api('/api/v1/support/contact-admin', {
+        method: 'POST',
+        body: {
+          subject: issueForm.title,
+          message: issueForm.description,
+          category: 'client_support',
+          priority: issueForm.severity || 'normal',
+        },
+      });
+      alert('Your message has been emailed to our administrators. A copy is on its way to you.');
+      setShowIssueModal(false);
+    } catch (err) {
+      alert('Could not send the email. Please try again.');
+    } finally {
+      setEmailingAdmin(false);
+    }
+  };
+
   const handleIssueSubmit = async (e) => {
     e.preventDefault();
     if (!issueForm.title || !issueForm.description) return;
@@ -475,10 +510,10 @@ export default function ClientSupport() {
   }
 
   const crisisHotlines = [
-    { name: '988 Suicide & Crisis Lifeline', desc: 'Call or text 988 — free, 24/7', href: 'tel:988', color: '#dc2626' },
-    { name: 'Crisis Text Line', desc: 'Text HOME to 741741', href: 'sms:741741?body=HOME', color: '#7c3aed' },
-    { name: 'Emergency Services', desc: 'Call 911 for immediate danger', href: 'tel:911', color: '#ea580c' },
-    { name: 'Trevor Project (LGBTQ+)', desc: '1-866-488-7386 | 24/7', href: 'tel:18664887386', color: '#0ea5e9' },
+    { name: 'National Emergency — 112', desc: 'Police, ambulance & fire — 24/7 toll-free', href: 'tel:112', color: '#dc2626' },
+    { name: 'Mental Health Authority Helpline', desc: '0509 405 480 — 24/7 crisis counselling', href: 'tel:+233509405480', color: '#7c3aed' },
+    { name: 'Suicide Prevention (Ghana)', desc: '0244 846 701 — trained volunteers', href: 'tel:+233244846701', color: '#0ea5e9' },
+    { name: 'National Ambulance — 193', desc: 'Ambulance dispatch, nationwide', href: 'tel:193', color: '#ea580c' },
     { name: 'NAMI Helpline', desc: '1-800-950-6264 (Mon–Fri)', href: 'tel:18009506264', color: '#16a34a' },
   ];
 
@@ -511,7 +546,7 @@ export default function ClientSupport() {
         </div>
         <div className="crisis-safety-note">
           <Flag size={16} />
-          <span>This platform is not for emergencies. If you are in danger, call 911 or go to your nearest emergency room.</span>
+          <span>This platform is not for emergencies. If you are in danger, call 112 or go to your nearest emergency room.</span>
         </div>
       </div>
 
@@ -916,6 +951,17 @@ export default function ClientSupport() {
                 <button type="submit" className="btn-primary">
                   <Send size={16} />
                   Submit Issue
+                </button>
+                {/* Second route to the same people: files it AND emails the
+                    admins now, for anyone who would rather reach a person. */}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleEmailAdmin}
+                  disabled={emailingAdmin}
+                >
+                  <Mail size={16} />
+                  {emailingAdmin ? 'Sending…' : 'Email an Administrator'}
                 </button>
                 <button 
                   type="button" 

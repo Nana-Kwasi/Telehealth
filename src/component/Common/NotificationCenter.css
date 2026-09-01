@@ -1,0 +1,176 @@
+/* Notification bell + panel. Styles live with the component so it can be
+   dropped onto any dashboard without depending on that dashboard's stylesheet. */
+
+.nh-notif { position: relative; display: inline-flex; }
+
+.nh-notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.nh-notif-bell:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+.nh-notif-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+.nh-notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 360px;
+  max-width: calc(100vw - 2rem);
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.16);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.nh-notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.nh-notif-mark,
+.nh-notif-back,
+.nh-notif-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.nh-notif-close { color: #94a3b8; }
+
+.nh-notif-list { max-height: 420px; overflow-y: auto; }
+
+.nh-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.nh-notif-item:hover { background: #f8fafc; }
+
+/* Unread carries a tint and a rail, so the two states differ by more than
+   weight alone — weight is easy to miss in a dense list. */
+.nh-notif-item--unread {
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.nh-notif-item--unread:hover { background: #dbeafe; }
+
+.nh-notif-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.nh-notif-item--unread .nh-notif-item-icon { background: #dbeafe; color: #1d4ed8; }
+
+.nh-notif-item-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+
+.nh-notif-item-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.nh-notif-item-body {
+  font-size: 0.76rem;
+  color: #64748b;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nh-notif-item-time { font-size: 0.7rem; color: #94a3b8; flex-shrink: 0; white-space: nowrap; }
+
+.nh-notif-empty {
+  padding: 2.25rem 1rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.nh-notif-empty p { margin: 0.5rem 0 0; font-size: 0.85rem; font-weight: 600; color: #64748b; }
+.nh-notif-empty-sub { font-size: 0.76rem !important; font-weight: 400 !important; color: #94a3b8 !important; }
+
+.nh-notif-detail { padding: 1rem; }
+.nh-notif-detail h4 { margin: 0 0 0.3rem; font-size: 0.98rem; font-weight: 800; color: #0f172a; line-height: 1.35; }
+.nh-notif-detail-time { margin: 0 0 0.75rem; font-size: 0.74rem; color: #94a3b8; }
+.nh-notif-detail-body { margin: 0 0 1rem; font-size: 0.86rem; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+
+.nh-notif-cta {
+  width: 100%;
+  padding: 0.6rem;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nh-notif-cta:hover { background: #1d4ed8; }
+
+@media (max-width: 520px) {
+  .nh-notif-panel { position: fixed; top: 64px; right: 0.75rem; left: 0.75rem; width: auto; }
+}

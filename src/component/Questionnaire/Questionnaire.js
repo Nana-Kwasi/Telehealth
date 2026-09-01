@@ -160,9 +160,18 @@ export default function Questionnaire() {
       }
       
       const docRef = await addDoc(collection(db, 'clients'), clientData);
-      
-      // Save the client document ID for later use
-      localStorage.setItem('th.clientId', docRef.id);
+
+      // Save the client document ID for later use — but ONLY when it is a real id.
+      // Before signup there is no account yet, so the shim parks the answers in
+      // `th.clientIntake` and returns the placeholder 'pending-intake'. Storing that
+      // poisoned `th.clientId` for the whole session: ~40 screens read
+      // `localStorage.getItem('th.clientId') || currentUser.uid`, so they all
+      // requested /clients/pending-intake (400 "Invalid value for 'clientId'")
+      // instead of the real profile — which is why the intake answers never showed
+      // up on the client's Settings/Profile screens after signing in.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (UUID_RE.test(String(docRef.id))) localStorage.setItem('th.clientId', docRef.id);
+      else localStorage.removeItem('th.clientId');
       
       // Navigate to signup, carrying the intake answers so the Full name field can
       // pre-fill from the consent signature (SignUp reads clientData.name /

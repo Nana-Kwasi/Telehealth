@@ -845,3 +845,157 @@
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .header-content { flex-direction: column; align-items: flex-start; }
 }
+
+/* Mark-a-session-complete action in Today's Schedule. Shown only once the
+   session time has passed — a future session has nothing to complete. */
+.mark-complete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.mark-complete-btn:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  transform: translateY(-1px);
+}
+
+.mark-complete-btn:disabled { opacity: 0.6; cursor: default; }
+.mark-complete-btn:focus-visible { outline: 2px solid #059669; outline-offset: 2px; }
+
+/* ── "Right now" ──────────────────────────────────────────────────────────
+   The triage strip at the top of the dashboard. This is the only place on the
+   page that uses an alert palette: red and amber here mean "act on this", and
+   spending those colours anywhere decorative is how they stop being noticed. */
+.th-now {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: stretch;
+}
+
+.th-now-next,
+.th-now-attention {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.th-now-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.th-now-next-body { display: flex; align-items: center; gap: 0.75rem; }
+
+.th-now-avatar {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #4f46e5, #818cf8);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1rem;
+}
+
+.th-now-next-info { min-width: 0; }
+.th-now-next-name { margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a; }
+.th-now-next-when { margin: 0.1rem 0 0; font-size: 0.78rem; color: #64748b; }
+
+.th-now-join {
+  margin-top: auto;
+  padding: 0.6rem 0.9rem;
+  border: none; border-radius: 10px;
+  background: #4f46e5; color: #fff;
+  font-family: inherit; font-size: 0.83rem; font-weight: 700;
+  cursor: pointer;
+}
+.th-now-join:hover { background: #4338ca; }
+
+/* Before the window opens there is nothing to join — say when, don't offer a
+   button that must not be pressed. */
+.th-now-wait {
+  margin-top: auto;
+  font-size: 0.78rem; font-weight: 600; color: #94a3b8;
+}
+
+.th-now-empty { margin: 0; font-size: 0.83rem; color: #94a3b8; line-height: 1.5; }
+
+.th-now-clear {
+  display: flex; align-items: flex-start; gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+.th-now-clear-title { margin: 0; font-size: 0.87rem; font-weight: 700; color: #15803d; }
+.th-now-clear-sub { margin: 0.15rem 0 0; font-size: 0.76rem; color: #4d9c68; }
+
+.th-attn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.th-attn {
+  width: 100%;
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.th-attn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,0.07); }
+
+.th-attn-icon {
+  width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.th-attn-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.th-attn-label { font-size: 0.84rem; font-weight: 700; color: #0f172a; line-height: 1.3; }
+.th-attn-detail {
+  font-size: 0.74rem; color: #64748b; margin-top: 0.1rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.th-attn-chev { color: #cbd5e1; flex-shrink: 0; }
+
+/* Severity is the only thing that changes colour here. */
+.th-attn--high { border-color: #fecaca; background: #fef2f2; }
+.th-attn--high .th-attn-icon { background: #fee2e2; color: #dc2626; }
+.th-attn--medium { border-color: #fed7aa; background: #fff7ed; }
+.th-attn--medium .th-attn-icon { background: #ffedd5; color: #d97706; }
+.th-attn--low .th-attn-icon { background: #e2e8f0; color: #64748b; }
+
+@media (max-width: 900px) {
+  .th-now { grid-template-columns: 1fr; }
+}
+
+/* The mini-calendar cells became buttons so a free day can be booked from here;
+   they must not inherit browser button chrome. */
+button.cal-cell {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+button.cal-cell:disabled { cursor: default; opacity: 0.45; }
+button.cal-cell:not(:disabled):hover { background: #eef2ff; border-radius: 8px; }

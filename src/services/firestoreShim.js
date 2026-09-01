@@ -98,13 +98,56 @@ function asUuid(value) {
 // client ids). The API column is `assigned_client_ids`, a text field, and it
 // ignores anything else — so "specific clients" selections were dropped and
 // every book behaved as if shared with everyone.
+// The rich book fields the composer collects. They have no columns of their own,
+// so they travel together in metadataJson — NOT inside `content`, which is the
+// readable body a client is shown.
+const BOOK_META_FIELDS = [
+  'author', 'coverImage', 'targetAudience', 'difficultyLevel', 'estimatedReadingTime',
+  'tableOfContents', 'chapters', 'keyTopics', 'exercises', 'resources', 'bibliography',
+];
+
+// Identity and bookkeeping keys that must never end up inside a note's
+// structuredData / body. Carrying the whole document through meant a client
+// opened a note and saw {"therapistId":"…","therapistName":"…"} — or, once those
+// keys were filtered out for display, nothing at all.
+const NOTE_NON_CONTENT_KEYS = new Set([
+  'id', 'therapistId', 'therapistName', 'clientId', 'clientName', 'clientNames',
+  'assignedClients', 'assignmentId', 'sessionId', 'noteType', 'visibleToClient',
+  'isDraft', 'signature', 'createdAt', 'updatedAt', 'sessionDate', 'version',
+  'structuredData', 'content', 'body', 'status', 'type',
+]);
+
+/** Keep only the fields a therapist actually typed. */
+function noteContentFields(data = {}) {
+  const out = {};
+  Object.entries(data).forEach(([k, v]) => {
+    if (NOTE_NON_CONTENT_KEYS.has(k)) return;
+    if (v === undefined || v === null || v === '') return;
+    if (typeof v === 'object' && !Array.isArray(v)) return;
+    out[k] = v;
+  });
+  return out;
+}
+
 function bookBody(data) {
   const ids = Array.isArray(data.assignedClients)
     ? data.assignedClients.filter(Boolean)
     : undefined;
   const { assignedClients, ...rest } = data;
+
+  const meta = {};
+  BOOK_META_FIELDS.forEach((k) => {
+    if (rest[k] !== undefined && rest[k] !== null && rest[k] !== '') meta[k] = rest[k];
+    delete rest[k];
+  });
+
   return {
     ...rest,
+    // The composer names the field `bookTitle`; the endpoint requires `title` and
+    // rejected the whole request with "Validation failed" (400) without it — which
+    // is why no book could be created from the web at all.
+    title: data.title || data.bookTitle || '',
+    ...(Object.keys(meta).length ? { metadataJson: JSON.stringify(meta) } : {}),
     ...(ids ? { assignedClientIds: JSON.stringify(ids) } : {}),
   };
 }
@@ -1390,8 +1433,25 @@ async function resolveCollection(path, constraints) {
 
     // Client-side logging collections — authService already records login/logout
     // server-side, so these reads return empty (no-op).
+    // Login history. This was a hard-coded empty array, so the client dashboard's
+    // "Days Active" tile (which counts distinct login days) read 0 for every
+    // account — while user_login_logs_v2 held hundreds of real rows. Logout logs
+    // still have no read endpoint, so they stay an empty read.
     case 'loginLogs':
-    case 'userLoginLogs':
+    case 'userLoginLogs': {
+      const llUserId = getWhereValue(constraints, 'userId') || getStoredUserId();
+      if (!llUserId) return toQuerySnapshot([]);
+      const data = await api(`/api/v1/auth/mobile/login-logs?userId=${llUserId}`).catch(() => []);
+      const items = (Array.isArray(data) ? data : []).map(l => _normalizeTimestamps({
+        ...l,
+        id: l.id,
+        userId: l.userId || llUserId,
+        // Screens read `timestamp`; the row stores loginTimeIso (a string) and
+        // createdAt. Prefer the recorded login time, fall back to the row's own.
+        timestamp: l.loginTimeIso || l.createdAt || null,
+      }));
+      return toQuerySnapshot(applyInMemoryFilters(items, constraints));
+    }
     case 'userLogoutLogs':
       return toQuerySnapshot([]);
 
@@ -1556,7 +1616,14 @@ export async function getDoc(docRef) {
         return toDocSnap(found ? { ...found, id } : null);
       }
       case 'therapyBooks': {
-        const list = await api('/api/v1/therapy-books').catch(() => []);
+        // Fetch the one book. This used to pull the whole list and search it, but an
+        // unparameterised GET /therapy-books returns PUBLIC books only — so every
+        // private book (the default) resolved to nothing and the note viewer showed
+        // "Note not found". Falls back to the therapist-scoped list for safety.
+        const one = await api(`/api/v1/therapy-books/${id}`).catch(() => null);
+        if (one) return toDocSnap({ ...one, id });
+        const tid = getStoredUserId();
+        const list = await api(`/api/v1/therapy-books${tid ? `?therapistId=${tid}` : ''}`).catch(() => []);
         const found = (Array.isArray(list) ? list : []).find(b => String(b.id) === String(id));
         return toDocSnap(found ? { ...found, id } : null);
       }
@@ -1731,7 +1798,13 @@ export async function addDoc(colRef, data) {
         // structuredData so nothing entered is lost.
         const cnContent = data.content || data.body || data.note || data.sessionFocus
           || data.clientResponse || data.behavioralObservations || 'Session note';
-        const cnStructured = data.structuredData !== undefined ? data.structuredData : data;
+        // Only the typed fields — NOT the whole document. Passing `data` through
+        // stored therapistId/therapistName/createdAt as "note content", which the
+        // client's note view then rendered as a JSON blob.
+        const cnFields = noteContentFields(data);
+        const cnStructured = data.structuredData !== undefined
+          ? data.structuredData
+          : (Object.keys(cnFields).length ? cnFields : null);
         return api('/api/v1/clinical-notes', { method: 'POST', body: {
           therapistId: data.therapistId || getStoredUserId(),
           clientId: data.clientId,
@@ -1745,8 +1818,21 @@ export async function addDoc(colRef, data) {
           signature: data.signature || null,
         } });
       }
-      case 'notes':
-        return api(`/api/v1/clients/${data.clientId}/therapy-notes`, { method: 'POST', body: { therapistId: data.therapistId, body: JSON.stringify(data), source: 'client-note' } });
+      case 'notes': {
+        // `body` is the readable note. JSON.stringify(data) put the entire
+        // document there, so the client's shelf showed a card whose preview was
+        // {"therapistId":"…","therapistName":"…"}.
+        const nFields = noteContentFields(data);
+        const nBody = data.noteContent || data.content || data.body
+          || Object.entries(nFields).map(([k, v]) => `${k}: ${v}`).join('\n\n')
+          || 'Session note';
+        return api(`/api/v1/clients/${data.clientId}/therapy-notes`, { method: 'POST', body: {
+          therapistId: data.therapistId,
+          body: nBody,
+          source: 'client-note',
+          metadataJson: Object.keys(nFields).length ? JSON.stringify(nFields) : null,
+        } });
+      }
       case 'doctorAvailability': {
         // Component sends {date,startTime,endTime}; backend wants startsAt/endsAt
         // Instants. Build them as local datetimes → ISO (UTC) so they round-trip.
@@ -1905,7 +1991,14 @@ export async function addDoc(colRef, data) {
       case 'therapyBooks':
         return api('/api/v1/therapy-books', { method: 'POST', body: bookBody(data) });
       case 'clients/goals':
-        return api('/api/v1/therapy-management/goals', { method: 'POST', body: { clientId: id1, ...data } });
+        // The goal form collects `title`; the endpoint requires `goalTitle` and
+        // rejects the request with @NotBlank otherwise — which is why no goal a
+        // therapist created on the web ever saved.
+        return api('/api/v1/therapy-management/goals', { method: 'POST', body: {
+          clientId: id1,
+          ...data,
+          goalTitle: data.goalTitle || data.title || '',
+        } });
       case 'auditLogs':
         return api('/api/v1/audit-logs', { method: 'POST', body: data }).catch(() => ({ id: `tmp_${Date.now()}` }));
       case 'supportTickets':

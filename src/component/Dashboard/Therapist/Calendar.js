@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation as useRouterLocation } from 'react-router-dom';
 import {
   Calendar as CalendarIcon,
   Clock, 
@@ -66,6 +67,7 @@ const TherapistCalendar = () => {
   const [activeTab, setActiveTab] = useState('calendar');
   // Sessions on the day the therapist clicked, shown in a detail dialog.
   const [dayDetail, setDayDetail] = useState(null);
+  const routerLocation = useRouterLocation();
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
     date: '',
@@ -381,6 +383,26 @@ const TherapistCalendar = () => {
   // A therapist with no assigned clients has nobody to schedule with — the form's
   // client picker would be empty and every submit would fail. Block it up front.
   const canSchedule = clients.length > 0;
+
+  // A date handed over from the dashboard's mini calendar. `scheduleDate` means
+  // the therapist clicked a free day and wants to book it; `focusDate` means the
+  // day already has sessions and they want to see them.
+  useEffect(() => {
+    const handoff = routerLocation.state || {};
+    const ymd = handoff.scheduleDate || handoff.focusDate;
+    if (!ymd) return;
+    const [y, m, d] = String(ymd).split('-').map(Number);
+    if (!y || !m || !d) return;
+    const target = new Date(y, m - 1, d);
+    setSelectedDate(target);
+    if (handoff.scheduleDate && canSchedule) {
+      setScheduleForm({ date: ymd, time: '', duration: '30', notes: '' });
+      setShowScheduleForm(true);
+    }
+    // Clear it so a later refresh does not reopen the form unexpectedly.
+    window.history.replaceState({}, document.title);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerLocation.state, canSchedule]);
 
   // Clicking a day shows what's booked; clicking an empty future day starts a
   // booking on that date instead of only highlighting it.

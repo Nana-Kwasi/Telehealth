@@ -21,14 +21,43 @@ export default function ViewNote() {
   useEffect(() => {
     const fetchNote = async () => {
       try {
-        // Try multiple collections where notes might be stored
-        const collections = ['therapyNotes', 'notes', 'therapyBooks'];
+        // Try every store a note might live in. `clinicalNotes` was missing —
+        // and that is exactly where the Notes screen writes clinical notes
+        // (therapy books go to `therapyBooks`), so opening any SOAP/DAP/progress
+        // note fell through every branch and rendered "Note not found".
+        const collections = ['clinicalNotes', 'therapyBooks', 'therapyNotes', 'notes'];
         
         for (const collectionName of collections) {
           try {
             const noteDoc = await getDoc(doc(db, collectionName, noteId));
             if (noteDoc.exists()) {
-              setNote({ id: noteDoc.id, ...noteDoc.data() });
+              const raw = { id: noteDoc.id, ...noteDoc.data() };
+              // A book row carries no `noteType` — the Notes list adds it when
+              // mapping. Without it this page fell through every book branch and
+              // rendered "Unknown Client - Note" with an empty body. Tag it from
+              // the store it was found in, and expand the rich fields that live in
+              // metadataJson (older rows keep them inside `content`).
+              // Clinical notes keep their SOAP/DAP fields in `structuredData`, so
+              // note.subjective/objective/... were undefined and that branch
+              // rendered an empty card too.
+              const parseJson = (v) => {
+                if (!v || typeof v !== 'string') return null;
+                const t = v.trim();
+                if (!t.startsWith('{') || !t.endsWith('}')) return null;
+                try { const o = JSON.parse(t); return o && typeof o === 'object' ? o : null; } catch { return null; }
+              };
+              const structured = parseJson(raw.structuredData);
+              if (structured) Object.assign(raw, { ...structured, ...raw, ...structured });
+
+              if (collectionName === 'therapyBooks') {
+                raw.noteType = 'therapyBook';
+                raw.bookTitle = raw.bookTitle || raw.title;
+                const meta = parseJson(raw.metadataJson) || {};
+                const legacy = parseJson(raw.content) || {};
+                Object.assign(raw, { ...legacy, ...meta });
+                if (Object.keys(legacy).length) raw.content = '';
+              }
+              setNote(raw);
               return;
             }
           } catch (err) {
@@ -82,8 +111,10 @@ export default function ViewNote() {
   }
 
   const getNoteTitle = () => {
-    if (note.noteType === 'therapyBook' && note.targetAudience === 'all') {
-      return templates[note.noteType]?.name || 'Therapy Book';
+    // A book is titled by its own title — it is not written for one client, so
+    // "Unknown Client - Therapy Book" was both wrong and the same for every book.
+    if (note.noteType === 'therapyBook') {
+      return note.title || note.bookTitle || templates[note.noteType]?.name || 'Therapy Book';
     }
     if (note.clientNames && note.clientNames.length > 1) {
       return `${note.clientNames.join(', ')} - ${templates[note.noteType]?.name || 'Note'}`;

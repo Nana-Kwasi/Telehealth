@@ -2,8 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Video, Phone, Clock, Calendar, Search, ExternalLink } from 'lucide-react';
 import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from '../../../services/firestoreShim';
+import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 
 const generateDoctorToken = httpsCallable(functions, 'generateDoctorToken');
+
+/** Consultation types this screen can place a call for. */
+const CALL_TYPES = ['video', 'audio'];
+
+/** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
+function ymdLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export default function DoctorVideoCall({ profile }) {
   const [appointments, setAppointments] = useState([]);
@@ -24,7 +33,11 @@ export default function DoctorVideoCall({ profile }) {
       const snap = await getDocs(q);
       const appts = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(a => (a.consultationType || 'video') === 'video')
+        // Audio consults belong here too. This screen is the only place a doctor
+        // can start a call, so filtering to `video` alone made an audio
+        // appointment invisible — the doctor saw "no appointments for today"
+        // while one sat in the calendar. Untyped rows default to video.
+        .filter(a => CALL_TYPES.includes((a.consultationType || a.type || 'video').toLowerCase()))
         .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
       setAppointments(appts);
     } catch (error) {
@@ -101,7 +114,9 @@ export default function DoctorVideoCall({ profile }) {
     }
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  // Local date, not toISOString() — that is UTC and rolls the day over at the
+  // wrong moment for anyone east or west of Greenwich.
+  const today = ymdLocal(new Date());
 
   const filtered = appointments.filter(a => {
     // Filter by time
@@ -184,14 +199,14 @@ export default function DoctorVideoCall({ profile }) {
       </div>
 
       <div className="doctor-card">
-        <h3>Video Appointments ({filtered.length})</h3>
+        <h3>Consultations ({filtered.length})</h3>
         {loading ? (
           <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading...</p>
         ) : filtered.length === 0 ? (
           <div className="doctor-empty-state">
             <Video size={40} />
-            <h3>No video appointments {filter !== 'all' ? `for ${filter}` : ''}</h3>
-            <p>Confirmed video appointments will appear here.</p>
+            <h3>No consultations {filter !== 'all' ? `for ${filter}` : ''}</h3>
+            <p>Confirmed video and audio appointments will appear here.</p>
           </div>
         ) : (
           <table className="doctor-table">
@@ -201,6 +216,7 @@ export default function DoctorVideoCall({ profile }) {
                 <th>Date</th>
                 <th>Time</th>
                 <th>Status</th>
+                <th>Type</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -211,13 +227,35 @@ export default function DoctorVideoCall({ profile }) {
                   <td>{appt.date || '—'}</td>
                   <td>{appt.time || '—'}</td>
                   <td>{getCallStatusBadge(appt)}</td>
+                  {/* Audio consults now appear alongside video, so the row has to
+                      say which kind of call the doctor is about to place. */}
+                  <td style={{ textTransform: 'capitalize' }}>
+                    {(appt.consultationType || appt.type || 'video').toLowerCase()}
+                  </td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      {appt.status === 'confirmed' && appt.callStatus !== 'in_progress' && (
-                        <button className="doctor-btn doctor-btn-sm doctor-btn-success" onClick={() => initiateCall(appt)}>
-                          <Video size={14} /> Start Call
-                        </button>
-                      )}
+                      {/* A call cannot be started before its scheduled time. The
+                          therapy module has always enforced this window; the
+                          medical module showed Start on every confirmed row, so
+                          a consultation booked for next week looked startable
+                          today. Same 15-min-early / 30-min-grace rule. */}
+                      {appt.status === 'confirmed' && appt.callStatus !== 'in_progress' && (() => {
+                        const win = getJoinWindow(appt);
+                        const isAudio = (appt.consultationType || appt.type || 'video').toLowerCase() === 'audio';
+                        if (!win.canJoin) {
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: '#64748b' }}>
+                              <Clock size={13} />
+                              {win.state === 'ended' ? 'Window closed' : `Opens ${win.waitLabel}`}
+                            </span>
+                          );
+                        }
+                        return (
+                          <button className="doctor-btn doctor-btn-sm doctor-btn-success" onClick={() => initiateCall(appt)}>
+                            {isAudio ? <><Phone size={14} /> Start Audio</> : <><Video size={14} /> Start Call</>}
+                          </button>
+                        );
+                      })()}
                       {appt.callStatus === 'in_progress' && (
                         <>
                           <button className="doctor-btn doctor-btn-sm doctor-btn-primary" onClick={() => {

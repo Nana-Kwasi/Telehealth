@@ -34,7 +34,6 @@ import {
   Send, 
   Paperclip, 
   Smile,
-  FileText,
   Download
 } from 'lucide-react';
 import './Messages.css';
@@ -464,12 +463,11 @@ export default function ClientMessages() {
                 downloadFile(mediaUrlOf(message), fileNameOf(message));
               }}
             >
-              <FileText size={20} />
+              <Download size={20} className="file-lead-icon" />
               <span className="file-name">{fileNameOf(message)}</span>
               {fileSizeOf(message) && (
                 <small className="file-size">{fileSizeOf(message)}</small>
               )}
-              <Download size={16} className="file-download-icon" />
             </a>
           )}
           

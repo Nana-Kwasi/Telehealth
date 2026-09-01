@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, MessageSquare, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, AlertTriangle, Clock, CheckCircle, Activity } from 'lucide-react';
+import { Users, Calendar, FileText, TrendingUp, ChevronRight, Clock, CheckCircle, Activity } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import {
-  collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, Timestamp
+  collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, updateDoc, Timestamp
 } from '../../../services/firestoreShim';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
@@ -13,6 +13,9 @@ import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { api } from '../../../services/apiClient';
 import { calculateClientProgress, progressLabel } from '../../../utils/clientProgress';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
+import NotificationCenter from '../../Common/NotificationCenter';
+import WeatherCard from '../../Common/WeatherCard';
+import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 import {
   enrichClientRecord,
   getClientDisplayName,
@@ -35,6 +38,7 @@ export default function TherapistHome({ profile }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [calDate, setCalDate] = useState(new Date());
   const [appointmentDays, setAppointmentDays] = useState(new Set());
+  const [completingId, setCompletingId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentUser = auth.currentUser;
@@ -420,11 +424,150 @@ export default function TherapistHome({ profile }) {
     return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  // Mark a session complete. Nothing in the platform ever moved a scheduled call
+  // out of 'scheduled'/'in_progress', so Completion Rate here and "Sessions
+  // Completed" on the client dashboard were permanently 0. The backend PATCH
+  // already accepts the status and enforces therapist/client ownership.
+  const markSessionComplete = async (appt) => {
+    if (!appt?.id || completingId) return;
+    setCompletingId(appt.id);
+    try {
+      await updateDoc(doc(db, 'scheduledCalls', appt.id), {
+        status: 'completed',
+        updatedBy: currentUser?.uid || null,
+      });
+      // Reflect it immediately in both lists rather than waiting for a refetch.
+      const applyDone = (list) => list.map(a => (a.id === appt.id ? { ...a, status: 'completed' } : a));
+      setTodayAppointments(applyDone);
+      setUpcomingAppointments(applyDone);
+      setKpis(prev => {
+        const done = Math.round((prev.completionRate / 100) * prev.totalSessions) + 1;
+        return {
+          ...prev,
+          completionRate: prev.totalSessions > 0 ? Math.round((done / prev.totalSessions) * 100) : 0,
+        };
+      });
+    } catch (e) {
+      console.error('Could not mark session complete:', e);
+      alert('Could not mark this session complete. Please try again.');
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
   const getSessionStatus = (appt) => {
     if (appt.status === 'completed') return 'completed';
     const dt = appt.scheduledTime?.toDate ? appt.scheduledTime.toDate() : new Date(appt.scheduledTime);
     return dt > new Date() ? 'upcoming' : 'scheduled';
   };
+
+  /**
+   * Clicking a day on the mini calendar. The cells used to be inert divs, so a
+   * therapist could see a free day here but had no way to act on it — mobile
+   * has always opened a booking from an empty day. The full Calendar page
+   * already implements that flow, so this hands the date to it: an empty future
+   * day opens the booking form, a day with sessions opens that day's detail.
+   */
+  const openDay = (date, hasAppt) => {
+    const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    navigate('/dashboard/schedule', {
+      state: hasAppt ? { focusDate: ymd } : { scheduleDate: ymd },
+    });
+  };
+
+  /**
+   * "What needs me now" — the triage model behind the panel at the top.
+   *
+   * The screen used to open on six equal tiles of all-time totals (Total
+   * Sessions, Total Notes, Completion Rate). None of them answer the question a
+   * therapist actually has in the ninety seconds between clients, which is who
+   * needs something from them today. These are the things that are actionable,
+   * each one a link to the place it gets resolved.
+   *
+   * Severity drives colour, and nothing else on the screen uses red — an alert
+   * palette spent on decoration is how alarm fatigue starts.
+   */
+  const attentionItems = useMemo(() => {
+    const items = [];
+    const now = new Date();
+
+    const unconfirmed = upcomingAppointments.filter(
+      (a) => String(a.status || '').toLowerCase() === 'pending',
+    );
+    if (unconfirmed.length) {
+      items.push({
+        key: 'confirm',
+        severity: 'high',
+        icon: Clock,
+        label: `${unconfirmed.length} session${unconfirmed.length > 1 ? 's' : ''} awaiting your confirmation`,
+        detail: 'Clients cannot join until you confirm.',
+        to: '/dashboard/schedule',
+      });
+    }
+
+    if (kpis.pendingNotes > 0) {
+      items.push({
+        key: 'notes',
+        severity: 'medium',
+        icon: FileText,
+        label: `${kpis.pendingNotes} clinical note${kpis.pendingNotes > 1 ? 's' : ''} to finish`,
+        detail: 'Drafts saved but not completed.',
+        to: '/dashboard/notes',
+      });
+    }
+
+    // Falling wellbeing, from the client's own readings — not from how much the
+    // therapist has written about them.
+    const declining = clientProgress.filter(
+      (c) => c.progress !== null && c.progress !== undefined && c.progress < 40,
+    );
+    if (declining.length) {
+      items.push({
+        key: 'declining',
+        severity: 'high',
+        icon: TrendingUp,
+        label: `${declining.length} client${declining.length > 1 ? 's' : ''} trending down`,
+        detail: declining.slice(0, 3).map((c) => c.name).join(', ')
+          + (declining.length > 3 ? ` +${declining.length - 3} more` : ''),
+        to: '/dashboard/clients',
+      });
+    }
+
+    // Assigned but not seen in a month — quietly drifting out of care.
+    const stale = clientProgress.filter((c) => {
+      if (!c.lastSession || c.lastSession === 'No sessions yet') return false;
+      const d = new Date(c.lastSession);
+      if (Number.isNaN(d.getTime())) return false;
+      return (now - d) / 86400000 > 30;
+    });
+    if (stale.length) {
+      items.push({
+        key: 'stale',
+        severity: 'low',
+        icon: Users,
+        label: `${stale.length} client${stale.length > 1 ? 's' : ''} not seen in over a month`,
+        detail: stale.slice(0, 3).map((c) => c.name).join(', ')
+          + (stale.length > 3 ? ` +${stale.length - 3} more` : ''),
+        to: '/dashboard/clients',
+      });
+    }
+
+    const order = { high: 0, medium: 1, low: 2 };
+    return items.sort((a, b) => order[a.severity] - order[b.severity]);
+  }, [upcomingAppointments, kpis.pendingNotes, clientProgress]);
+
+  /** The very next session, for the spotlight. */
+  const nextSession = useMemo(() => {
+    const now = Date.now();
+    return [...todayAppointments, ...upcomingAppointments]
+      .filter((a) => {
+        const t = new Date(a.scheduledTime?.toDate?.() || a.scheduledTime).getTime();
+        return !Number.isNaN(t) && t >= now - 30 * 60000
+          && String(a.status || '').toLowerCase() !== 'cancelled';
+      })
+      .sort((a, b) => new Date(a.scheduledTime?.toDate?.() || a.scheduledTime)
+        - new Date(b.scheduledTime?.toDate?.() || b.scheduledTime))[0] || null;
+  }, [todayAppointments, upcomingAppointments]);
 
   // Mini calendar helpers
   const daysInMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
@@ -486,6 +629,9 @@ export default function TherapistHome({ profile }) {
             </div>
           </div>
 
+          {/* Conditions where the therapist is, from their saved location. */}
+          <WeatherCard profile={therapistProfile} compact />
+
           <div className="time-display">
             <span className="current-time">
               {currentTime.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true })}
@@ -495,30 +641,79 @@ export default function TherapistHome({ profile }) {
             </span>
           </div>
 
-          <div style={{ position:'relative' }}>
-            <button className="notification-icon" onClick={() => setShowNotifications(v => !v)}>
-              <Bell size={20} />
-              {unreadNotifications > 0 && <span className="notification-badge">{unreadNotifications}</span>}
-            </button>
-            {showNotifications && (
-              <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', width:320, background:'white', border:'1.5px solid #e2e8f0', borderRadius:14, boxShadow:'0 12px 32px rgba(0,0,0,0.12)', zIndex:200, overflow:'hidden' }}>
-                <div style={{ padding:'0.85rem 1rem', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span style={{ fontWeight:700, fontSize:'0.875rem', color:'#0f172a' }}>Notifications</span>
-                  {unreadNotifications > 0 && <span style={{ fontSize:'0.7rem', color:'#4f46e5', fontWeight:600 }}>{unreadNotifications} new</span>}
+          {/* Live notification centre — replaces a hand-rolled dropdown that
+              polled, had no read state and no way to open one notification.
+              This one streams over SSE and is shared with the other dashboards. */}
+          <NotificationCenter />
+        </div>
+      </div>
+
+      {/* ── Right now ────────────────────────────────────────────────────────
+          The first thing on the screen answers "what needs me?", because that
+          is the question a therapist has between clients. It used to open on
+          six tiles of all-time totals, which answer nothing actionable. ── */}
+      <div className="th-now">
+        {/* Next session, with the join control the therapist actually needs. */}
+        <div className="th-now-next">
+          <span className="th-now-label">Next session</span>
+          {nextSession ? (
+            <>
+              <div className="th-now-next-body">
+                <div className="th-now-avatar">
+                  {(nextSession.clientName || '?')[0].toUpperCase()}
                 </div>
-                <div style={{ maxHeight:280, overflowY:'auto' }}>
-                  {notifications.length === 0 ? (
-                    <p style={{ padding:'1.5rem', textAlign:'center', color:'#94a3b8', fontSize:'0.85rem' }}>No notifications</p>
-                  ) : notifications.map(n => (
-                    <div key={n.id} style={{ padding:'0.75rem 1rem', borderBottom:'1px solid #f8fafc', background: n.read ? 'transparent' : '#f0f7ff' }}>
-                      <p style={{ margin:0, fontSize:'0.82rem', color:'#334155', fontWeight: n.read ? 400 : 600 }}>{n.message || n.title}</p>
-                      <span style={{ fontSize:'0.7rem', color:'#94a3b8' }}>{n.createdAt?.toDate ? timeAgo(n.createdAt.toDate()) : ''}</span>
-                    </div>
-                  ))}
+                <div className="th-now-next-info">
+                  <p className="th-now-next-name">{nextSession.clientName || 'Client'}</p>
+                  <p className="th-now-next-when">
+                    {formatDateShort(nextSession.scheduledTime)} · {formatTime12(nextSession.scheduledTime)}
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
+              {(() => {
+                const win = getJoinWindow({ scheduledTime: nextSession.scheduledTime });
+                return win.canJoin ? (
+                  <button type="button" className="th-now-join" onClick={() => navigate('/dashboard/video')}>
+                    Join session
+                  </button>
+                ) : (
+                  <span className="th-now-wait">
+                    {win.state === 'ended' ? 'Window closed' : `Opens ${win.waitLabel}`}
+                  </span>
+                );
+              })()}
+            </>
+          ) : (
+            <p className="th-now-empty">Nothing scheduled. Pick a free day on the calendar to book one.</p>
+          )}
+        </div>
+
+        {/* Triage. Red and amber live here and nowhere else on the page. */}
+        <div className="th-now-attention">
+          <span className="th-now-label">Needs your attention</span>
+          {attentionItems.length === 0 ? (
+            <div className="th-now-clear">
+              <CheckCircle size={20} />
+              <div>
+                <p className="th-now-clear-title">You are all clear</p>
+                <p className="th-now-clear-sub">No unconfirmed sessions, unfinished notes or clients at risk.</p>
+              </div>
+            </div>
+          ) : (
+            <ul className="th-attn-list">
+              {attentionItems.map(({ key, severity, icon: Icon, label, detail, to }) => (
+                <li key={key}>
+                  <button type="button" className={`th-attn th-attn--${severity}`} onClick={() => navigate(to)}>
+                    <span className="th-attn-icon"><Icon size={16} /></span>
+                    <span className="th-attn-text">
+                      <span className="th-attn-label">{label}</span>
+                      <span className="th-attn-detail">{detail}</span>
+                    </span>
+                    <ChevronRight size={16} className="th-attn-chev" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -526,12 +721,14 @@ export default function TherapistHome({ profile }) {
       <div className="stats-section">
         <div className="stats-grid">
           {[
-            { label:'Active Clients',     value: kpis.activeClients,    change:'Currently assigned',    icon: Users,       bg:'bg-blue-100',   ic:'text-blue-500' },
-            { label:"Today's Sessions",   value: kpis.todaySessions,    change:'Scheduled today',       icon: Calendar,    bg:'bg-green-100',  ic:'text-green-500' },
-            { label:'Total Sessions',     value: kpis.totalSessions,    change:'All time',              icon: Activity,    bg:'bg-teal-100',   ic:'text-teal-500' },
-            { label:'Total Notes',        value: kpis.totalNotes,       change:'Clinical notes written', icon: FileText,   bg:'bg-indigo-100', ic:'text-indigo-500' },
-            { label:'Pending Notes',      value: kpis.pendingNotes,     change:'Drafts to complete',    icon: Clock,       bg:'bg-purple-100', ic:'text-purple-500' },
-            { label:'Completion Rate',    value:`${kpis.completionRate}%`, change:'All time',           icon: TrendingUp,  bg:'bg-orange-100', ic:'text-orange-500' },
+            // Today first, lifetime totals last. The six rotating pastel tiles
+            // gave equal weight to "sessions today" and "notes ever written",
+            // and spent six hues on data that carries no signal.
+            { label:"Today's Sessions",   value: kpis.todaySessions,    change:'Scheduled today',        icon: Calendar,   bg:'bg-blue-100',   ic:'text-blue-500' },
+            { label:'Active Clients',     value: kpis.activeClients,    change:'Currently assigned',     icon: Users,      bg:'bg-blue-100',   ic:'text-blue-500' },
+            { label:'Completion Rate',    value:`${kpis.completionRate}%`, change:'All time',            icon: TrendingUp, bg:'bg-blue-100',   ic:'text-blue-500' },
+            { label:'Total Sessions',     value: kpis.totalSessions,    change:'All time',               icon: Activity,   bg:'bg-slate-100',  ic:'text-slate-500' },
+            { label:'Total Notes',        value: kpis.totalNotes,       change:'Clinical notes written', icon: FileText,   bg:'bg-slate-100',  ic:'text-slate-500' },
           ].map(({ label, value, change, icon: Icon, bg, ic }) => (
             <div className="stat-card" key={label}>
               <div className={`stat-icon ${bg}`}><Icon className={ic} size={22} /></div>
@@ -612,7 +809,24 @@ export default function TherapistHome({ profile }) {
                       <p className="appointment-type">{appt.sessionType || appt.callType || 'Individual'} • {appt.duration || 50}min</p>
                     </div>
                     <div className="appointment-status">
-                      {status === 'completed' ? <CheckCircle size={16} color="#10b981" /> : <Clock size={16} color="#4f46e5" />}
+                      {status === 'completed' ? (
+                        <CheckCircle size={16} color="#10b981" />
+                      ) : status === 'upcoming' ? (
+                        <Clock size={16} color="#4f46e5" />
+                      ) : (
+                        // Only offer it once the session time has passed — marking a
+                        // future session complete makes no clinical sense.
+                        <button
+                          type="button"
+                          className="mark-complete-btn"
+                          onClick={() => markSessionComplete(appt)}
+                          disabled={completingId === appt.id}
+                          title="Mark this session complete"
+                        >
+                          <CheckCircle size={14} />
+                          {completingId === appt.id ? 'Saving…' : 'Complete'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -636,11 +850,27 @@ export default function TherapistHome({ profile }) {
               {calCells().map((day, i) => {
                 const isToday = day && calDate.getMonth() === new Date().getMonth() && calDate.getFullYear() === new Date().getFullYear() && day === new Date().getDate();
                 const hasAppt = day && appointmentDays.has(day);
+                if (!day) return <div key={i} className="cal-cell empty" />;
+
+                const cellDate = new Date(calDate.getFullYear(), calDate.getMonth(), day);
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+                const isPast = cellDate < startOfToday;
+
                 return (
-                  <div key={i} className={`cal-cell ${!day ? 'empty' : ''} ${isToday ? 'today' : ''} ${hasAppt && !isToday ? 'has-appt' : ''}`}>
-                    {day && <span className="cal-day-num">{day}</span>}
+                  <button
+                    type="button"
+                    key={i}
+                    className={`cal-cell ${isToday ? 'today' : ''} ${hasAppt && !isToday ? 'has-appt' : ''} ${isPast && !hasAppt ? 'cal-cell--past' : ''}`}
+                    onClick={() => openDay(cellDate, hasAppt)}
+                    disabled={isPast && !hasAppt}
+                    title={hasAppt
+                      ? 'View this day'
+                      : isPast ? 'Past date' : 'Schedule a session on this day'}
+                  >
+                    <span className="cal-day-num">{day}</span>
                     {hasAppt && <span className="cal-appt-dot">•</span>}
-                  </div>
+                  </button>
                 );
               })}
             </div>

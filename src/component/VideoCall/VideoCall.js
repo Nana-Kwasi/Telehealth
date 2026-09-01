@@ -655,6 +655,10 @@ const VideoCall = ({ user }) => {
   const [assignedPerson, setAssignedPerson] = useState(null);
   const [scheduledCalls, setScheduledCalls] = useState([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
+  // Which person the schedule modal is for. Without this the form fell back to
+  // assignedPerson[0] — the first client in the grid — so a therapist could press
+  // Schedule on any client and the call was always booked with the first one.
+  const [scheduleTarget, setScheduleTarget] = useState(null);
   const [scheduleForm, setScheduleForm] = useState({
     date: '',
     time: '',
@@ -1417,6 +1421,7 @@ const VideoCall = ({ user }) => {
                 className="btn-schedule"
                 onClick={() => {
                   setEditingCall(null);
+                  setScheduleTarget(assignedPerson);
                   setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
                   setShowScheduleForm(true);
                 }}
@@ -1455,6 +1460,7 @@ const VideoCall = ({ user }) => {
                     className="btn-schedule"
                     onClick={() => {
                       setEditingCall(null);
+                      setScheduleTarget(client);
                       setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
                       setShowScheduleForm(true);
                     }}
@@ -1578,21 +1584,34 @@ const VideoCall = ({ user }) => {
         <div className="modal-overlay" onClick={() => {
           setShowScheduleForm(false);
           setEditingCall(null);
+          setScheduleTarget(null);
           setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
         }}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{editingCall ? 'Edit Scheduled Call' : 'Schedule Call'}</h3>
+            <h3>
+              {editingCall
+                ? 'Edit Scheduled Call'
+                : `Schedule Call${scheduleTarget
+                    ? ` with ${scheduleTarget.displayName || scheduleTarget.clientName || scheduleTarget.name || scheduleTarget.email || ''}`
+                    : ''}`}
+            </h3>
             <form onSubmit={(e) => {
               e.preventDefault();
               if (editingCall) {
                 updateScheduledCall();
               } else {
-                const targetPerson = user.role === 'client' ? 
-                  assignedPerson : 
-                  (Array.isArray(assignedPerson) ? assignedPerson[0] : assignedPerson);
-                if (targetPerson) {
-                  scheduleCall(targetPerson);
+                // Use the person whose Schedule button was pressed. The old
+                // fallback to assignedPerson[0] booked every call with whichever
+                // client happened to sort first.
+                const targetPerson = scheduleTarget
+                  || (user.role === 'client'
+                    ? assignedPerson
+                    : (Array.isArray(assignedPerson) ? null : assignedPerson));
+                if (!targetPerson) {
+                  alert('Please choose a client to schedule with.');
+                  return;
                 }
+                scheduleCall(targetPerson);
               }
             }}>
               <div className="form-group">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, Calendar, MessageSquare, FileText, Settings,
@@ -20,17 +21,66 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from '../../../service
 import './MedicalPatientDashboard.css';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import WeatherCard from '../../Common/WeatherCard';
+import { subscribeLocationUpdate, applyLocationPatch, publishLocationUpdate } from '../../../utils/locationBus';
 import { patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
 import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { readPendingBooking, materializePendingBooking } from '../../../utils/pendingDoctorBooking';
+import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** One-line summary of a vitals reading, for the dashboard card. */
+function summariseVitals(v) {
+  if (!v) return '';
+  const bits = [];
+  if (v.bpSystolic && v.bpDiastolic) bits.push(`BP ${v.bpSystolic}/${v.bpDiastolic}`);
+  if (v.heartRate) bits.push(`HR ${v.heartRate}`);
+  if (v.spo2) bits.push(`SpO2 ${v.spo2}%`);
+  if (v.temperature) bits.push(`${v.temperature}°${v.tempUnit || 'C'}`);
+  if (v.respiratoryRate) bits.push(`RR ${v.respiratoryRate}`);
+  return bits.length ? bits.join(' · ') : 'Recorded';
+}
+
+/**
+ * Renders modals into <body> instead of wherever they sit in the tree.
+ *
+ * They used to live inside the right column, which is `position: sticky` — and
+ * a sticky element creates a stacking context. That trapped the overlay's
+ * `z-index: 9999` INSIDE that context, so it could not paint above siblings of
+ * the column that carry a z-index of their own (the banner action cards, the
+ * doctor card). The result was a modal with page content floating on top of its
+ * own dim overlay. A portal to <body> puts the overlay at the top level where
+ * its z-index means what it says, whatever the layout does around it.
+ */
+function ModalHost({ children }) {
+  return createPortal(children, document.body);
+}
+
+/**
+ * Millis from whatever shape a timestamp arrives in — the shim hands back a
+ * dual-shaped Timestamp (`seconds` + `toDate()`), while a plain REST read is an
+ * ISO string. Returns 0 when there is nothing usable, so callers can compare.
+ */
+function tsMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  if (typeof ts.toDate === 'function') { const d = ts.toDate(); return d ? d.getTime() : 0; }
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+// How the daily check-in prompt paces itself. Once a check-in is logged the
+// prompt stays away for a full day; dismissing it only snoozes, so it can still
+// catch the patient later the same day without nagging on every navigation.
+const MOOD_PROMPT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MOOD_SNOOZE_MS = 4 * 60 * 60 * 1000;
 
 /** The 6x7 grid for a month, padded with the surrounding days. */
 function getCalendarDays(monthDate) {
@@ -84,6 +134,16 @@ function MedPatHome({ profile }) {
   const [allAppts, setAllAppts] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
   const [moodHistory, setMoodHistory] = useState([]);
+
+  // `profile` is resolved once at login and never changes for the rest of the
+  // session, so a location saved in Settings left this page showing the old one
+  // until the patient signed out. Track a live copy that location saves patch.
+  const [liveProfile, setLiveProfile] = useState(profile);
+  useEffect(() => { setLiveProfile(profile); }, [profile]);
+  useEffect(
+    () => subscribeLocationUpdate(patch => setLiveProfile(p => applyLocationPatch(p, patch))),
+    [],
+  );
   const [stats, setStats] = useState({ upcoming: 0, completed: 0, pending: 0, prescriptions: 0 });
   const [loading, setLoading] = useState(true);
   const [primaryDoctor, setPrimaryDoctor] = useState(null);
@@ -108,6 +168,13 @@ function MedPatHome({ profile }) {
   const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [vitalsForm, setVitalsForm] = useState(EMPTY_VITALS);
   const [submittingVitals, setSubmittingVitals] = useState(false);
+  // The last reading on file, and whether the modal is reading it back or
+  // editing it. Once a patient has logged vitals the card stops asking them to
+  // record and offers to show or amend what is already there.
+  const [latestVitals, setLatestVitals] = useState(null);
+  const [vitalsMode, setVitalsMode] = useState('edit');
+  const [vitalsError, setVitalsError] = useState('');
+  const [moodError, setMoodError] = useState('');
 
   const TODAY = new Date().toISOString().split('T')[0];
 
@@ -148,7 +215,12 @@ function MedPatHome({ profile }) {
 
       // Process mood history for charts (last 7 entries)
       const moodScore = { Great: 5, Good: 4, Okay: 3, Poor: 2, Bad: 1 };
-      const moodList = moodSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const moodDocs = moodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // The server is the authority on whether today's check-in exists — the
+      // localStorage stamp below is only a fast path and is empty on a new
+      // browser or after a cache clear.
+      const lastCheckInAt = moodDocs.reduce((max, m) => Math.max(max, tsMillis(m.createdAt)), 0);
+      const moodList = moodDocs
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
         .slice(0, 7)
         .reverse()
@@ -188,16 +260,34 @@ function MedPatHome({ profile }) {
           if (!intakeSnap.exists() && !localDone) setShowIntakeBtn(true);
         } catch (_) {}
       }
-      // Daily mood: show popup if not submitted in last 24h
+      // Daily check-in prompt. This used to consult only the localStorage stamp,
+      // which is written on SUBMIT alone — so dismissing the modal recorded
+      // nothing and it reappeared on every single navigation back to home. Two
+      // things now suppress it: a check-in already logged within the last day
+      // (read from the server, so it holds on a fresh browser too), and a
+      // dismissal, which snoozes it for a few hours rather than forever.
       try {
-        const lastFeelingStr = localStorage.getItem(`lastDailyFeeling_${profile.id}`);
-        const lastFeeling = lastFeelingStr ? parseInt(lastFeelingStr) : 0;
-        if (Date.now() - lastFeeling > 24 * 60 * 60 * 1000) setShowMoodModal(true);
+        const stampStr = localStorage.getItem(`lastDailyFeeling_${profile.id}`);
+        const stamp = stampStr ? parseInt(stampStr) : 0;
+        const lastLogged = Math.max(lastCheckInAt, stamp);
+        const snoozeStr = localStorage.getItem(`dailyFeelingSnooze_${profile.id}`);
+        const snoozedUntil = snoozeStr ? parseInt(snoozeStr) : 0;
+        const now = Date.now();
+        const dueForCheckIn = now - lastLogged > MOOD_PROMPT_INTERVAL_MS;
+        if (dueForCheckIn && now > snoozedUntil) setShowMoodModal(true);
       } catch (_) {}
-      // Fetch patient status
+      // Fetch patient status and the most recent vitals. The backend keeps the
+      // last reading on the profile as `vitalsLatestJson` (a JSON string); the
+      // old `vitals.latest` shape this screen used to write never existed
+      // server-side, which is why nothing was ever read back.
       try {
-        const profSnap = await getDoc(doc(db, 'patientProfiles', profile.id));
-        if (profSnap.exists()) setPatientStatus(profSnap.data().status || 'active');
+        const pat = await api(`/api/v1/patients/${profile.id}`);
+        if (pat) {
+          setPatientStatus(pat.status || 'active');
+          const raw = pat.vitalsLatestJson;
+          const parsed = typeof raw === 'string' && raw.trim() ? JSON.parse(raw) : (raw || null);
+          if (parsed && typeof parsed === 'object') setLatestVitals(parsed);
+        }
       } catch (_) {}
       setLoading(false);
     })();
@@ -223,9 +313,20 @@ function MedPatHome({ profile }) {
     finally { setSubmittingIntake(false); }
   };
 
+  // Closing the check-in without submitting has to leave a trace, or the prompt
+  // has no way to tell "already asked and declined" from "never asked today"
+  // and re-opens the moment the patient navigates back to home.
+  const dismissMoodModal = () => {
+    try {
+      localStorage.setItem(`dailyFeelingSnooze_${profile.id}`, String(Date.now() + MOOD_SNOOZE_MS));
+    } catch (_) {}
+    setShowMoodModal(false);
+  };
+
   const submitMood = async () => {
     if (!moodForm.mood) return;
     setSubmittingMood(true);
+    setMoodError('');
     try {
       await addDoc(collection(db, 'patientDailyFeelings'), {
         patientId: profile.id,
@@ -237,37 +338,99 @@ function MedPatHome({ profile }) {
         createdAt: serverTimestamp(),
       });
       localStorage.setItem(`lastDailyFeeling_${profile.id}`, String(Date.now()));
+      localStorage.removeItem(`dailyFeelingSnooze_${profile.id}`);
+      // Show it on the trend immediately instead of waiting for a reload.
+      setMoodHistory(prev => [...prev, {
+        day: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        mood: { Great: 5, Good: 4, Okay: 3, Poor: 2, Bad: 1 }[moodForm.mood] || 3,
+        moodLabel: moodForm.mood,
+        pain: parseInt(moodForm.painLevel) || 0,
+      }].slice(-7));
       setShowMoodModal(false);
-    } catch (_) {}
+    } catch (err) {
+      // This used to swallow the error, so a check-in that never reached the
+      // server looked submitted — the modal closed and the trend stayed empty
+      // with no explanation.
+      setMoodError(err?.message || 'Could not submit your check-in. Please try again.');
+    }
     finally { setSubmittingMood(false); }
+  };
+
+  /** Open the vitals modal reading back the last entry, or editing it. */
+  const openVitals = (mode) => {
+    setVitalsError('');
+    setVitalsMode(mode);
+    // Editing always starts from the most recent reading, so "save" amends it
+    // rather than making the patient retype everything.
+    setVitalsForm(latestVitals ? { ...EMPTY_VITALS, ...latestVitals } : EMPTY_VITALS);
+    setShowVitalsModal(true);
   };
 
   const submitVitals = async () => {
     const hasData = vitalsForm.bpSystolic || vitalsForm.heartRate || vitalsForm.spo2 || vitalsForm.temperature || vitalsForm.respiratoryRate;
-    if (!hasData) return;
+    if (!hasData) { setVitalsError('Enter at least one reading before saving.'); return; }
     setSubmittingVitals(true);
+    setVitalsError('');
     try {
-      await setDoc(doc(db, 'patientProfiles', profile.id), {
-        vitals: {
-          latest: {
-            ...vitalsForm,
-            recordedAt: serverTimestamp(),
-          },
-        },
-      }, { merge: true });
-      setVitalsForm(EMPTY_VITALS);
+      // POST /vitals is the only write that reaches the vitals store: it appends
+      // to the log AND refreshes the profile's latest reading. The previous
+      // patientProfiles write put `vitals.latest` into metadata_json instead,
+      // where nothing reads it — so every reading a patient logged was lost.
+      const payload = { ...vitalsForm, recordedAt: new Date().toISOString() };
+      await api(`/api/v1/patients/${profile.id}/vitals`, { method: 'POST', body: payload });
+      setLatestVitals(payload);
       setShowVitalsModal(false);
-    } catch (err) { console.error('Error saving vitals:', err); }
+    } catch (err) {
+      // Never swallow this. A patient who thinks their readings reached their
+      // doctor when they did not is worse off than one who sees an error.
+      setVitalsError(err?.message || 'Could not save. Please try again.');
+    }
     finally { setSubmittingVitals(false); }
   };
 
   const nextAppt = appts[0];
   const todayAppts = appts.filter(a => a.date === TODAY);
-  const hasConfirmedToday = todayAppts.some(a => a.status === 'confirmed');
+  // Today's call is only offered once its window is actually open — being on
+  // today's date is not the same as being joinable at 6am.
+  const hasConfirmedToday = todayAppts.some(a => a.status === 'confirmed' && getJoinWindow(a).canJoin);
 
   return (
     <div className="mp-page">
-      <LocationSummaryCard profile={profile} onEdit={() => navigate('/dashboard/settings')} />
+      {/* ── Top strip ────────────────────────────────────────────────────
+          Where you are, what it is like there, and who your doctor is. The
+          doctor card came up from the sidebar: it is identity, not a widget,
+          and belonged beside the other "about you" cards rather than above a
+          calendar. ── */}
+      <div className="mp-top-strip">
+        <LocationSummaryCard profile={liveProfile} compact onEdit={() => navigate('/dashboard/settings')} />
+        <WeatherCard profile={liveProfile} />
+        {/* Your Doctor Card */}
+        {primaryDoctor && (
+          <div className="mp-your-doctor-card">
+            <div className="mp-yd-label"><Heart size={14} /> Your Doctor</div>
+            <div className="mp-yd-body">
+              <div className="mp-yd-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+                {primaryDoctor.photoURL ? (
+                  <img src={primaryDoctor.photoURL} alt={primaryDoctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                ) : null}
+                <span style={{ display: primaryDoctor.photoURL ? 'none' : 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>{getInitials(primaryDoctor.name)}</span>
+              </div>
+              <div className="mp-yd-info">
+                <p className="mp-yd-name">Dr. {primaryDoctor.name}</p>
+                <p className="mp-yd-spec">{primaryDoctor.spec}</p>
+              </div>
+              <div className="mp-yd-actions">
+                <button className="mp-btn mp-btn-primary mp-btn-sm" onClick={() => navigate('/dashboard/appointments')}>
+                  <Calendar size={13} /> Schedule
+                </button>
+                <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => navigate('/dashboard/messages')}>
+                  <MessageSquare size={13} /> Message
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       {/* Welcome Banner */}
       <div className="mp-welcome-banner">
         <div className="mp-welcome-left">
@@ -280,6 +443,47 @@ function MedPatHome({ profile }) {
             </span>
           </div>
         </div>
+        {/* The two prompts that ask something OF the patient. They used to sit at
+            the very bottom of the right column, below a 12-tile quick-actions
+            grid, so they were off-screen until you scrolled — the last place a
+            call to action should be. On the banner they are the first thing
+            read after the greeting. */}
+        <div className="mp-welcome-actions">
+          {latestVitals ? (
+            /* Something is on file — stop asking for it and offer the reading
+               back instead, with the two things you can do to it. */
+            <div className="mp-welcome-action mp-welcome-action--static">
+              <span className="mp-wa-icon"><Heart size={18} /></span>
+              <span className="mp-wa-text">
+                <span className="mp-wa-title">Your Vitals</span>
+                <span className="mp-wa-sub">{summariseVitals(latestVitals)}</span>
+              </span>
+              <span className="mp-wa-actions">
+                <button type="button" className="mp-wa-btn" onClick={() => openVitals('view')}>View</button>
+                <button type="button" className="mp-wa-btn mp-wa-btn--solid" onClick={() => openVitals('edit')}>Edit</button>
+              </span>
+            </div>
+          ) : (
+            <button className="mp-welcome-action" onClick={() => openVitals('edit')}>
+              <span className="mp-wa-icon"><Heart size={18} /></span>
+              <span className="mp-wa-text">
+                <span className="mp-wa-title">Record Your Vitals</span>
+                <span className="mp-wa-sub">Blood pressure, heart rate, SpO2 and more</span>
+              </span>
+            </button>
+          )}
+
+          {showIntakeBtn && (
+            <button className="mp-welcome-action mp-welcome-action--intake" onClick={() => setShowIntakeModal(true)}>
+              <span className="mp-wa-icon"><AlertTriangle size={18} /></span>
+              <span className="mp-wa-text">
+                <span className="mp-wa-title">Tell your doctor what's wrong</span>
+                <span className="mp-wa-sub">Describe your symptoms before your consultation</span>
+              </span>
+            </button>
+          )}
+        </div>
+
         <div className="mp-welcome-right">
           {hasConfirmedToday ? (
             <button className="mp-join-call-banner-btn" onClick={() => navigate('/dashboard/video')}>
@@ -290,7 +494,10 @@ function MedPatHome({ profile }) {
               <Plus size={16} /> Find a Doctor
             </button>
           ) : (
-            <button className="mp-btn mp-btn-outline" style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.4)', color: 'white' }} onClick={() => navigate('/dashboard/appointments')}>
+            // Plain outline button: the inline white-on-transparent overrides
+            // that used to be here existed only to survive the blue gradient,
+            // and turned invisible once the banner went white.
+            <button className="mp-btn mp-btn-outline" onClick={() => navigate('/dashboard/appointments')}>
               <Calendar size={16} /> Book Appointment
             </button>
           )}
@@ -370,11 +577,11 @@ function MedPatHome({ profile }) {
         </div>
       </div>
 
-      {/* ── Main 2-Column Layout ── */}
-      <div className="mp-home-main-grid">
-
-        {/* LEFT COLUMN: appointments + prescriptions */}
-        <div className="mp-home-left">
+      {/* Everything below runs full width in one grid. The calendar and
+          quick actions are cards in it rather than a 340px rail — that rail
+          ran far taller than the cards beside it, which is what produced the
+          empty band down the page. */}
+      <div className="mp-home-body">
 
           {/* Next Appointment Spotlight */}
           {nextAppt && (
@@ -400,11 +607,17 @@ function MedPatHome({ profile }) {
                 </div>
                 <div className="mp-next-appt-actions">
                   <StatusBadge status={nextAppt.status} />
-                  {nextAppt.status === 'confirmed' && (
+                  {/* Joinable only inside the scheduled window — a patient
+                      offered "Join Call" days early has nothing to join. */}
+                  {nextAppt.status === 'confirmed' && (getJoinWindow(nextAppt).canJoin ? (
                     <button className="mp-btn mp-btn-primary" onClick={() => navigate('/dashboard/video')}>
                       <Video size={14} /> Join Call
                     </button>
-                  )}
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: '#64748b' }}>
+                      <Clock size={13} /> Opens {getJoinWindow(nextAppt).waitLabel}
+                    </span>
+                  ))}
                   <button className="mp-btn mp-btn-outline" onClick={() => navigate('/dashboard/messages')}>
                     <MessageSquare size={14} /> Message
                   </button>
@@ -471,7 +684,33 @@ function MedPatHome({ profile }) {
             </div>
           )}
         </div>
-
+      {/* Quick Actions */}
+      <div className="mp-card" style={{ padding: '1.25rem' }}>
+        <div className="mp-card-header" style={{ marginBottom: '1rem' }}><h3>Quick Actions</h3></div>
+        <div className="mp-quick-actions-grid">
+          {[
+            primaryDoctor
+              ? { icon: Calendar, label: 'Book Appointment', color: '#1e6bb8', bg: '#eff6ff', action: () => navigate('/dashboard/appointments') }
+              : { icon: Plus, label: 'Find a Doctor', color: '#1e6bb8', bg: '#eff6ff', action: () => navigate('/doctors') },
+            { icon: Video, label: 'Video Calls', color: '#7c3aed', bg: '#f3e8ff', action: () => navigate('/dashboard/video') },
+            { icon: MessageSquare, label: 'Messages', color: '#0891b2', bg: '#ecfeff', action: () => navigate('/dashboard/messages') },
+            { icon: Pill, label: 'Prescriptions', color: '#059669', bg: '#f0fdf4', action: () => navigate('/dashboard/prescriptions') },
+            { icon: FileText, label: 'Medical History', color: '#d97706', bg: '#fffbeb', action: () => navigate('/dashboard/history') },
+            { icon: Shield, label: 'Insurance', color: '#0e7490', bg: '#ecfeff', action: () => navigate('/dashboard/insurance') },
+            { icon: Phone, label: 'Emergency Contacts', color: '#ea580c', bg: '#fff7ed', action: () => navigate('/dashboard/emergency') },
+            { icon: Download, label: 'Health Records', color: '#059669', bg: '#f0fdf4', action: () => navigate('/dashboard/records') },
+            { icon: Heart, label: 'Record Vitals', color: '#dc2626', bg: '#fef2f2', action: () => setShowVitalsModal(true) },
+            { icon: Pill, label: 'E-Pharmacy', color: '#7c3aed', bg: '#f3e8ff', action: () => navigate('/dashboard/epharmacy') },
+            { icon: Settings, label: 'My Profile', color: '#64748b', bg: '#f1f5f9', action: () => navigate('/dashboard/settings') },
+            { icon: AlertCircle, label: 'Support', color: '#dc2626', bg: '#fef2f2', action: () => navigate('/dashboard/support') },
+          ].map(({ icon: Icon, label, color, bg, action }) => (
+            <button key={label} className="mp-quick-action-btn" onClick={action} style={{ '--qa-color': color, '--qa-bg': bg }}>
+              <div className="mp-qa-icon"><Icon size={20} /></div>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
         {/* Care Team */}
         <div className="mp-card">
           <div className="mp-card-header"><h3>My Care Team</h3></div>
@@ -532,39 +771,6 @@ function MedPatHome({ profile }) {
             </div>
           )}
         </div>
-      </div>{/* end mp-home-grid */}
-    </div>{/* end mp-home-left */}
-
-    {/* RIGHT COLUMN */}
-    <div className="mp-home-right">
-
-      {/* Your Doctor Card */}
-      {primaryDoctor && (
-        <div className="mp-your-doctor-card">
-          <div className="mp-yd-label"><Heart size={14} /> Your Doctor</div>
-          <div className="mp-yd-body">
-            <div className="mp-yd-avatar" style={{ overflow: 'hidden', padding: 0 }}>
-              {primaryDoctor.photoURL ? (
-                <img src={primaryDoctor.photoURL} alt={primaryDoctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-              ) : null}
-              <span style={{ display: primaryDoctor.photoURL ? 'none' : 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>{getInitials(primaryDoctor.name)}</span>
-            </div>
-            <div className="mp-yd-info">
-              <p className="mp-yd-name">Dr. {primaryDoctor.name}</p>
-              <p className="mp-yd-spec">{primaryDoctor.spec}</p>
-            </div>
-            <div className="mp-yd-actions">
-              <button className="mp-btn mp-btn-primary mp-btn-sm" onClick={() => navigate('/dashboard/appointments')}>
-                <Calendar size={13} /> Schedule
-              </button>
-              <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => navigate('/dashboard/messages')}>
-                <MessageSquare size={13} /> Message
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Appointments calendar — the dashboard had no calendar, so a patient
           could not see their scheduled dates without opening another page.
           Mirrors the mobile medical home. */}
@@ -621,226 +827,15 @@ function MedPatHome({ profile }) {
             : 'No appointments scheduled yet.'}
         </p>
       </div>
+      </div>{/* end mp-home-grid */}
 
-      {/* Quick Actions */}
-      <div className="mp-card" style={{ padding: '1.25rem' }}>
-        <div className="mp-card-header" style={{ marginBottom: '1rem' }}><h3>Quick Actions</h3></div>
-        <div className="mp-quick-actions-grid">
-          {[
-            primaryDoctor
-              ? { icon: Calendar, label: 'Book Appointment', color: '#1e6bb8', bg: '#eff6ff', action: () => navigate('/dashboard/appointments') }
-              : { icon: Plus, label: 'Find a Doctor', color: '#1e6bb8', bg: '#eff6ff', action: () => navigate('/doctors') },
-            { icon: Video, label: 'Video Calls', color: '#7c3aed', bg: '#f3e8ff', action: () => navigate('/dashboard/video') },
-            { icon: MessageSquare, label: 'Messages', color: '#0891b2', bg: '#ecfeff', action: () => navigate('/dashboard/messages') },
-            { icon: Pill, label: 'Prescriptions', color: '#059669', bg: '#f0fdf4', action: () => navigate('/dashboard/prescriptions') },
-            { icon: FileText, label: 'Medical History', color: '#d97706', bg: '#fffbeb', action: () => navigate('/dashboard/history') },
-            { icon: Shield, label: 'Insurance', color: '#0e7490', bg: '#ecfeff', action: () => navigate('/dashboard/insurance') },
-            { icon: Phone, label: 'Emergency Contacts', color: '#ea580c', bg: '#fff7ed', action: () => navigate('/dashboard/emergency') },
-            { icon: Download, label: 'Health Records', color: '#059669', bg: '#f0fdf4', action: () => navigate('/dashboard/records') },
-            { icon: Heart, label: 'Record Vitals', color: '#dc2626', bg: '#fef2f2', action: () => setShowVitalsModal(true) },
-            { icon: Pill, label: 'E-Pharmacy', color: '#7c3aed', bg: '#f3e8ff', action: () => navigate('/dashboard/epharmacy') },
-            { icon: Settings, label: 'My Profile', color: '#64748b', bg: '#f1f5f9', action: () => navigate('/dashboard/settings') },
-            { icon: AlertCircle, label: 'Support', color: '#dc2626', bg: '#fef2f2', action: () => navigate('/dashboard/support') },
-          ].map(({ icon: Icon, label, color, bg, action }) => (
-            <button key={label} className="mp-quick-action-btn" onClick={action} style={{ '--qa-color': color, '--qa-bg': bg }}>
-              <div className="mp-qa-icon"><Icon size={20} /></div>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Record Vitals Red Button */}
-      <div style={{ marginTop: '0.75rem', background: 'white', border: '2px solid #dc2626', borderRadius: 14, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }} onClick={() => setShowVitalsModal(true)}>
-        <Heart size={22} color="#dc2626" />
-        <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontWeight: 700, color: '#dc2626', fontSize: '0.95rem' }}>Record Your Vitals</p>
-          <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Log your blood pressure, heart rate, SpO2 and more for your doctor.</p>
-        </div>
-        <button style={{ background: '#dc2626', border: 'none', borderRadius: 8, color: 'white', fontWeight: 700, padding: '0.4rem 0.85rem', cursor: 'pointer', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-          Record
-        </button>
-      </div>
-
-      {/* "Tell doctor what's wrong" intake button — shown if no intake submitted yet */}
-      {showIntakeBtn && (
-        <div style={{ marginTop: '0.75rem', background: 'white', border: '2px solid #ef4444', borderRadius: 14, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }} onClick={() => setShowIntakeModal(true)}>
-          <AlertTriangle size={22} color="#ef4444" />
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontWeight: 700, color: '#ef4444', fontSize: '0.95rem' }}>Tell your doctor what's wrong</p>
-            <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Describe your symptoms so your doctor can prepare for your consultation.</p>
-          </div>
-          <button style={{ background: 'none', border: '1.5px solid #ef4444', borderRadius: 8, color: '#ef4444', fontWeight: 700, padding: '0.4rem 0.85rem', cursor: 'pointer', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-            Tell Us
-          </button>
-        </div>
-      )}
-
-      {/* Daily Mood Popup Modal */}
-      {showMoodModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 480, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Smile size={22} color="#1e6bb8" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Daily Check-In</h3>
-              </div>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowMoodModal(false)}>✕</button>
-            </div>
-            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Tell your doctor how you're feeling today.</p>
-
-            <p style={{ margin: '0 0 0.5rem', fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>How are you feeling? *</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-              {['Great','Good','Okay','Poor','Bad'].map(m => (
-                <button key={m} onClick={() => setMoodForm(f => ({ ...f, mood: m }))} style={{ padding: '0.4rem 1rem', borderRadius: 20, border: `2px solid ${moodForm.mood === m ? '#1e6bb8' : '#e2e8f0'}`, background: moodForm.mood === m ? '#1e6bb8' : 'white', color: moodForm.mood === m ? 'white' : '#64748b', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
-                  {m}
-                </button>
-              ))}
-            </div>
-
-            {[
-              { key: 'painLevel', label: 'Pain Level (0–10)', placeholder: '0 = no pain, 10 = severe', type: 'number' },
-              { key: 'symptoms', label: 'Symptoms Today', placeholder: 'e.g. Headache, nausea (comma-separated)' },
-              { key: 'medications', label: 'Medications Taken Today', placeholder: 'e.g. Amoxicillin 500mg' },
-              { key: 'notes', label: 'Additional Notes', placeholder: 'Any other concerns...', multiline: true },
-            ].map(f => (
-              <div key={f.key} style={{ marginBottom: '0.85rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '0.3rem' }}>{f.label}</label>
-                {f.multiline ? (
-                  <textarea style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', resize: 'vertical', minHeight: 70, boxSizing: 'border-box' }}
-                    placeholder={f.placeholder} value={moodForm[f.key]} onChange={e => setMoodForm(p => ({ ...p, [f.key]: e.target.value }))} />
-                ) : (
-                  <input type={f.type || 'text'} style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
-                    placeholder={f.placeholder} value={moodForm[f.key]} onChange={e => setMoodForm(p => ({ ...p, [f.key]: e.target.value }))} />
-                )}
-              </div>
-            ))}
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-              <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowMoodModal(false)}>Skip for Now</button>
-              <button style={{ flex: 2, padding: '0.7rem', background: '#1e6bb8', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !moodForm.mood || submittingMood ? 'not-allowed' : 'pointer', opacity: !moodForm.mood || submittingMood ? 0.6 : 1 }} onClick={submitMood} disabled={!moodForm.mood || submittingMood}>
-                {submittingMood ? 'Submitting…' : 'Submit Check-In'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Vitals Modal */}
-      {showVitalsModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Heart size={20} color="#dc2626" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>Record Vitals</h3>
-              </div>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowVitalsModal(false)}>✕</button>
-            </div>
-            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Enter your current readings. Leave fields blank if not available.</p>
-
-            {/* Blood Pressure */}
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.4rem' }}>❤️ Blood Pressure (mmHg)</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.2rem' }}>Systolic</label>
-                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 120" value={vitalsForm.bpSystolic} onChange={e => setVitalsForm(f => ({ ...f, bpSystolic: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.2rem' }}>Diastolic</label>
-                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 80" value={vitalsForm.bpDiastolic} onChange={e => setVitalsForm(f => ({ ...f, bpDiastolic: e.target.value }))} />
-                </div>
-              </div>
-            </div>
-
-            {/* Heart Rate + SpO2 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.4rem' }}>💓 Heart Rate (bpm)</label>
-                <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 72" value={vitalsForm.heartRate} onChange={e => setVitalsForm(f => ({ ...f, heartRate: e.target.value }))} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#16a34a', marginBottom: '0.4rem' }}>🫁 SpO2 (%)</label>
-                <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #bbf7d0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#f0fdf4' }} placeholder="e.g. 98" value={vitalsForm.spo2} onChange={e => setVitalsForm(f => ({ ...f, spo2: e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Respiratory Rate + Temperature */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '0.4rem' }}>🌬️ Respiratory Rate (breaths/min)</label>
-                <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #bfdbfe', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#eff6ff' }} placeholder="e.g. 16" value={vitalsForm.respiratoryRate} onChange={e => setVitalsForm(f => ({ ...f, respiratoryRate: e.target.value }))} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#d97706', marginBottom: '0.4rem' }}>🌡️ Temperature</label>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <input type="number" style={{ flex: 1, padding: '0.6rem 0.85rem', border: '1.5px solid #fed7aa', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff7ed' }} placeholder="e.g. 37.0" value={vitalsForm.temperature} onChange={e => setVitalsForm(f => ({ ...f, temperature: e.target.value }))} />
-                  <select style={{ padding: '0.6rem 0.5rem', border: '1.5px solid #fed7aa', borderRadius: 8, fontSize: '0.875rem', outline: 'none', background: '#fff7ed', cursor: 'pointer' }} value={vitalsForm.tempUnit} onChange={e => setVitalsForm(f => ({ ...f, tempUnit: e.target.value }))}>
-                    <option value="C">°C</option>
-                    <option value="F">°F</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => { setShowVitalsModal(false); setVitalsForm(EMPTY_VITALS); }}>Cancel</button>
-              <button style={{ flex: 2, padding: '0.7rem', background: '#dc2626', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: submittingVitals ? 'not-allowed' : 'pointer', opacity: submittingVitals ? 0.6 : 1 }} onClick={submitVitals} disabled={submittingVitals}>
-                {submittingVitals ? 'Saving…' : '❤️ Save Vitals'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Intake Modal */}
-      {showIntakeModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 500, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <AlertTriangle size={20} color="#ef4444" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ef4444' }}>Tell Your Doctor What's Wrong</h3>
-              </div>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowIntakeModal(false)}>✕</button>
-            </div>
-            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Describe your main health concern so your doctor can prepare for your consultation.</p>
-
-            {[
-              { key: 'complaint', label: 'Main Complaint *', placeholder: 'e.g. I have been experiencing chest pain for 3 days', multiline: true },
-              { key: 'duration', label: 'How long have you had this?', placeholder: 'e.g. 3 days, 2 weeks' },
-              { key: 'severity', label: 'Severity (1–10)', placeholder: '10 = worst possible', type: 'number' },
-              { key: 'symptoms', label: 'Other Symptoms', placeholder: 'e.g. Fever, headache (comma-separated)' },
-              { key: 'notes', label: 'Additional Notes', placeholder: 'Anything else your doctor should know...', multiline: true },
-            ].map(f => (
-              <div key={f.key} style={{ marginBottom: '0.85rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '0.3rem' }}>{f.label}</label>
-                {f.multiline ? (
-                  <textarea style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', resize: 'vertical', minHeight: 70, boxSizing: 'border-box' }}
-                    placeholder={f.placeholder} value={intakeForm[f.key]} onChange={e => setIntakeForm(p => ({ ...p, [f.key]: e.target.value }))} />
-                ) : (
-                  <input type={f.type || 'text'} style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
-                    placeholder={f.placeholder} value={intakeForm[f.key]} onChange={e => setIntakeForm(p => ({ ...p, [f.key]: e.target.value }))} />
-                )}
-              </div>
-            ))}
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-              <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowIntakeModal(false)}>Cancel</button>
-              <button style={{ flex: 2, padding: '0.7rem', background: '#ef4444', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !intakeForm.complaint.trim() || submittingIntake ? 'not-allowed' : 'pointer', opacity: !intakeForm.complaint.trim() || submittingIntake ? 0.6 : 1 }} onClick={submitIntake} disabled={!intakeForm.complaint.trim() || submittingIntake}>
-                {submittingIntake ? 'Submitting…' : 'Submit'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>{/* end mp-home-right */}
-    </div>{/* end mp-home-main-grid */}
-
-    {/* ── Health Overview — last section, full width ── */}
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.25rem', marginTop: '1.25rem', alignItems: 'start' }}>
+      {/* ── Health Overview ──────────────────────────────────────────────
+          Lives at the foot of the LEFT column, not below the whole grid.
+          The right column (doctor, calendar, quick actions, vitals) is far
+          taller than the cards above, so as a full-width trailer these two
+          started only after it ended — leaving a screen-high empty band down
+          the left side. Inside the column they simply fill it. ── */}
+      <div className="mp-health-overview-grid">
 
       {/* LEFT card: Mood & Pain Trend — line chart style */}
       <div className="mp-card" style={{ padding: '1.75rem' }}>
@@ -939,6 +934,199 @@ function MedPatHome({ profile }) {
       </div>
 
     </div>
+      </div>{/* end mp-home-body */}
+
+
+      <ModalHost>
+        {/* Daily Mood Popup Modal */}
+        {showMoodModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 480, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Smile size={22} color="#1e6bb8" />
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Daily Check-In</h3>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={dismissMoodModal}>✕</button>
+              </div>
+              <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Tell your doctor how you're feeling today.</p>
+
+              <p style={{ margin: '0 0 0.5rem', fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>How are you feeling? *</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                {['Great','Good','Okay','Poor','Bad'].map(m => (
+                  <button key={m} onClick={() => setMoodForm(f => ({ ...f, mood: m }))} style={{ padding: '0.4rem 1rem', borderRadius: 20, border: `2px solid ${moodForm.mood === m ? '#1e6bb8' : '#e2e8f0'}`, background: moodForm.mood === m ? '#1e6bb8' : 'white', color: moodForm.mood === m ? 'white' : '#64748b', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+
+              {[
+                { key: 'painLevel', label: 'Pain Level (0–10)', placeholder: '0 = no pain, 10 = severe', type: 'number' },
+                { key: 'symptoms', label: 'Symptoms Today', placeholder: 'e.g. Headache, nausea (comma-separated)' },
+                { key: 'medications', label: 'Medications Taken Today', placeholder: 'e.g. Amoxicillin 500mg' },
+                { key: 'notes', label: 'Additional Notes', placeholder: 'Any other concerns...', multiline: true },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom: '0.85rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '0.3rem' }}>{f.label}</label>
+                  {f.multiline ? (
+                    <textarea style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', resize: 'vertical', minHeight: 70, boxSizing: 'border-box' }}
+                      placeholder={f.placeholder} value={moodForm[f.key]} onChange={e => setMoodForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                  ) : (
+                    <input type={f.type || 'text'} style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+                      placeholder={f.placeholder} value={moodForm[f.key]} onChange={e => setMoodForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                  )}
+                </div>
+              ))}
+
+              {moodError ? (
+                <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', fontWeight: 600, color: '#b91c1c' }}>{moodError}</p>
+              ) : null}
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={dismissMoodModal}>Skip for Now</button>
+                <button style={{ flex: 2, padding: '0.7rem', background: '#1e6bb8', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !moodForm.mood || submittingMood ? 'not-allowed' : 'pointer', opacity: !moodForm.mood || submittingMood ? 0.6 : 1 }} onClick={submitMood} disabled={!moodForm.mood || submittingMood}>
+                  {submittingMood ? 'Submitting…' : 'Submit Check-In'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Vitals Modal */}
+        {showVitalsModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Heart size={20} color="#dc2626" />
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>
+                    {vitalsMode === 'view' ? 'Your Latest Vitals' : latestVitals ? 'Update Vitals' : 'Record Vitals'}
+                  </h3>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowVitalsModal(false)}>✕</button>
+              </div>
+              <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>
+                {vitalsMode === 'view'
+                  ? `Your most recent reading${latestVitals?.recordedAt ? ', recorded ' + fmtDate(String(latestVitals.recordedAt).slice(0, 10)) : ''}.`
+                  : 'Enter your current readings. Leave fields blank if not available.'}
+              </p>
+
+              {/* A disabled fieldset makes every control below read-only in view
+                  mode without duplicating the form. */}
+              <fieldset disabled={vitalsMode === 'view'} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
+
+              {/* Blood Pressure */}
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.4rem' }}>❤️ Blood Pressure (mmHg)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.2rem' }}>Systolic</label>
+                    <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 120" value={vitalsForm.bpSystolic} onChange={e => setVitalsForm(f => ({ ...f, bpSystolic: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.2rem' }}>Diastolic</label>
+                    <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 80" value={vitalsForm.bpDiastolic} onChange={e => setVitalsForm(f => ({ ...f, bpDiastolic: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Heart Rate + SpO2 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#b91c1c', marginBottom: '0.4rem' }}>💓 Heart Rate (bpm)</label>
+                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #fecaca', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff0f0' }} placeholder="e.g. 72" value={vitalsForm.heartRate} onChange={e => setVitalsForm(f => ({ ...f, heartRate: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#16a34a', marginBottom: '0.4rem' }}>🫁 SpO2 (%)</label>
+                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #bbf7d0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#f0fdf4' }} placeholder="e.g. 98" value={vitalsForm.spo2} onChange={e => setVitalsForm(f => ({ ...f, spo2: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Respiratory Rate + Temperature */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '0.4rem' }}>🌬️ Respiratory Rate (breaths/min)</label>
+                  <input type="number" style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #bfdbfe', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#eff6ff' }} placeholder="e.g. 16" value={vitalsForm.respiratoryRate} onChange={e => setVitalsForm(f => ({ ...f, respiratoryRate: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#d97706', marginBottom: '0.4rem' }}>🌡️ Temperature</label>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <input type="number" style={{ flex: 1, padding: '0.6rem 0.85rem', border: '1.5px solid #fed7aa', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box', background: '#fff7ed' }} placeholder="e.g. 37.0" value={vitalsForm.temperature} onChange={e => setVitalsForm(f => ({ ...f, temperature: e.target.value }))} />
+                    <select style={{ padding: '0.6rem 0.5rem', border: '1.5px solid #fed7aa', borderRadius: 8, fontSize: '0.875rem', outline: 'none', background: '#fff7ed', cursor: 'pointer' }} value={vitalsForm.tempUnit} onChange={e => setVitalsForm(f => ({ ...f, tempUnit: e.target.value }))}>
+                      <option value="C">°C</option>
+                      <option value="F">°F</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              </fieldset>
+
+              {vitalsError ? (
+                <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', fontWeight: 600, color: '#b91c1c' }}>{vitalsError}</p>
+              ) : null}
+
+              {vitalsMode === 'view' ? (
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowVitalsModal(false)}>Close</button>
+                  <button style={{ flex: 2, padding: '0.7rem', background: '#dc2626', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: 'pointer' }} onClick={() => setVitalsMode('edit')}>
+                    Edit Readings
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => { setShowVitalsModal(false); setVitalsForm(EMPTY_VITALS); setVitalsError(''); }}>Cancel</button>
+                  <button style={{ flex: 2, padding: '0.7rem', background: '#dc2626', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: submittingVitals ? 'not-allowed' : 'pointer', opacity: submittingVitals ? 0.6 : 1 }} onClick={submitVitals} disabled={submittingVitals}>
+                    {submittingVitals ? 'Saving…' : latestVitals ? '❤️ Save Changes' : '❤️ Save Vitals'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Intake Modal */}
+        {showIntakeModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div style={{ background: 'white', borderRadius: 20, padding: '2rem', maxWidth: 500, width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <AlertTriangle size={20} color="#ef4444" />
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ef4444' }}>Tell Your Doctor What's Wrong</h3>
+                </div>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#64748b' }} onClick={() => setShowIntakeModal(false)}>✕</button>
+              </div>
+              <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#64748b' }}>Describe your main health concern so your doctor can prepare for your consultation.</p>
+
+              {[
+                { key: 'complaint', label: 'Main Complaint *', placeholder: 'e.g. I have been experiencing chest pain for 3 days', multiline: true },
+                { key: 'duration', label: 'How long have you had this?', placeholder: 'e.g. 3 days, 2 weeks' },
+                { key: 'severity', label: 'Severity (1–10)', placeholder: '10 = worst possible', type: 'number' },
+                { key: 'symptoms', label: 'Other Symptoms', placeholder: 'e.g. Fever, headache (comma-separated)' },
+                { key: 'notes', label: 'Additional Notes', placeholder: 'Anything else your doctor should know...', multiline: true },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom: '0.85rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '0.3rem' }}>{f.label}</label>
+                  {f.multiline ? (
+                    <textarea style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', resize: 'vertical', minHeight: 70, boxSizing: 'border-box' }}
+                      placeholder={f.placeholder} value={intakeForm[f.key]} onChange={e => setIntakeForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                  ) : (
+                    <input type={f.type || 'text'} style={{ width: '100%', padding: '0.6rem 0.85rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
+                      placeholder={f.placeholder} value={intakeForm[f.key]} onChange={e => setIntakeForm(p => ({ ...p, [f.key]: e.target.value }))} />
+                  )}
+                </div>
+              ))}
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button style={{ flex: 1, padding: '0.7rem', background: '#f1f5f9', border: 'none', borderRadius: 10, color: '#64748b', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowIntakeModal(false)}>Cancel</button>
+                <button style={{ flex: 2, padding: '0.7rem', background: '#ef4444', border: 'none', borderRadius: 10, color: 'white', fontWeight: 700, cursor: !intakeForm.complaint.trim() || submittingIntake ? 'not-allowed' : 'pointer', opacity: !intakeForm.complaint.trim() || submittingIntake ? 0.6 : 1 }} onClick={submitIntake} disabled={!intakeForm.complaint.trim() || submittingIntake}>
+                  {submittingIntake ? 'Submitting…' : 'Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </ModalHost>
 
     </div>
   );
@@ -1235,11 +1423,15 @@ function MedPatAppointments({ profile }) {
                   </div>
                   <div style={{ display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'0.4rem' }}>
                     <StatusBadge status={a.status} />
-                    {a.status==='confirmed' && (
+                    {a.status==='confirmed' && (getJoinWindow(a).canJoin ? (
                       <button className="mp-btn mp-btn-primary mp-btn-sm" onClick={() => navigate('/dashboard/video')}>
                         <Video size={12}/> Join Call
                       </button>
-                    )}
+                    ) : (
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                        {getJoinWindow(a).state === 'ended' ? 'Closed' : `Opens ${getJoinWindow(a).waitLabel}`}
+                      </span>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -3144,6 +3336,19 @@ function MedPatSettings({ profile }) {
         },
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      // Tell the rest of the dashboard the location moved. Without this the
+      // card on home kept showing whatever login resolved, so a patient who
+      // corrected their city here saw the old one until they signed out.
+      publishLocationUpdate({
+        country: form.country || '',
+        city: form.city || '',
+        area: form.area || '',
+        region: form.region || '',
+        street: form.street || '',
+        ghanaDigitalAddress: form.ghanaDigitalAddress || '',
+        latitude,
+        longitude,
+      });
       flash('Profile saved successfully.');
     } catch { flash('Failed to save. Please try again.'); }
     finally { setSaving(false); }
@@ -3622,6 +3827,36 @@ function MedPatSupport({ profile }) {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [emailingAdmin, setEmailingAdmin] = useState(false);
+
+  /**
+   * Files the ticket AND emails the administrators now, for anyone who would
+   * rather reach a person than wait on a queue. Identity is read from the auth
+   * token on the backend, so nothing identifying is sent from here.
+   */
+  const handleEmailAdmin = async () => {
+    if (!issueType) { setError('Please select an issue type.'); return; }
+    if (!subject.trim()) { setError('Please enter a subject.'); return; }
+    if (!description.trim()) { setError('Please describe your issue.'); return; }
+    setError('');
+    setEmailingAdmin(true);
+    try {
+      await api('/api/v1/support/contact-admin', {
+        method: 'POST',
+        body: {
+          subject: subject.trim(),
+          message: description.trim(),
+          category: issueType,
+          priority: 'normal',
+        },
+      });
+      setSuccess(true);
+    } catch (err) {
+      setError(err?.message || 'Could not send the email. Please try again.');
+    } finally {
+      setEmailingAdmin(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -3746,6 +3981,18 @@ function MedPatSupport({ profile }) {
               <button className="mp-btn mp-btn-primary" type="submit" disabled={submitting} style={{ width: '100%' }}>
                 {submitting ? 'Submitting…' : 'Submit Ticket'}
               </button>
+              <button
+                type="button"
+                className="mp-btn mp-btn-outline"
+                onClick={handleEmailAdmin}
+                disabled={emailingAdmin}
+                style={{ width: '100%', marginTop: '0.6rem' }}
+              >
+                {emailingAdmin ? 'Sending…' : 'Email an Administrator'}
+              </button>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center' }}>
+                Sends your message to our admin team by email. You will receive a copy.
+              </p>
             </form>
           </div>
         </div>

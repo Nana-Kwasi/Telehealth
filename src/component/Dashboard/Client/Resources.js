@@ -37,6 +37,16 @@ import { hydrateBookContent } from '../../../utils/noteSections';
 import ResourceMedia from '../../Common/ResourceMedia';
 
 /** Tags may be an array or a comma-separated string, depending on where saved. */
+// A multi-answer worksheet field comes back in three shapes depending on where it
+// was filled in: an array (web), a "|"-joined string (mobile) or a comma list
+// (older rows). Read all three so an answer given on the phone still shows its
+// ticks on the web.
+function pickedList(answer) {
+  if (Array.isArray(answer)) return answer;
+  if (answer === undefined || answer === null || answer === '') return [];
+  return String(answer).split(/\s*[|,]\s*/).filter(Boolean);
+}
+
 function toTagList(tags) {
   if (Array.isArray(tags)) return tags.filter(Boolean);
   if (typeof tags === 'string') return tags.split(',').map((t) => t.trim()).filter(Boolean);
@@ -237,7 +247,11 @@ export default function ClientResources() {
             .map(note => ({
               ...note,
               type: 'note',
-              noteType: 'clinical'
+              // Keep the note's own template type ('soap' / 'progress' / …).
+              // Forcing 'clinical' meant every note, whatever template the
+              // therapist chose, was labelled the same in the list, the viewer
+              // and the downloaded PDF.
+              noteType: note.noteType || 'note',
             }));
 
           // Fetch therapy books based on target audience
@@ -1094,7 +1108,36 @@ export default function ClientResources() {
                               </div>
                             )}
                             
-                            {field.type === 'checkbox' && (
+                            {/* A checkbox field now carries the therapist's own
+                                list of boxes. Older worksheets saved before that
+                                have no options — those still render as the single
+                                "I agree" tick they were authored as. */}
+                            {field.type === 'checkbox' && (field.options?.length ? (
+                              <div className="multiple-choice-group">
+                                {field.options.map((option, optIndex) => {
+                                  const answered = !isEditable && hasExistingResponse
+                                    ? clientResponse.responses[index]
+                                    : worksheetResponses[index];
+                                  const picked = pickedList(answered);
+                                  return (
+                                    <label key={optIndex} className="checkbox-option">
+                                      <input
+                                        type="checkbox"
+                                        checked={picked.includes(option)}
+                                        onChange={(e) => handleResponseChange(
+                                          index,
+                                          e.target.checked
+                                            ? [...picked, option]
+                                            : picked.filter(v => v !== option),
+                                        )}
+                                        disabled={!isEditable}
+                                      />
+                                      <span>{option}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            ) : (
                               <label className="checkbox-option">
                                 <input
                                   type="checkbox"
@@ -1110,13 +1153,13 @@ export default function ClientResources() {
                                 />
                                 <span>I agree</span>
                               </label>
-                            )}
+                            ))}
                             
                             {field.type === 'rating' && (
                               <div className="rating-group">
                                 <div className="rating-scale">
                                   <span>1</span>
-                                  {[1,2,3,4,5,6,7,8,9,10].map(num => (
+                                  {Array.from({ length: Number(field.max) || 10 }, (_, i) => i + 1).map(num => (
                                     <label key={num} className="rating-option">
                                       <input
                                         type="radio"
@@ -1135,7 +1178,7 @@ export default function ClientResources() {
                                       <span className="rating-dot">{num}</span>
                                     </label>
                                   ))}
-                                  <span>10</span>
+                                  <span>{Number(field.max) || 10}</span>
                                 </div>
                               </div>
                             )}
@@ -1146,9 +1189,13 @@ export default function ClientResources() {
                                   <label key={optIndex} className="checkbox-option">
                                     <input
                                       type="checkbox"
-                                      checked={(worksheetResponses[index] || []).includes(option)}
+                                      checked={pickedList(
+                                        !isEditable && hasExistingResponse
+                                          ? clientResponse.responses[index]
+                                          : worksheetResponses[index],
+                                      ).includes(option)}
                                       onChange={(e) => {
-                                        const currentValues = worksheetResponses[index] || [];
+                                        const currentValues = pickedList(worksheetResponses[index]);
                                         const newValues = e.target.checked
                                           ? [...currentValues, option]
                                           : currentValues.filter(v => v !== option);

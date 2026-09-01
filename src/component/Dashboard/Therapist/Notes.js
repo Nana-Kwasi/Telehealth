@@ -110,7 +110,8 @@ export default function TherapistNotes() {
         // For therapy books, update if they don't have clientName
         // If targetAudience is 'specific', they should have assignedClients
         // If targetAudience is 'all', they won't have assignedClients but still need a clientName
-        return !note.clientName;
+        // Books have no single client — nothing to back-fill.
+        return false;
       } else {
         // For regular notes, check if they have clientId but no clientName
         return note.clientId && !note.clientName;
@@ -408,30 +409,19 @@ export default function TherapistNotes() {
       
       if (noteForm.noteType === 'therapyBook') {
         collectionName = 'therapyBooks';
-      } else {
-        // For regular notes, ensure client visibility is handled
-        if (noteForm.visibleToClient && noteForm.clientId) {
-          // Also save a copy to notes collection for client access
-          const clientNoteData = {
-            therapistId: currentUser.uid,
-            therapistName: currentUser.displayName || 'Therapist',
-            clientId: noteForm.clientId,
-            clientName: clientName,
-            noteType: noteForm.noteType,
-            title: noteForm.noteType.charAt(0).toUpperCase() + noteForm.noteType.slice(1) + ' Note',
-            noteContent: Object.keys(template?.fields || {}).reduce((content, field) => {
-              if (noteForm[field]) {
-                content += `${field.charAt(0).toUpperCase() + field.slice(1)}: ${noteForm[field]}\n\n`;
-              }
-              return content;
-            }, ''),
-            sessionDate: noteForm.sessionDate,
-            createdAt: serverTimestamp()
-          };
-          
-          await addDoc(collection(db, 'notes'), clientNoteData);
-        }
       }
+      // NOTE: there is deliberately no second "copy for the client" write here.
+      //
+      // This used to also addDoc into `notes`, a Firestore-era duplicate so the
+      // client had something to read. Both stores now resolve to clinical_notes,
+      // so one therapist action produced TWO rows and the client's shelf listed
+      // the same note twice — once with the real content and once with only
+      // "title: Progress Note" (that copy built its body from
+      // Object.keys(template.fields), but `fields` is an ARRAY, so the keys were
+      // "0","1","2" and no field value was ever picked up).
+      //
+      // The single note already carries `visibleToClient`, and the client shelf
+      // filters on exactly that, so nothing needs duplicating.
 
       await addDoc(collection(db, collectionName), noteData);
       setShowCreateModal(false);
@@ -589,9 +579,18 @@ export default function TherapistNotes() {
   };
 
   const filteredNotes = notes.filter(note => {
-    const matchesSearch = note.clientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         note.subjective?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         note.objective?.toLowerCase().includes(searchQuery.toLowerCase());
+    // A therapy book belongs to a shelf, not to one client, so it carries no
+    // clientName. Matching only on clientName/subjective/objective made every
+    // book evaluate to `undefined` — falsy — and vanish from the list. They
+    // appeared for about a second only because the client-name backfill briefly
+    // wrote a name into local state; the next poll replaced it with the API row
+    // (which has no clientName) and they disappeared for good.
+    const q = searchQuery.trim().toLowerCase();
+    const haystack = [
+      note.clientName, note.title, note.bookTitle, note.description,
+      note.subjective, note.objective, note.noteContent,
+    ].filter(Boolean).join(' ').toLowerCase();
+    const matchesSearch = !q || haystack.includes(q);
     const matchesFilter = filterType === 'all' || note.noteType === filterType;
     return matchesSearch && matchesFilter;
   });
@@ -682,8 +681,11 @@ export default function TherapistNotes() {
             <div className="note-header">
               <div className="note-info">
                 <h3 className="note-title">
-                  {note.noteType === 'therapyBook' && note.targetAudience === 'all' 
-                    ? templates[note.noteType]?.name || 'Therapy Book'
+                  {/* Books are titled by their own title — they are not written
+                      for a single client, so "Unknown Client - Therapy Book" was
+                      both wrong and identical across every book. */}
+                  {note.noteType === 'therapyBook'
+                    ? (note.title || note.bookTitle || 'Untitled book')
                     : note.clientNames && note.clientNames.length > 1
                       ? `${note.clientNames.join(', ')} - ${templates[note.noteType]?.name || 'Note'}`
                       : `${note.clientName || 'Unknown Client'} - ${templates[note.noteType]?.name || 'Note'}`

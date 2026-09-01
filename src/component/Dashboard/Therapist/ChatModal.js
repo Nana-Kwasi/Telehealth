@@ -4,7 +4,7 @@ import {
   collection, addDoc, onSnapshot, orderBy, query,
   serverTimestamp, doc, updateDoc, where, getDocs
 } from '../../../services/firestoreShim';
-import { Send, X, Phone, Video, MoreVertical, Smile, Paperclip, Image as ImageIcon, Check, CheckCheck } from 'lucide-react';
+import { Send, X, Phone, Video, MoreVertical, Smile, Paperclip, Image as ImageIcon, Check, CheckCheck, Download } from 'lucide-react';
 import { uploadFile } from '../../../services/apiClient';
 import ChatImage from '../../Common/ChatImage';
 import VoiceNote from '../../Common/VoiceNote';
@@ -325,7 +325,7 @@ export default function ChatModal({ target, type, onClose }) {
                               }}
                               title={`Download ${fileNameOf(msg)}`}
                             >
-                              <Paperclip size={16} />
+                              <Download size={16} style={{ flexShrink: 0 }} />
                               <span style={{ fontWeight: 600 }}>{fileNameOf(msg)}</span>
                               {fileSizeOf(msg) && (
                                 <small style={{ opacity: 0.75 }}>{fileSizeOf(msg)}</small>
