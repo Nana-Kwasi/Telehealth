@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import AppointmentRiskPanel from '../../Common/AppointmentRiskPanel';
 import {
   Calendar, Check, X, List, ChevronLeft, ChevronRight,
   Clock, Video, Phone, MessageCircle, AlertTriangle, Plus,
@@ -314,6 +315,10 @@ export default function DoctorAppointments({ profile }) {
 
   return (
     <div className="doctor-page">
+      {/* Which of these is worth a reminder, and why. Hides itself when
+          nothing is worth chasing. */}
+      <AppointmentRiskPanel />
+
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>

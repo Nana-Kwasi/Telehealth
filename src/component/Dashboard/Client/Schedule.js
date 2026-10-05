@@ -24,7 +24,10 @@ import {
   getDoc,
   serverTimestamp 
 } from '../../../services/firestoreShim';
+import { payForBooking } from '../../../services/paystack';
+import { therapistFee } from '../../../utils/therapistFee';
 import './Schedule.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function ClientSchedule() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -278,6 +281,28 @@ export default function ClientSchedule() {
         // "client" 500'd. See the same fix in VideoCall.js.
         createdBy: clientData.id
       };
+
+      // ── Pay before the session exists ────────────────────────────────────
+      // The request used to be written straight to the backend, so a therapy
+      // session was booked without any charge. A therapist with no rate set
+      // skips the step rather than blocking the booking.
+      const fee = therapistFee(therapistData) ?? 0;
+      const paid = await payForBooking({
+        email: clientData.email,
+        amount: fee,
+        purpose: 'therapy_session',
+        metadata: { therapistId: therapistData?.id, clientId: clientData.id },
+      });
+
+      if (!paid.ok) {
+        setMessage({ type: 'error', text: paid.reason || 'Payment was not completed.' });
+        setIsSubmitting(false);
+        return;
+      }
+
+      appointmentData.paymentReference = paid.reference;
+      appointmentData.amountPaid = paid.amount;
+      appointmentData.currency = paid.currency;
 
       await addDoc(collection(db, 'scheduledCalls'), appointmentData);
       
@@ -578,7 +603,7 @@ export default function ClientSchedule() {
               <div className="client-schedule-therapist-info">
                 <div className="client-schedule-therapist-avatar">
                   {therapistData.photoURL ? (
-                    <img src={therapistData.photoURL} alt={therapistData.name} />
+                    <img src={resolveFileUrl(therapistData.photoURL)} alt={therapistData.name} />
                   ) : (
                     <User size={24} />
                   )}

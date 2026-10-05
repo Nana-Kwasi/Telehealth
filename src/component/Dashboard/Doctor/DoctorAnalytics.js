@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, DollarSign, Users, Calendar, Star, Clock } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, getDoc } from '../../../services/firestoreShim';
+import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
 
 export default function DoctorAnalytics({ profile }) {
   const [loading, setLoading] = useState(true);
@@ -118,6 +119,10 @@ export default function DoctorAnalytics({ profile }) {
         <h1>Analytics</h1>
         <p>Track your practice performance and earnings</p>
       </div>
+
+      {/* Counted server-side against the previous period; the model only
+          writes the paragraph over those figures. */}
+      <PracticeAnalyticsPanel scope="me" />
 
       {/* Top Stats */}
       <div className="doctor-stats-grid">

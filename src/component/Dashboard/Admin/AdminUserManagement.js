@@ -8,9 +8,19 @@ import {
   buildHomeCareNurseUidSet,
 } from '../../../utils/authUserFilters';
 
+/** A therapy client's tier decides which of the two client tabs they belong in. */
+const isSecondOpinionRow = (r) =>
+  String(r?.membershipTier || r?.membership_tier || '').toLowerCase() === 'second_opinion';
+
 const TABS = [
   { key: 'Medical Patients', col: 'auth',            icon: '🤒', roleLabel: 'Medical Patient' },
   { key: 'Clients',          col: 'clients',         icon: '🧘', roleLabel: 'Therapy Client'  },
+  // Second Opinion users are CLIENT-role accounts too, so they arrive in the
+  // same `clients` collection. They are a different product — one-off review,
+  // no membership — so they get their own tab and are kept OUT of Clients
+  // rather than inflating the member count.
+  { key: 'Second Opinion',   col: 'clients',         icon: '🔎', roleLabel: 'Second Opinion',
+    tier: 'second_opinion' },
   { key: 'Doctors',          col: 'doctors',         icon: '🩺', roleLabel: 'Doctor'          },
   { key: 'Therapists',       col: 'therapists',      icon: '🧠', roleLabel: 'Therapist'       },
   { key: 'Nurses',           col: 'homeCareNurses',  icon: '🏠', roleLabel: 'Home Care Nurse' },
@@ -46,6 +56,13 @@ export default function AdminUserManagement() {
           c[t.key] = snap.docs.filter((d) =>
             isMedicalPatientAuthDoc({ id: d.id, ...d.data() }, therapyUids, nurseUids)
           ).length;
+        } else if (t.col === 'clients') {
+          // Same collection, split by tier — so the two counts add up to the
+          // total instead of double-counting.
+          const wantSecondOpinion = t.tier === 'second_opinion';
+          c[t.key] = snap.docs.filter(
+            (d) => isSecondOpinionRow({ id: d.id, ...d.data() }) === wantSecondOpinion,
+          ).length;
         } else {
           c[t.key] = snap.size;
         }
@@ -68,6 +85,10 @@ export default function AdminUserManagement() {
       const nurseUids = nursesSnap ? buildHomeCareNurseUidSet(nursesSnap) : null;
       let rows = snap.docs.map(d => ({ id: d.id, ...d.data(), _col: tabCfg.col, _roleLabel: tabCfg.roleLabel }));
       if (t === 'Medical Patients') rows = rows.filter((r) => isMedicalPatientAuthDoc(r, therapyUids, nurseUids));
+      if (tabCfg.col === 'clients') {
+        const wantSecondOpinion = tabCfg.tier === 'second_opinion';
+        rows = rows.filter((r) => isSecondOpinionRow(r) === wantSecondOpinion);
+      }
       rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setData(rows);
     } catch (e) {

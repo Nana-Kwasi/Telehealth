@@ -56,7 +56,13 @@ export default function ParentConsent() {
 
     saveJson(TEEN_STORAGE_KEYS.consent, consentData);
     saveJson(TEEN_STORAGE_KEYS.onboard, buildTeenOnboardPayload(consentData));
-    navigate('/questionnaire');
+    // Into the SAME cached flow the individual path uses. Nothing has been
+    // written server-side up to this point — parent, child and consent details
+    // have all been local — so the teen journey can defer account creation
+    // until payment succeeds, exactly like individual. `flow=medpsych` is what
+    // routes the questionnaire into the cached path instead of straight to
+    // sign-up. Matches the mobile teen flow.
+    navigate('/questionnaire?flow=medpsych');
   };
 
   return (

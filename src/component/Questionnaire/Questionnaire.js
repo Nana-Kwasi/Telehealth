@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { steps, phq9Questions } from './steps';
 import './Questionnaire.css';
 import { db } from '../../services/firestoreShim';
@@ -20,6 +20,7 @@ import {
   getQuestionnaireAgeOptions,
   validateQuestionnaireAge,
 } from '../../utils/therapyAgeValidation';
+import { updateFlow as updateMedPsychFlow } from '../../utils/medpsychFlow';
 
 const storageKey = 'th.onboard';
 
@@ -43,6 +44,18 @@ const questionnaireDisplayName = (d = {}) =>
 
 export default function Questionnaire() {
   const navigate = useNavigate();
+
+  /**
+   * Psychology & Counseling reuses this questionnaire.
+   *
+   * That flow must not write anything before payment, so in this mode the
+   * answers are cached into the medpsych flow and the user continues to
+   * psychiatrist selection instead of account creation. Everything else — the
+   * steps, validation, PHQ-9 scoring — is shared, so the two intakes cannot
+   * drift apart.
+   */
+  const location = useLocation();
+  const medpsychMode = new URLSearchParams(location.search).get('flow') === 'medpsych';
   const [data, setData] = useState(getInitial());
   const isTeen = data.therapyType === 'teen';
   const childInfo = data.childInfo || loadJson(TEEN_STORAGE_KEYS.child);
@@ -58,11 +71,20 @@ export default function Questionnaire() {
   const [loading, setLoading] = useState(false);
 
   const activeSteps = useMemo(() => {
+    // Psychology & Counseling already collected consent at its policy gate,
+    // one tick per document with a timestamp, written to policy_acceptances_v2.
+    // Appending the consent step here asked the same person for the same
+    // agreements a second time — which reads as though the first set did not
+    // register, and is worse than redundant on a consent screen.
+    //
+    // The standard therapy sign-up has no earlier gate, so it keeps this step.
+    if (medpsychMode) return steps;
+
     if (needsIndividualQuestionnaireConsent(data.therapyType)) {
       return [...steps, INDIVIDUAL_CONSENT_STEP];
     }
     return steps;
-  }, [data.therapyType]);
+  }, [data.therapyType, medpsychMode]);
 
   useEffect(() => {
     if (data.therapyType === 'teen' && !data.parentInfo?.firstName) {
@@ -123,6 +145,26 @@ export default function Questionnaire() {
   const complete = async () => {
     setLoading(true);
     try {
+      if (medpsychMode) {
+        // Cache only. No account, no client record — the flow commits after
+        // payment, in one transaction, exactly as the rest of it does.
+        const phq9 = {};
+        for (let i = 1; i <= 9; i += 1) {
+          if (data[`phq9_${i}`] !== undefined) phq9[`phq9_${i}`] = data[`phq9_${i}`];
+        }
+        // Carry the therapy type through so the questionnaire, matching and
+        // the committed account agree on it — and so the teen path's consent
+        // details reach the commit. An under-18 account must never exist
+        // without the consent that permits it.
+        updateMedPsychFlow({
+          intake: { ...data, phq9 },
+          therapyType: data.therapyType || 'individual',
+          step: 'therapist',
+        });
+        navigate('/medpsych/psychiatrists');
+        return;
+      }
+
       // Check if we're online
       if (!navigator.onLine) {
         throw new Error('You are currently offline. Please check your internet connection and try again.');

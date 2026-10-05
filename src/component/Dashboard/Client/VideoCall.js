@@ -34,7 +34,10 @@ import {
   BookOpen,
   Languages
 } from 'lucide-react';
+import { payForBooking } from '../../../services/paystack';
+import { therapistFee } from '../../../utils/therapistFee';
 import './VideoCall.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 const ClientVideoCall = ({ profile }) => {
   const navigate = useNavigate();
@@ -296,6 +299,26 @@ const ClientVideoCall = ({ profile }) => {
       console.log('Preparing to submit call data:', callData);
       console.log('Adding document to scheduledCalls collection...');
       
+      // Same charge as the Schedule screen: this is the client asking for a
+      // session, so it must go through the gateway rather than creating an
+      // unpaid booking. A therapist with no rate set skips the step.
+      const fee = therapistFee(therapistData) ?? 0;
+      const paid = await payForBooking({
+        email: clientProfile?.email,
+        amount: fee,
+        purpose: 'therapy_session',
+        metadata: { therapistId: therapistData?.id, clientId: clientProfile?.id },
+      });
+
+      if (!paid.ok) {
+        setMessage({ type: 'error', text: paid.reason || 'Payment was not completed.' });
+        return;
+      }
+
+      callData.paymentReference = paid.reference;
+      callData.amountPaid = paid.amount;
+      callData.currency = paid.currency;
+
       const docRef = await addDoc(collection(db, 'scheduledCalls'), callData);
       console.log('✅ Call scheduled successfully with ID:', docRef.id);
       
@@ -1150,7 +1173,7 @@ const ClientVideoCall = ({ profile }) => {
               <div className="therapist-photo-section">
                 {therapistData.photoURL ? (
                   <img 
-                    src={therapistData.photoURL} 
+                    src={resolveFileUrl(therapistData.photoURL)} 
                     alt={therapistData.name}
                     className="therapist-photo"
                   />

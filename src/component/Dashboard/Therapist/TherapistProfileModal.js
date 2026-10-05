@@ -1,5 +1,6 @@
 import React from 'react';
 import './TherapistProfileModal.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function TherapistProfileModal({ therapist, onClose, onSendMessage, onViewProfile }) {
   return (
@@ -15,7 +16,7 @@ export default function TherapistProfileModal({ therapist, onClose, onSendMessag
           <div className="therapist-preview">
             <div className="therapist-avatar">
               {therapist.photoURL ? (
-                <img src={therapist.photoURL} alt={therapist.name} />
+                <img src={resolveFileUrl(therapist.photoURL)} alt={therapist.name} />
               ) : (
                 <div className="avatar-placeholder">🧑‍⚕️</div>
               )}

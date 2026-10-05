@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import PriceTag from '../Common/PriceTag';
+import { quotePrices } from '../../services/pricing';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../../services/firestoreShim';
 import './MatchTherapist.css';
@@ -11,11 +13,14 @@ import {
   proposeCoupleTherapist,
   confirmCoupleTherapist,
 } from '../../services/coupleTherapyService';
+import { therapistFee } from '../../utils/therapistFee';
+import { resolveFileUrl } from '../../utils/fileUrl';
 
 
 /** A therapist's own per-session charge (stored in their profile metadata). */
 export function therapistRate(t) {
-  const raw = t?.sessionRate ?? t?.consultationFee ?? t?.rate ?? t?.price;
+  // One implementation, shared with every other fee reader.
+  const raw = therapistFee(t);
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -25,10 +30,33 @@ export default function MatchTherapist() {
   const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [therapists, setTherapists] = useState([]);
+  // Keyed by therapist id. Empty until the batch quote lands, which is why the
+  // card falls back to the plain rate rather than rendering a blank price.
+  const [quotes, setQuotes] = useState({});
   const [coupleProfile, setCoupleProfile] = useState(null);
   const [coupleBlocked, setCoupleBlocked] = useState(false);
   const [availabilityOverlap, setAvailabilityOverlap] = useState(true);
   const [myPartnerKey, setMyPartnerKey] = useState(null);
+
+  // One request for the whole list. Twelve cards firing twelve quotes is both
+  // slow and a good way to have half the list show a discount and half not.
+  // Declared with the other hooks: below an early return it would run
+  // conditionally, which React forbids.
+  useEffect(() => {
+    const items = therapists
+      .map((t) => ({
+        key: t.id || t.uid,
+        providerId: t.id || t.uid,
+        serviceType: 'therapy',
+        baseAmount: therapistRate(t),
+      }))
+      .filter((i) => i.key && i.baseAmount > 0);
+    if (!items.length) { setQuotes({}); return undefined; }
+    let live = true;
+    quotePrices(items).then((map) => { if (live) setQuotes(map || {}); });
+    return () => { live = false; };
+  }, [therapists]);
+
 
   // MUST be memoised: this object is a dependency of the loader effect below, and
   // rebuilding it on every render made the effect re-run on every render — an
@@ -185,7 +213,7 @@ export default function MatchTherapist() {
             name: t.name || t.fullName || t.displayName || 'Therapist',
             specialization: t.specialization || t.therapyType || '',
             sessionRate: therapistRate(t),
-            photoURL: t.photoURL || null,
+            photoURL: resolveFileUrl(t.photoURL) || null,
           },
         },
       });
@@ -200,7 +228,7 @@ export default function MatchTherapist() {
   const awaitingMyConfirm = pendingProposal && pendingProposal.proposedBy !== myPartnerKey;
 
   if (coupleBlocked) {
-    return (
+  return (
       <div className="match-container">
         <h1 className="page-title">Therapist selection locked</h1>
         <p className="subtitle">
@@ -273,7 +301,7 @@ export default function MatchTherapist() {
         <div className="card-grid">
           {therapists.map((t) => (
             <div key={t.id} className="therapist-card">
-              <div className="therapist-avatar">{t.photoURL ? <img alt="" src={t.photoURL} /> : '🧑‍⚕️'}</div>
+              <div className="therapist-avatar">{t.photoURL ? <img alt="" src={resolveFileUrl(t.photoURL)} /> : '🧑‍⚕️'}</div>
               <div className="therapist-info">
                 <div className="therapist-name">{t.name || t.fullName || t.displayName || 'Therapist'}</div>
                 <div className="therapist-details">
@@ -284,9 +312,14 @@ export default function MatchTherapist() {
                   {(Array.isArray(t.specialties) ? t.specialties : [t.specialties]).filter(Boolean).join(', ')}
                 </div>
                 <div className="therapist-rate">
-                  {therapistRate(t) != null
-                    ? `GHS ${therapistRate(t).toFixed(2)} / session`
-                    : 'Rate not published'}
+                  {therapistRate(t) != null ? (
+                    <PriceTag
+                      quote={quotes[t.id || t.uid]}
+                      baseAmount={therapistRate(t)}
+                      suffix=" / session"
+                      size="sm"
+                    />
+                  ) : 'Rate not published'}
                 </div>
                 {t.score ? <div className="therapist-score">Match: {Math.round(t.score)}%</div> : null}
               </div>

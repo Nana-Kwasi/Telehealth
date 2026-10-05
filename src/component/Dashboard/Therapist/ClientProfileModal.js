@@ -1,5 +1,6 @@
 import React from 'react';
 import './ClientProfileModal.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function ClientProfileModal({ client, onClose, onMessage, onVideoCall, onViewProfile }) {
   return (
@@ -15,7 +16,7 @@ export default function ClientProfileModal({ client, onClose, onMessage, onVideo
           <div className="client-preview">
             <div className="client-avatar">
               {client.photoURL ? (
-                <img src={client.photoURL} alt={client.name} />
+                <img src={resolveFileUrl(client.photoURL)} alt={client.name} />
               ) : (
                 <div className="avatar-placeholder">👤</div>
               )}

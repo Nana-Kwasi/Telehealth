@@ -1,0 +1,362 @@
+/* ─── Therapy module design system ────────────────────────────────────────────
+   The single source of truth for the THERAPY MODULE on web. Every therapy
+   screen — client and therapist dashboards, couple, teen, MedPsych — draws from
+   these tokens.
+
+   The look follows the Bio Tech reference: a warm off-white ground, near-black
+   type, one deep pine accent, and glassmorphic panels — frosted, translucent,
+   hairline-bordered — with fully rounded pill controls.
+
+   Two things here are load-bearing and easy to get wrong:
+
+   1. GLASS NEEDS SOMETHING BEHIND IT. `backdrop-filter` blurs whatever it
+      overlaps; over a flat fill it just looks like a slightly grey box. So the
+      ground carries soft colour pools, and glass is reserved for panels that
+      sit over them.
+
+   2. CONTRAST IS CHECKED, NOT ASSUMED. Translucent surfaces make text contrast
+      depend on whatever is underneath — which is exactly how the previous dark
+      pass produced unreadable screens. Every text token below is near-black and
+      stays legible on every surface in this system, including the lightest
+      glass.
+
+   Scoped under .zc so it cannot leak into the medical, admin or pharmacy
+   dashboards, which keep their own look.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.zc {
+  /* ── Ground ──────────────────────────────────────────────────────────────
+     Warm off-white, not pure white: #fff behind a white glass panel gives the
+     panel nothing to separate against. */
+  --zc-bg:        #f1f1ef;
+  --zc-bg-warm:   #ecebe8;
+  --zc-surface:   #ffffff;
+  --zc-surface-2: #f7f7f5;
+
+  /* ── Accent ──────────────────────────────────────────────────────────────
+     One deep pine, spent on the primary action and almost nothing else. */
+  --zc-accent:       #2f5d54;
+  --zc-accent-deep:  #234641;
+  --zc-accent-light: #4a7d72;
+  --zc-accent-wash:  rgba(47, 93, 84, 0.08);
+
+  /* ── Ink ─────────────────────────────────────────────────────────────────
+     Near-black rather than pure black — softer on a warm ground, and still
+     comfortably past AA on every surface below. */
+  --zc-ink:    #0d0d0d;
+  --zc-ink-2:  #3d3d3d;
+  --zc-ink-3:  #6b6b6b;
+  --zc-ink-4:  #9a9a9a;
+
+  /* Status, muted so they sit inside a calm palette. */
+  --zc-success: #2f7d5f;
+  --zc-warning: #a8752a;
+  --zc-danger:  #b5433c;
+
+  /* ── Glass ───────────────────────────────────────────────────────────────
+     The border is what makes glass read as a pane: without a hairline lighter
+     than its own fill, a blurred panel just looks out of focus. */
+  --zc-glass:        rgba(255, 255, 255, 0.62);
+  --zc-glass-strong: rgba(255, 255, 255, 0.80);
+  --zc-glass-dark:   rgba(28, 42, 39, 0.55);
+  --zc-glass-border: rgba(255, 255, 255, 0.75);
+  --zc-glass-blur:   18px;
+
+  --zc-line:   rgba(13, 13, 13, 0.09);
+  --zc-line-2: rgba(13, 13, 13, 0.16);
+
+  /* Wide and very soft. A tight dark shadow fights the airiness of the look. */
+  --zc-shadow-sm: 0 2px 10px rgba(13, 13, 13, 0.05);
+  --zc-shadow:    0 10px 34px rgba(13, 13, 13, 0.07);
+  --zc-shadow-lg: 0 22px 60px rgba(13, 13, 13, 0.10);
+
+  --zc-sans: 'Outfit', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --zc-track-wide: 0.14em;
+  --zc-track: 0.04em;
+
+  /* Pills everywhere — the reference has almost no square corners. */
+  --zc-radius:      22px;
+  --zc-radius-sm:   14px;
+  --zc-radius-pill: 999px;
+
+  color: var(--zc-ink);
+  font-family: var(--zc-sans);
+  background: var(--zc-bg);
+}
+
+/* The ground. Soft pools of colour give the glass something to refract; over a
+   flat fill `backdrop-filter` has nothing to do and glass reads as grey. */
+.zc-app-ground {
+  background:
+    radial-gradient(900px 520px at 82% 8%, rgba(74, 125, 114, 0.10) 0%, transparent 60%),
+    radial-gradient(700px 460px at 6% 88%, rgba(47, 93, 84, 0.07) 0%, transparent 62%),
+    var(--zc-bg);
+  background-attachment: fixed;
+}
+
+.zc-hero-ground { background: var(--zc-bg); }
+
+/* ── Type ───────────────────────────────────────────────────────────────── */
+
+.zc-display {
+  font-family: var(--zc-sans);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  color: var(--zc-ink);
+  margin: 0;
+  font-size: clamp(2.1rem, 4.6vw, 3.9rem);
+}
+
+.zc-title {
+  font-weight: 600;
+  font-size: clamp(1.35rem, 2.2vw, 1.9rem);
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--zc-ink);
+  margin: 0;
+}
+
+.zc-heading { font-size: 1rem; font-weight: 600; color: var(--zc-ink); margin: 0; }
+
+/* Small tracked uppercase label, as above the reference's headline. */
+.zc-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: var(--zc-track-wide);
+  text-transform: uppercase;
+  color: var(--zc-ink-3);
+  margin: 0 0 0.75rem;
+}
+
+.zc-body { font-size: 1rem; line-height: 1.62; color: var(--zc-ink-2); margin: 0; }
+.zc-meta { font-size: 0.82rem; color: var(--zc-ink-3); margin: 0; }
+.zc-stat { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; color: var(--zc-ink); line-height: 1; }
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+
+/* Solid card: the workhorse for dense content, where glass costs legibility. */
+.zc-card {
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line);
+  border-radius: var(--zc-radius);
+  padding: 1.5rem;
+  box-shadow: var(--zc-shadow-sm);
+  color: var(--zc-ink);
+}
+
+/* Glass panel. The `-webkit-` prefix is not optional — Safari still needs it,
+   and without it the panel renders there as flat translucent grey. */
+.zc-glass {
+  background: var(--zc-glass);
+  -webkit-backdrop-filter: blur(var(--zc-glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--zc-glass-blur)) saturate(150%);
+  border: 1px solid var(--zc-glass-border);
+  border-radius: var(--zc-radius);
+  box-shadow: var(--zc-shadow);
+  color: var(--zc-ink);
+}
+
+/* Dark glass, for a panel over imagery — the reference's floating card. */
+.zc-glass--dark {
+  background: var(--zc-glass-dark);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.zc-glass--strong { background: var(--zc-glass-strong); }
+
+.zc-card--tap,
+.zc-glass--tap {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.zc-card--tap:hover,
+.zc-glass--tap:hover { transform: translateY(-2px); box-shadow: var(--zc-shadow); }
+
+.zc-rule { height: 1px; background: var(--zc-line); border: 0; margin: 1.5rem 0; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────────
+   Pills, as in the reference: a filled pine primary with a trailing arrow, and
+   a circular icon button beside it. */
+
+.zc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1.7rem;
+  border-radius: var(--zc-radius-pill);
+  font-family: var(--zc-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease,
+              border-color 0.15s ease, color 0.15s ease;
+}
+
+.zc-btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.zc-btn:not(:disabled):hover { transform: translateY(-1px); }
+.zc-btn:focus-visible { outline: 2px solid var(--zc-accent); outline-offset: 3px; }
+
+.zc-btn--primary {
+  background: var(--zc-accent);
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(47, 93, 84, 0.22);
+}
+.zc-btn--primary:not(:disabled):hover { background: var(--zc-accent-deep); }
+
+/* White pill on the ground — the reference's nav button. */
+.zc-btn--white {
+  background: var(--zc-surface);
+  color: var(--zc-ink);
+  border-color: var(--zc-line);
+  box-shadow: var(--zc-shadow-sm);
+}
+.zc-btn--white:not(:disabled):hover { background: var(--zc-surface-2); }
+
+.zc-btn--glass {
+  background: var(--zc-glass);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  border-color: var(--zc-glass-border);
+  color: var(--zc-ink);
+}
+
+.zc-btn--ghost { background: transparent; border-color: var(--zc-line-2); color: var(--zc-ink); }
+.zc-btn--ghost:not(:disabled):hover { border-color: var(--zc-accent); color: var(--zc-accent); }
+
+.zc-btn--danger { background: transparent; border-color: var(--zc-danger); color: var(--zc-danger); }
+
+.zc-btn--sm { padding: 0.55rem 1.1rem; font-size: 0.84rem; }
+.zc-btn--block { width: 100%; }
+
+/* Circular icon button that pairs with the primary pill. */
+.zc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line);
+  color: var(--zc-ink);
+  cursor: pointer;
+  box-shadow: var(--zc-shadow-sm);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.zc-icon-btn:hover { transform: translateY(-1px); background: var(--zc-surface-2); }
+
+/* ── Forms ──────────────────────────────────────────────────────────────── */
+
+.zc-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--zc-ink-3);
+  margin-bottom: 0.4rem;
+}
+
+.zc-input {
+  width: 100%;
+  padding: 0.85rem 1.1rem;
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line-2);
+  border-radius: var(--zc-radius-sm);
+  color: var(--zc-ink);
+  font-family: var(--zc-sans);
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.zc-input::placeholder { color: var(--zc-ink-4); }
+.zc-input:focus {
+  outline: none;
+  border-color: var(--zc-accent);
+  box-shadow: 0 0 0 3px var(--zc-accent-wash);
+}
+
+.zc-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1.05rem;
+  border: 1px solid var(--zc-line-2);
+  border-radius: var(--zc-radius-sm);
+  background: var(--zc-surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.zc-check:hover { border-color: var(--zc-accent-light); }
+.zc-check--on { border-color: var(--zc-accent); background: var(--zc-accent-wash); }
+.zc-check input { margin-top: 0.15rem; accent-color: var(--zc-accent); width: 17px; height: 17px; flex-shrink: 0; }
+.zc-check-text { font-size: 0.88rem; line-height: 1.5; color: var(--zc-ink-2); }
+.zc-check-text strong { color: var(--zc-ink); font-weight: 600; }
+
+.zc-link { color: var(--zc-accent); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Chips and badges ───────────────────────────────────────────────────── */
+
+.zc-badge,
+.zc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--zc-radius-pill);
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line);
+  color: var(--zc-ink-2);
+}
+
+.zc-chip--accent  { background: var(--zc-accent-wash); border-color: rgba(47,93,84,0.22); color: var(--zc-accent); }
+.zc-chip--success { background: rgba(47,125,95,0.10);  border-color: rgba(47,125,95,0.24); color: var(--zc-success); }
+.zc-chip--warning { background: rgba(168,117,42,0.10); border-color: rgba(168,117,42,0.24); color: var(--zc-warning); }
+.zc-chip--danger  { background: rgba(181,67,60,0.10);  border-color: rgba(181,67,60,0.24); color: var(--zc-danger); }
+
+.zc-avatar {
+  width: 42px; height: 42px; flex-shrink: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--zc-accent-wash);
+  border: 1px solid rgba(47, 93, 84, 0.2);
+  color: var(--zc-accent);
+  font-weight: 600;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+.zc-shell { min-height: 100vh; }
+.zc-container { max-width: 1180px; margin: 0 auto; padding: 0 1.5rem; }
+.zc-stack { display: flex; flex-direction: column; gap: 1rem; }
+.zc-row   { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.zc-grid  { display: grid; gap: 1.1rem; }
+.zc-grid--3 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.zc-grid--4 { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+
+/* Form controls inherit neither colour nor font; without this they fall back to
+   the UA default and drift from the rest of the system. */
+.zc button, .zc input, .zc textarea, .zc select { font-family: inherit; }
+
+@media (max-width: 640px) {
+  .zc-btn { padding: 0.8rem 1.3rem; font-size: 0.86rem; }
+  .zc-card, .zc-glass { padding: 1.15rem; border-radius: 18px; }
+  .zc-container { padding: 0 1rem; }
+}
+
+/* Glass is a progressive enhancement. Where `backdrop-filter` is unsupported the
+   panel would be flat and low-contrast, so it falls back to a solid surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .zc-glass, .zc-btn--glass { background: var(--zc-surface); }
+  .zc-glass--dark { background: #24352f; }
+}

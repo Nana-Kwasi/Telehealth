@@ -4,19 +4,11 @@ import './Home.css';
 // NOTE: the assets folder is named "Images " — with a trailing space.
 import heroBackground from '../../Images /main.png';
 import { NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
-import { beginTherapySession, beginHomeCareSession } from '../../utils/patientSessionIntent';
-import individualIcon from '../../../src/Images /v.jpg';
-import couplesIcon    from '../../../src/Images /v2.jpg';
-import teenIcon       from '../../../src/Images /v1.jpg';
-
-const therapyTypes = [
-  { key: 'individual', title: 'Individual', desc: 'For myself', iconSrc: individualIcon },
-  { key: 'couples', title: 'Couples', desc: 'Me & my partner', iconSrc: couplesIcon },
-  { key: 'teen', title: 'Teen', desc: 'For my child', iconSrc: teenIcon },
-];
+import { beginTherapySession } from '../../utils/patientSessionIntent';
+import TherapyTypeModal, { THERAPY_TYPES, PSYCHIATRY_TYPES } from './TherapyTypeModal';
 
 const steps = [
-  { n: '1', title: 'Choose your service',       desc: 'Select therapy, medical care, or home-care when available.' },
+  { n: '1', title: 'Choose your service',       desc: 'Select therapy, medical care, psychiatry, or second opinion.' },
   { n: '2', title: 'Match with a professional', desc: 'We pair you with the right therapist or doctor based on your needs.' },
   { n: '3', title: 'Start your session',        desc: 'Connect via video, chat, or audio. Get care on your schedule.' },
 ];
@@ -30,7 +22,9 @@ const features = [
 
 export default function Home() {
   const navigate = useNavigate();
-  const [selectedService, setSelectedService] = useState(null);
+  // Which "what kind?" dialog is open: null | 'psychiatry' | 'counselling'.
+  // One value rather than two booleans, so the two cannot both be open.
+  const [typeModal, setTypeModal] = useState(null);
   const [counters, setCounters] = useState({ therapists: 0, sessions: 0, clients: 0, messages: 0 });
   const currentYear = new Date().getFullYear();
 
@@ -57,6 +51,45 @@ export default function Home() {
     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M+';
     if (n >= 1000)    return (n / 1000).toFixed(0) + 'K+';
     return n.toLocaleString() + '+';
+  };
+
+  /**
+   * Psychology & Counseling, after the type has been chosen.
+   *
+   * Teen and couples keep their existing journeys (parent/guardian consent and
+   * partner invitation). Individual goes into the policy-gated, cached sign-up
+   * where nothing is written until payment succeeds.
+   */
+  const startCounselling = (type) => {
+    setTypeModal(null);
+
+    // Teen and couples keep their existing journeys unchanged.
+    if (type === 'teen' || type === 'couples') {
+      startTherapy(type);
+      return;
+    }
+
+    // Individual goes to the policy-gated, cached sign-up instead of straight
+    // to the questionnaire — so startTherapy is NOT reused here: it ends by
+    // navigating to /questionnaire, which would fight this navigation.
+    // Clearing the stale per-flow keys still matters: a half-finished teen or
+    // couple attempt leaves parent, child and invite records behind, and they
+    // must not follow the user into a different type.
+    beginTherapySession('therapy');
+    [
+      'th.onboard', 'th.subscription', 'th.match',
+      'th.parentInfo', 'th.childInfo', 'th.parentConsent',
+      'th.coupleId', 'th.couplePartnerRole', 'th.coupleInviteToken',
+      'th.coupleMyIntakeComplete',
+    ].forEach((k) => localStorage.removeItem(k));
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith('th.coupleDraft_')) localStorage.removeItem(k);
+    });
+    localStorage.setItem('th.onboard', JSON.stringify({
+      therapyType: 'individual', startedAt: new Date().toISOString(),
+    }));
+
+    navigate('/medpsych');
   };
 
   const startTherapy = (type) => {
@@ -93,10 +126,12 @@ export default function Home() {
     navigate('/questionnaire');
   };
 
-  const selectHomeCare = () => {
-    beginHomeCareSession();
-    navigate('/home-care/browse');
-  };
+  // Home care remains intentionally hidden from the public marketing pages until
+  // it is actively promoted as a supported public entry point.
+  // const selectHomeCare = () => {
+  //   beginHomeCareSession();
+  //   navigate('/home-care/browse');
+  // };
 
   return (
     <div className="page-container">
@@ -111,39 +146,6 @@ export default function Home() {
       >
         <div className="home-container">
 
-          {/* ── Therapy Type Cards (revealed on Therapy click) ── */}
-          {selectedService === 'therapy' && (
-            <div className="therapy-reveal">
-              <p className="cards-section-title">Start therapy today — choose your type</p>
-              <div className="therapy-cards-grid">
-                {therapyTypes.map(({ key, title, desc, iconSrc }) => (
-                  <div
-                    key={key}
-                    className={`therapy-card therapy-card--${key}`}
-                    onClick={() => startTherapy(key)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        startTherapy(key);
-                      }
-                    }}
-                  >
-                    <div className="card-content">
-                      <h3 className="therapy-title">{title}</h3>
-                      <p className="therapy-description">{desc}</p>
-                      <div className="therapy-arrow">→</div>
-                    </div>
-                    <div className="therapy-icon">
-                      <img src={iconSrc} alt="" className="therapy-icon-img" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
 
           {/* ── Module picker ──
@@ -153,15 +155,15 @@ export default function Home() {
         <div className="hero-modules">
           <button
             type="button"
-            className={`hero-module ${selectedService === 'therapy' ? 'is-active' : ''}`}
-            onClick={() => setSelectedService(selectedService === 'therapy' ? null : 'therapy')}
+            className={`hero-module ${typeModal === 'psychiatry' ? 'is-active' : ''}`}
+            onClick={() => setTypeModal('psychiatry')}
           >
             <svg className="hero-module-icon" viewBox="0 0 64 64" aria-hidden="true">
               <circle cx="26" cy="16" r="10" />
               <path d="M8 56c0-11 8-19 18-19 3 0 6 .6 8 1.8" />
               <path d="M45.5 34.2c2.6-2.7 6.9-2.7 9.5 0 2.6 2.7 2.6 7 0 9.7L45.5 54l-9.5-10.1c-2.6-2.7-2.6-7 0-9.7 2.6-2.7 6.9-2.7 9.5 0z" />
             </svg>
-            <span className="hero-module-label">Therapy</span>
+            <span className="hero-module-label">Psychiatry</span>
           </button>
 
           <button
@@ -178,6 +180,8 @@ export default function Home() {
             <span className="hero-module-label">Medical Care</span>
           </button>
 
+          {/* Home Care is parked, not removed — the module and its routes are
+              untouched, so restoring this button brings it straight back.
           <button
             type="button"
             className="hero-module"
@@ -189,6 +193,41 @@ export default function Home() {
               <path d="M32 46l-7-7.2c-1.9-2-1.9-5.1 0-7.1 1.9-2 5-2 6.9 0l.1.1.1-.1c1.9-2 5-2 6.9 0 1.9 2 1.9 5.1 0 7.1z" />
             </svg>
             <span className="hero-module-label">Home Care</span>
+          </button>
+          */}
+
+          {/* Psychology & Counseling: ongoing talking therapy. Asks WHICH kind
+              first, then hands off to the journey that already handles it —
+              individual questionnaire, teen consent, or couple invitation. */}
+          <button
+            type="button"
+            className="hero-module"
+            onClick={() => setTypeModal('counselling')}
+          >
+            <svg className="hero-module-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M32 10c-9 0-16 6.7-16 15 0 5.2 2.6 9.4 6 12v7h20v-7c3.4-2.6 6-6.8 6-12 0-8.3-7-15-16-15z" />
+              <path d="M26 51h12M28 56h8" />
+              <path d="M32 25v10M27 30h10" />
+            </svg>
+            <span className="hero-module-label">Psychology &amp; Counseling</span>
+          </button>
+
+          {/* Second Opinion: for someone ALREADY under care elsewhere who wants
+              an independent view on one decision. Its own entry because the
+              intake is different — a short case questionnaire rather than the
+              full programme questionnaire — and so is what they get afterwards. */}
+          <button
+            type="button"
+            className="hero-module"
+            onClick={() => navigate('/second-opinion')}
+          >
+            <svg className="hero-module-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M20 12h18l10 10v30a2 2 0 0 1-2 2H20a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2z" />
+              <path d="M38 12v10h10" />
+              <circle cx="30" cy="36" r="7" />
+              <path d="M35 41l6 6" />
+            </svg>
+            <span className="hero-module-label">Second Opinion</span>
           </button>
         </div>
       </section>
@@ -266,13 +305,27 @@ export default function Home() {
               </ul>
             </div>
             <div className="footer-section">
+              {/* Mirrors the modules in the hero, one entry each, going where
+                  its button goes. It previously listed the old therapy types —
+                  Individual, Couples and Teen — and pointed all three at
+                  /questionnaire, so every link landed on the individual intake
+                  regardless of which was clicked, and Psychiatry and Second
+                  Opinion had no footer entry at all. */}
               <h4>Services</h4>
               <ul>
-                <li><Link to="/questionnaire">Individual Therapy</Link></li>
-                <li><Link to="/questionnaire">Couples Therapy</Link></li>
-                <li><Link to="/questionnaire">Teen Therapy</Link></li>
-                <li><Link to="/doctors">Medical Consultations</Link></li>
-                <li><button type="button" className="footer-link-button" onClick={selectHomeCare}>Home-Care</button></li>
+                <li>
+                  <button type="button" className="footer-link-button" onClick={() => setTypeModal('psychiatry')}>
+                    Psychiatry
+                  </button>
+                </li>
+                <li><Link to="/medical">Medical Care</Link></li>
+                <li>
+                  <button type="button" className="footer-link-button" onClick={() => setTypeModal('counselling')}>
+                    Psychology &amp; Counseling
+                  </button>
+                </li>
+                <li><Link to="/second-opinion">Second Opinion</Link></li>
+                {/* <li><button type="button" className="footer-link-button" onClick={selectHomeCare}>Home-Care</button></li> */}
               </ul>
             </div>
             <div className="footer-section">
@@ -310,6 +363,29 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+    {/* Psychiatry and Psychology ask the same question with the same three
+        answers, but hand off to different journeys, so they share the dialog
+        and differ only in the handler. */}
+    <TherapyTypeModal
+      open={typeModal === 'psychiatry'}
+      onClose={() => setTypeModal(null)}
+      onSelect={(key) => { setTypeModal(null); startTherapy(key); }}
+      eyebrow="Psychiatry"
+      title="Who is this care for?"
+      subtitle="This decides which psychiatrist you are matched with."
+      options={PSYCHIATRY_TYPES}
+    />
+
+    <TherapyTypeModal
+      open={typeModal === 'counselling'}
+      onClose={() => setTypeModal(null)}
+      onSelect={startCounselling}
+      eyebrow="Psychology & Counseling"
+      title="What kind of therapy?"
+      subtitle="This decides who you will be matched with."
+      options={THERAPY_TYPES}
+    />
 
     </div>
   );

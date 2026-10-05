@@ -1,214 +1,436 @@
-/* ═══════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    NESSAHUB — MEDICAL INTAKE
-   Simple 3-step condition form
-   ═══════════════════════════════════ */
+
+   Every colour is a literal. This route does not load the zencare token sheet,
+   and `var(--color-medical-500, …)` only appeared to work because of the
+   fallback — the moment a declaration used a token with no fallback it was
+   dropped entirely at computed-value time.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .mi-page {
   min-height: 100vh;
-  background: linear-gradient(160deg, #0f172a 0%, #1a3a5c 60%, #0d2233 100%);
+  /* Was a flex ROW, so .mi-skip-row rendered BESIDE the card and overlapped it.
+     That is the stray "I'll find a doctor later" link floating on the right. */
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
-  font-family: var(--font-sans);
+  padding: 2.5rem 1rem;
+  background:
+    radial-gradient(1100px 620px at 50% -10%, rgba(45, 118, 190, 0.34), transparent 70%),
+    linear-gradient(165deg, #0d1729 0%, #14314f 55%, #0b1b2b 100%);
+  font-family: var(--font-sans, system-ui, -apple-system, 'Segoe UI', sans-serif);
 }
 
 .mi-card {
-  background: white;
-  border-radius: 24px;
-  padding: 2.5rem 2rem;
-  width: 100%;
-  max-width: 520px;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.3);
   position: relative;
+  width: 100%;
+  max-width: 600px;
+  padding: 1.6rem 1.9rem 1.5rem;
+  border-radius: 26px;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 30px 80px rgba(4, 12, 26, 0.45);
+}
+
+/* ── Header row ────────────────────────────────────────────────────────── */
+.mi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  min-height: 30px;
+}
+
+.mi-badge {
+  display: inline-block;
+  padding: 0.3rem 0.72rem;
+  border-radius: 999px;
+  background: #e8f1fb;
+  color: #12507f;          /* 7.42:1 on #e8f1fb */
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 .mi-back {
-  position: absolute;
-  top: 1.5rem;
-  left: 1.5rem;
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
   border: none;
-  color: #6b7280;
-  font-size: 0.875rem;
-  font-weight: 600;
+  border-radius: 999px;
+  background: #f2f4f8;
+  color: #495267;          /* 7.10:1 on #f2f4f8 */
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
   cursor: pointer;
-  font-family: var(--font-sans);
-  transition: color 120ms ease;
+  transition: background 140ms ease, color 140ms ease;
 }
-.mi-back:hover { color: #111827; }
+.mi-back:hover { background: #e6e9f0; color: #16203a; }
 
-/* Progress */
+.mi-step-count {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #6f7787;          /* 4.50:1 on white */
+}
+
+/* ── Progress rail ─────────────────────────────────────────────────────────
+   Labelled, because three unlabelled dashes said "there are three of
+   something" and nothing else. */
 .mi-progress {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-bottom: 1.75rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1.6rem;
 }
 
-.mi-dot {
-  width: 28px;
+.mi-track { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.mi-track-bar {
   height: 4px;
-  border-radius: 9999px;
-  background: #e5e7eb;
-  transition: background 250ms ease;
+  border-radius: 999px;
+  background: #e4e7ee;
+  transition: background 260ms ease;
 }
-.mi-dot.active { background: var(--color-medical-500, #1e6bb8); }
+.mi-track.is-done .mi-track-bar { background: #1e6bb8; }
 
-/* Header */
-.mi-icon-top {
-  font-size: 2.5rem;
-  text-align: center;
-  margin-bottom: 0.75rem;
-  line-height: 1;
+.mi-track-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #99a0ae;
+  transition: color 260ms ease;
 }
+.mi-track.is-done .mi-track-label { color: #1a5c9e; }   /* 6.84:1 on white */
 
+/* ── Headings ──────────────────────────────────────────────────────────── */
 .mi-title {
-  font-size: 1.4rem;
+  margin: 0 0 0.35rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  color: #111827;
-  text-align: center;
-  margin: 0 0 0.4rem;
-  letter-spacing: -0.3px;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  color: #0f1424;
 }
 
 .mi-sub {
-  font-size: 0.9rem;
-  color: #6b7280;
-  text-align: center;
-  margin: 0 0 1.75rem;
+  margin: 0 0 1.4rem;
+  font-size: 0.89rem;
   line-height: 1.55;
+  color: #59606f;          /* 6.31:1 on white */
 }
 
-/* Category grid */
+/* ── Category grid ─────────────────────────────────────────────────────────
+   Three columns, not five. Nine options over five columns left a ragged 5 + 4
+   with four dead cells; 3 x 3 fills exactly and gives each tile room for a
+   readable label instead of 0.68rem text. */
 .mi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.6rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
 }
 
 .mi-cat-btn {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.75rem 0.25rem;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 14px;
-  background: white;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.85rem 0.8rem 0.9rem;
+  text-align: left;
+  border: 1.5px solid #e4e7ee;
+  border-radius: 16px;
+  background: #ffffff;
   cursor: pointer;
-  font-family: var(--font-sans);
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+  font-family: inherit;
+  transition: border-color 150ms ease, background 150ms ease,
+              transform 150ms ease, box-shadow 150ms ease;
 }
-
 .mi-cat-btn:hover {
-  border-color: var(--color-medical-500, #1e6bb8);
-  background: #f0f7ff;
+  border-color: #1e6bb8;
+  background: #f6faff;
   transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(30, 107, 184, 0.14);
+}
+.mi-cat-btn:focus-visible { outline: 2px solid #1e6bb8; outline-offset: 2px; }
+
+.mi-cat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 0.45rem;
+  border-radius: 11px;
+  background: #e8f1fb;
+  color: #17578f;          /* 6.58:1 on #e8f1fb — stated, never inherited */
+  transition: background 150ms ease, color 150ms ease;
+}
+.mi-cat-btn:hover .mi-cat-icon { background: #1e6bb8; color: #ffffff; }
+
+.mi-cat-label {
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #16203a;
 }
 
-.mi-cat-emoji { font-size: 1.5rem; line-height: 1; }
-.mi-cat-label { font-size: 0.68rem; font-weight: 600; color: #374151; text-align: center; line-height: 1.2; }
+.mi-cat-hint {
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: #6b7283;          /* 4.82:1 on white — measured, not judged */
+}
 
-/* Textarea */
+/* ── Chosen-category chip (step 2) ─────────────────────────────────────── */
+.mi-chosen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.4rem 0.8rem 0.4rem 0.45rem;
+  border-radius: 999px;
+  background: #e8f1fb;
+  color: #12507f;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.mi-chosen-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #17578f;
+}
+
+/* ── Textarea ──────────────────────────────────────────────────────────── */
 .mi-textarea {
   width: 100%;
-  padding: 0.875rem 1rem;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 14px;
-  font-size: 0.95rem;
-  color: #111827;
-  font-family: var(--font-sans);
-  resize: none;
-  box-sizing: border-box;
-  outline: none;
-  background: #f9fafb;
-  transition: border-color 150ms ease, background 150ms ease;
-  margin-bottom: 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1.5px solid #e4e7ee;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #0f1424;
+  font-family: inherit;
+  font-size: 0.93rem;
   line-height: 1.6;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
-.mi-textarea:focus { border-color: var(--color-medical-500, #1e6bb8); background: white; }
-.mi-textarea::placeholder { color: #9ca3af; }
+.mi-textarea:focus {
+  border-color: #1e6bb8;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(30, 107, 184, 0.14);
+}
+.mi-textarea::placeholder { color: #98a0af; }
 
-/* Urgency */
+/* ── Urgency ───────────────────────────────────────────────────────────── */
 .mi-urgency-list {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .mi-urgency-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
   text-align: left;
-  padding: 0.875rem 1.1rem;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 14px;
-  background: white;
+  border: 1.5px solid #e4e7ee;
+  border-radius: 16px;
+  background: #ffffff;
   cursor: pointer;
-  font-family: var(--font-sans);
+  font-family: inherit;
   transition: border-color 150ms ease, background 150ms ease;
 }
+.mi-urgency-btn:hover { border-color: #b3bccc; background: #fafbfd; }
+.mi-urgency-btn.selected { border-color: #1e6bb8; background: #f2f8ff; }
+.mi-urgency-btn:focus-visible { outline: 2px solid #1e6bb8; outline-offset: 2px; }
 
-.mi-urgency-btn:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
+.mi-urgency-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #eef1f6;
+  color: #566073;
+  transition: background 150ms ease, color 150ms ease;
 }
+.mi-urgency-btn.selected .mi-urgency-icon { background: #1e6bb8; color: #ffffff; }
 
-.mi-urgency-btn.selected {
-  border-color: var(--color-medical-500, #1e6bb8);
-  background: var(--color-medical-100, #e8f1fb);
-}
+.mi-urgency-text { flex: 1; min-width: 0; }
 
 .mi-urgency-label {
-  font-size: 0.95rem;
+  display: block;
+  font-size: 0.92rem;
   font-weight: 700;
-  color: #111827;
-  margin-bottom: 0.15rem;
+  color: #16203a;
 }
-.mi-urgency-btn.selected .mi-urgency-label { color: var(--color-medical-500, #1e6bb8); }
+.mi-urgency-btn.selected .mi-urgency-label { color: #124a7d; }
 
 .mi-urgency-desc {
-  font-size: 0.8rem;
-  color: #6b7280;
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  color: #6f7787;
 }
 
-/* CTA */
+/* A real radio affordance: "selected" was previously only a faint tint. */
+.mi-radio {
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 2px solid #ccd3de;
+  background: #ffffff;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.mi-urgency-btn.selected .mi-radio {
+  border-color: #1e6bb8;
+  box-shadow: inset 0 0 0 4px #1e6bb8;
+}
+
+/* ── Emergency note ────────────────────────────────────────────────────── */
+.mi-note {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 1.1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #8a4b09;          /* 6.40:1 on #fff7ed */
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.mi-note svg { flex-shrink: 0; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
 .mi-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   width: 100%;
-  background: linear-gradient(135deg, var(--color-medical-500, #1e6bb8), var(--color-medical-600, #155a9c));
-  color: white;
+  padding: 0.95rem;
   border: none;
-  border-radius: 14px;
-  padding: 0.9rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2176c4, #15558f);
+  color: #ffffff;
+  font-family: inherit;
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
-  font-family: var(--font-sans);
-  transition: opacity 200ms ease, transform 200ms ease;
-  box-shadow: 0 4px 14px rgba(30,107,184,0.3);
+  box-shadow: 0 6px 18px rgba(30, 107, 184, 0.32);
+  transition: transform 180ms ease, box-shadow 180ms ease;
 }
-.mi-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30,107,184,0.35); }
+.mi-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(30, 107, 184, 0.4); }
 
-/* Mobile */
-@media (max-width: 480px) {
-  .mi-card { padding: 2rem 1.25rem; }
-  .mi-grid { grid-template-columns: repeat(4, 1fr); }
-}
-
-.mi-skip-row {
-  text-align: center;
-  margin-top: 1.5rem;
-}
-.mi-skip-link {
-  background: none;
+.mi-ghost {
+  display: block;
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 0.6rem;
   border: none;
-  color: rgba(255,255,255,0.55);
-  font-size: 0.85rem;
+  background: transparent;
+  color: #6f7787;
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
   cursor: pointer;
-  font-family: var(--font-sans);
+}
+.mi-ghost:hover { color: #16203a; }
+
+/* ── Skip row ──────────────────────────────────────────────────────────────
+   Inside the card now — it was landing BESIDE the card, not under it,
+   because .mi-page was a flex row. On white it also gets a real colour
+   instead of rgba(255,255,255,0.55) over navy. */
+.mi-skip-row {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #edeff4;
+  text-align: center;
+}
+
+.mi-skip-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #4a638a;          /* 6.10:1 on white */
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
-  transition: color 180ms;
-  padding: 0;
+  transition: color 160ms ease;
 }
-.mi-skip-link:hover { color: rgba(255,255,255,0.85); }
+.mi-skip-link:hover { color: #14314f; }
+
+/* ── Small screens ─────────────────────────────────────────────────────── */
+@media (max-width: 560px) {
+  .mi-page { padding: 1.25rem 0.85rem; justify-content: flex-start; }
+  .mi-card { padding: 1.3rem 1.1rem 1.2rem; border-radius: 22px; }
+  .mi-title { font-size: 1.28rem; }
+  .mi-grid { grid-template-columns: repeat(2, 1fr); }
+  .mi-track-label { font-size: 0.63rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-cat-btn, .mi-btn { transition: none; }
+  .mi-cat-btn:hover, .mi-btn:hover { transform: none; }
+}
+
+/* ── Emergency screen result ──────────────────────────────────────────────
+   Shown instead of the Continue buttons when the description contains
+   emergency or self-harm language. Red is used here and nowhere else in this
+   flow, so it cannot be mistaken for ordinary validation. */
+.mi-safety {
+  margin-top: 1.1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #f3c7c3;
+  border-radius: 14px;
+  background: #fdeceb;
+  text-align: left;
+}
+.mi-safety-title {
+  display: block;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #8f1d17;              /* 7.59:1 on #fdeceb */
+}
+.mi-safety-reason {
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #2c3040;              /* 11.0:1 */
+}
+.mi-safety-body {
+  margin: 0.6rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: #2c3040;
+  white-space: pre-line;
+}
+.mi-safety-number {
+  margin: 0.7rem 0 0;
+  font-size: 0.95rem;
+  color: #8f1d17;
+}
+.mi-safety .mi-ghost { margin-top: 0.9rem; }

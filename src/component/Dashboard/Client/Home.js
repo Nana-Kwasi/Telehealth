@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video } from 'lucide-react';
+import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard } from 'lucide-react';
 import './Home.css';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
 import { buildProgressMetrics, overallProgressScore } from '../../../utils/clientDashboardMetrics';
@@ -32,10 +32,13 @@ import {
   Filler,
 } from 'chart.js';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
-import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
+import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import ClinicianStatus from '../../Common/ClinicianStatus';
 import WeatherCard from '../../Common/WeatherCard';
+import patientHero from '../../../assets/patient-hero.jpg';
 import { subscribeLocationUpdate, applyLocationPatch } from '../../../utils/locationBus';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 // Register Chart.js components
 ChartJS.register(
@@ -90,6 +93,8 @@ export default function ClientHome({ profile }) {
   });
   const [moodHistory, setMoodHistory] = useState([]);
   const [isSubmittingMood, setIsSubmittingMood] = useState(false);
+  // Review material starts collapsed — see the disclosure below.
+  const [showProgress, setShowProgress] = useState(false);
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [moodAnswers, setMoodAnswers] = useState({});
@@ -1870,10 +1875,6 @@ export default function ClientHome({ profile }) {
 
   return (
     <div className="dashboard-home">
-      <LocationSummaryCard
-        profile={locationProfile || mergeLocationProfile(profile, clientData)}
-        onEdit={() => navigate('/dashboard/settings')}
-      />
       {clientData?.coupleId ? (
         <div
           role="button"
@@ -1927,74 +1928,80 @@ export default function ClientHome({ profile }) {
         </div>
       )}
 
-      {/* Clean Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '1.25rem 1.5rem', background: '#fff',
-        borderBottom: '1px solid #f1f5f9', marginBottom: '1.5rem',
-        borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: '50%',
-            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontWeight: 700, fontSize: '1.1rem', flexShrink: 0
-          }}>
-            {profile?.photoURL
-              ? <img src={profile.photoURL} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
-              : (profile?.name?.charAt(0).toUpperCase() || 'C')}
-          </div>
-          <div>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </p>
-            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>
-              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {profile?.name?.split(' ')[0] || 'there'} 👋
-            </h2>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {therapistData && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '0.6rem',
-              background: '#f0f7ff', borderRadius: '10px', padding: '0.5rem 0.85rem',
-              border: '1px solid #dbeafe'
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#4f46e5,#6366f1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0
-              }}>
-                {therapistData.photoURL
-                  ? <img src={therapistData.photoURL} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
-                  : therapistData.name?.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p style={{ margin: 0, fontSize: '0.65rem', color: '#64748b' }}>Your Therapist</p>
-                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: '#1e293b' }}>{therapistData.name || therapistName}</p>
-              </div>
+      {/* ── Welcome hero ──────────────────────────────────────────────────
+          Was a full-width location card followed by a thin greeting strip with
+          two unlabelled icon buttons. Now one card carrying the greeting, where
+          you are, what it is like there, who your therapist is, and the two
+          things a client actually does from here. ── */}
+      <section className="ch-hero">
+        <div className="ch-hero-main">
+          <div className="ch-hero-id">
+            <div className="ch-hero-avatar">
+              {profile?.photoURL
+                ? <img src={resolveFileUrl(profile.photoURL)} alt="" />
+                : (profile?.name?.charAt(0).toUpperCase() || 'C')}
             </div>
-          )}
-          <div
-            style={{ position: 'relative', cursor: 'pointer', padding: '0.5rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}
-            onClick={() => setShowMoodModal(true)}
-            title="Log your mood"
-          >
-            <Activity size={20} color="#6366f1" />
+            <div className="ch-hero-who">
+              <p className="ch-hero-date">
+                {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+              <h1 className="ch-hero-greet">
+                Good {currentTime.getHours() < 12 ? 'morning' : currentTime.getHours() < 17 ? 'afternoon' : 'evening'},{' '}
+                <span className="ch-hero-name">{profile?.name?.split(' ')[0] || 'there'}</span>
+              </h1>
+              {therapistData ? (
+                <button
+                  type="button"
+                  className="ch-hero-therapist"
+                  onClick={() => navigate('/dashboard/messages')}
+                >
+                  {therapistData.photoURL
+                    ? <img src={resolveFileUrl(therapistData.photoURL)} alt="" />
+                    : <span className="ch-hero-therapist-initial">
+                        {(therapistData.name || 'T').charAt(0).toUpperCase()}
+                      </span>}
+                  <span>
+                    <em>Your therapist</em>
+                    <strong>{therapistData.name || 'Assigned'}</strong>
+                    {/* Their own declared availability. Renders nothing when
+                        they have never set one, rather than claiming a status
+                        on their behalf. */}
+                    <ClinicianStatus status={therapistData} />
+                  </span>
+                </button>
+              ) : null}
+            </div>
           </div>
-          <div style={{ position: 'relative', cursor: 'pointer', padding: '0.5rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-            <Bell size={20} color="#64748b" />
-            {(unreadCount > 0 || Object.values(newContentCounts).some(c => c > 0)) && (
-              <span style={{
-                position: 'absolute', top: 2, right: 2, width: 8, height: 8,
-                background: '#ef4444', borderRadius: '50%'
-              }} />
-            )}
-          </div>
-        </div>
-      </div>
 
+        </div>
+
+        {/* Decorative, last in the DOM and hidden from assistive tech. */}
+        <img className="ch-hero-art" src={patientHero} alt="" aria-hidden="true" />
+      </section>
+
+      {/* ── Where you are, and the one thing we ask of you ──────────────
+          Location and weather were inside the greeting card, which left no
+          room for either. The check-in button was there too, competing with
+          the greeting for the same line. All three get their own row. ── */}
+      <div className="ch-meta-row">
+        <div className="ch-meta-card">
+          <LocationSummaryCard
+            compact
+            profile={locationProfile || mergeLocationProfile(profile, clientData)}
+            onEdit={() => navigate('/dashboard/settings')}
+          />
+        </div>
+        <div className="ch-meta-card">
+          <WeatherCard profile={locationProfile || mergeLocationProfile(profile, clientData)} compact />
+        </div>
+        <button type="button" className="ch-checkin-card" onClick={() => setShowMoodModal(true)}>
+          <span className="ch-checkin-icon"><Activity size={20} /></span>
+          <span className="ch-checkin-text">
+            <strong>Log how you feel</strong>
+            <em>A quick check-in your therapist can see</em>
+          </span>
+        </button>
+      </div>
 
       {/* ── Today band ───────────────────────────────────────────────────────
           Replaces the full-width red alarm bar. That banner shouted at every
@@ -2170,24 +2177,30 @@ export default function ClientHome({ profile }) {
 
       {/* Quick Actions — the dashboard had no direct route to the things a client
           actually opens every visit; everything went through the left nav. */}
-      <div className="client-quick-actions">
+      {/* Circle buttons, one colour each — the same language as the clinician
+          and patient dashboards. Every icon/circle pair is measured; the
+          lowest here is gold at 5.37:1. */}
+      <div className="ch-quick">
         {[
-          { label: 'Book a session',  hint: 'Find a free slot',      icon: Calendar,      to: '/dashboard/schedule',  tone: 'emerald' },
-          { label: 'Message therapist', hint: 'Ask a question',      icon: MessageSquare, to: '/dashboard/messages',  tone: 'sky' },
-          { label: 'Join video call', hint: 'Enter your session',    icon: Video,         to: '/dashboard/video',     tone: 'violet' },
-          { label: 'Resources',       hint: 'Worksheets & reading',  icon: BookOpen,      to: '/dashboard/resources', tone: 'amber' },
-        ].map(({ label, hint, icon: Icon, to, tone }) => (
-          <button key={label} className={`quick-action quick-action-${tone}`} onClick={() => navigate(to)}>
-            <span className="quick-action-icon"><Icon size={19} /></span>
-            <span className="quick-action-text">
-              <span className="quick-action-label">{label}</span>
-              <span className="quick-action-hint">{hint}</span>
-            </span>
-            <ChevronRight size={16} className="quick-action-chevron" />
+          { label: 'Book a session', icon: Calendar,      to: '/dashboard/schedule',  tone: 'green' },
+          { label: 'Message',        icon: MessageSquare, to: '/dashboard/messages',  tone: 'sky' },
+          { label: 'Video call',     icon: Video,         to: '/dashboard/video',     tone: 'violet' },
+          { label: 'Resources',      icon: BookOpen,      to: '/dashboard/resources', tone: 'gold' },
+          { label: 'My care',        icon: Heart,         to: '/dashboard/my-care',   tone: 'rose' },
+          { label: 'Billing',        icon: CreditCard,    to: '/dashboard/billing',   tone: 'blue' },
+        ].map(({ label, icon: Icon, to, tone }) => (
+          <button key={label} type="button" className="ch-quick-btn"
+                  onClick={() => navigate(to)} title={label}>
+            <span className={`ch-quick-circle ch-circle-${tone}`}><Icon size={19} /></span>
+            <span className="ch-quick-label">{label}</span>
           </button>
         ))}
       </div>
 
+      {/* Progress, activity and charts, always rendered.
+          They used to sit behind a "Show your progress, activity and charts"
+          disclosure, which meant a client had to click before seeing any of
+          the work they had put in. */}
       {/* Progress and Activities Cards */}
       <div className="progress-activities-section">
         <div className="progress-activities-row">
@@ -2437,6 +2450,8 @@ export default function ClientHome({ profile }) {
 
         </div>
       </div>
+
+
 
       {/* Mood Check-in Modal */}
       {showMoodModal && (

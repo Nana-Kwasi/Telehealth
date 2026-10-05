@@ -3,9 +3,14 @@
 // import { db, functions, httpsCallable, auth } from '../../services/firestoreShim';
 // import { Phone, Calendar, Clock, User } from 'lucide-react';
 // import { onAuthStateChanged } from '../../services/authShim';
+// import { resolveFileUrl } from '../../utils/fileUrl';
 // import './VideoCall.css';
 
-// const VideoCall = ({ user }) => {
+
+
+
+// 
+//   const VideoCall = ({ user }) => {
 //   const [assignedPerson, setAssignedPerson] = useState(null);
 //   const [scheduledCalls, setScheduledCalls] = useState([]);
 //   const [showScheduleForm, setShowScheduleForm] = useState(false);
@@ -624,9 +629,78 @@ import { collection, query, where, getDocs, addDoc, orderBy, onSnapshot, Timesta
 // was the token callable, which now goes through twilioVideoService directly.
 import { db, auth } from '../../services/firestoreShim';
 import { generateVideoToken, roomNameForCall } from '../../services/twilioVideoService';
-import { Phone, Calendar, Clock, User, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { Phone, Calendar, Clock, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { onAuthStateChanged } from '../../services/authShim';
 import './VideoCall.css';
+import { resolveFileUrl } from '../../utils/fileUrl';
+
+/**
+ * One person you can call.
+ *
+ * A row, not a tile. The old card stacked a 50px avatar, a 1.9rem name and two
+ * large pill buttons inside a gradient box, which left no room for the name —
+ * "Akosua Boateng" wrapped across two lines and ran into the buttons.
+ *
+ * Falls back to initials when there is no photo, rather than a generic person
+ * glyph repeated down the list: initials at least distinguish one row from
+ * the next.
+ */
+function PersonRow({ person, subtitle, isStartingCall, disabled, onCall, onSchedule }) {
+  const name = person.displayName || person.clientName || person.name
+    || person.email || 'Client';
+  const email = person.clientEmail || person.email || '';
+  const photo = resolveFileUrl(person.photoURL || person.avatarUrl || person.avatar_url);
+
+  const initials = String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
+  return (
+    <div className="vc-person">
+      {photo ? (
+        <img className="vc-avatar" src={photo} alt="" />
+      ) : (
+        <span className="vc-avatar vc-avatar--initials" aria-hidden="true">{initials}</span>
+      )}
+
+      <span className="vc-person-text">
+        <span className="vc-person-name">{name}</span>
+        {subtitle ? (
+          <span className="vc-person-sub">{subtitle}</span>
+        ) : email ? (
+          <span className="vc-person-sub">{email}</span>
+        ) : null}
+      </span>
+
+      <span className="vc-person-actions">
+        <button
+          type="button"
+          className="vc-btn vc-btn--call"
+          onClick={onCall}
+          disabled={disabled || isStartingCall}
+          title={`Start a call with ${name} now`}
+        >
+          <Phone size={15} />
+          <span>{isStartingCall ? 'Starting…' : 'Call'}</span>
+        </button>
+        <button
+          type="button"
+          className="vc-btn vc-btn--schedule"
+          onClick={onSchedule}
+          disabled={disabled}
+          title={`Schedule a session with ${name}`}
+        >
+          <Calendar size={15} />
+          <span>Schedule</span>
+        </button>
+      </span>
+    </div>
+  );
+}
 
 // Call Logging System
 const logCallActivity = async (activityData) => {
@@ -653,6 +727,8 @@ if (!sessionStorage.getItem('sessionId')) {
 
 const VideoCall = ({ user }) => {
   const [assignedPerson, setAssignedPerson] = useState(null);
+  // Only surfaced once the roster is long enough to need it.
+  const [personQuery, setPersonQuery] = useState('');
   const [scheduledCalls, setScheduledCalls] = useState([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   // Which person the schedule modal is for. Without this the form fell back to
@@ -993,9 +1069,14 @@ const VideoCall = ({ user }) => {
         roomName,
         participantName,
         identity,
-        displayNames: { [identity]: participantName },
+        // The other party's tile is labelled from this map by Twilio identity
+        // (their user id). targetPerson used to be the whole record → "[object Object]".
+        displayNames: {
+          [identity]: participantName,
+          ...(targetPerson?.id ? { [targetPerson.id]: targetPerson.displayName || targetPerson.name || 'Client' } : {}),
+        },
         token: result.token,
-        targetPerson,
+        targetPerson: targetPerson?.displayName || targetPerson?.name || 'Client',
         callType: 'instant'
       };
       
@@ -1389,94 +1470,85 @@ const VideoCall = ({ user }) => {
         </div>
       )}
 
-      {/* Assigned Person Section */}
-      <div className="assigned-person-section">
-        <h2 style={{color:'salmon'}}>
-          {user.role === 'client' ? 'Your Therapist' : 'Your Clients'}
-        </h2>
-        
-        {user.role === 'client' && assignedPerson ? (
-          <div className="person-card">
-            <div className="person-info">
-              <div className="person-avatar">
-                <User size={50} />
-              </div>
-              <div className="person-details">
-                <h3 style={{color: 'white'}}>
-                  {assignedPerson.displayName || assignedPerson.name || assignedPerson.email}
-                </h3>
-                <p>Assigned Therapist</p>
-              </div>
-            </div>
-            <div className="person-actions">
-              <button 
-                className="btn-call-now"
-                onClick={() => startInstantCall(assignedPerson)}
-                disabled={!authUser || isStartingCall}
-              >
-                <Phone size={16} />
-                {isStartingCall ? 'Starting...' : 'Call Now'}
-              </button>
-              <button 
-                className="btn-schedule"
-                onClick={() => {
-                  setEditingCall(null);
-                  setScheduleTarget(assignedPerson);
-                  setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
-                  setShowScheduleForm(true);
-                }}
-                disabled={!authUser}
-              >
-                <Calendar size={16} />
-                Schedule
-              </button>
-            </div>
+      {/* ── Who you can call ──────────────────────────────────────────────
+          Was a grid of purple gradient tiles with 1.9rem white names and two
+          large pill buttons crammed beside them, so a two-word name wrapped
+          straight into the controls. This is a plain roster: photo, name,
+          email, and the two actions at a size that leaves the name room.
+          Only the presentation changed — startInstantCall, the schedule modal
+          and every handler are untouched. ── */}
+      <div className="vc-people">
+        <div className="vc-people-head">
+          <h2 className="vc-people-title">
+            {user.role === 'client' ? 'Your therapist' : 'Your clients'}
+          </h2>
+          {Array.isArray(assignedPerson) && assignedPerson.length > 6 ? (
+            <input
+              className="vc-search"
+              value={personQuery}
+              onChange={(e) => setPersonQuery(e.target.value)}
+              placeholder="Search…"
+              aria-label="Search your clients"
+            />
+          ) : null}
+        </div>
+
+        {user.role === 'client' && assignedPerson && !Array.isArray(assignedPerson) ? (
+          <div className="vc-grid">
+            <PersonRow
+              person={assignedPerson}
+              subtitle="Assigned therapist"
+              isStartingCall={isStartingCall}
+              disabled={!authUser}
+              onCall={() => startInstantCall(assignedPerson)}
+              onSchedule={() => {
+                setEditingCall(null);
+                setScheduleTarget(assignedPerson);
+                setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
+                setShowScheduleForm(true);
+              }}
+            />
           </div>
-        ) : (user.role === 'therapist' || user.role === 'admin') && Array.isArray(assignedPerson) && assignedPerson.length > 0 ? (
-          <div className="clients-grid">
-            {assignedPerson.map((client) => (
-              <div key={client.id} className="person-card">
-                <div className="person-info">
-                  <div className="person-avatar">
-                    <User size={32} />
-                  </div>
-                  <div className="person-details">
-                    <h3 style={{color:'white', fontSize:'1.9rem'}}>
-                      {client.displayName || client.clientName || client.name || client.email || `Client ${client.id}`}
-                    </h3>
-                    {/* <p>Assigned Client</p> */}
-                  </div>
-                </div>
-                <div className="person-actions">
-                  <button 
-                    className="btn-call-now"
-                    onClick={() => startInstantCall(client)}
-                    disabled={!authUser || isStartingCall}
-                  >
-                    <Phone size={16} />
-                    {isStartingCall ? 'Starting...' : 'Call Now'}
-                  </button>
-                  <button 
-                    className="btn-schedule"
-                    onClick={() => {
+        ) : (user.role === 'therapist' || user.role === 'admin')
+            && Array.isArray(assignedPerson) && assignedPerson.length > 0 ? (
+          <>
+            <div className="vc-grid">
+              {assignedPerson
+                .filter((c) => {
+                  const q = personQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  const name = c.displayName || c.clientName || c.name || '';
+                  return `${name} ${c.clientEmail || c.email || ''}`.toLowerCase().includes(q);
+                })
+                .map((client) => (
+                  <PersonRow
+                    key={client.id}
+                    person={client}
+                    isStartingCall={isStartingCall}
+                    disabled={!authUser}
+                    onCall={() => startInstantCall(client)}
+                    onSchedule={() => {
                       setEditingCall(null);
                       setScheduleTarget(client);
                       setScheduleForm({ date: '', time: '', duration: '30', notes: '' });
                       setShowScheduleForm(true);
                     }}
-                    disabled={!authUser}
-                  >
-                    <Calendar size={16} />
-                    Schedule
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  />
+                ))}
+            </div>
+            {personQuery.trim()
+              && assignedPerson.filter((c) => {
+                const q = personQuery.trim().toLowerCase();
+                const name = c.displayName || c.clientName || c.name || '';
+                return `${name} ${c.clientEmail || c.email || ''}`.toLowerCase().includes(q);
+              }).length === 0 ? (
+                <p className="vc-empty">Nobody matches “{personQuery}”.</p>
+              ) : null}
+          </>
         ) : (
-          <div className="empty-state">
-            <p>No {user.role === 'client' ? 'therapist' : 'clients'} assigned yet.</p>
-          </div>
+          <p className="vc-empty">
+            No {user.role === 'client' ? 'therapist' : 'clients'} assigned yet.
+          </p>
         )}
       </div>
 
@@ -1509,7 +1581,7 @@ const VideoCall = ({ user }) => {
                 <div key={call.id} className={`call-card ${canJoin ? 'can-join' : ''}`}>
                   <div className="call-info">
                     <div className="call-header">
-                      <h3 style={{color:'salmon'}}>
+                      <h3 className="vc-call-title">
                         Call with {user.role === 'client' ? call.therapistName : call.clientName}
                       </h3>
                       {canManage && (

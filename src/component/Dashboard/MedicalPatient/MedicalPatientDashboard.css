@@ -193,6 +193,10 @@
 /* White banner. Everything inside was written white-on-blue, so each piece
    below is re-coloured for a light ground rather than left to disappear. */
 .mp-welcome-banner {
+  /* DEAD as of the hero redesign — .mp-hero replaced it and nothing renders
+     these classes any more. Left in place rather than deleted because the
+     block below it is long and intertwined with shared tokens; nothing loads
+     it today. */
   background: white;
   border: 1.5px solid #e2e8f0;
   border-radius: 20px;
@@ -1678,4 +1682,202 @@
   text-align: center;
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PATIENT WELCOME HERO
+   Replaces .mp-welcome-banner, which packed the greeting, a red-outlined
+   vitals box and a button into one row with no room for any of them.
+   Every colour is measured against the surface it sits on.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.mp-hero {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 1.5rem;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  padding: 1.6rem 1.8rem;
+  border-radius: 24px;
+  background:
+    radial-gradient(520px 320px at 92% 12%, rgba(139, 195, 235, 0.38), transparent 68%),
+    radial-gradient(420px 300px at 4% 94%, rgba(160, 216, 196, 0.32), transparent 66%),
+    linear-gradient(118deg, #eaf3fb 0%, #e6f1fa 52%, #e9f5f0 100%);
+}
+
+.mp-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Identity ─────────────────────────────────────────────────────────── */
+.mp-hero-id { display: flex; align-items: center; gap: 0.9rem; min-width: 210px; }
+
+.mp-hero-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #d3e6f7;
+  color: #0f4c81;              /* 6.93:1 */
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.mp-hero-who { min-width: 0; }
+
+.mp-hero-greet {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.6rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #0e2438;              /* 13.95:1 on the hero ground */
+}
+.mp-hero-name { color: #1361a6; }   /* 5.63:1 */
+
+.mp-hero-date {
+  margin: 0.2rem 0 0.5rem;
+  font-size: 0.83rem;
+  color: #4a5a6b;              /* 6.25:1 */
+}
+
+.mp-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.mp-hero-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.mp-hero-badge.is-active     { background: #dcfce7; color: #14532d; }  /* 8.30:1 */
+.mp-hero-badge.is-discharged { background: #eef0f5; color: #454b5c; }  /* 7.63:1 */
+
+/* ── The prompt cards ─────────────────────────────────────────────────── */
+.mp-hero-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1;
+  min-width: 260px;
+}
+
+.mp-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+}
+.mp-hero-card.is-button { cursor: pointer; transition: background 140ms ease, transform 140ms ease; }
+.mp-hero-card.is-button:hover { background: #ffffff; transform: translateY(-1px); }
+
+.mp-hero-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 12px;
+}
+.mp-tint-rose  { background: #fde8e8; color: #a52121; }  /* 6.30:1 */
+.mp-tint-amber { background: #fdeee0; color: #9a4f08; }  /* 5.29:1 */
+
+/* flex:1 on the text only — on the row it would stretch the icon. */
+.mp-hero-card-text { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; min-width: 0; }
+.mp-hero-card-title { font-size: 0.88rem; font-weight: 750; color: #0f1a2b; }
+.mp-hero-card-sub   { font-size: 0.77rem; line-height: 1.4; color: #5b6779; }
+
+.mp-hero-card-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+.mp-hero-mini {
+  padding: 0.35rem 0.75rem;
+  border: 1.5px solid #cfe0ef;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #12507f;              /* 8.47:1 */
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mp-hero-mini:hover { background: #f2f8fd; }
+.mp-hero-mini.is-solid {
+  border-color: #1361a6;
+  background: #1361a6;
+  color: #ffffff;              /* 6.39:1 */
+}
+.mp-hero-mini.is-solid:hover { background: #10538e; }
+
+/* ── Primary action ───────────────────────────────────────────────────── */
+.mp-hero-cta { flex-shrink: 0; }
+.mp-hero-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.8rem 1.35rem;
+  border: none;
+  border-radius: 999px;
+  background: #1361a6;
+  color: #ffffff;              /* 6.39:1 */
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(19, 97, 166, 0.3);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.mp-hero-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(19, 97, 166, 0.38);
+}
+
+/* ── Artwork ──────────────────────────────────────────────────────────── */
+.mp-hero-art {
+  align-self: flex-end;
+  height: 100%;
+  max-height: 250px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+  -webkit-mask-image: linear-gradient(to left, #000 74%, transparent 99%);
+  mask-image: linear-gradient(to left, #000 74%, transparent 99%);
+  pointer-events: none;
+}
+@media (max-width: 1180px) { .mp-hero-art { display: none; } }
+
+@media (max-width: 720px) {
+  .mp-hero { padding: 1.25rem 1.1rem; border-radius: 20px; }
+  .mp-hero-main { gap: 1.1rem; }
+  .mp-hero-cta, .mp-hero-primary { width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-hero-card.is-button, .mp-hero-primary { transition: none; }
+  .mp-hero-card.is-button:hover, .mp-hero-primary:hover { transform: none; }
 }

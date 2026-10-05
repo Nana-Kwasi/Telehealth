@@ -42,6 +42,7 @@ import {
   Camera
 } from 'lucide-react';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function ClientSettings() {
   const [clientData, setClientData] = useState(null);
@@ -488,7 +489,7 @@ export default function ClientSettings() {
               <div className="settings-photo-upload">
                 <div className="settings-photo-avatar">
                   {clientData?.photoURL ? (
-                    <img src={clientData.photoURL} alt="Profile" className="settings-photo-img" />
+                    <img src={resolveFileUrl(clientData.photoURL)} alt="Profile" className="settings-photo-img" />
                   ) : (
                     <span className="settings-photo-initials">
                       {clientData?.name ? clientData.name.charAt(0).toUpperCase() : 'C'}

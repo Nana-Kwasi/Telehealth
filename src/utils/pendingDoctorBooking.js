@@ -67,6 +67,12 @@ export async function materializePendingBooking(booking, { userId, name, email }
   let res;
   try {
     res = await addDoc(collection(db, 'doctorAppointments'), {
+    // This replays a booking the user began BEFORE signing in, and it runs on
+    // dashboard load — so it cannot open a payment window without ambushing
+    // someone who just logged in. It therefore records the appointment as
+    // UNPAID rather than creating a free one silently, so the fee is still
+    // owed and visible instead of quietly written off.
+    paymentStatus: 'unpaid',
     doctorId: booking.doctorId,
     doctorName: booking.doctorName || 'Doctor',
     doctorSpecialization: booking.doctorSpecialization || '',

@@ -1,0 +1,699 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   NESSAHUB — CLINICIAN HOME
+   Shared by the therapist and doctor dashboards.
+
+   Colours are literals, each measured against the surface it sits on. These
+   screens render inside role shells that define different token sets, and a
+   var() with no fallback is dropped wholesale at computed-value time — which
+   is how an icon ended up invisible on its own tint once already.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.nd-home {
+  padding: 1.5rem;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ── Grid ──────────────────────────────────────────────────────────────────
+   Three columns on a wide screen, exactly as the reference: two-thirds of
+   content on the left, a narrow rail on the right. */
+.nd-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  /* Stretch, not start. With `start` every card kept its natural height, so a
+     short panel ("Needs your attention") left an obvious hole beside a tall
+     one ("Recent activity"). Rows now share a height and the grid reads as
+     rows rather than ragged columns. */
+  align-items: stretch;
+}
+
+/* Panels fill the height the row gives them, and push any footer content to
+   the bottom rather than leaving it floating mid-card. */
+.nd-grid > .nd-panel,
+.nd-grid > .nd-rail {
+  display: flex;
+  flex-direction: column;
+}
+.nd-grid > .nd-panel > :last-child { margin-bottom: 0; }
+.nd-span-2 { grid-column: span 2; }
+.nd-span-3 { grid-column: span 3; }
+
+@media (max-width: 1180px) {
+  .nd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nd-span-2, .nd-span-3 { grid-column: span 2; }
+}
+@media (max-width: 760px) {
+  .nd-grid { grid-template-columns: 1fr; }
+  .nd-span-2, .nd-span-3 { grid-column: span 1; }
+  .nd-home { padding: 1rem; }
+}
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+.nd-hero {
+  grid-column: span 2;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.9rem 2rem;
+  border-radius: 24px;
+  background:
+    radial-gradient(520px 320px at 88% 18%, rgba(147, 168, 250, 0.42), transparent 68%),
+    radial-gradient(420px 300px at 8% 92%, rgba(196, 173, 250, 0.38), transparent 66%),
+    linear-gradient(118deg, #ecedfc 0%, #e6edfb 55%, #eae7fb 100%);
+}
+@media (max-width: 1180px) { .nd-hero { grid-column: span 2; } }
+@media (max-width: 760px)  { .nd-hero { grid-column: span 1; padding: 1.4rem 1.25rem; } }
+
+.nd-hero-copy { flex: 1; min-width: 0; position: relative; z-index: 1; }
+
+.nd-hero-greet {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.9rem;
+  padding: 0.34rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #3d4257;              /* 8.1:1 on the pill */
+  font-size: 0.79rem;
+  font-weight: 650;
+}
+.nd-hero-greet-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+
+.nd-hero-title {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.5rem, 2.6vw, 2.15rem);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+  color: #15173a;              /* 14.60:1 on the hero ground */
+}
+.nd-hero-accent {
+  background: linear-gradient(100deg, #5b5bd6, #8b5cf6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* If background-clip:text is unsupported the gradient is ignored and this
+     colour shows instead — never a transparent, unreadable heading. */
+  color: #5b5bd6;
+}
+
+.nd-hero-body {
+  margin: 0 0 1.2rem;
+  max-width: 46ch;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #4a5063;              /* 6.77:1 on the hero ground */
+}
+
+.nd-hero-actions { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+
+.nd-hero-aside { flex-shrink: 0; position: relative; z-index: 1; }
+@media (max-width: 900px) { .nd-hero-aside { display: none; } }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.nd-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 1.35rem;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #ffffff;              /* 5.37:1 on the gradient's lighter stop */
+  background: linear-gradient(120deg, #5b5bd6, #7c4ddb);
+  box-shadow: 0 8px 22px rgba(91, 91, 214, 0.34);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.nd-cta:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(91, 91, 214, 0.42); }
+.nd-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.nd-cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 1.1rem;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: #3d4257;
+  background: rgba(255, 255, 255, 0.7);
+}
+.nd-cta-ghost:hover { background: #ffffff; }
+
+/* ── Stat rail ─────────────────────────────────────────────────────────── */
+.nd-rail { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.nd-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 1rem 1.05rem;
+  text-align: left;
+  border: 1px solid #ebecf3;
+  border-radius: 18px;
+  background: #ffffff;
+  font-family: inherit;
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+.nd-stat.is-clickable { cursor: pointer; }
+.nd-stat.is-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(21, 23, 58, 0.08);
+}
+
+.nd-stat-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px;
+}
+/* flex:1 on the text only — on the row it would stretch the icon. */
+.nd-stat-body { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; min-width: 0; }
+.nd-stat-label { font-size: 0.8rem; font-weight: 650; color: #656b7d; }
+.nd-stat-value { font-size: 1.22rem; font-weight: 800; color: #15173a; line-height: 1.2; }
+.nd-stat-meta  { font-size: 0.74rem; color: #7b8190; }
+.nd-stat-chev  { color: #b6bbc9; flex-shrink: 0; }
+.nd-spark { flex-shrink: 0; display: flex; align-items: center; }
+
+/* ── Panels ────────────────────────────────────────────────────────────── */
+.nd-panel {
+  padding: 1.2rem 1.25rem;
+  border: 1px solid #ebecf3;
+  border-radius: 22px;
+  background: #ffffff;
+  min-width: 0;
+}
+.nd-panel-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; margin-bottom: 1rem;
+}
+.nd-panel-heading { min-width: 0; }
+.nd-panel-title { margin: 0; font-size: 1.02rem; font-weight: 800; color: #15173a; }
+.nd-panel-sub   { margin: 0.2rem 0 0; font-size: 0.79rem; color: #656b7d; }
+.nd-viewall {
+  flex-shrink: 0; padding: 0; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 0.79rem; font-weight: 650; color: #5b5bd6;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+
+/* ── Score ring ────────────────────────────────────────────────────────── */
+.nd-overview { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+.nd-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+.nd-ring { width: 118px; height: 118px; transform: rotate(-90deg); }
+.nd-ring-track { fill: none; stroke: #eef0f5; stroke-width: 11; }
+.nd-ring-fill  { fill: none; stroke-width: 11; stroke-linecap: round; transition: stroke-dasharray 700ms ease; }
+.nd-ring-value {
+  transform: rotate(90deg); transform-origin: 55px 55px;
+  text-anchor: middle; font-size: 25px; font-weight: 800; fill: #15173a;
+}
+.nd-ring-unit {
+  transform: rotate(90deg); transform-origin: 55px 55px;
+  text-anchor: middle; font-size: 11px; font-weight: 650; fill: #7b8190;
+}
+.nd-ring-label   { font-size: 0.8rem; font-weight: 700; color: #15173a; }
+.nd-ring-caption { font-size: 0.72rem; color: #656b7d; }
+
+/* ── Metric tiles ──────────────────────────────────────────────────────── */
+.nd-metrics {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem; flex: 1; min-width: 210px;
+}
+.nd-metric {
+  display: flex; flex-direction: column; gap: 0.1rem;
+  padding: 0.75rem 0.85rem; border-radius: 15px; background: #f8f9fc;
+}
+.nd-metric-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9px; margin-bottom: 0.3rem;
+}
+.nd-metric-label { font-size: 0.72rem; font-weight: 600; color: #656b7d; }
+.nd-metric-value { font-size: 1.05rem; font-weight: 800; color: #15173a; }
+.nd-metric-note  { font-size: 0.7rem; color: #12602f; font-weight: 650; }
+
+/* ── Person / activity rows ────────────────────────────────────────────── */
+.nd-row, .nd-act {
+  display: flex; align-items: center; gap: 0.75rem;
+  width: 100%; padding: 0.6rem 0.4rem; text-align: left;
+  border: none; background: none; border-radius: 12px; font-family: inherit;
+}
+.nd-row.is-clickable, .nd-act.is-clickable { cursor: pointer; }
+.nd-row.is-clickable:hover, .nd-act.is-clickable:hover { background: #f8f9fc; }
+.nd-row + .nd-row, .nd-act + .nd-act { border-top: 1px solid #f2f3f8; }
+
+.nd-row-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #e4ecfb; }
+.nd-row-initials {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.82rem; font-weight: 800; color: #1a3ea8;   /* 7.70:1 on #e4ecfb */
+}
+.nd-row-text { display: flex; flex-direction: column; gap: 0.05rem; flex: 1; min-width: 0; }
+.nd-row-name { font-size: 0.89rem; font-weight: 700; color: #15173a;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-row-meta { font-size: 0.76rem; color: #656b7d;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-row-when { font-size: 0.74rem; color: #7b8190; }
+.nd-row-chev { color: #b6bbc9; flex-shrink: 0; }
+
+.nd-act-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 11px; flex-shrink: 0;
+}
+.nd-act-text { display: flex; flex-direction: column; gap: 0.05rem; flex: 1; min-width: 0; }
+.nd-act-title { font-size: 0.86rem; font-weight: 700; color: #15173a; }
+.nd-act-sub   { font-size: 0.76rem; color: #656b7d;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-act-time  { font-size: 0.73rem; color: #7b8190; flex-shrink: 0; }
+
+/* ── Pills ─────────────────────────────────────────────────────────────── */
+.nd-pill {
+  flex-shrink: 0; padding: 0.2rem 0.6rem; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 750;
+}
+.nd-pill-confirmed { background: #dcfce7; color: #14532d; }  /* 8.30:1 */
+.nd-pill-upcoming  { background: #e4ecfb; color: #14427e; }  /* 8.38:1 */
+.nd-pill-scheduled { background: #eef0f5; color: #454b5c; }  /* 7.63:1 */
+.nd-pill-alert     { background: #fdeee0; color: #9a4f08; }  /* 5.29:1 */
+
+/* ── Shortcuts ─────────────────────────────────────────────────────────────
+   Same circle treatment as quick actions, so the two panels read as one
+   family rather than two different button languages side by side. */
+.nd-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 0.6rem 0.4rem;
+}
+
+.nd-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.25rem;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 140ms ease;
+}
+.nd-shortcut:hover { background: #f7f8fc; }
+.nd-shortcut:focus-visible { outline: 2px solid #5b5bd6; outline-offset: 2px; }
+
+.nd-shortcut-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.nd-shortcut:hover .nd-shortcut-icon {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(21, 23, 58, 0.14);
+}
+
+.nd-shortcut-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  color: #15173a;
+}
+.nd-shortcut-count {
+  font-size: 0.68rem;
+  line-height: 1.3;
+  text-align: center;
+  color: #656b7d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nd-shortcut, .nd-shortcut-icon { transition: none; }
+  .nd-shortcut:hover .nd-shortcut-icon { transform: none; }
+}
+
+/* ── Promo ─────────────────────────────────────────────────────────────── */
+.nd-promo {
+  position: relative; overflow: hidden;
+  background:
+    radial-gradient(260px 200px at 88% 6%, rgba(251, 207, 232, 0.5), transparent 70%),
+    linear-gradient(160deg, #eceefe 0%, #e7eefc 100%);
+  border-color: #e0e3fa;
+}
+.nd-promo-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 58px; height: 58px; border-radius: 18px; margin-bottom: 0.9rem;
+  background: rgba(255, 255, 255, 0.85); color: #4338ca;
+}
+.nd-promo-title { margin: 0 0 0.4rem; font-size: 1.18rem; font-weight: 800; color: #15173a; }
+.nd-promo-body  { margin: 0 0 1.1rem; font-size: 0.85rem; line-height: 1.55; color: #4a5063; }
+
+/* ── Trends ────────────────────────────────────────────────────────────── */
+.nd-trend { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; }
+.nd-trend-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
+}
+.nd-trend-label { flex: 1; min-width: 0; font-size: 0.82rem; color: #3d4257;
+                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-trend-up   { font-size: 0.79rem; font-weight: 750; color: #15803d; }  /* 5.02:1 on white */
+.nd-trend-down { font-size: 0.79rem; font-weight: 750; color: #b3261e; }
+
+/* ── Tints ─────────────────────────────────────────────────────────────── */
+.nd-tone-lilac  { background: #eceefe; color: #4338ca; }  /* 6.86:1 */
+.nd-tone-blue   { background: #e4ecfb; color: #1a3ea8; }  /* 7.70:1 */
+.nd-tone-green  { background: #e4f6ec; color: #12602f; }  /* 6.82:1 */
+.nd-tone-amber  { background: #fdeee0; color: #9a4f08; }  /* 5.29:1 */
+.nd-tone-rose   { background: #fde8e8; color: #a52121; }
+.nd-tone-teal   { background: #dff3f2; color: #0f5f5c; }
+/* Added because ShortcutTile now asks for these. A tone class that does not
+   exist renders an untinted circle — no error, just a blank one. */
+.nd-tone-violet { background: #f0e9fd; color: #5b21a6; }  /* 8.03:1 */
+.nd-tone-sky    { background: #e0f2fb; color: #0b5c86; }  /* 6.32:1 */
+.nd-tone-gold   { background: #fdf3dc; color: #8a5a04; }  /* 5.37:1 */
+
+.nd-empty {
+  margin: 0; padding: 1.1rem 0; font-size: 0.85rem; color: #656b7d;
+  text-align: center;
+  /* Fills the panel's spare height so an empty panel is not a title with a
+     void under it. */
+  flex: 1; display: flex; align-items: center; justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nd-cta, .nd-stat, .nd-shortcut, .nd-ring-fill { transition: none; }
+  .nd-cta:hover, .nd-stat.is-clickable:hover, .nd-shortcut:hover { transform: none; }
+}
+
+/* The hero's right-hand side. Deliberately the clock rather than stock art:
+   it is real, it is useful between clients, and it never claims to be data
+   the system does not have. */
+.nd-hero-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 1.3rem 1.8rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.nd-hero-time {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #15173a;
+  font-variant-numeric: tabular-nums;
+}
+.nd-hero-date { font-size: 0.78rem; font-weight: 600; color: #4a5063; }
+
+/* ── Top bar ───────────────────────────────────────────────────────────── */
+.nd-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; margin-bottom: 1.1rem; flex-wrap: wrap;
+}
+.nd-search {
+  position: relative; flex: 1; min-width: 200px; max-width: 460px;
+}
+.nd-search-icon {
+  position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+  color: #8b90a0; pointer-events: none;
+}
+.nd-search input {
+  width: 100%; padding: 0.8rem 1rem 0.8rem 2.75rem;
+  border: 1px solid #ebecf3; border-radius: 999px; background: #ffffff;
+  font-family: inherit; font-size: 0.87rem; color: #15173a; box-sizing: border-box;
+}
+.nd-search input::placeholder { color: #8b90a0; }
+.nd-search input:focus {
+  outline: none; border-color: #b9bcfa; box-shadow: 0 0 0 4px rgba(91, 91, 214, 0.1);
+}
+
+.nd-topbar-right {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 0.7rem; margin-left: auto; flex-wrap: wrap;
+}
+.nd-topbar-weather {
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  padding: 0.5rem 0.75rem; border-radius: 999px; background: rgba(255,255,255,0.9);
+  border: 1px solid #ebecf3; box-shadow: 0 4px 12px rgba(30,41,59,0.04);
+}
+.nd-topbar-weather-icon {
+  display: inline-flex; align-items:center; justify-content:center;
+  width: 27px; height: 27px; border-radius: 50%;
+  background: linear-gradient(135deg, #fef3c7, #fbbf24); font-size: 0.9rem;
+}
+.nd-topbar-weather-text {
+  display: flex; flex-direction: column; line-height: 1.1;
+}
+.nd-topbar-weather-text strong {
+  font-size: 0.72rem; font-weight: 800; color: #15173a;
+}
+.nd-topbar-weather-text span {
+  font-size: 0.62rem; color: #656b7d;
+}
+.nd-topbar-status {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.52rem 0.8rem; border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 999px; background: rgba(240,253,244,0.95);
+  color: #166534; cursor: pointer; font-family: inherit;
+  box-shadow: 0 8px 18px rgba(34,197,94,0.08);
+}
+.nd-topbar-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+}
+.nd-topbar-status-copy {
+  display: flex; flex-direction: column; line-height: 1.1; align-items: flex-start;
+}
+.nd-topbar-status-copy strong {
+  font-size: 0.72rem; font-weight: 800; color: #166534;
+}
+.nd-topbar-status-copy em {
+  font-style: normal; font-size: 0.6rem; color: #2f7d5f;
+}
+.nd-bell {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 42px; height: 42px; border: 1px solid #ebecf3; border-radius: 50%;
+  background: #ffffff; color: #3d4257; cursor: pointer;
+}
+.nd-bell-dot {
+  position: absolute; top: 9px; right: 10px; width: 9px; height: 9px;
+  border-radius: 50%; background: #e11d48; border: 2px solid #ffffff;
+}
+.nd-toppill {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.45rem 0.95rem 0.45rem 0.5rem;
+  border: 1px solid #ebecf3; border-radius: 999px; background: #ffffff;
+}
+.nd-toppill-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #eceefe; color: #4338ca;
+}
+.nd-toppill-text { display: flex; flex-direction: column; line-height: 1.25; }
+.nd-toppill-text strong { font-size: 0.79rem; font-weight: 700; color: #15173a; }
+.nd-toppill-text em { font-style: normal; font-size: 0.72rem; color: #656b7d; }
+@media (max-width: 900px) { .nd-toppill { display: none; } }
+
+.nd-avatar-btn { padding: 0; border: none; background: none; cursor: pointer; }
+.nd-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+             background: #e4ecfb; display: block; }
+.nd-avatar-initials {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 800; color: #1a3ea8;
+}
+
+
+/* ── Bars ──────────────────────────────────────────────────────────────── */
+.nd-bar { display: flex; align-items: center; gap: 0.65rem; padding: 0.28rem 0; }
+.nd-bar-label { width: 42px; flex-shrink: 0; font-size: 0.75rem; color: #656b7d; }
+.nd-bar-track { flex: 1; height: 8px; border-radius: 999px; background: #f1f2f7; overflow: hidden; }
+.nd-bar-fill  { display: block; height: 8px; border-radius: 999px; transition: width 600ms ease; }
+.nd-bar-value { width: 30px; flex-shrink: 0; text-align: right;
+                font-size: 0.75rem; font-weight: 700; color: #15173a; }
+
+/* ── Client progress ───────────────────────────────────────────────────── */
+.nd-prog { padding: 0.45rem 0; }
+.nd-prog + .nd-prog { border-top: 1px solid #f2f3f8; }
+.nd-prog-top { display: flex; align-items: baseline; justify-content: space-between;
+               gap: 0.6rem; margin-bottom: 0.35rem; }
+.nd-prog-name { font-size: 0.83rem; font-weight: 650; color: #15173a;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-prog-label { font-size: 0.73rem; font-weight: 700; flex-shrink: 0; }
+.nd-prog-track { display: block; height: 7px; border-radius: 999px; background: #f1f2f7; overflow: hidden; }
+.nd-prog-fill  { display: block; height: 7px; border-radius: 999px; transition: width 600ms ease; }
+
+/* The weather card sits in the rail and must not fight the stat tiles. */
+.nd-weather-slot {
+  border: 1px solid #ebecf3; border-radius: 18px; background: #ffffff;
+  padding: 0.85rem 1rem; overflow: hidden;
+}
+
+/* Bars fill the panel so a two-column chart never leaves a dead half. */
+.nd-bars { display: flex; flex-direction: column; gap: 0.1rem; }
+
+/* ── Doctor: appointment calendar ──────────────────────────────────────────
+   Doctor-only. The therapist dashboard has no equivalent because their
+   calendar is a screen of its own. */
+.nd-cal-head {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.75rem; margin-bottom: 0.9rem;
+}
+.nd-cal-nav {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: 1px solid #ebecf3; border-radius: 9px;
+  background: #ffffff; color: #3d4257; cursor: pointer;
+}
+.nd-cal-nav:hover { background: #f5f6fb; }
+.nd-cal-month {
+  min-width: 140px; text-align: center;
+  font-size: 0.88rem; font-weight: 750; color: #15173a;
+}
+
+/* ── Doctor: quick actions ─────────────────────────────────────────────────
+   Circle buttons, one colour each. Every icon/circle pair is measured against
+   its own tint rather than inheriting a single accent — the lowest is
+   5.29:1 (amber), the highest 8.03:1 (violet). */
+.nd-quick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 0.6rem 0.4rem;
+}
+
+.nd-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.25rem;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 140ms ease;
+}
+.nd-quick-btn:hover { background: #f7f8fc; }
+.nd-quick-btn:focus-visible { outline: 2px solid #5b5bd6; outline-offset: 2px; }
+
+.nd-quick-circle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.nd-quick-btn:hover .nd-quick-circle {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(21, 23, 58, 0.14);
+}
+
+.nd-quick-label {
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  color: #3d4257;              /* 9.93:1 on white */
+}
+
+/* A count on the circle itself, not a separate row. */
+.nd-quick-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  background: #c1121f;
+  color: #ffffff;              /* 6.22:1 */
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* One colour per action. */
+.nd-circle-amber  { background: #fdeee0; color: #9a4f08; }
+.nd-circle-blue   { background: #e4ecfb; color: #1a3ea8; }
+.nd-circle-violet { background: #f0e9fd; color: #5b21a6; }
+.nd-circle-green  { background: #e4f6ec; color: #12602f; }
+.nd-circle-sky    { background: #e0f2fb; color: #0b5c86; }
+.nd-circle-gold   { background: #fdf3dc; color: #8a5a04; }
+.nd-circle-teal   { background: #ddf2f1; color: #0f5f5c; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nd-quick-btn, .nd-quick-circle { transition: none; }
+  .nd-quick-btn:hover .nd-quick-circle { transform: none; }
+}
+
+/* ── Filling the height a stretched row gives a short panel ────────────────
+   With `align-items: stretch` a short panel matches its tallest neighbour,
+   which is right for the grid but leaves its own content hugging the top —
+   the "Your tools" tiles with a void beneath them.
+
+   These two rules let the content take that height instead: the tile grids
+   grow, and their rows share the space evenly. */
+.nd-panel > .nd-shortcuts,
+.nd-panel > .nd-quick,
+.nd-panel > .nd-bars {
+  flex: 1;
+  align-content: stretch;
+}
+
+.nd-panel > .nd-shortcuts .nd-shortcut { justify-content: center; }
+
+/* Lists of rows spread through the panel rather than stacking at the top. */
+.nd-panel > .nd-row:last-of-type,
+.nd-panel > .nd-act:last-of-type { margin-bottom: auto; }
+
+/* A panel whose only content is an overview block centres it vertically. */
+.nd-panel > .nd-overview { flex: 1; align-content: center; }
+
+/* ── Full-width hero with artwork ──────────────────────────────────────────
+   The greeting card now spans the whole row and carries the clock, the
+   weather and the illustration. */
+.nd-hero-wide { grid-column: 1 / -1; }
+
+.nd-hero-art {
+  height: 100%;
+  max-height: 340px;
+  width: auto;
+  align-self: flex-end;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 22px 18px rgba(91, 91, 214, 0.18));
+  -webkit-mask-image: linear-gradient(to left, #000 72%, transparent 99%);
+  mask-image: linear-gradient(to left, #000 72%, transparent 99%);
+  pointer-events: none;
+}
+@media (max-width: 1080px) { .nd-hero-art { display: none; } }
+
+/* The weather/time/availability widgets now live in the top search row. */
+.nd-hero-meta {
+  display: none;
+}
+.nd-hero-weather,
+.nd-hero-status {
+  display: none;
+}

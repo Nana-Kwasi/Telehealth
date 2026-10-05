@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import AiAssistantFab from '../../Common/AiAssistantFab';
+import CarePlanComposer from '../../Common/CarePlanComposer';
+import ReferralComposer from '../../Common/ReferralComposer';
+import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home,
-  Users,
-  MessageSquare,
-  Video,
-  Calendar,
-  BookOpen,
-  Settings,
-  LogOut,
-  Clock,
-  FileText,
-  Flag,
-  Activity,
-  Heart,
+  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth, db, doc, getDoc } from '../../../services/firestoreShim';
@@ -42,6 +34,16 @@ import Notifications from './Notifications';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import '../../../styles/zencare.css';
+import '../../../styles/zencare-therapy.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
+import ProviderPromotions from '../../Common/ProviderPromotions';
+import ProviderPricePromotions from '../../Common/ProviderPricePromotions';
+import ProviderWellness from '../../Common/ProviderWellness';
+import FeedbackResults from '../../Common/FeedbackResults';
+import NotificationCentre from '../../Common/NotificationCentre';
+import AiClinicalAssistant from '../../Common/AiClinicalAssistant';
+import ClinicianFollowUps from '../../Common/ClinicianFollowUps';
 
 export default function TherapistDashboard({ profile }) {
   const location = useLocation();
@@ -80,13 +82,23 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard', icon: Home, label: 'Home', component: TherapistHome },
     { path: '/dashboard/clients', icon: Users, label: 'Clients', component: TherapistClients },
     { path: '/dashboard/couple-cases', icon: Heart, label: 'Couple Cases', component: CoupleCases },
-    { path: '/dashboard/staff', icon: MessageSquare, label: 'Staff', component: TherapistMessages },
+    { path: '/dashboard/staff', icon: MessageSquare, label: 'Messaging', component: TherapistMessages },
     { path: '/dashboard/video', icon: Video, label: 'Video Call', component: TherapistVideoCall },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
+    { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans', component: CarePlanComposer },
+    { path: '/dashboard/documents', icon: FileSignature, label: 'Documents', component: AdminDocComposer },
+    { path: '/dashboard/referrals', icon: Share2, label: 'Referrals', component: ReferralComposer },
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: TherapistResources },
     { path: '/dashboard/mood', icon: Heart, label: 'Client Moods', component: MoodDashboard },
+    { path: '/dashboard/wellness', icon: Leaf, label: 'Wellness', component: ProviderWellness },
+    { path: '/dashboard/feedback', icon: Star, label: 'Patient Feedback', component: FeedbackResults },
+    { path: '/dashboard/ai-assistant', icon: Sparkles, label: 'NessaHub Assistant', component: AiClinicalAssistant },
+    { path: '/dashboard/check-ins', icon: ClipboardList, label: 'Check-ins', component: ClinicianFollowUps },
+    { path: '/dashboard/notifications', icon: Bell, label: 'Notifications', component: NotificationCentre },
+    { path: '/dashboard/promotions', icon: Gift, label: 'Promotions', component: ProviderPromotions },
+    { path: '/dashboard/fee-offers', icon: Tag, label: 'Offers on my fee', component: ProviderPricePromotions },
     { path: '/dashboard/reports', icon: Flag, label: 'Reports', component: TherapistReports },
     { path: '/dashboard/report-issue', icon: FileText, label: 'Report Issue', component: GlobalReportForm },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: TherapistSettings }
@@ -140,6 +152,7 @@ export default function TherapistDashboard({ profile }) {
 
 
   return (
+    <div className="zc zc-therapy zc-app-ground">
     <div className="therapist-dashboard">
       {/* Sidebar */}
       <aside className="therapist-sidebar">
@@ -155,7 +168,7 @@ export default function TherapistDashboard({ profile }) {
           <div className="user-info">
             <div className="user-avatar" onClick={() => document.getElementById('therapist-profile-image-input').click()}>
               {profile?.photoURL ? (
-                <img src={profile.photoURL} alt="Profile" />
+                <img src={resolveFileUrl(profile.photoURL)} alt="Profile" />
               ) : (
                 <span>{profile?.name ? profile.name.charAt(0).toUpperCase() : 'T'}</span>
               )}
@@ -208,7 +221,17 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/appointments" element={<TherapistAppointments />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
+          <Route path="/care-plans" element={<CarePlanComposer role="THERAPIST" />} />
+          <Route path="/documents" element={<AdminDocComposer role="THERAPIST" />} />
+          <Route path="/referrals" element={<ReferralComposer role="THERAPIST" />} />
           <Route path="/resources" element={<TherapistResources />} />
+          <Route path="/promotions" element={<ProviderPromotions />} />
+          <Route path="/fee-offers" element={<ProviderPricePromotions />} />
+          <Route path="/wellness" element={<ProviderWellness audience="my_clients" peopleNoun="clients" />} />
+          <Route path="/feedback" element={<FeedbackResults />} />
+          <Route path="/ai-assistant" element={<AiClinicalAssistant role="THERAPIST" />} />
+          <Route path="/check-ins" element={<ClinicianFollowUps role="THERAPIST" />} />
+          <Route path="/notifications" element={<NotificationCentre />} />
           <Route path="/mood" element={<MoodDashboard />} />
           <Route path="/reports" element={<TherapistReports />} />
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="therapist" />} />
@@ -220,7 +243,12 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/notifications" element={<Notifications />} />
           {isAdmin && <Route path="/logs" element={<TherapistLogs />} />}
         </Routes>
+        {/* Floating, so the assistant is reachable from every screen without
+            navigating away from what you are looking at. */}
+        <AiAssistantFab clinician />
+
       </main>
+    </div>
     </div>
   );
 }

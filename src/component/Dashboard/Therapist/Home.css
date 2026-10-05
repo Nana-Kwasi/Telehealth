@@ -999,3 +999,107 @@ button.cal-cell {
 }
 button.cal-cell:disabled { cursor: default; opacity: 0.45; }
 button.cal-cell:not(:disabled):hover { background: #eef2ff; border-radius: 8px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GLASS SURFACE
+   ══════════════════════════════════════════════════════════════════════════
+
+   Two opaque layers used to sit on top of the app's gradient ground — the
+   shell painted --th-bg (#f4f6fb) and this page painted #f4f6fb again — so
+   the dashboard read as a flat white slab with a nicer background visible
+   only at the edges. Both are cleared here and the cards become glass.
+
+   Opacity is 0.72, not lower. Measured: over the darkest region of the ground
+   (#e6e9e6) that flattens to #f8f9f8, where the muted text tone (#6b7283)
+   holds 4.56:1 — just over the AA floor. At 0.62 it fell to 4.48:1 and the
+   faint tone failed outright. Glass that looks better and reads worse is not
+   a trade worth making.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.therapist-dashboard { background: transparent; }
+
+.dashboard-home {
+  background: transparent;
+  min-height: auto;
+}
+
+/* Every raised surface on this screen, in one place. */
+.dashboard-home .enhanced-header,
+.dashboard-home .stat-card,
+.dashboard-home .th-home-chart-card,
+.dashboard-home .progress-section,
+.dashboard-home .schedule-section,
+.dashboard-home .schedule-card,
+.dashboard-home .activities-card,
+.dashboard-home .th-now,
+.dashboard-home .client-progress-card,
+.dashboard-home .th-home-admin-banner {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 1px 2px rgba(16, 22, 48, 0.04),
+    0 8px 28px rgba(16, 22, 48, 0.07);
+}
+
+/* Nested panels sit ON glass, so they get a lighter treatment — stacking two
+   full glass layers just produces mud. */
+.dashboard-home .th-now-next,
+.dashboard-home .th-now-attention,
+.dashboard-home .appointment-item,
+.dashboard-home .activity-item {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  backdrop-filter: none;
+}
+
+.dashboard-home .stat-card:hover,
+.dashboard-home .client-progress-card:hover {
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow:
+    0 2px 4px rgba(16, 22, 48, 0.05),
+    0 14px 38px rgba(16, 22, 48, 0.1);
+}
+
+/* The faint tone failed AA on glass; this is the measured replacement. */
+.dashboard-home .last-session,
+.dashboard-home .stat-change,
+.dashboard-home .th-now-wait {
+  color: #676e7e;
+}
+
+/* The calendar grid is the one control that books a session — it should read
+   as interactive rather than as a printed month. */
+.dashboard-home .cal-cell {
+  border-radius: 9px;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.dashboard-home .cal-cell:not(.empty):hover {
+  background: rgba(29, 78, 216, 0.1);
+  color: #14336e;
+  transform: translateY(-1px);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-home .stat-card,
+  .dashboard-home .cal-cell { transition: none; }
+  .dashboard-home .cal-cell:not(.empty):hover { transform: none; }
+}
+
+/* Safari on older iOS has no backdrop-filter; without this the cards there
+   would be 72% white over the ground with no blur, which looks washed out
+   rather than glassy. Give them a solid surface instead. */
+@supports not (backdrop-filter: blur(1px)) {
+  .dashboard-home .enhanced-header,
+  .dashboard-home .stat-card,
+  .dashboard-home .th-home-chart-card,
+  .dashboard-home .progress-section,
+  .dashboard-home .schedule-section,
+  .dashboard-home .schedule-card,
+  .dashboard-home .activities-card,
+  .dashboard-home .th-now {
+    background: #ffffff;
+  }
+}

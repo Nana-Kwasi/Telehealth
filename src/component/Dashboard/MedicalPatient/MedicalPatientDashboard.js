@@ -1,4 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import AiAssistantFab from '../../Common/AiAssistantFab';
+import ClientWellness from '../../Common/ClientWellness';
+import SymptomTriage from '../../Common/SymptomTriage';
+import MyCarePlan from '../../Common/MyCarePlan';
+import CareCentre from '../../Common/CareCentre';
+import SmartDocumentUpload from '../../Common/SmartDocumentUpload';
+import BillingAssistantPanel from '../../Common/BillingAssistantPanel';
+import RecordExplorer from '../../Common/RecordExplorer';
+import AiHealthAssistant from '../../Common/AiHealthAssistant';
+// Mobile medical patients had a notification centre (with the marketing /
+// wellness preference switches); web had none, so the same account could turn
+// promotional mail off on a phone and not find the control on a laptop.
+import NotificationCentre from '../../Common/NotificationCentre';
+import patientHero from '../../../assets/patient-hero.jpg';
 import { createPortal } from 'react-dom';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -7,7 +21,7 @@ import {
   CheckCircle, Video, Phone, MessageCircle, Pill,
   Bell, CreditCard, AlertCircle, TrendingUp, User,
   BarChart2, Heart, Star, Shield, Download, Plus, Smile, AlertTriangle, Search,
-  Mic, MicOff, Paperclip, Microscope, Minus,
+  Mic, MicOff, Paperclip, Microscope, Minus, Sparkles, Leaf, ClipboardList,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { signOut } from '../../../services/authShim';
@@ -30,6 +44,8 @@ import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverla
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { readPendingBooking, materializePendingBooking } from '../../../utils/pendingDoctorBooking';
 import { getJoinWindow } from '../../../utils/sessionJoinWindow';
+import { payForBooking } from '../../../services/paystack';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
@@ -396,6 +412,94 @@ function MedPatHome({ profile }) {
 
   return (
     <div className="mp-page">
+      {/* ── Welcome hero ──────────────────────────────────────────────────
+          Was a single cramped row: avatar and greeting squeezed against a
+          red-outlined vitals box and a button, with no room for any of them.
+          Now the first thing on the page, full width, with the three things
+          a patient opens this for — who they are, what their last reading
+          was, and how to book — each given its own space. ── */}
+      <section className="mp-hero">
+        <div className="mp-hero-main">
+          <div className="mp-hero-id">
+            <div className="mp-hero-avatar">{getInitials(profile?.name)}</div>
+            <div className="mp-hero-who">
+              <h1 className="mp-hero-greet">
+                Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
+                <span className="mp-hero-name">{profile?.name?.split(' ')[0] || 'Patient'}</span>
+              </h1>
+              <p className="mp-hero-date">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+              <span className={`mp-hero-badge ${patientStatus === 'discharged' ? 'is-discharged' : 'is-active'}`}>
+                {patientStatus === 'discharged' ? 'Discharged' : 'Active patient'}
+              </span>
+            </div>
+          </div>
+
+          <div className="mp-hero-cards">
+            {latestVitals ? (
+              /* Something is on file — offer the reading back rather than
+                 asking again. The red outline is gone: a normal reading is
+                 not a warning, and colouring it like one taught patients to
+                 ignore the colour. */
+              <div className="mp-hero-card">
+                <span className="mp-hero-card-icon mp-tint-rose"><Heart size={18} /></span>
+                <span className="mp-hero-card-text">
+                  <span className="mp-hero-card-title">Your vitals</span>
+                  <span className="mp-hero-card-sub">{summariseVitals(latestVitals)}</span>
+                </span>
+                <span className="mp-hero-card-actions">
+                  <button type="button" className="mp-hero-mini" onClick={() => openVitals('view')}>View</button>
+                  <button type="button" className="mp-hero-mini is-solid" onClick={() => openVitals('edit')}>Edit</button>
+                </span>
+              </div>
+            ) : (
+              <button className="mp-hero-card is-button" onClick={() => openVitals('edit')}>
+                <span className="mp-hero-card-icon mp-tint-rose"><Heart size={18} /></span>
+                <span className="mp-hero-card-text">
+                  <span className="mp-hero-card-title">Record your vitals</span>
+                  <span className="mp-hero-card-sub">Blood pressure, heart rate, SpO2 and more</span>
+                </span>
+              </button>
+            )}
+
+            {showIntakeBtn && (
+              <button className="mp-hero-card is-button" onClick={() => setShowIntakeModal(true)}>
+                <span className="mp-hero-card-icon mp-tint-amber"><AlertTriangle size={18} /></span>
+                <span className="mp-hero-card-text">
+                  <span className="mp-hero-card-title">Tell your doctor what's wrong</span>
+                  <span className="mp-hero-card-sub">Describe your symptoms before your consultation</span>
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div className="mp-hero-cta">
+            {hasConfirmedToday ? (
+              <button className="mp-hero-primary" onClick={() => navigate('/dashboard/video')}>
+                <Video size={16} /> Join today's call
+              </button>
+            ) : !primaryDoctor ? (
+              <button className="mp-hero-primary" onClick={() => navigate('/doctors')}>
+                <Plus size={16} /> Find a doctor
+              </button>
+            ) : (
+              <button className="mp-hero-primary" onClick={() => navigate('/dashboard/appointments')}>
+                <Calendar size={16} /> Book appointment
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Decorative, last in the DOM and hidden from assistive tech. */}
+        <img className="mp-hero-art" src={patientHero} alt="" aria-hidden="true" />
+      </section>
+
+      {/* Level-of-care suggestion before booking. The pattern-based safety layer
+          on the server outranks the model, so an emergency cannot be talked down
+          into an appointment — and this hides the booking button when it fires. */}
+      <SymptomTriage />
+
       {/* ── Top strip ────────────────────────────────────────────────────
           Where you are, what it is like there, and who your doctor is. The
           doctor card came up from the sidebar: it is identity, not a widget,
@@ -411,7 +515,7 @@ function MedPatHome({ profile }) {
             <div className="mp-yd-body">
               <div className="mp-yd-avatar" style={{ overflow: 'hidden', padding: 0 }}>
                 {primaryDoctor.photoURL ? (
-                  <img src={primaryDoctor.photoURL} alt={primaryDoctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+                  <img src={resolveFileUrl(primaryDoctor.photoURL)} alt={primaryDoctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
                 ) : null}
                 <span style={{ display: primaryDoctor.photoURL ? 'none' : 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>{getInitials(primaryDoctor.name)}</span>
               </div>
@@ -431,79 +535,6 @@ function MedPatHome({ profile }) {
           </div>
         )}
       </div>
-      {/* Welcome Banner */}
-      <div className="mp-welcome-banner">
-        <div className="mp-welcome-left">
-          <div className="mp-welcome-avatar">{getInitials(profile?.name)}</div>
-          <div>
-            <h1 className="mp-welcome-name">Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {profile?.name?.split(' ')[0] || 'Patient'}</h1>
-            <p className="mp-welcome-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
-            <span className={`mp-patient-status-badge ${patientStatus === 'discharged' ? 'mp-status-discharged' : 'mp-status-active'}`}>
-              {patientStatus === 'discharged' ? '● Discharged' : '● Active Patient'}
-            </span>
-          </div>
-        </div>
-        {/* The two prompts that ask something OF the patient. They used to sit at
-            the very bottom of the right column, below a 12-tile quick-actions
-            grid, so they were off-screen until you scrolled — the last place a
-            call to action should be. On the banner they are the first thing
-            read after the greeting. */}
-        <div className="mp-welcome-actions">
-          {latestVitals ? (
-            /* Something is on file — stop asking for it and offer the reading
-               back instead, with the two things you can do to it. */
-            <div className="mp-welcome-action mp-welcome-action--static">
-              <span className="mp-wa-icon"><Heart size={18} /></span>
-              <span className="mp-wa-text">
-                <span className="mp-wa-title">Your Vitals</span>
-                <span className="mp-wa-sub">{summariseVitals(latestVitals)}</span>
-              </span>
-              <span className="mp-wa-actions">
-                <button type="button" className="mp-wa-btn" onClick={() => openVitals('view')}>View</button>
-                <button type="button" className="mp-wa-btn mp-wa-btn--solid" onClick={() => openVitals('edit')}>Edit</button>
-              </span>
-            </div>
-          ) : (
-            <button className="mp-welcome-action" onClick={() => openVitals('edit')}>
-              <span className="mp-wa-icon"><Heart size={18} /></span>
-              <span className="mp-wa-text">
-                <span className="mp-wa-title">Record Your Vitals</span>
-                <span className="mp-wa-sub">Blood pressure, heart rate, SpO2 and more</span>
-              </span>
-            </button>
-          )}
-
-          {showIntakeBtn && (
-            <button className="mp-welcome-action mp-welcome-action--intake" onClick={() => setShowIntakeModal(true)}>
-              <span className="mp-wa-icon"><AlertTriangle size={18} /></span>
-              <span className="mp-wa-text">
-                <span className="mp-wa-title">Tell your doctor what's wrong</span>
-                <span className="mp-wa-sub">Describe your symptoms before your consultation</span>
-              </span>
-            </button>
-          )}
-        </div>
-
-        <div className="mp-welcome-right">
-          {hasConfirmedToday ? (
-            <button className="mp-join-call-banner-btn" onClick={() => navigate('/dashboard/video')}>
-              <Video size={16} /> Join Today's Call
-            </button>
-          ) : !primaryDoctor ? (
-            <button className="mp-find-doc-btn" onClick={() => navigate('/doctors')}>
-              <Plus size={16} /> Find a Doctor
-            </button>
-          ) : (
-            // Plain outline button: the inline white-on-transparent overrides
-            // that used to be here existed only to survive the blue gradient,
-            // and turned invisible once the banner went white.
-            <button className="mp-btn mp-btn-outline" onClick={() => navigate('/dashboard/appointments')}>
-              <Calendar size={16} /> Book Appointment
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* No-doctor CTA banner */}
       {!loading && !primaryDoctor && !lastBookedDoctor && (
         <div className="mp-find-doctor-banner">
@@ -1255,6 +1286,25 @@ function MedPatAppointments({ profile }) {
     if (!sForm.time) { setSError('Please enter a time.'); return; }
     setSSaving(true); setSError('');
     try {
+      // ── Pay before the appointment exists ────────────────────────────────
+      // Medical consultations were created without touching a gateway at all.
+      // The fee comes from the selected doctor; one with no fee set skips the
+      // charge rather than blocking the booking.
+      const chosen = myDoctors.find((d) => d.id === sForm.doctorId);
+      const fee = Number(chosen?.consultationFee ?? 0);
+      const paid = await payForBooking({
+        email: profile?.email,
+        amount: fee,
+        purpose: 'medical',
+        metadata: { doctorId: sForm.doctorId, patientId: profile.id },
+      });
+
+      if (!paid.ok) {
+        setSError(paid.reason || 'Payment was not completed.');
+        setSSaving(false);
+        return;
+      }
+
       await addDoc(collection(db, 'doctorAppointments'), {
         doctorId: sForm.doctorId,
         doctorName: sForm.doctorName,
@@ -1265,6 +1315,8 @@ function MedPatAppointments({ profile }) {
         consultationType: sForm.type,
         reason: sForm.reason,
         status: 'pending',
+        paymentReference: paid.reference,
+        consultationFee: paid.amount,
         createdAt: serverTimestamp(),
       });
       // Refresh local list
@@ -2799,7 +2851,8 @@ function MedPatEmergencyContacts({ profile }) {
 // ─── Health Records Screen ────────────────────────────────────────────────────
 const HR_RADIOLOGY = ['MRI', 'CT Scan', 'Ultrasound', 'X-Ray'];
 const HR_LAB = ['CBC (Complete Blood Count)', 'BMP (Basic Metabolic Panel)', 'CMP (Comprehensive Metabolic Panel)', 'LFT (Liver Function Tests)', 'TFT (Thyroid Function Tests)', 'Lipid Panel', 'HbA1c', 'Lab Result', 'Blood Test', 'Urinalysis', 'Allergy Test'];
-const HR_OTHER = ['Vaccination', 'Surgical Report', 'Drug Allergy', 'Prescribed Medication', 'Over-the-Counter Medication', 'Prescription', 'Other'];
+// The last five are what document intelligence files a document as.
+const HR_OTHER = ['Vaccination', 'Surgical Report', 'Drug Allergy', 'Prescribed Medication', 'Over-the-Counter Medication', 'Prescription', 'Referral', 'Medical Certificate', 'Discharge Summary', 'Insurance Document', 'Imaging Report', 'Other'];
 const HR_GROUPS = [
   { label: 'Radiology', color: '#7c3aed', bg: '#f3e8ff', border: '#ddd6fe', types: HR_RADIOLOGY },
   { label: 'Lab Results', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', types: HR_LAB },
@@ -2931,6 +2984,13 @@ function MedPatHealthRecords({ profile }) {
         <h1>Health Records</h1>
         <p>Lab results, imaging, reports — securely stored</p>
       </div>
+
+      {/* Upload once: the document is read, sorted and filled in, then filed
+          here after the patient checks it. */}
+      <SmartDocumentUpload onFiled={async () => {
+        const snap = await getDoc(doc(db, 'patientProfiles', profile.id));
+        if (snap.exists()) setRecords(snap.data().healthRecords || []);
+      }} />
 
       {records.length === 0 ? (
         <div className="mp-card mp-empty-state-card">
@@ -4790,6 +4850,16 @@ export default function MedicalPatientDashboard({ profile }) {
     { path: '/dashboard/emergency',     icon: Phone,        label: 'Emergency Contacts' },
     { path: '/dashboard/records',       icon: Download,     label: 'Health Records' },
     { path: '/dashboard/epharmacy',     icon: Pill,         label: 'E-Pharmacy' },
+    /* The receiving end of the doctor's wellness messages — email-only until
+       now, so there was no way to re-read one. */
+    { path: '/dashboard/care-plan',     icon: ClipboardList, label: 'My Care Plan' },
+    /* Medication reminders, check-ins and follow-ups. Reminder notifications
+       link here; medical patients — the ones with prescriptions — had no way in. */
+    { path: '/dashboard/my-care',       icon: Pill,          label: 'My Care' },
+    { path: '/dashboard/my-records',   icon: Search,        label: 'My Records' },
+    { path: '/dashboard/wellness',      icon: Leaf,         label: 'Wellness' },
+    { path: '/dashboard/notifications', icon: Bell,         label: 'Notifications' },
+    { path: '/dashboard/ai-assistant',  icon: Sparkles,     label: 'NessaHub Assistant' },
     { path: '/dashboard/settings',      icon: Settings,     label: 'Settings' },
     { path: '/dashboard/support',       icon: AlertCircle,  label: 'Support & Report' },
   ];
@@ -4849,14 +4919,24 @@ export default function MedicalPatientDashboard({ profile }) {
           <Route path="/timeline"      element={<MedPatTimeline      profile={profile} />} />
           <Route path="/diagnostics"   element={<MedPatDiagnostics   profile={profile} />} />
           <Route path="/history"       element={<MedPatHistory       profile={profile} />} />
-          <Route path="/billing"       element={<MedPatBilling             profile={profile} />} />
+          <Route path="/billing"       element={<><BillingAssistantPanel /><MedPatBilling profile={profile} /></>} />
           <Route path="/insurance"     element={<MedPatInsurance           profile={profile} />} />
           <Route path="/emergency"     element={<MedPatEmergencyContacts   profile={profile} />} />
           <Route path="/records"       element={<MedPatHealthRecords       profile={profile} />} />
           <Route path="/epharmacy"     element={<MedPatEPharmacy           profile={profile} />} />
           <Route path="/settings"      element={<MedPatSettings            profile={profile} />} />
           <Route path="/support"       element={<MedPatSupport             profile={profile} />} />
+          <Route path="/wellness"      element={<ClientWellness peopleNoun="doctor" />} />
+          <Route path="/care-plan"     element={<MyCarePlan />} />
+          <Route path="/my-care"       element={<CareCentre userId={profile?.id || profile?.uid} />} />
+          <Route path="/my-records" element={<RecordExplorer title="My records" />} />
+          <Route path="/ai-assistant"  element={<AiHealthAssistant />} />
+          <Route path="/notifications" element={<NotificationCentre />} />
         </Routes>
+        {/* Floating, so the assistant is reachable from every screen without
+            navigating away from what you are looking at. */}
+        <AiAssistantFab />
+
       </main>
     </div>
   );

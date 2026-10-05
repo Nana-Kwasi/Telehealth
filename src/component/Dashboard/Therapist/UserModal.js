@@ -21,6 +21,7 @@ import {
   Building
 } from 'lucide-react';
 import './UserModal.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function UserModal({ user, mode, onClose, isAdmin }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -115,7 +116,7 @@ export default function UserModal({ user, mode, onClose, isAdmin }) {
           <div className="user-profile-info-section">
             <div className="user-profile-avatar-large">
               {user.photoURL ? (
-                <img src={user.photoURL} alt={user.name} />
+                <img src={resolveFileUrl(user.photoURL)} alt={user.name} />
               ) : (
                 <div className="user-profile-avatar-placeholder">{user.name.charAt(0)}</div>
               )}

@@ -15,6 +15,7 @@ import { mediaUrlOf, fileNameOf, fileSizeOf } from '../../../utils/chatMedia';
 import { downloadFile } from '../../../utils/downloadFile';
 import ChatImage from '../../Common/ChatImage';
 import './Messages.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 // Render a presence timestamp (Firestore Timestamp, ISO string, millis, or Date)
 // the WhatsApp way: "Online" / "Last seen Xm ago".
@@ -316,7 +317,7 @@ export default function TherapistMessages() {
         {!isOwnMessage && (
           <div className="message-avatar">
             {selectedTherapist?.photoURL ? (
-              <img src={selectedTherapist.photoURL} alt={selectedTherapist.name} />
+              <img src={resolveFileUrl(selectedTherapist.photoURL)} alt={selectedTherapist.name} />
             ) : (
               <div className="avatar-placeholder">{selectedTherapist?.name?.charAt(0) || 'T'}</div>
             )}
@@ -403,7 +404,7 @@ export default function TherapistMessages() {
             >
               <div className="conversation-avatar">
                 {therapist.photoURL ? (
-                  <img src={therapist.photoURL} alt={therapist.name} />
+                  <img src={resolveFileUrl(therapist.photoURL)} alt={therapist.name} />
                 ) : (
                   <div className="avatar-placeholder">{therapist.name.charAt(0)}</div>
                 )}
@@ -458,7 +459,7 @@ export default function TherapistMessages() {
               <div className="chat-user-info">
                 <div className="chat-avatar">
                   {selectedTherapist.photoURL ? (
-                    <img src={selectedTherapist.photoURL} alt={selectedTherapist.name} />
+                    <img src={resolveFileUrl(selectedTherapist.photoURL)} alt={selectedTherapist.name} />
                   ) : (
                     <div className="avatar-placeholder">{selectedTherapist.name.charAt(0)}</div>
                   )}

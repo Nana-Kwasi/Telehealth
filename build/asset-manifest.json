@@ -1,24 +1,24 @@
 {
   "files": {
-    "main.css": "/static/css/main.916517e5.css",
-    "main.js": "/static/js/main.c0504dfd.js",
+    "main.css": "/static/css/main.7c4ee1e1.css",
+    "main.js": "/static/js/main.579ef7cc.js",
     "static/js/239.021ed72c.chunk.js": "/static/js/239.021ed72c.chunk.js",
     "static/js/213.a73fa5e0.chunk.js": "/static/js/213.a73fa5e0.chunk.js",
-    "static/js/455.f50b5a67.chunk.js": "/static/js/455.f50b5a67.chunk.js",
+    "static/js/455.fd1bc161.chunk.js": "/static/js/455.fd1bc161.chunk.js",
     "static/media/main.png": "/static/media/main.d5297e50aa932d9b46e5.png",
-    "static/media/v1.jpg": "/static/media/v1.c44804f6cad3f17b6e7e.jpg",
+    "static/media/zencare-emblem.png": "/static/media/zencare-emblem.f97998a0a75351fd4dee.png",
     "static/media/login.jpg": "/static/media/login.f9bb47a6fff2895988e8.jpg",
-    "static/media/v2.jpg": "/static/media/v2.6e5c6d41eaa4d07e16a5.jpg",
-    "static/media/v.jpg": "/static/media/v.9012b2092e5aac771e4c.jpg",
+    "static/media/patient-hero.jpg": "/static/media/patient-hero.c293e2b6282f05eff67a.jpg",
+    "static/media/clinician-hero.jpg": "/static/media/clinician-hero.efc1f8233866a454398f.jpg",
     "index.html": "/index.html",
-    "main.916517e5.css.map": "/static/css/main.916517e5.css.map",
-    "main.c0504dfd.js.map": "/static/js/main.c0504dfd.js.map",
+    "main.7c4ee1e1.css.map": "/static/css/main.7c4ee1e1.css.map",
+    "main.579ef7cc.js.map": "/static/js/main.579ef7cc.js.map",
     "239.021ed72c.chunk.js.map": "/static/js/239.021ed72c.chunk.js.map",
     "213.a73fa5e0.chunk.js.map": "/static/js/213.a73fa5e0.chunk.js.map",
-    "455.f50b5a67.chunk.js.map": "/static/js/455.f50b5a67.chunk.js.map"
+    "455.fd1bc161.chunk.js.map": "/static/js/455.fd1bc161.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.916517e5.css",
-    "static/js/main.c0504dfd.js"
+    "static/css/main.7c4ee1e1.css",
+    "static/js/main.579ef7cc.js"
   ]
 }

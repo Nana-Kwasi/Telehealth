@@ -3,8 +3,38 @@ import { Video, Phone, Clock, Calendar, Search, ExternalLink } from 'lucide-reac
 import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { getJoinWindow } from '../../../utils/sessionJoinWindow';
+import { getStoredUserId } from '../../../services/apiClient';
 
 const generateDoctorToken = httpsCallable(functions, 'generateDoctorToken');
+
+/**
+ * Mint a token and open the call page. The token identity must be the doctor's
+ * user id — TwilioIdentityPolicy rejects a display name with 400 "identity must
+ * match authenticated user", which used to abort Start Call before the patient
+ * was rung or the appointment marked in progress. Rejoin opened the page with
+ * no token at all, so it never connected.
+ */
+async function openDoctorCallRoom({ roomName, participantName, appointment }) {
+  const identity = getStoredUserId();
+  const result = await generateDoctorToken({
+    roomName,
+    participantName: identity,
+    appointmentId: appointment.id,
+  });
+  const patientName = appointment.clientName || 'Patient';
+  localStorage.setItem('videoCallInfo', JSON.stringify({
+    token: result.data.token,
+    roomName,
+    participantName,
+    identity,
+    displayNames: { [identity]: participantName, ...(appointment.clientId ? { [appointment.clientId]: patientName } : {}) },
+    targetPerson: patientName,
+    appointmentId: appointment.id,
+    patientName,
+    role: 'doctor',
+  }));
+  window.open(`/video-call/${roomName}/${encodeURIComponent(participantName)}`, '_blank');
+}
 
 /** Consultation types this screen can place a call for. */
 const CALL_TYPES = ['video', 'audio'];
@@ -52,14 +82,6 @@ export default function DoctorVideoCall({ profile }) {
       const roomName = `doctor_${profile.id}_${appointment.clientId}_${Date.now()}`;
       const participantName = `Dr. ${profile.name || 'Doctor'}`;
 
-      // Get a Twilio JWT from Cloud Function (also creates the room)
-      const result = await generateDoctorToken({
-        roomName,
-        participantName,
-        appointmentId: appointment.id,
-      });
-      const { token } = result.data;
-
       // Notify the patient of incoming call
       await addDoc(collection(db, 'callNotifications'), {
         doctorId: profile.id,
@@ -80,17 +102,7 @@ export default function DoctorVideoCall({ profile }) {
         callStartedAt: serverTimestamp(),
       });
 
-      // Pass token + room info to the VideoCallPage via localStorage
-      localStorage.setItem('videoCallInfo', JSON.stringify({
-        token,
-        roomName,
-        participantName,
-        appointmentId: appointment.id,
-        patientName: appointment.clientName || 'Patient',
-        role: 'doctor',
-      }));
-
-      window.open(`/video-call/${roomName}/${encodeURIComponent(participantName)}`, '_blank');
+      await openDoctorCallRoom({ roomName, participantName, appointment });
       setAppointments(prev =>
         prev.map(a => a.id === appointment.id ? { ...a, callStatus: 'in_progress', callRoomName: roomName } : a)
       );
@@ -259,13 +271,11 @@ export default function DoctorVideoCall({ profile }) {
                       {appt.callStatus === 'in_progress' && (
                         <>
                           <button className="doctor-btn doctor-btn-sm doctor-btn-primary" onClick={() => {
-                            const callInfo = {
+                            openDoctorCallRoom({
                               roomName: appt.callRoomName,
                               participantName: `Dr. ${profile.name || 'Doctor'}`,
-                              role: 'doctor',
-                            };
-                            localStorage.setItem('videoCallInfo', JSON.stringify(callInfo));
-                            window.open(`/video-call/${appt.callRoomName}/${encodeURIComponent(callInfo.participantName)}`, '_blank');
+                              appointment: appt,
+                            }).catch((e) => console.error('Error rejoining call:', e));
                           }}>
                             <ExternalLink size={14} /> Rejoin
                           </button>

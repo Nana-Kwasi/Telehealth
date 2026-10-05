@@ -17,10 +17,10 @@ const TILES = [
     cta: 'Browse doctors',
   },
   {
-    title: 'Home-care nurses',
-    body: 'Browse approved nurses, compare specialties, and request home visits.',
-    to: '/home-care/browse',
-    cta: 'Browse nurses',
+    title: 'Psychiatry & second opinion',
+    body: 'Explore psychiatry or request an independent specialist review when you want a second view.',
+    to: '/medpsych',
+    cta: 'Explore psychiatry',
   },
   {
     title: 'FAQs',
@@ -41,6 +41,8 @@ const TILES = [
     cta: '988 Lifeline (US)',
     external: true,
   },
+  // Home care is intentionally hidden from the public marketing pages until it
+  // is actively promoted as a supported public service.
 ];
 
 export default function ResourcesPage() {

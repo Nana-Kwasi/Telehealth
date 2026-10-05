@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../../services/firestoreShim';
 import { collection, doc, getDocs, setDoc } from '../../services/firestoreShim';
 import './TherapistSelectionModal.css';
+import { resolveFileUrl } from '../../utils/fileUrl';
 
 export default function TherapistSelectionModal() {
   const navigate = useNavigate();
@@ -203,7 +204,7 @@ export default function TherapistSelectionModal() {
                 <div key={therapist.id} className="therapist-card">
                   <div className="therapist-avatar">
                     {therapist.photoURL ? (
-                      <img src={therapist.photoURL} alt={therapist.name} />
+                      <img src={resolveFileUrl(therapist.photoURL)} alt={therapist.name} />
                     ) : (
                       <div className="avatar-placeholder">
                         {therapist.role === 'admin' ? '👑' : 

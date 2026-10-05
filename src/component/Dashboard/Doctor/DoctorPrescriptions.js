@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PrescriptionAssistant from '../../Common/PrescriptionAssistant';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDown } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
@@ -631,6 +632,23 @@ export default function DoctorPrescriptions({ profile }) {
             <h3 style={{ margin: 0 }}>{editing ? 'Edit Prescription' : 'New Prescription'}</h3>
             <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => { setShowForm(false); setEditing(null); setWarnings([]); }}>Cancel</button>
           </div>
+
+          {/* Formulary-backed drafting and checks: interactions with the patient's
+              current medicines, duplicates and recorded allergies. Added
+              orders land in this form for the doctor to edit and save. */}
+          <PrescriptionAssistant
+            patientId={form.patientId}
+            medications={form.medications}
+            allergies={patientAllergies}
+            onAddOrders={(orders, patientText) => setForm((prev) => ({
+              ...prev,
+              medications: [
+                ...prev.medications.filter((m) => m.name && m.name.trim()),
+                ...orders.map((o) => ({ ...EMPTY_MED, ...o, schedule: o.frequency ? autoSchedule(o.frequency) : [] })),
+              ],
+              instructions: prev.instructions || patientText || '',
+            }))}
+          />
 
           {/* Safety Warnings */}
           {warnings.length > 0 && (

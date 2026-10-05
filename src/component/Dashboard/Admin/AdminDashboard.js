@@ -19,8 +19,15 @@ import AdminHomeCareManage from './AdminHomeCareManage';
 import AdminCreateLabScan     from './AdminCreateLabScan';
 import AdminAppointments      from './AdminAppointments';
 import AdminNotifications     from './AdminNotifications';
+import AdminNotificationTemplates from './AdminNotificationTemplates';
+import AdminPromotions from './AdminPromotions';
+import AdminPricePromotions from './AdminPricePromotions';
+import AdminAiKnowledge from './AdminAiKnowledge';
 import AdminReports           from './AdminReports';
 import AdminReportsCenter     from './AdminReportsCenter';
+import AdminInsuranceVerification from './AdminInsuranceVerification';
+import FormularyManager from '../../Common/FormularyManager';
+import AdminRiskAlerts from './AdminRiskAlerts';
 import AdminSystemPdfExport   from './AdminSystemPdfExport';
 import AdminAuditLog          from './AdminAuditLog';
 import AdminApprovals         from './AdminApprovals';
@@ -44,7 +51,14 @@ const NAV = [
   { path: '/dashboard/reports',           label: 'Analytics & Reports',   icon: '📈', section: 'ANALYTICS' },
   { path: '/dashboard/system-pdf-export', label: 'System PDF export',     icon: '📄', section: 'ANALYTICS' },
   { path: '/dashboard/reports-center',    label: 'Reports & Feedback',    icon: '📩', section: 'ANALYTICS' },
+  { path: '/dashboard/insurance-verification', label: 'Insurance & Claims', icon: '🛡️', section: 'ANALYTICS' },
+  { path: '/dashboard/formulary', label: 'Formulary', icon: '📚', section: 'ANALYTICS' },
+  { path: '/dashboard/risk-alerts', label: 'Patterns to review', icon: '🔎', section: 'ANALYTICS' },
   { path: '/dashboard/notifications',     label: 'Notifications',         icon: '📣', section: 'ANALYTICS' },
+  { path: '/dashboard/notification-templates', label: 'Message Templates', icon: '✉️', section: 'ANALYTICS' },
+  { path: '/dashboard/promotions',        label: 'Promo Campaigns',       icon: '📣', section: 'ANALYTICS' },
+  { path: '/dashboard/price-promotions',  label: 'Price Promotions',      icon: '🏷️', section: 'ANALYTICS' },
+  { path: '/dashboard/ai-knowledge',      label: 'AI Knowledge Base',     icon: '🧠', section: 'SYSTEM' },
   { path: '/dashboard/audit-log',         label: 'Audit Log',             icon: '🔍', section: 'ANALYTICS' },
   // SYSTEM
   { path: '/dashboard/system-config',     label: 'System Config',         icon: '⚙️', section: 'SYSTEM' },
@@ -139,7 +153,14 @@ export default function AdminDashboard({ profile }) {
           <Route path="/reports"             element={<AdminReports />} />
           <Route path="/system-pdf-export"   element={<AdminSystemPdfExport />} />
           <Route path="/reports-center"      element={<AdminReportsCenter />} />
+          <Route path="/insurance-verification" element={<AdminInsuranceVerification />} />
+          <Route path="/formulary" element={<FormularyManager />} />
+          <Route path="/risk-alerts" element={<AdminRiskAlerts />} />
           <Route path="/notifications"       element={<AdminNotifications />} />
+          <Route path="/notification-templates" element={<AdminNotificationTemplates />} />
+          <Route path="/promotions" element={<AdminPromotions />} />
+          <Route path="/price-promotions" element={<AdminPricePromotions />} />
+          <Route path="/ai-knowledge" element={<AdminAiKnowledge />} />
           <Route path="/audit-log"           element={<AdminAuditLog />} />
           <Route path="/system-config"       element={<AdminSystemConfig />} />
         </Routes>

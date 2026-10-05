@@ -1,21 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import AiAssistantFab from '../../Common/AiAssistantFab';
+import CarePlanComposer from '../../Common/CarePlanComposer';
+import ReferralComposer from '../../Common/ReferralComposer';
+import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home,
-  Users,
-  Calendar,
-  MessageSquare,
-  FileText,
-  Settings,
-  LogOut,
-  Activity,
-  Video,
-  Pill,
-  Star,
-  BarChart3,
-  LayoutDashboard,
-  FlaskConical,
-  ClipboardList,
+  Home, Users, Calendar, MessageSquare, FileText, Settings, LogOut, Activity, Video, Pill, Star, BarChart3, LayoutDashboard, FlaskConical, ClipboardList, Gift, Leaf, Bell, Sparkles, Tag, Share2, FileSignature,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -43,6 +33,14 @@ import NotificationBell from './NotificationBell';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import { resolveFileUrl } from '../../../utils/fileUrl';
+import ProviderPromotions from '../../Common/ProviderPromotions';
+import ProviderPricePromotions from '../../Common/ProviderPricePromotions';
+import ProviderWellness from '../../Common/ProviderWellness';
+import FeedbackResults from '../../Common/FeedbackResults';
+import NotificationCentre from '../../Common/NotificationCentre';
+import AiClinicalAssistant from '../../Common/AiClinicalAssistant';
+import ClinicianFollowUps from '../../Common/ClinicianFollowUps';
 
 export default function DoctorDashboard({ profile }) {
   const location = useLocation();
@@ -66,6 +64,16 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/dashboard/notes', icon: FileText, label: 'Notes' },
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions' },
+    { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans' },
+    { path: '/dashboard/documents', icon: FileSignature, label: 'Documents' },
+    { path: '/dashboard/referrals', icon: Share2, label: 'Referrals' },
+    { path: '/dashboard/wellness', icon: Leaf, label: 'Wellness' },
+    { path: '/dashboard/feedback', icon: Star, label: 'Patient Feedback' },
+    { path: '/dashboard/ai-assistant', icon: Sparkles, label: 'NessaHub Assistant' },
+    { path: '/dashboard/check-ins', icon: ClipboardList, label: 'Check-ins' },
+    { path: '/dashboard/notifications', icon: Bell, label: 'Notifications' },
+    { path: '/dashboard/promotions', icon: Gift, label: 'Promotions' },
+    { path: '/dashboard/fee-offers', icon: Tag, label: 'Offers on my fee' },
     { path: '/dashboard/diagnostic-order', icon: FlaskConical, label: 'Order Lab / Scan' },
     { path: '/dashboard/diagnostic-results', icon: ClipboardList, label: 'Lab & Scan Results' },
     { path: '/dashboard/reviews', icon: Star, label: 'Reviews' },
@@ -100,7 +108,7 @@ export default function DoctorDashboard({ profile }) {
           <div className="user-info">
             <div className="doctor-avatar">
               {livePhotoURL ? (
-                <img src={livePhotoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                <img src={resolveFileUrl(livePhotoURL)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
               ) : (
                 <span>{profile?.name ? profile.name.charAt(0).toUpperCase() : 'D'}</span>
               )}
@@ -156,6 +164,16 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/messages" element={<DoctorMessages profile={profile} />} />
           <Route path="/notes" element={<DoctorNotes profile={profile} />} />
           <Route path="/prescriptions" element={<DoctorPrescriptions profile={profile} />} />
+          <Route path="/care-plans" element={<CarePlanComposer role="DOCTOR" />} />
+          <Route path="/documents" element={<AdminDocComposer role="DOCTOR" />} />
+          <Route path="/referrals" element={<ReferralComposer role="DOCTOR" />} />
+          <Route path="/promotions" element={<ProviderPromotions />} />
+          <Route path="/fee-offers" element={<ProviderPricePromotions />} />
+          <Route path="/wellness" element={<ProviderWellness audience="my_patients" peopleNoun="patients" />} />
+          <Route path="/feedback" element={<FeedbackResults />} />
+          <Route path="/ai-assistant" element={<AiClinicalAssistant role="DOCTOR" />} />
+          <Route path="/check-ins" element={<ClinicianFollowUps role="DOCTOR" />} />
+          <Route path="/notifications" element={<NotificationCentre />} />
           <Route path="/diagnostic-order" element={<DoctorDiagnosticOrder profile={profile} />} />
           <Route path="/diagnostic-results" element={<DoctorDiagnosticResults profile={profile} />} />
           <Route path="/reviews" element={<DoctorReviews profile={profile} />} />
@@ -163,6 +181,10 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="doctor" />} />
           <Route path="/settings" element={<DoctorSettings profile={profile} />} />
         </Routes>
+        {/* Floating, so the assistant is reachable from every screen without
+            navigating away from what you are looking at. */}
+        <AiAssistantFab clinician />
+
       </main>
     </div>
   );

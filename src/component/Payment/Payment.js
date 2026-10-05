@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Payment.css';
 import TherapistSelectionModal from '../Match/TherapistSelectionModal';
+import PriceTag from '../Common/PriceTag';
+import { quotePrice } from '../../services/pricing';
 import { auth } from '../../services/firestoreShim';
 import { api, getStoredUserId } from '../../services/apiClient';
 import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
@@ -36,6 +38,26 @@ export default function Payment() {
   const [showTherapistSelection, setShowTherapistSelection] = useState(false);
   const [checking, setChecking] = useState(isCouple);
   const [blocked, setBlocked] = useState(false);
+  // The server's answer to "what does this cost this person right now".
+  // Null until it lands; the card shows the undiscounted fee meanwhile, which
+  // is the safe direction — nobody is charged more than they were shown.
+  const [quote, setQuote] = useState(null);
+
+  useEffect(() => {
+    if (!therapistFee) { setQuote(null); return undefined; }
+    let live = true;
+    quotePrice({
+      serviceType: 'therapy',
+      baseAmount: therapistFee,
+      providerId: selectedTherapist?.id || null,
+    }).then((q) => { if (live) setQuote(q); });
+    return () => { live = false; };
+  }, [therapistFee, selectedTherapist]);
+
+  // What is actually charged. Reads the SERVER's final amount, never a number
+  // this component worked out — a price the payment endpoint has not agreed to
+  // is a price it will refuse.
+  const amountDue = quote?.discounted ? Number(quote.finalAmount) : therapistFee;
 
   const prices = {
     basic: 70,
@@ -71,7 +93,10 @@ export default function Payment() {
       'th.subscription',
       JSON.stringify({
         plan: selectedTherapist ? 'per-session' : plan,
-        price: therapistFee ?? prices[plan],
+        price: amountDue ?? prices[plan],
+        // Kept so a refund can find which offer applied.
+        promotionId: quote?.discounted ? quote.promotionId : null,
+        listPrice: therapistFee ?? prices[plan],
         therapistId: selectedTherapist?.id || null,
         therapistName: selectedTherapist?.name || null,
         activatedAt: new Date().toISOString(),
@@ -155,11 +180,18 @@ export default function Payment() {
             <div className="pricing-features"><span>{selectedTherapist.specialization}</span></div>
           ) : null}
           <div className="pricing-price">
-            {therapistFee != null ? `GHS ${therapistFee.toFixed(2)}` : 'Rate not set'}
+            <PriceTag quote={quote} baseAmount={therapistFee} size="lg" />
           </div>
           <div className="pricing-features">
             <span>{therapistFee != null ? 'per session' : 'This therapist has not published a rate yet.'}</span>
           </div>
+          {quote?.discounted ? (
+            <div className="pricing-features" style={{ marginTop: '0.35rem' }}>
+              <span style={{ color: '#166534', fontWeight: 700 }}>
+                {quote.promotionName} — you save GHS {Number(quote.discountAmount).toFixed(2)}
+              </span>
+            </div>
+          ) : null}
         </div>
       ) : (
       <div className="pricing-grid">

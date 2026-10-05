@@ -7,6 +7,7 @@ import {
 } from '../../services/firestoreShim';
 import './DoctorProfilePage.css';
 import { savePendingBooking } from '../../utils/pendingDoctorBooking';
+import { payForBooking } from '../../services/paystack';
 
 function getInitials(name) {
   if (!name) return 'Dr';
@@ -155,7 +156,23 @@ export default function DoctorProfilePage({ session }) {
       const clientId = session.profile.id;
       const clientName = session.profile.name || session.profile.displayName || 'Patient';
 
+      // Booking a doctor from their public profile charged nothing at all.
+      const fee = Number(doctor?.consultationFee ?? 0);
+      const paid = await payForBooking({
+        email: session.profile?.email,
+        amount: fee,
+        purpose: 'medical',
+        metadata: { doctorId, patientId: clientId },
+      });
+
+      if (!paid.ok) {
+        setBookingState({ status: 'error', error: paid.reason || 'Payment was not completed.' });
+        return;
+      }
+
       await addDoc(collection(db, 'doctorAppointments'), {
+        paymentReference: paid.reference,
+        consultationFee: paid.amount,
         doctorId,
         doctorName: doctor.name,
         doctorSpecialization: doctor.specialization || '',

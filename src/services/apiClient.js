@@ -16,6 +16,10 @@ const API_PORT = 8085;
 
 function resolveApiBase() {
   if (process.env.REACT_APP_API_BASE) return process.env.REACT_APP_API_BASE;
+  // Opened through the HTTPS call tunnel (phones need HTTPS for the camera):
+  // call the API on the same address — the dev server forwards /api (setupProxy.js).
+  // A plain http://host:8085 call from an https page would be blocked as mixed content.
+  if (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:') return '';
   const host = (typeof window !== 'undefined' && window.location && window.location.hostname) || 'localhost';
   return `http://${host}:${API_PORT}`;
 }
@@ -82,6 +86,19 @@ async function attemptTokenRefresh() {
   }
 }
 
+/**
+ * Refresh the access token from outside api().
+ *
+ * The SSE stream cannot go through api() — it needs the raw ReadableStream
+ * body, not parsed JSON — so it reads the token itself. Without this it had no
+ * way to recover from an expired token: every ordinary request refreshed and
+ * carried on, while the stream alone 401'd and reported "the assistant could
+ * not be reached". The assistant was reachable; the request was unauthenticated.
+ */
+export async function refreshAccessToken() {
+  return attemptTokenRefresh();
+}
+
 // ── Core request helper ───────────────────────────────────────────────────────
 
 export async function api(
@@ -140,7 +157,7 @@ export async function api(
 // ── File upload (R2 presigned flow) ───────────────────────────────────────────
 // Mirrors the mobile uploadFile(): create session → PUT bytes → complete.
 // Returns the public URL of the stored object (or '' if it can't be resolved).
-export async function uploadFile(file, { domain = 'general', fileName, ownerId } = {}) {
+export async function uploadFile(file, { domain = 'general', fileName, ownerId, withMeta = false } = {}) {
   const owner = ownerId || getStoredUserId();
   const name  = fileName || file?.name || `upload-${Date.now()}`;
   const mime  = file?.type || 'application/octet-stream';
@@ -176,5 +193,8 @@ export async function uploadFile(file, { domain = 'general', fileName, ownerId }
   // Local (Postgres) files come back as a relative path → make it absolute so the
   // browser/<img> hits the backend, not the web origin. R2 urls are already absolute.
   const url = session?.publicUrl || '';
-  return url && url.startsWith('/') ? `${API_BASE}${url}` : url;
+  const absolute = url && url.startsWith('/') ? `${API_BASE}${url}` : url;
+  // `withMeta` is for callers that need the file id too (document
+  // classification works on the stored file). Everyone else keeps the URL.
+  return withMeta ? { url: absolute, fileId: session?.fileId } : absolute;
 }

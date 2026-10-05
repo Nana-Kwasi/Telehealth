@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export function nurseInitials(nurse) {
   const name = nurse?.fullName || nurse?.name || 'N';
@@ -15,7 +16,7 @@ export default function NurseAvatar({ nurse, size = 68, className = '' }) {
   if (nurse?.photoURL) {
     return (
       <img
-        src={nurse.photoURL}
+        src={resolveFileUrl(nurse.photoURL)}
         alt=""
         className={`hcn-avatar-img ${className}`.trim()}
         style={style}

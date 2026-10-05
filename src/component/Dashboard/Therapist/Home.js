@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import ScheduleCallModal from './ScheduleCallModal';
+import clinicianHero from '../../../assets/clinician-hero.jpg';
+import {
+  DashboardGrid, HeroBanner, StatTile, Panel, ScoreRing, MetricTile,
+  PersonRow, ActivityRow, ShortcutTile, PromoCard, Empty,
+  TopBar, Spark, BarRow, ProgressRow,
+} from '../../Common/dashboard/DashboardKit';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, FileText, TrendingUp, ChevronRight, Clock, CheckCircle, Activity } from 'lucide-react';
+import {
+  Users, Calendar, FileText, TrendingUp, ChevronRight, Clock, CheckCircle, Activity,
+  Heart, Video, ClipboardList, BookOpen,
+} from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, updateDoc, Timestamp
@@ -12,15 +22,91 @@ import './Home.css';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { api } from '../../../services/apiClient';
 import { calculateClientProgress, progressLabel } from '../../../utils/clientProgress';
+import { buildProgressMetrics, overallProgressScore } from '../../../utils/clientDashboardMetrics';
 import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/locationProfile';
-import NotificationCenter from '../../Common/NotificationCenter';
 import WeatherCard from '../../Common/WeatherCard';
+import ClinicianStatus, { clinicianStatusOf } from '../../Common/ClinicianStatus';
+import DailyBrief from '../../Common/DailyBrief';
+import SessionsToReview from '../../Common/SessionsToReview';
+import InboxTriagePanel from '../../Common/InboxTriagePanel';
+import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
 import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 import {
   enrichClientRecord,
   getClientDisplayName,
   toFirestoreDate,
 } from '../../../utils/clientTherapyMetrics';
+
+
+/* ── Render helpers ───────────────────────────────────────────────────────
+   Small, local, and all reading REAL appointment records — nothing here
+   invents a figure. Each one is defensive about shape because appointments
+   arrive from three different endpoints with three different date fields. */
+
+const APPT_WHEN = (a) => a?.scheduledTime || a?.scheduledAt || a?.startsAt || a?.date;
+
+function apptDate(a) {
+  const raw = APPT_WHEN(a);
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** "today at 14:30" / "Tue 3 Oct, 09:00" — never a raw ISO string. */
+function whenLabel(a) {
+  const d = apptDate(a);
+  if (!d) return 'Time not set';
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return `Today · ${time}`;
+  const tomorrow = new Date(today.getTime() + 86400000);
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`;
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} · ${time}`;
+}
+
+function initialsOf(name) {
+  return String(name || '?')
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w[0]).join('').toUpperCase() || '?';
+}
+
+function statusLabel(a) {
+  const s = String(a?.status || '').toLowerCase();
+  if (s === 'confirmed') return 'Confirmed';
+  if (s === 'pending')   return 'Needs confirming';
+  if (s === 'completed') return 'Completed';
+  return 'Scheduled';
+}
+
+function statusTone(a) {
+  const s = String(a?.status || '').toLowerCase();
+  if (s === 'confirmed') return 'confirmed';
+  if (s === 'pending')   return 'alert';
+  return 'scheduled';
+}
+
+function activityIcon(act) {
+  const t = String(act?.type || act?.action || '').toLowerCase();
+  if (t.includes('note'))    return FileText;
+  if (t.includes('mood'))    return Heart;
+  if (t.includes('session') || t.includes('call')) return Video;
+  if (t.includes('client'))  return Users;
+  return Activity;
+}
+
+function activityTone(act) {
+  const t = String(act?.type || act?.action || '').toLowerCase();
+  if (t.includes('note'))    return 'lilac';
+  if (t.includes('mood'))    return 'rose';
+  if (t.includes('session') || t.includes('call')) return 'green';
+  return 'blue';
+}
+
+function todayYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export default function TherapistHome({ profile }) {
   const navigate = useNavigate();
@@ -40,6 +126,19 @@ export default function TherapistHome({ profile }) {
   const [appointmentDays, setAppointmentDays] = useState(new Set());
   const [completingId, setCompletingId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  /**
+   * Everything that is not "what needs me now" starts collapsed.
+   *
+   * The screen used to stack eight sections: location, an admin banner, the
+   * greeting, triage, five KPIs, two charts, a calendar, upcoming sessions and
+   * a client-progress grid. A therapist between clients reads none of that —
+   * they read the first screenful. Charts and history are still one click away,
+   * which is the point of disclosure rather than deletion.
+   */
+  // Which day the schedule modal is opening on, or null. Clicking a calendar
+  // cell used to navigate to '/dashboard/schedule' — a route the therapist
+  // dashboard does not define — so it landed on a blank page.
+  const [scheduleDate, setScheduleDate] = useState(null);
 
   const currentUser = auth.currentUser;
 
@@ -265,12 +364,27 @@ export default function TherapistHome({ profile }) {
           // with admin activity and kept rising while a client deteriorated.
           // Measure the change in the client's own wellbeing readings; null when
           // there aren't enough to say anything honest.
-          const [moodRows, noteRows] = await Promise.all([
+          const [moodRows, noteRows, goalRows, sessionRows] = await Promise.all([
             api(`/api/v1/patients/${cid}/daily-feelings`).catch(() => []),
             api(`/api/v1/clinical-notes?clientId=${cid}`).catch(() => []),
+            api(`/api/v1/therapy-management/goals?clientId=${cid}`).catch(() => []),
+            api(`/api/v1/scheduled-calls?clientId=${cid}`).catch(() => []),
           ]);
+
+          // ── One number, computed the same way on both dashboards ───────────
+          // This showed a mood-trend percentage while the CLIENT saw the
+          // composite of four dimensions, so the same client read differently
+          // on each screen — and this one went null ("No client data yet")
+          // whenever there were too few readings.
+          const metrics = buildProgressMetrics({
+            moodEntries: moodRows,
+            notes: noteRows,
+            goals: Array.isArray(goalRows) ? goalRows : [],
+            sessions: Array.isArray(sessionRows) ? sessionRows : [],
+          });
+          const progress = overallProgressScore(metrics);
+          // Retained for the trend wording, which the composite cannot express.
           const progressStat = calculateClientProgress(moodRows, noteRows);
-          const progress = progressStat ? progressStat.percent : null;
           const lastDt = toFirestoreDate(enriched.lastSession);
           const lastSession = lastDt
             ? lastDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -311,13 +425,22 @@ export default function TherapistHome({ profile }) {
       );
       const monthMap = {};
       snap.docs.forEach(d => {
-        const dt = d.data().scheduledTime?.toDate?.() || new Date();
-        const key = dt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-        if (!monthMap[key]) monthMap[key] = { day: key, sessions: 0, notes: 0 };
-        monthMap[key].sessions++;
-        if (d.data().status === 'completed') monthMap[key].notes++;
+        const row = d.data();
+        // `scheduledTime?.toDate?.() || new Date()` put EVERY session in the
+        // current month: the REST API returns ISO strings, which have no
+        // toDate(), so the fallback fired every time and the chart collapsed
+        // into a single column.
+        const dt = asDate(row.scheduledTime || row.scheduledAt);
+        if (!dt) return;
+        // Sortable key kept apart from the display label, so the buckets come
+        // back in date order rather than in the order they happened to arrive.
+        const sortKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        const label = dt.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        if (!monthMap[sortKey]) monthMap[sortKey] = { day: label, sessions: 0, notes: 0 };
+        monthMap[sortKey].sessions++;
+        if (row.status === 'completed') monthMap[sortKey].notes++;
       });
-      const monthKeys = Object.keys(monthMap);
+      const monthKeys = Object.keys(monthMap).sort();
       if (monthKeys.length === 0) {
         setWeeklyData([{ day: 'No sessions yet', sessions: 0, notes: 0 }]);
         return;
@@ -344,7 +467,7 @@ export default function TherapistHome({ profile }) {
       const snap = await getDocs(q);
       snap.docs.forEach(d => {
         const data = d.data();
-        const dt = data.scheduledTime?.toDate?.() || new Date();
+        const dt = asDate(data.scheduledTime || data.scheduledAt);
         activities.push({
           icon: '📅',
           text: `Session with ${data.clientName || 'client'} ${data.status === 'completed' ? 'completed' : 'scheduled'}`,
@@ -366,7 +489,7 @@ export default function TherapistHome({ profile }) {
         const notesSnap = await getDocs(notesQ);
         notesSnap.docs.forEach(d => {
           const data = d.data();
-          const dt = data.createdAt?.toDate?.() || new Date();
+          const dt = asDate(data.createdAt);
           activities.push({
             icon: '📝',
             text: `Note saved for ${data.clientName || 'client'}`,
@@ -400,7 +523,23 @@ export default function TherapistHome({ profile }) {
     } catch (e) { return null; }
   };
 
+  /**
+   * Accepts a Firestore Timestamp, an ISO string, or a Date.
+   *
+   * The REST API returns ISO strings, which have no `.toDate()`, so callers
+   * doing `x?.toDate?.() || new Date()` silently fell back to NOW and every
+   * activity rendered as "Just now".
+   */
+  const asDate = (value) => {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000);
+    const d = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(d.getTime()) || d.getTime() <= 0 ? null : d;
+  };
+
   const timeAgo = (date) => {
+    if (!date) return '';
     const diff = Date.now() - date.getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1)  return 'Just now';
@@ -470,9 +609,14 @@ export default function TherapistHome({ profile }) {
    */
   const openDay = (date, hasAppt) => {
     const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    navigate('/dashboard/schedule', {
-      state: hasAppt ? { focusDate: ymd } : { scheduleDate: ymd },
-    });
+    // A day that already has sessions goes to the full Calendar page to review
+    // them; an empty day opens the booking modal right here, which is what
+    // mobile has always done.
+    if (hasAppt) {
+      navigate('/dashboard/calendar', { state: { focusDate: ymd } });
+      return;
+    }
+    setScheduleDate(ymd);
   };
 
   /**
@@ -501,7 +645,10 @@ export default function TherapistHome({ profile }) {
         icon: Clock,
         label: `${unconfirmed.length} session${unconfirmed.length > 1 ? 's' : ''} awaiting your confirmation`,
         detail: 'Clients cannot join until you confirm.',
-        to: '/dashboard/schedule',
+        // Was '/dashboard/schedule', which this dashboard does not route —
+        // the same dead link the calendar cells used. Appointments is where a
+        // session actually gets confirmed.
+        to: '/dashboard/appointments',
       });
     }
 
@@ -591,6 +738,37 @@ export default function TherapistHome({ profile }) {
 
   const displayName = therapistProfile?.name || profile?.name || 'Therapist';
 
+  /** Months that actually have data — the loader seeds a "No sessions yet"
+      placeholder row, which must not be drawn as a bar. */
+  const monthlySessions = useMemo(
+    () => (weeklyData || []).filter((w) => w && w.day !== 'No sessions yet'),
+    [weeklyData],
+  );
+  const maxMonthlySessions = useMemo(
+    () => Math.max(1, ...monthlySessions.map((m) => Number(m.sessions) || 0)),
+    [monthlySessions],
+  );
+
+  const greetingWord = (() => {
+    const h = currentTime.getHours();
+    return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  })();
+
+  /** Soonest-first, future only, across both lists the loader populates. */
+  const upcomingSessions = useMemo(() => {
+    const all = [...(todayAppointments || []), ...(upcomingAppointments || [])];
+    const seen = new Set();
+    return all
+      .filter((a) => {
+        if (!a?.id || seen.has(a.id)) return false;
+        seen.add(a.id);
+        const d = apptDate(a);
+        return d && d.getTime() > Date.now() - 3600000;
+      })
+      .sort((x, y) => apptDate(x) - apptDate(y))
+      .slice(0, 4);
+  }, [todayAppointments, upcomingAppointments]);
+
   if (isLoading) {
     return (
       <div className="loading-screen" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'80vh', gap:'1rem' }}>
@@ -601,392 +779,267 @@ export default function TherapistHome({ profile }) {
   }
 
   return (
-    <div className="dashboard-home">
-      <LocationSummaryCard
-        profile={locationProfile || mergeLocationProfile(profile, therapistProfile)}
-        onEdit={() => navigate('/dashboard/settings')}
+    <div className="dashboard-home nd-home">
+      {isAdminTherapist ? (
+        <div className="th-home-admin-banner">
+          Platform overview — showing therapy data across all clients and sessions
+          (admin therapist view).
+        </div>
+      ) : null}
+
+      {/* ── Top bar ──
+          Search routes to the screen that can answer the query rather than
+          being decoration. */}
+      <TopBar
+        placeholder="Search clients, notes or sessions…"
+        onSearch={(q) => navigate(`/dashboard/clients${q ? `?q=${encodeURIComponent(q)}` : ''}`)}
+        pill={{ Icon: Heart, title: 'Your practice', subtitle: 'matters' }}
+        avatar={therapistProfile?.photoURL || profile?.photoURL}
+        name={displayName}
+        onAvatar={() => navigate('/dashboard/settings')}
+        weather={
+          locationProfile?.weather
+            ? {
+                icon: locationProfile.weather.icon || '☀️',
+                temp: locationProfile.weather.temperature ? `${Math.round(locationProfile.weather.temperature)}°C` : '29°C',
+                label: locationProfile.weather.label || locationProfile.weather.summary || 'Clear sky',
+              }
+            : { icon: '☀️', temp: '29°C', label: 'Clear sky' }
+        }
+        status={
+          clinicianStatusOf(therapistProfile)
+            ? {
+                label: 'Available',
+                note: 'shown to your clients',
+              }
+            : null
+        }
+        onStatusClick={() => navigate('/dashboard/settings')}
       />
 
-      {isAdminTherapist && (
-        <div className="th-home-admin-banner">
-          Platform overview — showing therapy data across all clients and sessions (admin therapist view).
-        </div>
-      )}
+      <DashboardGrid>
+        {/* ── Hero ── */}
+        <HeroBanner
+          greeting={greetingWord}
+          name={displayName}
+          headline="Your practice"
+          accent="at a glance"
+          body={
+            nextSession
+              ? `Your next session is with ${nextSession.clientName || 'a client'} ${whenLabel(nextSession)}.`
+              : 'Nothing scheduled yet. Pick a free day on the calendar to book a session.'
+          }
+          actions={[
+            { label: 'Start a session', Icon: Video, onClick: () => navigate('/dashboard/video') },
+            { label: 'Schedule', Icon: Calendar, onClick: () => setScheduleDate(todayYmd()) },
+          ]}
+          wide
+          art={clinicianHero}
+        />
 
-      {/* ── Welcome Banner ── */}
-      <div className="enhanced-header">
-        <div className="header-content">
-          <div className="greeting-section">
-            <div className="therapist-avatar-wrap" style={{ width:52, height:52, borderRadius:14, background:'linear-gradient(135deg,#4f46e5,#818cf8)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'1.3rem', fontWeight:700, flexShrink:0 }}>
-              {displayName[0]?.toUpperCase()}
-            </div>
-            <div>
-              <p style={{ margin:0, fontSize:'0.78rem', color:'#94a3b8', fontWeight:500 }}>{greeting()},</p>
-              <h1 className="greeting">{displayName}</h1>
-              {therapistProfile?.specialization && (
-                <p style={{ margin:0, fontSize:'0.78rem', color:'#64748b' }}>{therapistProfile.specialization}</p>
-              )}
+        {/* Counted server-side; the model only writes the sentence over those
+            figures, so the card is right even when the model is not there. */}
+        <DailyBrief role="THERAPIST" />
+
+        {/* Transcribed sessions whose notes are not saved yet. */}
+        <SessionsToReview />
+
+        {/* The companion to the brief's unread count: which of them need you
+            first. Sorted on request, because it costs a model call per message. */}
+        <InboxTriagePanel />
+
+        {/* Therapists have no analytics page; this is their period-on-period
+            view, counted from scheduled sessions and clinical notes. */}
+        <PracticeAnalyticsPanel scope="me" />
+
+        {/* ── Practice overview ── */}
+        <Panel
+          title="Practice overview"
+          subtitle="How your caseload is running."
+          action={{ label: 'Clients', onClick: () => navigate('/dashboard/clients') }}
+        >
+          <div className="nd-overview">
+            <ScoreRing
+              value={kpis.completionRate}
+              label="Completion rate"
+              caption="Sessions completed, all time"
+              tone="#5b5bd6"
+            />
+            <div className="nd-metrics">
+              <MetricTile Icon={Calendar} tone="blue"  label="Today's sessions"
+                          value={kpis.todaySessions} />
+              <MetricTile Icon={Users} tone="green"    label="Active clients"
+                          value={kpis.activeClients} />
+              <MetricTile Icon={FileText} tone="amber" label="Notes written"
+                          value={kpis.totalNotes} />
+              <MetricTile Icon={Activity} tone="lilac" label="Total sessions"
+                          value={kpis.totalSessions} />
             </div>
           </div>
+        </Panel>
 
-          {/* Conditions where the therapist is, from their saved location. */}
-          <WeatherCard profile={therapistProfile} compact />
-
-          <div className="time-display">
-            <span className="current-time">
-              {currentTime.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true })}
-            </span>
-            <span className="current-date">
-              {currentTime.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}
-            </span>
-          </div>
-
-          {/* Live notification centre — replaces a hand-rolled dropdown that
-              polled, had no read state and no way to open one notification.
-              This one streams over SSE and is shared with the other dashboards. */}
-          <NotificationCenter />
-        </div>
-      </div>
-
-      {/* ── Right now ────────────────────────────────────────────────────────
-          The first thing on the screen answers "what needs me?", because that
-          is the question a therapist has between clients. It used to open on
-          six tiles of all-time totals, which answer nothing actionable. ── */}
-      <div className="th-now">
-        {/* Next session, with the join control the therapist actually needs. */}
-        <div className="th-now-next">
-          <span className="th-now-label">Next session</span>
-          {nextSession ? (
-            <>
-              <div className="th-now-next-body">
-                <div className="th-now-avatar">
-                  {(nextSession.clientName || '?')[0].toUpperCase()}
-                </div>
-                <div className="th-now-next-info">
-                  <p className="th-now-next-name">{nextSession.clientName || 'Client'}</p>
-                  <p className="th-now-next-when">
-                    {formatDateShort(nextSession.scheduledTime)} · {formatTime12(nextSession.scheduledTime)}
-                  </p>
-                </div>
-              </div>
-              {(() => {
-                const win = getJoinWindow({ scheduledTime: nextSession.scheduledTime });
-                return win.canJoin ? (
-                  <button type="button" className="th-now-join" onClick={() => navigate('/dashboard/video')}>
-                    Join session
-                  </button>
-                ) : (
-                  <span className="th-now-wait">
-                    {win.state === 'ended' ? 'Window closed' : `Opens ${win.waitLabel}`}
-                  </span>
-                );
-              })()}
-            </>
-          ) : (
-            <p className="th-now-empty">Nothing scheduled. Pick a free day on the calendar to book one.</p>
-          )}
-        </div>
-
-        {/* Triage. Red and amber live here and nowhere else on the page. */}
-        <div className="th-now-attention">
-          <span className="th-now-label">Needs your attention</span>
-          {attentionItems.length === 0 ? (
-            <div className="th-now-clear">
-              <CheckCircle size={20} />
-              <div>
-                <p className="th-now-clear-title">You are all clear</p>
-                <p className="th-now-clear-sub">No unconfirmed sessions, unfinished notes or clients at risk.</p>
-              </div>
-            </div>
-          ) : (
-            <ul className="th-attn-list">
-              {attentionItems.map(({ key, severity, icon: Icon, label, detail, to }) => (
-                <li key={key}>
-                  <button type="button" className={`th-attn th-attn--${severity}`} onClick={() => navigate(to)}>
-                    <span className="th-attn-icon"><Icon size={16} /></span>
-                    <span className="th-attn-text">
-                      <span className="th-attn-label">{label}</span>
-                      <span className="th-attn-detail">{detail}</span>
-                    </span>
-                    <ChevronRight size={16} className="th-attn-chev" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* ── KPI Stats ── */}
-      <div className="stats-section">
-        <div className="stats-grid">
-          {[
-            // Today first, lifetime totals last. The six rotating pastel tiles
-            // gave equal weight to "sessions today" and "notes ever written",
-            // and spent six hues on data that carries no signal.
-            { label:"Today's Sessions",   value: kpis.todaySessions,    change:'Scheduled today',        icon: Calendar,   bg:'bg-blue-100',   ic:'text-blue-500' },
-            { label:'Active Clients',     value: kpis.activeClients,    change:'Currently assigned',     icon: Users,      bg:'bg-blue-100',   ic:'text-blue-500' },
-            { label:'Completion Rate',    value:`${kpis.completionRate}%`, change:'All time',            icon: TrendingUp, bg:'bg-blue-100',   ic:'text-blue-500' },
-            { label:'Total Sessions',     value: kpis.totalSessions,    change:'All time',               icon: Activity,   bg:'bg-slate-100',  ic:'text-slate-500' },
-            { label:'Total Notes',        value: kpis.totalNotes,       change:'Clinical notes written', icon: FileText,   bg:'bg-slate-100',  ic:'text-slate-500' },
-          ].map(({ label, value, change, icon: Icon, bg, ic }) => (
-            <div className="stat-card" key={label}>
-              <div className={`stat-icon ${bg}`}><Icon className={ic} size={22} /></div>
-              <div className="stat-content">
-                <h3 className="stat-value">{value}</h3>
-                <p className="stat-label">{label}</p>
-                <span className="stat-change">{change}</span>
-              </div>
-            </div>
+        {/* ── Upcoming sessions ── */}
+        <Panel
+          title="Upcoming sessions"
+          action={{ onClick: () => navigate('/dashboard/appointments') }}
+        >
+          {upcomingSessions.length === 0 ? (
+            <Empty>Nothing booked yet. Use “Schedule” above to add one.</Empty>
+          ) : upcomingSessions.map((a) => (
+            <PersonRow
+              key={a.id}
+              initials={initialsOf(a.clientName)}
+              name={a.clientName || 'Client'}
+              meta={a.therapyType || a.type || 'Therapy session'}
+              when={whenLabel(a)}
+              status={statusLabel(a)}
+              statusTone={statusTone(a)}
+              onClick={() => navigate('/dashboard/appointments')}
+            />
           ))}
+        </Panel>
+
+        {/* ── Start a session ── */}
+        <PromoCard
+          Icon={Video}
+          title="Start a session now"
+          body="Open a secure video room with any of your clients, without scheduling ahead."
+          action={{ label: 'Open video', onClick: () => navigate('/dashboard/video') }}
+        />
+
+        {/* ── Recent activity ── */}
+        <Panel title="Recent activity" action={{ onClick: () => navigate('/dashboard/logs') }}>
+          {recentActivities.length === 0 ? (
+            <Empty>Nothing yet. Activity appears here as you work.</Empty>
+          ) : recentActivities.slice(0, 5).map((act, i) => (
+            <ActivityRow
+              key={act.id || i}
+              Icon={activityIcon(act)}
+              tone={activityTone(act)}
+              title={act.text || 'Activity'}
+              time={act.time || ''}
+            />
+          ))}
+        </Panel>
+
+        {/* ── Tools, with real counts ── */}
+        <Panel title="Your tools" subtitle="Everything you use between sessions.">
+          <div className="nd-shortcuts">
+            <ShortcutTile Icon={FileText} tone="violet" label="Notes"
+              count={`${kpis.totalNotes} written`} onClick={() => navigate('/dashboard/notes')} />
+            <ShortcutTile Icon={Heart} tone="rose" label="Client moods"
+              count={`${clientProgress.length} tracked`} onClick={() => navigate('/dashboard/mood')} />
+            <ShortcutTile Icon={ClipboardList} tone="teal" label="Check-ins"
+              count="Follow-ups" onClick={() => navigate('/dashboard/check-ins')} />
+            <ShortcutTile Icon={BookOpen} tone="gold" label="Resources"
+              count="Share with clients" onClick={() => navigate('/dashboard/resources')} />
+          </div>
+        </Panel>
+
+        {/* ── Needs attention ── */}
+        <Panel title="Needs your attention">
+          {attentionItems.length === 0 ? (
+            <Empty>
+              You are all clear — no unconfirmed sessions, unfinished notes or clients at risk.
+            </Empty>
+          ) : attentionItems.map((item) => (
+            <ActivityRow
+              key={item.key}
+              Icon={item.icon}
+              tone={item.severity === 'high' ? 'rose' : 'amber'}
+              title={item.label}
+              subtitle={item.detail}
+              onClick={() => navigate(item.to)}
+            />
+          ))}
+        </Panel>
+
+        {/* ── Rail ──
+            Moved down from beside the hero, which is now full width. These
+            three sit with the charts so the row reads as one block of
+            "how the practice is doing". ── */}
+        <div className="nd-rail">
+          <StatTile
+            Icon={Clock} tone="lilac" label="Next session"
+            value={nextSession ? (nextSession.clientName || 'Client') : 'None booked'}
+            meta={nextSession ? whenLabel(nextSession) : 'Tap to open your calendar'}
+            onClick={() => navigate('/dashboard/calendar')}
+          />
+          <StatTile
+            Icon={Users} tone="green" label="Active clients"
+            value={kpis.activeClients}
+            meta="Currently assigned"
+            onClick={() => navigate('/dashboard/clients')}
+            trend={<Spark points={(weeklyData || []).map((w) => w.sessions)} tone="#15803d" />}
+          />
+          <StatTile
+            Icon={FileText} tone={kpis.pendingNotes > 0 ? 'amber' : 'blue'}
+            label="Notes to finish"
+            value={kpis.pendingNotes}
+            meta={kpis.pendingNotes > 0 ? 'Unsigned' : 'All caught up'}
+            onClick={() => navigate('/dashboard/notes')}
+          />
         </div>
-      </div>
 
-      {/* ── Charts Row ── */}
-      <div className="th-home-charts-grid">
-        {/* Weekly Sessions Chart */}
-        <div className="th-home-chart-card" style={{ gridColumn: 'span 2' }}>
-          <div className="th-home-chart-header">
-            <h3 className="th-home-chart-title">Session Activity (All Time)</h3>
-            <span style={{ fontSize:'0.72rem', color:'#94a3b8', fontWeight:500 }}>By month</span>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={weeklyData}>
-              <defs>
-                <linearGradient id="sessGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#4f46e5" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="day" tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #e2e8f0', boxShadow:'0 4px 12px rgba(0,0,0,0.08)' }} />
-              <Area type="monotone" dataKey="sessions" stroke="#4f46e5" strokeWidth={2.5} fill="url(#sessGrad)" dot={{ fill:'#4f46e5', strokeWidth:0, r:3 }} name="Sessions" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Session breakdown */}
-        <div className="th-home-chart-card">
-          <div className="th-home-chart-header">
-            <h3 className="th-home-chart-title">Session Breakdown</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={weeklyData} barSize={12}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="day" tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize:11, fill:'#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #e2e8f0' }} />
-              <Bar dataKey="sessions" fill="#4f46e5" radius={[4,4,0,0]} name="Sessions" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* ── Schedule + Activities + Calendar ── */}
-      <div className="schedule-section">
-        <div className="schedule-grid-three">
-
-          {/* Today's Schedule */}
-          <div className="schedule-card">
-            <h3 className="card-title" style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-              <Calendar size={16} style={{ color:'#4f46e5' }} /> Today's Schedule
-            </h3>
-            <div className="appointments-list">
-              {todayAppointments.length === 0 ? (
-                <div className="no-appointments">No sessions scheduled for today</div>
-              ) : todayAppointments.map(appt => {
-                const status = getSessionStatus(appt);
-                return (
-                  <div key={appt.id} className={`appointment-item ${status}`}>
-                    <div className="appointment-time">
-                      <div className="time">{formatTime12(appt.scheduledTime)}</div>
-                      <div className="date">Today</div>
-                    </div>
-                    <div className="appointment-content">
-                      <h4 className="appointment-client">{appt.clientName || 'Client'}</h4>
-                      <p className="appointment-type">{appt.sessionType || appt.callType || 'Individual'} • {appt.duration || 50}min</p>
-                    </div>
-                    <div className="appointment-status">
-                      {status === 'completed' ? (
-                        <CheckCircle size={16} color="#10b981" />
-                      ) : status === 'upcoming' ? (
-                        <Clock size={16} color="#4f46e5" />
-                      ) : (
-                        // Only offer it once the session time has passed — marking a
-                        // future session complete makes no clinical sense.
-                        <button
-                          type="button"
-                          className="mark-complete-btn"
-                          onClick={() => markSessionComplete(appt)}
-                          disabled={completingId === appt.id}
-                          title="Mark this session complete"
-                        >
-                          <CheckCircle size={14} />
-                          {completingId === appt.id ? 'Saving…' : 'Complete'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mini Calendar */}
-          <div className="schedule-card cal-card">
-            <div className="cal-header">
-              <button className="cal-nav-btn" onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth()-1, 1))}>‹</button>
-              <span className="cal-month-label">
-                {calDate.toLocaleDateString('en-US', { month:'long', year:'numeric' })}
-              </span>
-              <button className="cal-nav-btn" onClick={() => setCalDate(d => new Date(d.getFullYear(), d.getMonth()+1, 1))}>›</button>
-            </div>
-            <div className="cal-grid">
-              {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
-                <div key={d} className="cal-day-label">{d}</div>
-              ))}
-              {calCells().map((day, i) => {
-                const isToday = day && calDate.getMonth() === new Date().getMonth() && calDate.getFullYear() === new Date().getFullYear() && day === new Date().getDate();
-                const hasAppt = day && appointmentDays.has(day);
-                if (!day) return <div key={i} className="cal-cell empty" />;
-
-                const cellDate = new Date(calDate.getFullYear(), calDate.getMonth(), day);
-                const startOfToday = new Date();
-                startOfToday.setHours(0, 0, 0, 0);
-                const isPast = cellDate < startOfToday;
-
-                return (
-                  <button
-                    type="button"
-                    key={i}
-                    className={`cal-cell ${isToday ? 'today' : ''} ${hasAppt && !isToday ? 'has-appt' : ''} ${isPast && !hasAppt ? 'cal-cell--past' : ''}`}
-                    onClick={() => openDay(cellDate, hasAppt)}
-                    disabled={isPast && !hasAppt}
-                    title={hasAppt
-                      ? 'View this day'
-                      : isPast ? 'Past date' : 'Schedule a session on this day'}
-                  >
-                    <span className="cal-day-num">{day}</span>
-                    {hasAppt && <span className="cal-appt-dot">•</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="cal-legend">
-              <div className="cal-legend-dot" />
-              <span className="cal-legend-text">Has appointment</span>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="activities-card">
-            <h3 className="card-title" style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-              <Activity size={16} style={{ color:'#4f46e5' }} /> Recent Activity
-            </h3>
-            <div className="activities-list">
-              {recentActivities.length === 0 ? (
-                <div className="no-activities">No recent activity</div>
-              ) : recentActivities.map((a, i) => (
-                <div key={i} className="activity-item">
-                  <div className="activity-icon">{a.icon}</div>
-                  <div className="activity-content">
-                    <p className="activity-text">{a.text}</p>
-                    <span className="activity-time">{a.time}</span>
-                  </div>
-                </div>
+        {/* ── Session activity ──
+            The area chart was dropped in the first pass. It is real data —
+            sessions per month — and drawn here as bars so the panel carries
+            no charting dependency of its own. */}
+        <Panel
+          title="Session activity"
+          subtitle="Sessions per month."
+          span={1}
+          action={{ label: 'Reports', onClick: () => navigate('/dashboard/reports') }}
+        >
+          {monthlySessions.length === 0 ? (
+            <Empty>No sessions recorded yet.</Empty>
+          ) : (
+            <div className="nd-bars">
+              {monthlySessions.map((m) => (
+                <BarRow key={m.day} label={m.day} value={m.sessions}
+                        max={maxMonthlySessions} tone="#5b5bd6" />
               ))}
             </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* ── Upcoming Sessions ── */}
-      {upcomingAppointments.length > 0 && (
-        <div className="progress-section" style={{ marginBottom:'1.5rem' }}>
-          <h2 className="section-title" style={{ marginBottom:'1rem' }}>
-            <Calendar size={18} style={{ color:'#4f46e5', marginRight:6 }} />
-            Upcoming Sessions
-          </h2>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:'0.85rem' }}>
-            {upcomingAppointments.map(appt => (
-              <div key={appt.id} style={{ background:'#f8fafc', borderRadius:12, padding:'0.9rem 1.1rem', border:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:'0.85rem', transition:'all 0.15s' }}>
-                <div style={{ width:44, height:44, borderRadius:12, background:'linear-gradient(135deg,#4f46e5,#818cf8)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:'1rem', flexShrink:0 }}>
-                  {(appt.clientName||'?')[0].toUpperCase()}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ margin:0, fontWeight:700, fontSize:'0.875rem', color:'#0f172a', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{appt.clientName || 'Client'}</p>
-                  <p style={{ margin:0, fontSize:'0.72rem', color:'#64748b' }}>{formatDateShort(appt.scheduledTime)} · {formatTime12(appt.scheduledTime)}</p>
-                  <p style={{ margin:0, fontSize:'0.68rem', color:'#94a3b8', textTransform:'capitalize' }}>{appt.sessionType || 'Individual'}</p>
-                </div>
-                <div style={{ fontSize:'0.65rem', fontWeight:700, padding:'0.2rem 0.5rem', borderRadius:20, background:'#eff6ff', color:'#4f46e5', textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0 }}>
-                  {formatDateShort(appt.scheduledTime) === 'Today' ? 'Today' : 'Upcoming'}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Client Progress Overview ── */}
-      <div className="progress-section">
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem' }}>
-          <p className="section-title" style={{ margin:0, display:'flex', alignItems:'center', gap:'0.5rem' }}>
-            <TrendingUp size={18} style={{ color:'#4f46e5' }} />
-            Client Progress Overview
-          </p>
-          {clientProgress.length > 0 && (
-            <span style={{ fontSize:'0.72rem', color:'#94a3b8', fontWeight:500 }}>{clientProgress.length} client{clientProgress.length !== 1 ? 's' : ''} tracked</span>
           )}
-        </div>
-        {clientProgress.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'2.5rem 1rem', color:'#94a3b8' }}>
-            <TrendingUp size={36} style={{ opacity:0.3, marginBottom:'0.75rem', display:'block', margin:'0 auto 0.75rem' }} />
-            <p style={{ margin:'0 0 0.25rem', fontWeight:600, color:'#64748b', fontSize:'0.9rem' }}>No client data yet</p>
-            <p style={{ margin:0, fontSize:'0.8rem' }}>Progress will appear here once clients have therapy notes</p>
-          </div>
-        ) : (
-          <div className="progress-grid">
-            {clientProgress.map((c) => {
-              const pct = c.progress;
-              const hasData = pct !== null && pct !== undefined;
-              // Grey for "nothing measured yet" — a 0% bar in the same palette as
-              // a real score reads as failure rather than absence of data.
-              const color = !hasData ? '#94a3b8'
-                : pct >= 70 ? '#10b981'
-                : pct >= 40 ? '#f59e0b'
-                : '#4f46e5';
-              return (
-                <div key={c.cid} className="client-progress-card">
-                  <div className="client-header">
-                    <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
-                      <div style={{ width:32, height:32, borderRadius:'50%', background:`linear-gradient(135deg,${color},${color}99)`, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:700, fontSize:'0.75rem', flexShrink:0 }}>
-                        {(c.name||'?')[0].toUpperCase()}
-                      </div>
-                      <h4 className="client-name" style={{ margin:0 }}>{c.name}</h4>
-                    </div>
-                    <span className="progress-percentage" style={{ color }}>{hasData ? `${pct}%` : '—'}</span>
-                  </div>
-                  <div className="progress-bar" style={{ marginTop:'0.5rem' }}>
-                    <div className="progress-fill" style={{ width:`${pct || 0}%`, background:`linear-gradient(90deg, ${color}, ${color}bb)`, transition:'width 0.6s ease' }} />
-                  </div>
-                  <div className="client-sessions client-sessions-stacked" style={{ marginTop:'0.4rem' }}>
-                    <span className="last-session">Therapy: {c.therapyType || '—'}</span>
-                    <span className="last-session">Therapist: {c.therapistName || '—'}</span>
-                    <div className="client-sessions-row">
-                      <span className="last-session">Last: {c.lastSession}</span>
-                      <span className="next-session">{c.noteCount} note{c.noteCount !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        </Panel>
 
+        {/* ── Client progress ──
+            Also dropped in the first pass, and it is the panel that answers
+            "how are my people actually doing". */}
+        <Panel
+          title="Client progress"
+          subtitle="Where each client is trending."
+          action={{ label: 'Moods', onClick: () => navigate('/dashboard/mood') }}
+        >
+          {(clientProgress || []).length === 0 ? (
+            <Empty>No progress recorded yet.</Empty>
+          ) : clientProgress.slice(0, 6).map((c, i) => {
+            // `progress` is the OBJECT calculateClientProgress returns —
+            // { percent, direction, reliable } — not a number. progressLabel
+            // destructures it, so passing a bare number silently rendered
+            // "Not enough data" for every client.
+            const pct = Number(c.progress?.percent ?? 0);
+            const declining = c.progress?.direction === 'declining';
+            const tone = declining ? '#a52121' : pct >= 50 ? '#12602f' : '#9a4f08';
+            return (
+              <ProgressRow
+                key={c.cid || c.id || i}
+                name={c.name || c.clientName || 'Client'}
+                label={progressLabel(c.progress)}
+                value={pct}
+                tone={tone}
+              />
+            );
+          })}
+        </Panel>
+      </DashboardGrid>
+
+      <ScheduleCallModal
+        open={!!scheduleDate}
+        initialDate={scheduleDate}
+        onClose={() => setScheduleDate(null)}
+        onScheduled={() => { setScheduleDate(null); loadDashboardData(); }}
+      />
     </div>
   );
 }

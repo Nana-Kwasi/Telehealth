@@ -1,0 +1,617 @@
+/* ─── Therapy module: glass + pine, applied over the existing light theme ─────
+   The therapy stylesheets stay as they are — light ground, dark text — and this
+   layer restyles the surfaces and controls on top of them.
+
+   That direction matters. The previous attempt inverted the module to a dark
+   theme by rewriting 40 stylesheets, and every surface it failed to convert
+   became white-on-white. Enhancing a light base cannot fail that way: if a rule
+   here does not reach some component, that component simply keeps its old light
+   styling and stays readable.
+
+   Scoped under `.zc-therapy`, which sits on a WRAPPER around each dashboard
+   root — not on the root itself, or these descendant selectors would not match
+   the element that carries the class.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.zc-therapy { font-family: var(--zc-sans); color: var(--zc-ink); }
+
+/* ── The real lever: the module's own CSS variables ────────────────────────
+   The therapist dashboard is built entirely on a `--th-*` palette declared in
+   TherapistDashboard.css, and every component reads from it. Restyling a
+   handful of card classes therefore changed almost nothing visible — the
+   indigo sidebar, the indigo clock, the five-colour stat borders and the
+   square white cards all come from here.
+
+   Remapping the variables re-skins the whole dashboard at once, and does it
+   correctly, because each component already asks for the right token by role.
+   This is the same move that worked on mobile with TherapistColors.
+
+   Redeclared on `.zc-therapy` rather than `:root` so the medical, admin and
+   pharmacy dashboards keep the original indigo. */
+.zc-therapy {
+  /* One accent replaces the indigo ramp. */
+  --th-indigo:       #2f5d54;
+  --th-indigo-light: #4a7d72;
+  --th-indigo-dark:  #1c2f2b;
+  --th-indigo-mid:   #26433d;
+
+  /* The reference spends almost no colour. These were a five-hue rainbow
+     across the stat cards; they collapse to the accent and two muted status
+     tones so the eye is not pulled five ways at once. */
+  --th-teal:    #2f5d54;
+  --th-emerald: #2f7d5f;
+  --th-amber:   #a8752a;
+  --th-rose:    #b5433c;
+  --th-purple:  #4a7d72;
+  --th-sky:     #2f5d54;
+
+  --th-text:   #0d0d0d;
+  --th-text-2: #3d3d3d;
+  --th-text-3: #6b6b6b;
+  --th-border: rgba(13, 13, 13, 0.09);
+
+  /* Transparent so the warm ground and its colour pools show through — a card
+     needs something behind it for the glass to refract. */
+  --th-bg:      transparent;
+  --th-surface: rgba(255, 255, 255, 0.62);
+
+  /* Wide and very soft; the old tight shadows fight the airiness. */
+  --th-shadow-sm: 0 2px 10px rgba(13, 13, 13, 0.05);
+  --th-shadow-md: 0 10px 34px rgba(13, 13, 13, 0.07);
+  --th-shadow-lg: 0 22px 60px rgba(13, 13, 13, 0.10);
+
+  --th-radius:    22px;
+  --th-radius-sm: 14px;
+}
+
+/* ── Sidebars ──────────────────────────────────────────────────────────────
+   Both dashboards ship a dark chrome rail — the therapist's a deep indigo, the
+   client's a slate-navy gradient. The reference has no dark chrome at all: its
+   navigation is a white pill on the same ground as everything else. */
+.zc-therapy .therapist-sidebar,
+.zc-therapy .client-sidebar {
+  background: var(--zc-glass-strong);
+  -webkit-backdrop-filter: blur(var(--zc-glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--zc-glass-blur)) saturate(150%);
+  border-right: 1px solid var(--zc-line);
+  color: var(--zc-ink);
+}
+
+/* The rail's contents were written for dark chrome, so they invert with it. */
+.zc-therapy .therapist-sidebar a,
+.zc-therapy .client-sidebar a,
+.zc-therapy .therapist-sidebar .nav-item,
+.zc-therapy .client-sidebar .nav-item,
+.zc-therapy .sidebar-nav a,
+.zc-therapy .sidebar-nav button { color: var(--zc-ink-2); border-radius: var(--zc-radius-pill); }
+
+.zc-therapy .sidebar-nav a:hover,
+.zc-therapy .sidebar-nav button:hover { background: rgba(13, 13, 13, 0.04); color: var(--zc-ink); }
+
+.zc-therapy .sidebar-nav a.active,
+.zc-therapy .sidebar-nav .active {
+  background: var(--zc-accent-wash);
+  color: var(--zc-accent);
+  font-weight: 600;
+}
+
+.zc-therapy .sidebar-header,
+.zc-therapy .sidebar-header h2,
+.zc-therapy .logo h2 { color: var(--zc-ink); }
+
+/* The profile card at the top of the rail. */
+.zc-therapy .sidebar-user,
+.zc-therapy .user-card,
+.zc-therapy .therapist-profile-card {
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line);
+  border-radius: var(--zc-radius-sm);
+  color: var(--zc-ink);
+}
+
+.zc-therapy .logout-btn,
+.zc-therapy .sidebar-logout {
+  background: transparent;
+  border: 1px solid var(--zc-line-2);
+  color: var(--zc-danger);
+  border-radius: var(--zc-radius-pill);
+}
+
+
+/* ── Ground ─────────────────────────────────────────────────────────────────
+   The warm off-white replaces the old cool grey page. Glass needs the colour
+   pools in `.zc-app-ground` behind it, so the panels below have something to
+   refract rather than a flat fill. */
+.zc-therapy .client-dashboard,
+.zc-therapy .therapist-dashboard,
+.zc-therapy .dashboard-content,
+.zc-therapy .main-content,
+.zc-therapy main { background: transparent; }
+
+/* ── Cards become glass ────────────────────────────────────────────────────
+   Frosted, hairline-bordered, generously rounded. Text is untouched: it is
+   already near-black from the base theme and stays legible on every one of
+   these surfaces. */
+.zc-therapy .card,
+.zc-therapy .stat-card,
+.zc-therapy .stats-card,
+.zc-therapy .schedule-card,
+.zc-therapy .activities-card,
+.zc-therapy .cal-card,
+.zc-therapy .client-progress-card,
+.zc-therapy .appointment-card,
+.zc-therapy .new-appointment-card,
+.zc-therapy .resource-card,
+.zc-therapy .note-card,
+.zc-therapy .client-item,
+.zc-therapy .section-card,
+.zc-therapy .panel,
+.zc-therapy .widget,
+.zc-therapy .enhanced-header {
+  background: var(--zc-glass);
+  -webkit-backdrop-filter: blur(var(--zc-glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--zc-glass-blur)) saturate(150%);
+  border: 1px solid var(--zc-glass-border);
+  border-radius: var(--zc-radius);
+  box-shadow: var(--zc-shadow);
+}
+
+/* Modals sit above a scrim, so they take the more opaque glass — a 62% panel
+   over a dimmed page is hard to read. */
+.zc-therapy .modal-content,
+.zc-therapy .modal-container,
+.zc-therapy .force-pw-card {
+  background: var(--zc-glass-strong);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+  border: 1px solid var(--zc-glass-border);
+  border-radius: var(--zc-radius);
+  box-shadow: var(--zc-shadow-lg);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────
+   Pine pills, following the reference. */
+.zc-therapy .btn-primary,
+.zc-therapy .primary-btn,
+.zc-therapy .send-button,
+.zc-therapy .submit-button {
+  background: var(--zc-accent);
+  color: #ffffff;
+  border: 1px solid transparent;
+  border-radius: var(--zc-radius-pill);
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(47, 93, 84, 0.22);
+}
+.zc-therapy .btn-primary:hover,
+.zc-therapy .primary-btn:hover,
+.zc-therapy .send-button:hover,
+.zc-therapy .submit-button:hover { background: var(--zc-accent-deep); color: #ffffff; }
+
+/* Secondary is a white pill on the ground, as in the reference's nav. */
+.zc-therapy .btn-secondary,
+.zc-therapy .secondary-btn,
+.zc-therapy .btn-outline,
+.zc-therapy .view-btn,
+.zc-therapy .back-button,
+.zc-therapy .action-btn {
+  background: var(--zc-surface);
+  color: var(--zc-ink);
+  border: 1px solid var(--zc-line);
+  border-radius: var(--zc-radius-pill);
+  font-weight: 600;
+  box-shadow: var(--zc-shadow-sm);
+}
+.zc-therapy .btn-secondary:hover,
+.zc-therapy .secondary-btn:hover,
+.zc-therapy .btn-outline:hover,
+.zc-therapy .view-btn:hover,
+.zc-therapy .back-button:hover,
+.zc-therapy .action-btn:hover { background: var(--zc-surface-2); border-color: var(--zc-accent-light); }
+
+/* Round every remaining control. The reference has almost no square corners. */
+.zc-therapy button,
+.zc-therapy .btn,
+.zc-therapy .tab,
+.zc-therapy .filter-btn,
+.zc-therapy .chip { border-radius: var(--zc-radius-pill); }
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+.zc-therapy input,
+.zc-therapy textarea,
+.zc-therapy select,
+.zc-therapy .search-input,
+.zc-therapy .field-input {
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line-2);
+  border-radius: var(--zc-radius-sm);
+  color: var(--zc-ink);
+}
+.zc-therapy input:focus,
+.zc-therapy textarea:focus,
+.zc-therapy select:focus {
+  outline: none;
+  border-color: var(--zc-accent);
+  box-shadow: 0 0 0 3px var(--zc-accent-wash);
+}
+
+/* Search fields read as pills in the reference. */
+.zc-therapy .search-input,
+.zc-therapy .search-bar input { border-radius: var(--zc-radius-pill); padding-left: 1.1rem; }
+
+/* ── Accent replacement ────────────────────────────────────────────────────
+   The base theme is indigo throughout; the module's accent is pine now. Only
+   the places where indigo carried meaning are remapped. */
+.zc-therapy .sidebar-item.active,
+.zc-therapy .nav-item.active,
+.zc-therapy .menu-item.active {
+  background: var(--zc-accent-wash);
+  color: var(--zc-accent);
+  border-radius: var(--zc-radius-pill);
+}
+
+.zc-therapy .status-badge,
+.zc-therapy .data-badge,
+.zc-therapy .badge,
+.zc-therapy .tag { border-radius: var(--zc-radius-pill); font-weight: 600; }
+
+/* Charts pick up the accent rather than the old indigo. */
+.zc-therapy .recharts-cartesian-grid line { stroke: rgba(13, 13, 13, 0.07); }
+.zc-therapy .recharts-text { fill: var(--zc-ink-3); }
+.zc-therapy .recharts-default-tooltip {
+  background: var(--zc-glass-strong) !important;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--zc-glass-border) !important;
+  border-radius: var(--zc-radius-sm);
+  color: var(--zc-ink) !important;
+}
+
+/* Scrollbars, so a glass panel does not get a heavy default track. */
+.zc-therapy *::-webkit-scrollbar { width: 9px; height: 9px; }
+.zc-therapy *::-webkit-scrollbar-track { background: transparent; }
+.zc-therapy *::-webkit-scrollbar-thumb { background: var(--zc-line-2); border-radius: 999px; }
+.zc-therapy *::-webkit-scrollbar-thumb:hover { background: var(--zc-ink-4); }
+
+/* Glass is a progressive enhancement; without support the panels fall back to
+   a solid surface rather than a flat, low-contrast wash. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .zc-therapy .card,
+  .zc-therapy .stat-card,
+  .zc-therapy .modal-content,
+  .zc-therapy .enhanced-header { background: var(--zc-surface); }
+}
+
+/* ── Why the first passes barely showed ────────────────────────────────────
+   Two causes, found by reading the CSS rather than guessing again.
+
+   1. HARDCODED VALUES, NOT TOKENS. The stat cards paint their top edge with
+      four literal gradients on `:nth-child(n)::before` — indigo, teal, purple,
+      amber. No variable is involved, so remapping `--th-*` could never reach
+      them. That rainbow is most of why the page still reads as the old design.
+
+   2. GLASS NEEDS SOMETHING BEHIND IT. A frosted panel over a near-white page
+      looks exactly like a plain white card — there is nothing for the blur to
+      pick up. In the reference the glass sits over a large photographic
+      artwork, which is what makes it read as glass at all. On a flat dashboard
+      the effect is invisible by construction, not by mistake. */
+
+/* The rainbow reduces to one accent, applied as a hairline. */
+.zc-therapy .stat-card::before,
+.zc-therapy .stat-card:nth-child(1)::before,
+.zc-therapy .stat-card:nth-child(2)::before,
+.zc-therapy .stat-card:nth-child(3)::before,
+.zc-therapy .stat-card:nth-child(4)::before,
+.zc-therapy .stat-card:nth-child(5)::before {
+  background: var(--zc-accent);
+  opacity: 0.55;
+  height: 2px;
+}
+
+/* Give the glass something to refract. Without visible colour behind them the
+   panels below are indistinguishable from plain white cards. */
+.zc-therapy {
+  background:
+    radial-gradient(1000px 620px at 88% -5%, rgba(47, 93, 84, 0.16) 0%, transparent 58%),
+    radial-gradient(760px 520px at 2% 92%, rgba(74, 125, 114, 0.13) 0%, transparent 60%),
+    radial-gradient(620px 420px at 45% 45%, rgba(47, 93, 84, 0.05) 0%, transparent 65%),
+    var(--zc-bg);
+  background-attachment: fixed;
+}
+
+/* The panels are translucent enough to show it. */
+.zc-therapy .stat-card,
+.zc-therapy .enhanced-header,
+.zc-therapy .schedule-card,
+.zc-therapy .activities-card,
+.zc-therapy .cal-card,
+.zc-therapy .client-progress-card,
+.zc-therapy .stats-section,
+.zc-therapy .progress-section {
+  background: rgba(255, 255, 255, 0.55) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-radius: var(--zc-radius) !important;
+  box-shadow: var(--zc-shadow) !important;
+}
+
+/* Remaining indigo that is baked in rather than tokenised. */
+.zc-therapy .th-home-profile-btn,
+.zc-therapy .stat-icon,
+.zc-therapy .avatar,
+.zc-therapy .th-avatar {
+  background: var(--zc-accent) !important;
+  color: #ffffff !important;
+}
+
+.zc-therapy .current-time,
+.zc-therapy .th-home-time,
+.zc-therapy .time-display .current-time { color: var(--zc-accent) !important; }
+
+/* Type: the reference's headline is a tight, heavy geometric sans. */
+.zc-therapy .greeting,
+.zc-therapy .page-title,
+.zc-therapy h1 {
+  font-family: var(--zc-sans);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* ── Sidebar text written for dark chrome ──────────────────────────────────
+   Confirmed from the live page, not guessed: `.user-name` computed to
+   rgba(255,255,255,0.95) and `.user-role` to rgba(255,255,255,0.75) — white
+   text, correct against the old navy rail, invisible against the new white one.
+   The nav items were already picked up by the rules above; these were not. */
+.zc-therapy .therapist-sidebar .user-name,
+.zc-therapy .client-sidebar .user-name,
+.zc-therapy .sidebar-header h2,
+.zc-therapy .sidebar-header h3 { color: var(--zc-ink) !important; }
+
+.zc-therapy .therapist-sidebar .user-role,
+.zc-therapy .client-sidebar .user-role,
+.zc-therapy .therapist-sidebar .user-location,
+.zc-therapy .client-sidebar .user-location,
+.zc-therapy .sidebar-nav h3,
+.zc-therapy .nav-section-title { color: var(--zc-ink-3) !important; }
+
+/* Anything left in the rail still painting itself white. */
+.zc-therapy .therapist-sidebar [style*="color: rgba(255"],
+.zc-therapy .therapist-sidebar [style*="color:#fff"],
+.zc-therapy .client-sidebar [style*="color: rgba(255"],
+.zc-therapy .client-sidebar [style*="color:#fff"] { color: var(--zc-ink-2) !important; }
+
+/* The profile block was a translucent white panel on navy; on a white rail it
+   needs a real edge to still read as a card. */
+.zc-therapy .therapist-sidebar .sidebar-header > div,
+.zc-therapy .client-sidebar .sidebar-header > div {
+  background: var(--zc-surface);
+  border: 1px solid var(--zc-line);
+  border-radius: var(--zc-radius-sm);
+}
+
+.zc-therapy .logo-badge {
+  background: var(--zc-accent-wash) !important;
+  color: var(--zc-accent) !important;
+}
+
+/* ── Ground ────────────────────────────────────────────────────────────────
+   The page still painted #f5f7fa from the base theme, which sat a shade cooler
+   and lighter than the module ground and left a visible seam at the edges.
+   Stronger pools, too: at 0.16 the glass had almost nothing to refract and the
+   panels read as plain white cards. */
+.zc-therapy,
+.zc-therapy .therapist-dashboard,
+.zc-therapy .client-dashboard {
+  background:
+    radial-gradient(1100px 680px at 90% -8%, rgba(47, 93, 84, 0.28) 0%, transparent 55%),
+    radial-gradient(820px 560px at -5% 95%, rgba(74, 125, 114, 0.22) 0%, transparent 58%),
+    radial-gradient(700px 460px at 40% 40%, rgba(47, 93, 84, 0.08) 0%, transparent 62%),
+    var(--zc-bg) !important;
+  background-attachment: fixed !important;
+}
+
+/* The main column must stay transparent or it covers the pools entirely. */
+.zc-therapy .therapist-main,
+.zc-therapy .client-main,
+.zc-therapy .dashboard-content,
+.zc-therapy .main-content,
+.zc-therapy main,
+.zc-therapy .stats-section,
+.zc-therapy .progress-section,
+.zc-therapy .schedule-section { background: transparent !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT — progressive disclosure
+   ═══════════════════════════════════════════════════════════════════════════
+   The therapy dashboards used to put every section on one page at equal
+   weight. The reference's calm comes from what it omits, so history and
+   planning now sit behind this control while triage keeps the first
+   screenful. Deleted nothing — moved it one click down.                     */
+
+.zc-therapy .th-disclosure {
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0 1.75rem;
+}
+
+.zc-therapy .th-disclosure-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(47, 93, 84, 0.22);
+  /* Glass, like the panels — it belongs to the page, not on top of it. */
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  color: var(--zc-accent, #2f5d54);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.zc-therapy .th-disclosure-toggle:hover {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(47, 93, 84, 0.4);
+  transform: translateY(-1px);
+}
+
+.zc-therapy .th-disclosure-toggle:focus-visible {
+  outline: 2px solid var(--zc-accent, #2f5d54);
+  outline-offset: 2px;
+}
+
+/* Points right when closed, down when open — the arrow is the affordance. */
+.zc-therapy .th-disclosure-chev {
+  transition: transform 0.2s ease;
+}
+.zc-therapy .th-disclosure-chev.is-open {
+  transform: rotate(90deg);
+}
+
+/* Three tiles now, not five, so let them breathe instead of holding the
+   five-up track they were sized for. */
+.zc-therapy .stats-section {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zc-therapy .th-disclosure-toggle,
+  .zc-therapy .th-disclosure-chev { transition: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTRAST — muted text on the converted surfaces
+   ═══════════════════════════════════════════════════════════════════════════
+   These 87 selectors were written as slate-400 (#94a3b8) back when they sat on
+   a dark rail, where that read as a quiet grey. On the light glass panels it
+   lands at ~2.56:1 against white — under the 4.5:1 AA floor, and the reason
+   labels like "Today's Sessions" looked washed out.
+
+   Remapped to the reference's secondary ink (~7:1 on white) so they stay
+   visibly secondary to the headline without becoming unreadable. Scoped to
+   .zc-therapy so medical and admin keep their palette, and listed selector by
+   selector because the source files hardcode the hex instead of using a token.
+
+   Generated by scanning those stylesheets — if you add a new muted rule there,
+   re-run the scan rather than hand-appending here.                          */
+
+.zc-therapy .activity-time,
+.zc-therapy .alert-meta,
+.zc-therapy .announcement-date,
+.zc-therapy .appointment-time,
+.zc-therapy .appointment-time .date,
+.zc-therapy .appointment-type,
+.zc-therapy .back-button,
+.zc-therapy .btn-icon,
+.zc-therapy .btn-secondary,
+.zc-therapy .cal-day-label,
+.zc-therapy .cal-legend-text,
+.zc-therapy .calendar-title p,
+.zc-therapy .call-duration,
+.zc-therapy .call-ended p,
+.zc-therapy .call-features li,
+.zc-therapy .client-schedule-form-group input:disabled,
+.zc-therapy .client-schedule-form-group select:disabled,
+.zc-therapy .client-schedule-form-group textarea:disabled,
+.zc-therapy .client-schedule-other-month,
+.zc-therapy .client-sessions,
+.zc-therapy .close-button,
+.zc-therapy .connecting-state p,
+.zc-therapy .content-section h3,
+.zc-therapy .control-btn.camera.off,
+.zc-therapy .control-btn.mic.muted,
+.zc-therapy .current-date,
+.zc-therapy .dashboard-empty,
+.zc-therapy .date-navigation button,
+.zc-therapy .detail-section h3,
+.zc-therapy .empty-chat,
+.zc-therapy .empty-state,
+.zc-therapy .error-state,
+.zc-therapy .file-size,
+.zc-therapy .filter-section,
+.zc-therapy .header-content .subtitle,
+.zc-therapy .header-left p,
+.zc-therapy .loading-state,
+.zc-therapy .log-field,
+.zc-therapy .log-timestamp,
+.zc-therapy .message-time,
+.zc-therapy .meta-item,
+.zc-therapy .mood-empty,
+.zc-therapy .mood-entry-date,
+.zc-therapy .mood-search-icon,
+.zc-therapy .mood-status-inactive,
+.zc-therapy .nav-tab,
+.zc-therapy .no-activities,
+.zc-therapy .no-appointments,
+.zc-therapy .no-incidents-icon,
+.zc-therapy .no-notifications,
+.zc-therapy .no-notifications p,
+.zc-therapy .notification-icon,
+.zc-therapy .notification-time,
+.zc-therapy .progress-info h4,
+.zc-therapy .progress-item .progress-detail,
+.zc-therapy .questionnaire-empty,
+.zc-therapy .questionnaire-panel__title,
+.zc-therapy .questionnaire-phq9-legend,
+.zc-therapy .questionnaire-section__meta,
+.zc-therapy .quick-action:hover .quick-action-chevron,
+.zc-therapy .resource-description,
+.zc-therapy .resource-type,
+.zc-therapy .search-input svg,
+.zc-therapy .section-title,
+.zc-therapy .sessions-no-notes,
+.zc-therapy .settings-tag-empty,
+.zc-therapy .sidebar-section h3,
+.zc-therapy .sidebar-section p,
+.zc-therapy .signature-section,
+.zc-therapy .stat-change,
+.zc-therapy .stat-label,
+.zc-therapy .subtitle,
+.zc-therapy .ta-close,
+.zc-therapy .ta-empty,
+.zc-therapy .tab-button,
+.zc-therapy .tag-more,
+.zc-therapy .tc-detail-row svg,
+.zc-therapy .th-now-empty,
+.zc-therapy .th-now-label,
+.zc-therapy .th-now-wait,
+.zc-therapy .therapist-role,
+.zc-therapy .time-slot,
+.zc-therapy .today-card-head,
+.zc-therapy .today-eyebrow,
+.zc-therapy .tooltip-date,
+.zc-therapy .video-placeholder p,
+.zc-therapy .view-toggles button {
+  color: var(--zc-ink-soft, #4b5563);
+}
+
+/* The secondary ink the remap above leans on, plus a tighter stats band.
+   64px of vertical padding around three tiles read as an empty box. */
+.zc-therapy {
+  --zc-ink-soft: #4b5563;
+}
+
+.zc-therapy .stats-section {
+  padding: 1.5rem 0;
+}
+
+/* The accent hairline on each stat card is an absolutely-positioned ::before.
+   Without a positioned parent it resolves against an ancestor, so it rendered
+   detached — floating above the card and wider than it. Anchor it, and let the
+   card's own radius clip it so it follows the rounded top edge. */
+.zc-therapy .stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.zc-therapy .stat-card::before {
+  left: 0;
+  right: 0;
+  width: auto;
+}

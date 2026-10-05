@@ -38,6 +38,7 @@ import {
   serverTimestamp 
 } from '../../../services/firestoreShim';
 import './Notes.css';
+import AiNoteDraft from '../../Common/AiNoteDraft';
 
 export default function TherapistNotes() {
   const navigate = useNavigate();
@@ -375,6 +376,18 @@ export default function TherapistNotes() {
         noteData.sessionDate = noteForm.sessionDate;
         noteData.signature = noteForm.signature;
         noteData.visibleToClient = noteForm.visibleToClient;
+
+        // Provenance. A signed note used to imply a person typed every word of
+        // it; once a draft can be generated, the record has to say so. `aiEdited`
+        // compares what was signed against what was proposed, so accepting a
+        // draft verbatim is distinguishable from reworking it.
+        if (noteForm.aiAssisted) {
+          const snap = noteForm.aiDraftSnapshot || {};
+          noteData.aiAssisted = true;
+          noteData.aiAuditId = noteForm.aiAuditId || null;
+          noteData.aiEdited = ['subjective', 'objective', 'assessment', 'plan']
+            .some((f) => (noteForm[f] || '') !== (snap[f] || ''));
+        }
         
         // Add multiple clients if selected
         if (noteForm.selectedClients && noteForm.selectedClients.length > 1) {
@@ -868,6 +881,30 @@ export default function TherapistNotes() {
                   )}
                 </div>
 
+
+            {/* Fills the SOAP fields below from what was said. Offered only for
+                SOAP, because those four fields are what the draft produces —
+                on a discharge summary it would have nowhere to put anything. */}
+            {noteForm.noteType === 'soap' && (
+              <AiNoteDraft
+                clientId={noteForm.clientId}
+                onDraft={(d) => setNoteForm(prev => ({
+                  ...prev,
+                  subjective: d.subjective || prev.subjective,
+                  objective:  d.objective  || prev.objective,
+                  assessment: d.assessment || prev.assessment,
+                  plan:       d.plan       || prev.plan,
+                  aiAssisted: true,
+                  aiAuditId:  d.aiAuditId || null,
+                  // Recorded from here on, so a draft accepted verbatim and one
+                  // rewritten do not look identical in the record.
+                  aiDraftSnapshot: {
+                    subjective: d.subjective || '', objective: d.objective || '',
+                    assessment: d.assessment || '', plan: d.plan || '',
+                  },
+                }))}
+              />
+            )}
 
                             {/* Dynamic Form Fields Based on Template - Only for regular notes */}
             {noteForm.noteType !== 'therapyBook' && templates[noteForm.noteType]?.fields.map(field => (

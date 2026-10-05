@@ -6,6 +6,7 @@ import {
   collection, getDocs, query, where,
 } from '../../../services/firestoreShim';
 import { logAction, A } from '../../../utils/auditLogger';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 const EDITABLE_FIELDS = {
   auth:        ['name', 'email', 'phone', 'nationalId', 'ghanaCard', 'dateOfBirth', 'gender', 'address', 'bloodGroup'],
@@ -16,7 +17,12 @@ const EDITABLE_FIELDS = {
                 'therapyType', 'emergencyContact', 'preferredLanguage',
                 'previousTherapy', 'concerns', 'goals', 'medications', 'notes'],
   doctors:     ['name', 'email', 'phone', 'specialization', 'licenseNumber', 'consultationFee', 'yearsExperience', 'bio'],
-  therapists:  ['name', 'email', 'phone', 'specialties', 'licenseNumber', 'consultationFee', 'yearsExperience', 'bio'],
+  // `sessionRate`, NOT `consultationFee`. The therapist's own Settings screen
+  // writes sessionRate and every booking screen reads it, so editing
+  // consultationFee here changed a field nothing consumed — an admin could set
+  // a fee, see it saved, and the client would still be charged the old one.
+  // (Doctors keep consultationFee: that is the medical module's own field.)
+  therapists:  ['name', 'email', 'phone', 'specialties', 'licenseNumber', 'sessionRate', 'yearsExperience', 'bio'],
   pharmacies:  ['pharmacyName', 'email', 'phone', 'address', 'country', 'businessReg'],
   labs:        ['labName', 'email', 'phone', 'address', 'country'],
   scanCenters: ['scanCenterName', 'email', 'phone', 'address', 'country'],
@@ -44,7 +50,8 @@ const FIELD_LABELS = {
   name: 'Full Name', email: 'Email', phone: 'Phone', nationalId: 'National ID',
   ghanaCard: 'Ghana Card', dateOfBirth: 'Date of Birth', gender: 'Gender', address: 'Address',
   bloodGroup: 'Blood Group', specialization: 'Specialization', specialties: 'Specialties',
-  licenseNumber: 'License Number', consultationFee: 'Consultation Fee', yearsExperience: 'Years Exp.',
+  licenseNumber: 'License Number', consultationFee: 'Consultation Fee',
+  sessionRate: 'Session Fee', yearsExperience: 'Years Exp.',
   bio: 'Bio', fullName: 'Full Name', specialty: 'Specialty',
   pharmacyName: 'Pharmacy Name', labName: 'Lab Name', scanCenterName: 'Center Name',
   country: 'Country', businessReg: 'Business Reg.', status: 'Status', accountStatus: 'Account status',
@@ -629,7 +636,7 @@ export default function AdminUserDetail() {
           {/* Avatar */}
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: `${colStyle.accent}25`, border: `3px solid ${colStyle.accent}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 800, color: colStyle.accent, flexShrink: 0 }}>
             {user.photoURL
-              ? <img src={user.photoURL} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
+              ? <img src={resolveFileUrl(user.photoURL)} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
               : (getName(user)[0] || '?').toUpperCase()}
           </div>
 

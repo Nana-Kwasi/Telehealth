@@ -8,12 +8,19 @@ export default function CouplePartnerBWelcome() {
   const {
     coupleId,
     token,
+    draftToken,
     partnerAName = 'Your partner',
     partnerBEmail = '',
     partnerBName = '',
   } = state || {};
 
-  if (!coupleId) {
+  // A draft invite has no couple record and no account yet — B is being asked
+  // to join a sign-up nobody has paid for. They set a password and do their
+  // intake; both accounts are created when partner A completes payment.
+  const isDraft = Boolean(draftToken || (!coupleId && token));
+  const inviteToken = draftToken || token;
+
+  if (!coupleId && !isDraft) {
     return (
       <div className="teen-intake-page">
         <p>Invalid invitation. <Link to="/couple/join">Enter your code</Link></p>
@@ -31,8 +38,9 @@ export default function CouplePartnerBWelcome() {
           <strong>{partnerAName}</strong> has started couples therapy on NessaHub and invited you to join them.
         </p>
         <p>
-          You will create your own account with your own email and password. Then you will complete a short private
-          intake form.
+          {isDraft
+            ? 'You will choose a password and complete a short private intake form. Your account is created once the first session is paid for.'
+            : 'You will create your own account with your own email and password. Then you will complete a short private intake form.'}
         </p>
       </header>
 
@@ -47,7 +55,13 @@ export default function CouplePartnerBWelcome() {
       <button
         type="button"
         className="teen-intake-submit"
-        onClick={() =>
+        onClick={() => {
+          if (isDraft) {
+            navigate('/couple/accept', {
+              state: { draftToken: inviteToken, partnerBEmail, partnerBName, partnerAName },
+            });
+            return;
+          }
           navigate('/signup', {
             state: {
               clientData: {
@@ -62,10 +76,10 @@ export default function CouplePartnerBWelcome() {
                 invitePartnerName: partnerAName,
               },
             },
-          })
-        }
+          });
+        }}
       >
-        Create my account
+        {isDraft ? 'Accept invitation' : 'Create my account'}
       </button>
 
       <p className="couple-ghost-link">

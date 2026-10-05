@@ -10,7 +10,12 @@ import {
   MessageSquare, Edit, UserX, UserCheck, TrendingUp,
   Activity, Clock, Heart, AlertTriangle, Target, CheckCircle, BookOpen, Eye
 } from 'lucide-react';
+import { api, getStoredUserId } from '../../../services/apiClient';
 import ChatModal from './ChatModal';
+import WeeklyCheckInPanel from '../../Common/WeeklyCheckInPanel';
+import PreSessionBrief from '../../Common/PreSessionBrief';
+import RecordGapsPanel from '../../Common/RecordGapsPanel';
+import CodingAssistPanel from '../../Common/CodingAssistPanel';
 import './ClientDetails.css';
 import {
   getClientDisplayName,
@@ -413,6 +418,41 @@ export default function ClientDetails() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [showNoteModal, setShowNoteModal] = useState(false);
+
+  // ── Prescribing (psychiatry track only) ────────────────────────────────────
+  const [showRx, setShowRx] = useState(false);
+  const [rx, setRx] = useState({ medication: '', dosage: '', instructions: '' });
+  const [savingRx, setSavingRx] = useState(false);
+  const [rxError, setRxError] = useState('');
+
+  const submitRx = async () => {
+    setRxError('');
+    if (!rx.medication.trim() || !rx.dosage.trim()) {
+      setRxError('A medication and a dosage are both needed.');
+      return;
+    }
+    setSavingRx(true);
+    try {
+      await api('/api/v1/medical/prescriptions', {
+        method: 'POST',
+        body: {
+          doctorId: getStoredUserId(),
+          patientId: client.id || client.clientId,
+          medication: rx.medication.trim(),
+          dosage: rx.dosage.trim(),
+          instructions: rx.instructions.trim() || 'As directed',
+        },
+      });
+      setShowRx(false);
+      setRx({ medication: '', dosage: '', instructions: '' });
+    } catch (e) {
+      // The server refuses a non-psychiatry client regardless of this screen,
+      // so show its reason rather than a generic failure.
+      setRxError(e?.message || 'Could not save the prescription.');
+    } finally {
+      setSavingRx(false);
+    }
+  };
   const [viewingNote, setViewingNote] = useState(null);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -434,7 +474,25 @@ export default function ClientDetails() {
         /* client doc */
         const cSnap = await getDoc(doc(db, 'clients', clientId));
         if (!cSnap.exists()) { setLoading(false); return; }
-        const cData = { id: cSnap.id, ...cSnap.data() };
+        const rawClient = { id: cSnap.id, ...cSnap.data() };
+
+        // A client's details live in TWO records, and this screen read one:
+        //
+        //   client_profiles_v2.preferences_json — the intake questionnaire
+        //   patient_profiles.metadata_json      — country, city, gender, dob
+        //
+        // So Country showed "—" for clients who have one on file, simply
+        // because it sits in the record this screen never opened. Merge both;
+        // the questionnaire wins where they overlap, being the client's own
+        // answer rather than a derived location. Same fix as mobile.
+        let patientMeta = {};
+        try {
+          const pat = await api(`/api/v1/patients/${clientId}`);
+          if (pat?.metadataJson) patientMeta = JSON.parse(pat.metadataJson) || {};
+          if (pat?.phone && !patientMeta.phone) patientMeta.phone = pat.phone;
+        } catch (_) { /* the questionnaire half still renders */ }
+
+        const cData = { ...patientMeta, ...rawClient };
         const auth = await fetchAuthProfileForClient(cData);
         setAuthProfile(auth);
 
@@ -803,6 +861,13 @@ export default function ClientDetails() {
         ))}
       </div>
 
+      {/* Opt-in weekly check-in and this week's answers against last week's. */}
+      {/* What the client has shared since last time, before you start. */}
+      <PreSessionBrief clientId={clientId} />
+      <WeeklyCheckInPanel clientId={clientId} />
+      <RecordGapsPanel patientId={clientId} />
+      <CodingAssistPanel patientId={clientId} />
+
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', background: '#fff', borderRadius: 14, padding: '0.4rem', border: '1px solid #e2e8f0', width: 'fit-content' }}>
         {TABS.map(tab => (
@@ -855,6 +920,68 @@ export default function ClientDetails() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e2e8f0' }}>
               <Calendar size={15} /> Therapy Information
             </div>
+            {/* Say plainly when the intake was never completed. These fields
+                otherwise render as a column of dashes, which reads like a
+                loading failure rather than "this client has not answered". */}
+            {/* A Second Opinion client has a CASE, not a programme. Their
+                answers are the most important thing on this screen — the
+                specialist is here to review a specific decision — so they come
+                before the therapy fields rather than being buried among
+                programme details that do not apply. */}
+            {/* Prescribing is offered only for the PSYCHIATRY track: a
+                psychiatrist prescribes, a counsellor does not, and both use
+                this screen. The server enforces the same rule, so hiding this
+                is a courtesy rather than the control. */}
+            {String(client.careTrack || '').toLowerCase() === 'psychiatry' && (
+              <button
+                type="button"
+                onClick={() => setShowRx(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                  width: '100%', padding: '0.8rem', marginBottom: '0.85rem',
+                  borderRadius: 999, border: 'none', cursor: 'pointer',
+                  background: '#5046bd', color: '#fff', fontWeight: 800, fontSize: '0.9rem',
+                }}
+              >
+                Prescribe medication
+              </button>
+            )}
+
+            {client.serviceType === 'second_opinion' && (
+              <div style={{
+                padding: '0.85rem', marginBottom: '0.85rem', borderRadius: 10,
+                background: 'rgba(80,70,189,0.07)', border: '1px solid rgba(80,70,189,0.22)',
+              }}>
+                <div style={{
+                  fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.06em',
+                  textTransform: 'uppercase', color: '#3f3796', marginBottom: '0.5rem',
+                }}>
+                  Second opinion request
+                </div>
+                {[
+                  ['Wants reviewed', client.reviewAreasLabel],
+                  ['Reason', client.reason],
+                  ['Current diagnosis', client.currentDiagnosis],
+                  ['Current treatment', client.currentTreatment],
+                ].filter(([, v]) => v).map(([label, value]) => (
+                  <div key={label} style={{ marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.74rem', color: '#44474f', fontWeight: 600 }}>{label}</div>
+                    <div style={{ fontSize: '0.86rem', color: '#101010' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {client.questionnaireCompleted === false && !client.therapyType && client.serviceType !== 'second_opinion' && (
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: '0.5rem',
+                padding: '0.75rem', marginBottom: '0.85rem', borderRadius: 10,
+                background: 'rgba(115,78,18,0.08)', border: '1px solid rgba(115,78,18,0.22)',
+                color: '#734e12', fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.45,
+              }}>
+                Intake questionnaire not completed — clinical answers are not on file for this client.
+              </div>
+            )}
             {[
               ['Therapy Type', formatFieldValue(client.therapyType || client.therapyTypes)],
               ['Session Frequency', client.sessionFrequency],
@@ -1227,6 +1354,82 @@ export default function ClientDetails() {
           onClick={() => setShowStatusMenu(false)}
         />
       )}
+    {showRx && (
+      <div
+        role="dialog"
+        aria-label="Prescribe medication"
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(28,34,70,0.45)', padding: '1rem',
+        }}
+        onClick={() => setShowRx(false)}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: '#fff', borderRadius: 20, padding: '1.5rem',
+            width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(28,34,70,0.25)',
+          }}
+        >
+          <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.15rem', color: '#101010' }}>
+            Prescribe medication
+          </h3>
+          <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#44474f' }}>
+            For {client?.name || 'this client'} — psychiatry track.
+          </p>
+
+          {[
+            ['medication', 'Medication', 'e.g. Sertraline', false],
+            ['dosage', 'Dosage', 'e.g. 50mg once daily', false],
+            ['instructions', 'Instructions', 'How and when to take it', true],
+          ].map(([key, label, placeholder, multiline]) => (
+            <div key={key} style={{ marginBottom: '0.75rem' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#44474f', marginBottom: '0.3rem' }}>
+                {label}
+              </label>
+              {multiline ? (
+                <textarea
+                  rows={3}
+                  placeholder={placeholder}
+                  value={rx[key]}
+                  onChange={(e) => setRx({ ...rx, [key]: e.target.value })}
+                  style={{ width: '100%', padding: '0.65rem', borderRadius: 10, border: '1px solid rgba(16,16,16,0.16)', fontSize: '0.9rem' }}
+                />
+              ) : (
+                <input
+                  placeholder={placeholder}
+                  value={rx[key]}
+                  onChange={(e) => setRx({ ...rx, [key]: e.target.value })}
+                  style={{ width: '100%', padding: '0.65rem', borderRadius: 10, border: '1px solid rgba(16,16,16,0.16)', fontSize: '0.9rem' }}
+                />
+              )}
+            </div>
+          ))}
+
+          {rxError && <p style={{ color: '#8c322d', fontSize: '0.82rem', fontWeight: 600 }}>{rxError}</p>}
+
+          <div style={{ display: 'flex', gap: '0.6rem', marginTop: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => setShowRx(false)}
+              style={{ flex: 1, padding: '0.7rem', borderRadius: 999, background: '#fff', border: '1px solid rgba(80,70,189,0.35)', color: '#3f3796', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submitRx}
+              disabled={savingRx}
+              style={{ flex: 1, padding: '0.7rem', borderRadius: 999, background: '#5046bd', border: 'none', color: '#fff', fontWeight: 800, cursor: 'pointer', opacity: savingRx ? 0.6 : 1 }}
+            >
+              {savingRx ? 'Saving…' : 'Prescribe'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     </div>
   );
 }

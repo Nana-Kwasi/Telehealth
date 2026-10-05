@@ -2500,3 +2500,385 @@
   margin-left: auto;
   color: #475569;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CLIENT WELCOME HERO
+   Replaces a full-width location card followed by a thin greeting strip with
+   two unlabelled icon buttons. Colours are literals measured against the
+   surface they sit on — this route does not load the zencare token sheet.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.ch-hero {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 1.5rem;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  padding: 1.6rem 1.8rem;
+  border-radius: 24px;
+  background:
+    radial-gradient(520px 320px at 92% 12%, rgba(163, 156, 245, 0.34), transparent 68%),
+    radial-gradient(420px 300px at 4% 94%, rgba(160, 216, 196, 0.28), transparent 66%),
+    linear-gradient(118deg, #eeedfc 0%, #eaeafb 52%, #ecf4f0 100%);
+}
+
+.ch-hero-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* ── Identity ─────────────────────────────────────────────────────────── */
+.ch-hero-id { display: flex; align-items: center; gap: 0.9rem; min-width: 230px; }
+
+.ch-hero-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #ded9fa;
+  color: #3f3796;              /* 7.01:1 */
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.ch-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.ch-hero-who { min-width: 0; }
+.ch-hero-date { margin: 0 0 0.1rem; font-size: 0.79rem; color: #4d5068; }  /* 6.70:1 */
+.ch-hero-greet {
+  margin: 0;
+  font-size: clamp(1.2rem, 1.9vw, 1.55rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #171a3d;              /* 14.26:1 */
+}
+.ch-hero-name { color: #4c3fb8; }   /* 6.58:1 */
+
+/* Who is treating you — was a cramped chip wedged between two icon buttons. */
+.ch-hero-therapist {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.85rem 0.4rem 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  font-family: inherit;
+}
+.ch-hero-therapist:hover { background: #ffffff; }
+.ch-hero-therapist img,
+.ch-hero-therapist-initial {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; object-fit: cover;
+  display: flex; align-items: center; justify-content: center;
+  background: #ded9fa; color: #3f3796; font-size: 0.78rem; font-weight: 800;
+}
+.ch-hero-therapist span { display: flex; flex-direction: column; line-height: 1.25; text-align: left; }
+.ch-hero-therapist em     { font-style: normal; font-size: 0.68rem; color: #5a5d73; }  /* 6.47:1 */
+.ch-hero-therapist strong { font-size: 0.83rem; font-weight: 750; color: #171a3d; }
+
+/* DEAD as of the row split — kept only so the block below reads in order. */
+/* ── Location + weather, one card ─────────────────────────────────────── */
+.ch-hero-meta {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 260px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+/* flex on the halves, not the row, so the rule keeps its 1px. */
+.ch-hero-meta-half { flex: 1; min-width: 0; }
+.ch-hero-meta-rule {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.6rem 0.25rem;
+  background: rgba(23, 26, 61, 0.1);
+}
+
+/* DEAD as of the row split — kept only so the block below reads in order. */
+/* ── Primary action ───────────────────────────────────────────────────── */
+.ch-hero-cta { flex-shrink: 0; }
+.ch-hero-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.8rem 1.35rem;
+  border: none;
+  border-radius: 999px;
+  background: #5046bd;
+  color: #ffffff;              /* 7.11:1 */
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(80, 70, 189, 0.3);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.ch-hero-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(80, 70, 189, 0.38);
+}
+
+/* ── Artwork ──────────────────────────────────────────────────────────── */
+.ch-hero-art {
+  align-self: flex-end;
+  height: 100%;
+  max-height: 250px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+  -webkit-mask-image: linear-gradient(to left, #000 74%, transparent 99%);
+  mask-image: linear-gradient(to left, #000 74%, transparent 99%);
+  pointer-events: none;
+}
+@media (max-width: 1180px) { .ch-hero-art { display: none; } }
+
+@media (max-width: 720px) {
+  .ch-hero { padding: 1.25rem 1.1rem; border-radius: 20px; }
+  .ch-hero-cta, .ch-hero-primary { width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-hero-primary { transition: none; }
+  .ch-hero-primary:hover { transform: none; }
+}
+
+/* ── Client quick actions ──────────────────────────────────────────────────
+   Circle buttons, one colour each, matching the clinician and patient
+   dashboards. Each icon/circle pair is measured against its own tint. */
+.ch-quick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 0.6rem 0.4rem;
+  margin-bottom: 1.25rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid #ebecf3;
+  border-radius: 20px;
+  background: #ffffff;
+}
+
+.ch-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.25rem;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 140ms ease;
+}
+.ch-quick-btn:hover { background: #f7f8fc; }
+.ch-quick-btn:focus-visible { outline: 2px solid #5046bd; outline-offset: 2px; }
+
+.ch-quick-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.ch-quick-btn:hover .ch-quick-circle {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(23, 26, 61, 0.14);
+}
+
+.ch-quick-label {
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  color: #3d4257;              /* 9.93:1 on white */
+}
+
+.ch-circle-green  { background: #e4f6ec; color: #12602f; }  /* 6.82:1 */
+.ch-circle-sky    { background: #e0f2fb; color: #0b5c86; }  /* 6.32:1 */
+.ch-circle-violet { background: #f0e9fd; color: #5b21a6; }  /* 8.03:1 */
+.ch-circle-gold   { background: #fdf3dc; color: #8a5a04; }  /* 5.37:1 */
+.ch-circle-rose   { background: #fde8e8; color: #a52121; }  /* 6.30:1 */
+.ch-circle-blue   { background: #e4ecfb; color: #1a3ea8; }  /* 7.70:1 */
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-quick-btn, .ch-quick-circle { transition: none; }
+  .ch-quick-btn:hover .ch-quick-circle { transform: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CLIENT DASHBOARD — GRID ALIGNMENT
+   This screen grew its own layout: today-band, progress-activities-row and
+   charts-grid each had a different column count, card surface and gap, so the
+   page read as three unrelated blocks stacked up. The clinician and patient
+   dashboards share one rhythm — three columns, 1rem gap, white panel, 1px
+   #ebecf3 border, 20px radius. These rules bring this screen onto it without
+   rewriting the chart JSX.
+   Appended last so they win over the earlier definitions.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.dashboard-home .today-band,
+.dashboard-home .progress-activities-row,
+.dashboard-home .charts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+}
+
+/* No span here. The row already has THREE children — progress, activities and
+   the calendar — so giving the first two tracks made 2+1+1 = 4 and pushed the
+   calendar onto a row of its own with two empty columns beside it. */
+
+/* Five charts over three columns leaves two dangling on the last row. The
+   fourth is the wide one, so it takes the pair. */
+.dashboard-home .charts-grid > .chart-card:nth-child(4) { grid-column: span 2; }
+
+/* One surface for every card on the page. */
+.dashboard-home .today-band > *,
+.dashboard-home .progress-activities-row > *,
+.dashboard-home .charts-grid > .chart-card,
+.dashboard-home .ch-quick,
+.dashboard-home .client-stats > * {
+  border: 1px solid #ebecf3;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+/* The multicolour gradient strip on every chart card put five accent colours
+   in competition on one screen. */
+.dashboard-home .charts-grid > .chart-card::before { display: none; }
+
+.dashboard-home .client-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-home .today-band,
+  .dashboard-home .progress-activities-row,
+  .dashboard-home .charts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-home .charts-grid > .chart-card:nth-child(4) { grid-column: span 2; }
+}
+@media (max-width: 760px) {
+  .dashboard-home .today-band,
+  .dashboard-home .progress-activities-row,
+  .dashboard-home .charts-grid { grid-template-columns: 1fr; }
+  .dashboard-home .charts-grid > .chart-card:nth-child(4) { grid-column: span 1; }
+}
+
+/* ── Taller hero ──────────────────────────────────────────────────────────
+   With location and weather taken out, the copy alone stopped filling the
+   height the artwork needs and the image was being letterboxed. */
+.ch-hero { min-height: 268px; align-items: center; }
+.ch-hero-art { max-height: 310px; }
+@media (max-width: 720px) { .ch-hero { min-height: 0; } }
+
+/* ── Hero, resized ────────────────────────────────────────────────────────
+   The card was wide and shallow, so the artwork sat as a small inset with a
+   large empty middle. Taller card, and the image is allowed to fill the
+   height rather than being letterboxed inside it. */
+.ch-hero {
+  min-height: 320px;
+  padding: 2rem 2.2rem;
+  align-items: stretch;
+}
+.ch-hero-main { align-items: center; }
+.ch-hero-art {
+  height: auto;
+  max-height: none;
+  align-self: stretch;
+  object-fit: cover;
+  object-position: center top;
+  /* Cover crops rather than letterboxes, so the figure fills the card's full
+     height. Width follows from the crop. */
+  width: clamp(280px, 34%, 460px);
+  border-radius: 18px;
+}
+@media (max-width: 1180px) { .ch-hero { min-height: 0; padding: 1.6rem 1.8rem; } }
+
+/* ── Location | weather | check-in ────────────────────────────────────────
+   Their own row, on the same three-column rhythm as everything else. */
+.ch-meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: stretch;
+}
+.ch-meta-card {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ebecf3;
+  border-radius: 20px;
+  background: #ffffff;
+}
+.ch-meta-card > * { width: 100%; }
+
+.ch-checkin-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.2rem;
+  text-align: left;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  background: linear-gradient(120deg, #5046bd, #7c4ddb);
+  box-shadow: 0 8px 22px rgba(80, 70, 189, 0.3);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.ch-checkin-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(80, 70, 189, 0.38);
+}
+.ch-checkin-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+/* flex on the text only — on the row it would stretch the icon. */
+.ch-checkin-text { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; min-width: 0; }
+.ch-checkin-text strong { font-size: 0.95rem; font-weight: 750; color: #ffffff; }  /* 7.11:1 */
+.ch-checkin-text em {
+  font-style: normal; font-size: 0.76rem; line-height: 1.4;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+@media (max-width: 1180px) { .ch-meta-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px)  { .ch-meta-row { grid-template-columns: 1fr; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-checkin-card { transition: none; }
+  .ch-checkin-card:hover { transform: none; }
+}
+
+/* The availability line under the therapist's name in the hero card. Its own
+   row in the existing flex column; only needs to not sit flush against the name. */
+.ch-hero-therapist span > span { margin-top: 0.15rem; }

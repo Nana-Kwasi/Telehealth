@@ -1796,7 +1796,17 @@ export async function addDoc(colRef, data) {
         // so this posted "" → 400 Validation failed → "Failed to save note".
         // Fall back to the structured fields, and carry the full note through as
         // structuredData so nothing entered is lost.
-        const cnContent = data.content || data.body || data.note || data.sessionFocus
+        // A SOAP note's body IS its four sections. They were missing from this
+        // chain, so every SOAP note ever saved from the web fell through to the
+        // literal string 'Session note' — the sections survived in
+        // structuredData, but anything reading `content` (the client's copy, a
+        // list preview, an export) showed two words and no note.
+        const soapBody = ['subjective', 'objective', 'assessment', 'plan']
+          .filter((f) => (data[f] || '').trim())
+          .map((f) => `${f.charAt(0).toUpperCase()}${f.slice(1)}\n${data[f].trim()}`)
+          .join('\n\n');
+
+        const cnContent = data.content || data.body || data.note || soapBody || data.sessionFocus
           || data.clientResponse || data.behavioralObservations || 'Session note';
         // Only the typed fields — NOT the whole document. Passing `data` through
         // stored therapistId/therapistName/createdAt as "note content", which the
@@ -1816,6 +1826,12 @@ export async function addDoc(colRef, data) {
           visibleToClient: data.visibleToClient ?? false,
           isDraft: data.isDraft ?? false,
           signature: data.signature || null,
+          // Provenance. This body is built field by field, so anything not named
+          // here is dropped in silence — which would have left every AI-drafted
+          // note indistinguishable from one a clinician typed.
+          aiAssisted: data.aiAssisted ?? false,
+          aiAuditId: data.aiAuditId || null,
+          aiEdited: data.aiEdited ?? null,
         } });
       }
       case 'notes': {
@@ -2166,8 +2182,19 @@ export async function addDoc(colRef, data) {
       case 'userPresence':
         return api(`/api/v1/realtime/presence/${id1}`, { method: 'PUT', body: { status: data?.online ? 'online' : 'offline' } }).catch(() => ({ id: id1 }));
       case 'chatSeen':
-      case 'callNotifications':
         return { id: `tmp_${Date.now()}` };
+      // A clinician's "Call" button writes an incoming-call notification. This
+      // was a no-op after the migration, so the patient never saw the call. It
+      // now rings the patient through /api/v1/calls (every open app + push).
+      case 'callNotifications': {
+        if (data?.targetId && data?.roomName && String(data?.status || 'incoming') === 'incoming') {
+          const res = await api('/api/v1/calls', {
+            method: 'POST', body: { calleeId: data.targetId, roomName: data.roomName },
+          }).catch((e) => { console.warn('[firestoreShim] ring failed:', e?.message); return null; });
+          return { id: res?.id || `tmp_${Date.now()}` };
+        }
+        return { id: `tmp_${Date.now()}` };
+      }
       // Client-side login/logout logging — handled server-side by authService.
       case 'loginLogs':
       case 'userLoginLogs':

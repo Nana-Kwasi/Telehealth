@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from '../../services/authShim';
-import { doc, setDoc } from '../../services/firestoreShim';
-import { auth, db } from '../../services/firestoreShim';
 import { RELATIONSHIP_TYPES, COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
-import {
-  createCoupleRegistration,
-  createPartnerClientRecord,
-  linkCouplePartnerAuth,
-} from '../../services/coupleTherapyService';
+import { api } from '../../services/apiClient';
 import ChipSelect from './ChipSelect';
 import { beginTherapySession } from '../../utils/patientSessionIntent';
 import './CoupleTherapyIntake.css';
@@ -73,69 +66,50 @@ export default function CoupleInitiation() {
     setLoading(true);
     setError('');
     try {
-      // The account must exist BEFORE the registration: POST /api/v1/couples is
-      // authenticated and takes partnerAId (the signed-in user). Creating the
-      // registration first meant it ran anonymously and the screen then crashed on
-      // `result.coupleId` of null. 4th arg carries the name through the shim.
-      const email = partnerAEmail.trim().toLowerCase();
-      const cred = await createUserWithEmailAndPassword(auth, email, password, partnerAName.trim());
-      const uid = cred.user.uid;
-
-      const result = await createCoupleRegistration({
-        partnerAId: uid,
-        relationshipType,
-        partnerA: { name: partnerAName.trim(), email },
-        partnerB: { name: partnerBName.trim(), email: partnerBEmail.trim().toLowerCase() },
+      // NO ACCOUNT IS CREATED HERE ANY MORE.
+      //
+      // This used to call createUserWithEmailAndPassword first, because the old
+      // POST /api/v1/couples was authenticated and needed partnerAId. That meant
+      // a couple who abandoned the sign-up — or never paid — still left two real
+      // accounts, a couple record and a client profile behind. The individual and
+      // teen flows have always deferred account creation until payment; this
+      // brings couples in line.
+      //
+      // Instead the whole sign-up lives on a draft, keyed by an invite token,
+      // until partner A pays for the first session. Only then are both accounts
+      // created, together.
+      const draft = await api('/api/v1/couples/drafts', {
+        method: 'POST',
+        authenticated: false,
+        body: {
+          relationshipType,
+          partnerA: { name: partnerAName.trim(), email: partnerAEmail.trim().toLowerCase() },
+          partnerB: { name: partnerBName.trim(), email: partnerBEmail.trim().toLowerCase() },
+          password,
+        },
       });
 
-      const coupleId = result.coupleId;
-      const clientId = await createPartnerClientRecord(
-        coupleId,
-        'partnerA',
-        email,
-        partnerAName.trim(),
-        uid,
-      );
+      if (!draft?.inviteToken) throw new Error('Could not start the couple sign-up.');
 
-      await setDoc(doc(db, 'auth', uid), {
-        uid,
-        name: partnerAName.trim(),
-        email,
-        role: 'client',
-        clientId,
-        userIntent: 'therapy',
-        therapyType: 'couples',
-        coupleId,
-        couplePartnerRole: 'partnerA',
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      });
-
-      await linkCouplePartnerAuth(coupleId, 'partnerA', {
-        authUid: uid,
-        clientId,
-        name: partnerAName.trim(),
-      });
-
-      localStorage.setItem(COUPLE_STORAGE_KEYS.coupleId, coupleId);
+      // Local breadcrumbs only. There is no session, because there is no account
+      // — the token is what identifies this sign-up from here on.
+      localStorage.setItem(COUPLE_STORAGE_KEYS.inviteToken, draft.inviteToken);
       localStorage.setItem(COUPLE_STORAGE_KEYS.partnerRole, 'partnerA');
       localStorage.setItem(COUPLE_STORAGE_KEYS.myIntakeComplete, 'false');
       localStorage.setItem(COUPLE_STORAGE_KEYS.otherPartnerName, partnerBName.trim());
-      localStorage.setItem(COUPLE_STORAGE_KEYS.myRegistrationEmail, email);
+      localStorage.setItem(COUPLE_STORAGE_KEYS.myRegistrationEmail, partnerAEmail.trim().toLowerCase());
       localStorage.setItem(COUPLE_STORAGE_KEYS.myPartnerName, partnerAName.trim());
-      localStorage.setItem('th.clientId', clientId);
       localStorage.setItem(
         'th.onboard',
-        JSON.stringify({ therapyType: 'couples', coupleId, startedAt: new Date().toISOString() }),
+        JSON.stringify({ therapyType: 'couples', startedAt: new Date().toISOString() }),
       );
 
-      navigate('/couple/intake', { state: { coupleId, partnerRole: 'partnerA' }, replace: true });
+      navigate('/couple/intake', {
+        state: { draftToken: draft.inviteToken, partnerRole: 'partnerA' },
+        replace: true,
+      });
     } catch (e) {
       console.error(e);
-      if (e.code === 'auth/email-already-in-use') {
-        navigate('/login', { state: { returnTo: '/couple/intake' }, replace: true });
-        return;
-      }
       setError(e.message || 'Could not start couple registration.');
     } finally {
       setLoading(false);
@@ -147,8 +121,9 @@ export default function CoupleInitiation() {
       <header className="teen-intake-header">
         <h1>Couple therapy</h1>
         <p>
-          Create your account, then complete your private intake. We email your partner their invitation
-          immediately — they never see your answers.
+          Set up your details, then complete your private intake. We email your partner their invitation
+          immediately — they never see your answers. Both accounts are created once your first session
+          is paid for.
         </p>
       </header>
 

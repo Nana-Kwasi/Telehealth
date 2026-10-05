@@ -4,6 +4,7 @@ import { db } from '../../../services/firestoreShim';
 import { doc, getDoc } from '../../../services/firestoreShim';
 import { ArrowLeft, User, Mail, Phone, MapPin, Award, Star, Languages, BookOpen } from 'lucide-react';
 import './TherapistDetails.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function TherapistDetails() {
   const { therapistId } = useParams();
@@ -63,7 +64,7 @@ export default function TherapistDetails() {
         <div className="therapist-photo-section">
           {therapist.photoURL ? (
             <img 
-              src={therapist.photoURL} 
+              src={resolveFileUrl(therapist.photoURL)} 
               alt={therapist.name}
               className="therapist-photo"
             />

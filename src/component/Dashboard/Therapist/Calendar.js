@@ -42,6 +42,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { db, auth } from '../../../services/firestoreShim';
 import './Calendar.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 // Scheduled times come back from the REST API as ISO strings, but this screen was
 // written against Firestore Timestamps and called `scheduledTime?.toDate()`. On a
@@ -2937,7 +2938,7 @@ const TherapistCalendar = () => {
                             <td>
                               <div className="client-info">
                                 {client.clientImage && (
-                                  <img src={client.clientImage} alt={client.name} className="client-avatar" />
+                                  <img src={resolveFileUrl(client.clientImage)} alt={client.name} className="client-avatar" />
                                 )}
                                 <span>{client.name || client.email || `Client ${client.id.slice(0, 8)}`}</span>
                               </div>
@@ -3056,7 +3057,7 @@ const TherapistCalendar = () => {
                             <td>
                               <div className="therapist-info">
                                 {therapist.therapistImage && (
-                                  <img src={therapist.therapistImage} alt={therapist.name} className="therapist-avatar" />
+                                  <img src={resolveFileUrl(therapist.therapistImage)} alt={therapist.name} className="therapist-avatar" />
                                 )}
                                 <span>{therapist.name || therapist.email}</span>
                               </div>
@@ -3100,7 +3101,7 @@ const TherapistCalendar = () => {
                             <td>
                               <div className="client-info">
                                 {client.clientImage && (
-                                  <img src={client.clientImage} alt={client.name} className="client-avatar" />
+                                  <img src={resolveFileUrl(client.clientImage)} alt={client.name} className="client-avatar" />
                                 )}
                                 <span>{client.name || client.email}</span>
                               </div>
@@ -5412,7 +5413,7 @@ export default TherapistCalendar;
 //                             <td>
 //                               <div className="client-info">
 //                                 {client.clientImage && (
-//                                   <img src={client.clientImage} alt={client.name} className="client-avatar" />
+//                                   <img src={resolveFileUrl(client.clientImage)} alt={client.name} className="client-avatar" />
 //                                 )}
 //                                 <span>{client.name || client.email || `Client ${client.id.slice(0, 8)}`}</span>
 //                               </div>
@@ -5531,7 +5532,7 @@ export default TherapistCalendar;
 //                             <td>
 //                               <div className="therapist-info">
 //                                 {therapist.therapistImage && (
-//                                   <img src={therapist.therapistImage} alt={therapist.name} className="therapist-avatar" />
+//                                   <img src={resolveFileUrl(therapist.therapistImage)} alt={therapist.name} className="therapist-avatar" />
 //                                 )}
 //                                 <span>{therapist.name || therapist.email}</span>
 //                               </div>
@@ -5575,7 +5576,7 @@ export default TherapistCalendar;
 //                             <td>
 //                               <div className="client-info">
 //                                 {client.clientImage && (
-//                                   <img src={client.clientImage} alt={client.name} className="client-avatar" />
+//                                   <img src={resolveFileUrl(client.clientImage)} alt={client.name} className="client-avatar" />
 //                                 )}
 //                                 <span>{client.name || client.email}</span>
 //                               </div>

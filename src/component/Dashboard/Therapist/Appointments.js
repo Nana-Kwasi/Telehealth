@@ -8,6 +8,7 @@
 // own copy of the state.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AppointmentRiskPanel from '../../Common/AppointmentRiskPanel';
 import { auth, db, collection, query, where, getDocs, doc, updateDoc } from '../../../services/firestoreShim';
 import { Calendar, Clock, Check, X, RefreshCw } from 'lucide-react';
 import ActionButton from '../../Common/ActionButton';
@@ -132,6 +133,10 @@ export default function TherapistAppointments() {
 
   return (
     <div className="ta-page">
+      {/* Which of these is worth a reminder, and why. Hides itself when
+          nothing is worth chasing. */}
+      <AppointmentRiskPanel />
+
       <div className="ta-header">
         <div>
           <h1>Appointments</h1>

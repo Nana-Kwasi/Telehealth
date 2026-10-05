@@ -4,7 +4,7 @@ import PublicPageShell from './PublicPageShell';
 import { NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
 
 const TOPICS = [
-  { title: 'Getting started', desc: 'Choose therapy, medical, or home-care and create your account.', to: '/' },
+  { title: 'Getting started', desc: 'Choose therapy, medical care, psychiatry, or second opinion and create your account.', to: '/' },
   { title: 'FAQs', desc: 'Searchable answers about the most common tasks.', to: '/faqs' },
   { title: 'Contact support', desc: 'Email the team or open a pre-filled message from your mail app.', to: '/contact' },
   { title: 'Account & login', desc: 'Use Log in / Sign up in the navigation. Reset flows live on the login page when enabled.', to: '/login' },

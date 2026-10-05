@@ -4,6 +4,7 @@ import { db } from '../../../services/firestoreShim';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, serverTimestamp } from '../../../services/firestoreShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import { refreshSession } from '../../Auth/authService';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 // Map a doctor record (session profile and/or the full /doctors/{id} document,
 // whose metadataJson-preserved fields are expanded by the shim) to the form shape.
@@ -229,7 +230,7 @@ export default function DoctorSettings({ profile }) {
           <div className="doctor-form-group" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
             <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#e8f1fb', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #bfdbfe' }}>
               {profileForm.photoURL ? (
-                <img src={profileForm.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+                <img src={resolveFileUrl(profileForm.photoURL)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
               ) : (
                 <span style={{ fontSize: '1.75rem', fontWeight: 700, color: '#1e6bb8' }}>{(profileForm.name || 'D')[0].toUpperCase()}</span>
               )}

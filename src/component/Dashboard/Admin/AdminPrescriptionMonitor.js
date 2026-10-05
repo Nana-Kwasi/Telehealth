@@ -1,6 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../../services/firestoreShim';
-import { collection, getDocs, query, orderBy } from '../../../services/firestoreShim';
+import { db, doc, getDoc } from '../../../services/firestoreShim';
+import { collection, getDocs } from '../../../services/firestoreShim';
+import RxFullDetails from '../Pharmacy/RxFullDetails';
+
+const normalizePrescription = async (raw = {}) => {
+  const medications = Array.isArray(raw.medications) && raw.medications.length > 0
+    ? raw.medications
+    : (raw.medication ? [{
+        name: raw.medication,
+        strength: raw.strength || '',
+        dosage: raw.dosage || '',
+        frequency: raw.frequency || '',
+        duration: raw.duration || '',
+        durationUnit: raw.durationUnit || '',
+        direction: raw.direction || '',
+        drugForm: raw.drugForm || '',
+        route: raw.route || '',
+      }] : []);
+
+  let patientName = raw.patientName || 'Patient';
+  if ((!raw.patientName || raw.patientName === 'Patient') && raw.patientId) {
+    try {
+      const snap = await getDoc(doc(db, 'auth', raw.patientId));
+      if (snap.exists()) {
+        const data = snap.data();
+        patientName = data?.name || data?.displayName || data?.fullName || patientName;
+      }
+    } catch (_) {}
+  }
+
+  let doctorName = raw.doctorName || 'Doctor';
+  if ((!raw.doctorName || raw.doctorName === 'Doctor') && raw.doctorId) {
+    try {
+      const snap = await getDoc(doc(db, 'doctors', raw.doctorId));
+      if (snap.exists()) {
+        const data = snap.data();
+        doctorName = data?.name || data?.fullName || data?.displayName || doctorName;
+      }
+    } catch (_) {}
+  }
+
+  return {
+    ...raw,
+    medications,
+    patientName,
+    doctorName,
+    status: raw.status || 'active',
+    warnings: Array.isArray(raw.warnings) ? raw.warnings : [],
+  };
+};
 
 export default function AdminPrescriptionMonitor() {
   const [prescriptions, setPrescriptions] = useState([]);
@@ -16,7 +64,9 @@ export default function AdminPrescriptionMonitor() {
   const loadData = async () => {
     try {
       const snap = await getDocs(collection(db, 'doctorPrescriptions'));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = await Promise.all(
+        snap.docs.map(async d => normalizePrescription({ id: d.id, ...d.data() }))
+      );
       list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setPrescriptions(list);
     } catch (e) {
@@ -132,39 +182,12 @@ export default function AdminPrescriptionMonitor() {
       {/* Detail Modal */}
       {selected && (
         <div className="admin-modal-overlay" onClick={() => setSelected(null)}>
-          <div className="admin-modal" onClick={e => e.stopPropagation()}>
+          <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h3 className="admin-modal-title">Prescription Detail</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕ Close</button>
             </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
-              <div><span style={{ color: '#64748b' }}>Patient: </span><b>{selected.patientName}</b></div>
-              <div><span style={{ color: '#64748b' }}>Doctor: </span><b>{selected.doctorName}</b></div>
-              <div><span style={{ color: '#64748b' }}>Diagnosis: </span><b>{selected.diagnosis}</b></div>
-              <div><span style={{ color: '#64748b' }}>Date: </span><b>{selected.date}</b></div>
-              <div><span style={{ color: '#64748b' }}>Status: </span><b>{selected.status}</b></div>
-              {selected.followUpDate && <div><span style={{ color: '#64748b' }}>Follow-up: </span><b>{selected.followUpDate}</b></div>}
-            </div>
-
-            {selected.warnings?.length > 0 && (
-              <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1rem' }}>
-                <div>
-                  <b>Safety Warnings</b>
-                  {selected.warnings.map((w, i) => <div key={i} style={{ marginTop: 4 }}>• {w}</div>)}
-                </div>
-              </div>
-            )}
-
-            <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 0.75rem' }}>Medications ({(selected.medications || []).length})</h4>
-            {(selected.medications || []).map((m, i) => (
-              <div key={i} style={{ background: '#f8fafc', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem', fontSize: '0.82rem' }}>
-                <b>{m.name}</b> {m.strength && `(${m.strength})`} — {m.drugForm || 'Tablet'}
-                <div style={{ color: '#64748b', marginTop: 4 }}>
-                  {m.dosage} · {m.frequency} · {m.duration}
-                </div>
-              </div>
-            ))}
+            <RxFullDetails rx={selected} />
           </div>
         </div>
       )}

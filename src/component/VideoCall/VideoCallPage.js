@@ -3,6 +3,10 @@ import { connect, createLocalTracks, createLocalVideoTrack, LocalVideoTrack } fr
 import { useParams, useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Monitor, Square } from 'lucide-react';
 import './VideoCallPage.css';
+import SessionTranscriber from './SessionTranscriber';
+import CallRingStatus from './CallRingStatus';
+import { generateVideoToken } from '../../services/twilioVideoService';
+import { getStoredUserId } from '../../services/apiClient';
 
 /**
  * A readable label for a Twilio participant.
@@ -18,7 +22,10 @@ function participantLabel(identity) {
   if (!isUuid) return identity;
   try {
     const info = JSON.parse(localStorage.getItem('videoCallInfo') || '{}');
-    return (info.displayNames && info.displayNames[identity]) || info.targetPerson || 'Participant';
+    const t = info.targetPerson;
+    // Older callers stored the whole client record here, which rendered as "[object Object]".
+    const fallback = t && typeof t === 'object' ? (t.displayName || t.name || t.fullName) : t;
+    return (info.displayNames && info.displayNames[identity]) || fallback || 'Participant';
   } catch {
     return 'Participant';
   }
@@ -46,9 +53,30 @@ const VideoCallPage = () => {
   // window.close() only closes windows that were opened by script. The therapist
   // joins via window.open (closable), but the client navigates in the same tab,
   // where close() is a no-op — the "Close Window" button did nothing at all.
+  // iPhones (Safari and in-app web views) have no screen capture API at all, so
+  // the share button silently did nothing there. Only offer it where it works.
+  const canShareScreen = typeof navigator !== 'undefined'
+    && !!navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function';
+
   const canCloseWindow = typeof window !== 'undefined' && !!window.opener && !window.opener.closed;
 
+  // Inside the phone app the page runs in a web view: window.close() does not
+  // close it (it left a half-torn-down page that crashed the dashboard), so ask
+  // the app to close its call screen instead.
+  const inApp = typeof window !== 'undefined' && !!window.ReactNativeWebView;
+  const closeCallWindow = () => {
+    if (inApp) {
+      window.ReactNativeWebView.postMessage('nessa:call-ended');
+      return;
+    }
+    window.close();
+  };
+
   const leaveCallScreen = () => {
+    if (inApp) {
+      closeCallWindow();
+      return;
+    }
     if (canCloseWindow) {
       window.close();
       return;
@@ -123,16 +151,45 @@ const VideoCallPage = () => {
   const remoteVideosRef = useRef({});
   
   // Get call info on component mount
+  // A caller that only knows the room (the phone app after Accept, a Join
+  // button) arrives without a token, or with a stale one for another room.
+  // Without a token the page went straight to "Call Ended", so mint one here —
+  // the identity must be this user's id (TwilioIdentityPolicy).
   useEffect(() => {
-    const storedCallInfo = localStorage.getItem('videoCallInfo');
-    if (storedCallInfo) {
-      const info = JSON.parse(storedCallInfo);
+    let cancelled = false;
+    let info = {};
+    try { info = JSON.parse(localStorage.getItem('videoCallInfo') || '{}') || {}; } catch { info = {}; }
+    if (info.token && info.roomName === roomName) {
       setCallInfo(info);
-      console.log('Call info loaded:', info);
-    } else {
-      setError('No call information found. Please start a new call.');
+      return undefined;
     }
-  }, []);
+    const identity = getStoredUserId();
+    if (!identity || !roomName) {
+      setError('No call information found. Please start a new call.');
+      return undefined;
+    }
+    setIsConnecting(true);
+    generateVideoToken({ roomName, participantName: identity })
+      .then((res) => {
+        if (cancelled) return;
+        const next = {
+          ...(info.roomName === roomName ? info : {}),
+          roomName,
+          participantName: participantName || info.participantName,
+          identity,
+          token: res.token,
+          displayNames: { ...(info.roomName === roomName ? info.displayNames : {}), [identity]: participantName },
+        };
+        localStorage.setItem('videoCallInfo', JSON.stringify(next));
+        setCallInfo(next);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setIsConnecting(false);
+        setError('Could not join the call: ' + (e?.message || 'please try again.'));
+      });
+    return () => { cancelled = true; };
+  }, [roomName, participantName]);
 
   // Start call when call info is available
   useEffect(() => {
@@ -164,6 +221,8 @@ const VideoCallPage = () => {
       setRoom(null);
     }
     
+    document.getElementById('remote-audio-sink')?.remove();
+
     // Reset all state
     setIsConnected(false);
     setIsConnecting(false);
@@ -279,7 +338,11 @@ const VideoCallPage = () => {
       const videoElement = track.attach();
       videoElement.style.width = '100%';
       videoElement.style.height = '100%';
-      videoElement.style.objectFit = 'cover';
+      // A shared screen must be seen whole: 'cover' cropped its sides on a
+      // portrait phone. Cameras keep 'cover' so faces fill the tile.
+      const isScreen = track.name === 'screen';
+      videoElement.style.objectFit = isScreen ? 'contain' : 'cover';
+      videoElement.style.background = isScreen ? '#000' : '';
       
       // Create or update participant div
       let participantDiv = document.getElementById(`participant-${participant.sid}`);
@@ -303,12 +366,31 @@ const VideoCallPage = () => {
       }
       participantDiv.appendChild(videoElement);
     }
+
+    // Remote audio was never attached, so neither side heard the other.
+    // Kept in a hidden container: a participant's audio can arrive before their
+    // video tile exists. playsinline + autoplay for iOS web views.
+    if (track.kind === 'audio') {
+      const audioElement = track.attach();
+      audioElement.autoplay = true;
+      audioElement.setAttribute('playsinline', '');
+      audioElement.dataset.participant = participant.sid;
+      let sink = document.getElementById('remote-audio-sink');
+      if (!sink) {
+        sink = document.createElement('div');
+        sink.id = 'remote-audio-sink';
+        sink.style.display = 'none';
+        document.body.appendChild(sink);
+      }
+      sink.appendChild(audioElement);
+      audioElement.play?.().catch(() => {});
+    }
   };
   
   const handleTrackUnsubscribed = (track, participant) => {
     console.log('Handling unsubscribed track:', track.kind, 'from participant:', participant.identity);
     
-    if (track.kind === 'video') {
+    if (track.kind === 'video' || track.kind === 'audio') {
       const attachedElements = track.detach();
       attachedElements.forEach(element => element.remove());
     }
@@ -328,9 +410,7 @@ const VideoCallPage = () => {
     cleanup();
     
     // Close window after a delay
-    setTimeout(() => {
-      window.close();
-    }, 2000);
+    setTimeout(closeCallWindow, inApp ? 0 : 2000);
   };
   
   const leaveRoom = () => {
@@ -340,9 +420,7 @@ const VideoCallPage = () => {
       room.disconnect();
     }
     
-    setTimeout(() => {
-      window.close();
-    }, 1000);
+    setTimeout(closeCallWindow, inApp ? 0 : 1000);
   };
   
   const toggleMute = () => {
@@ -530,6 +608,12 @@ const VideoCallPage = () => {
         </div>
       </div>
       
+      {/* Consented transcription: the clinician asks, the patient allows or
+          declines, either can stop. Audio is never stored — only text. */}
+      {/* For the caller: ringing / declined / no answer, with Ring again. */}
+      {roomName ? <CallRingStatus roomName={roomName} /> : null}
+      {room ? <SessionTranscriber room={room} roomName={roomName} /> : null}
+
       <div className="video-controls">
         <button 
           className={`control-btn ${isMuted ? 'muted' : ''}`} 
@@ -547,13 +631,15 @@ const VideoCallPage = () => {
           {isVideoOff ? <VideoOff size={20} /> : <VideoIcon size={20} />}
         </button>
         
-        <button 
-          className={`control-btn ${isScreenSharing ? 'screen-sharing' : ''}`} 
-          onClick={toggleScreenShare}
-          title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
-        >
-          {isScreenSharing ? <Square size={20} /> : <Monitor size={20} />}
-        </button>
+        {canShareScreen ? (
+          <button 
+            className={`control-btn ${isScreenSharing ? 'screen-sharing' : ''}`} 
+            onClick={toggleScreenShare}
+            title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
+          >
+            {isScreenSharing ? <Square size={20} /> : <Monitor size={20} />}
+          </button>
+        ) : null}
         
         <button 
           className="control-btn end-call" 

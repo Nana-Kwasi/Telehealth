@@ -5,15 +5,15 @@ import PublicPageShell from './PublicPageShell';
 const FAQS = [
   {
     q: 'How do I start therapy?',
-    a: 'From the home page choose Mental Health Therapy, pick individual / couples / teen, and complete the short questionnaire. You can create an account when prompted and continue into your therapist dashboard.',
+    a: 'From the home page choose Psychology & Counseling, pick individual / couples / teen, and complete the short questionnaire. You can create an account when prompted and continue into your therapist dashboard.',
   },
   {
     q: 'How do I book a doctor?',
-    a: 'Use “Medical Consultations” on the home page to open doctor search. Pick a provider, follow booking steps, and sign in when required to confirm your appointment.',
+    a: 'Use “Medical Care” on the home page to open doctor search. Pick a provider, follow booking steps, and sign in when required to confirm your appointment.',
   },
   {
-    q: 'What is home-care on NessaHub?',
-    a: 'Home-care lets you browse approved nurses, request visits, and track bookings. Start from the home page “Home-Care” card or go to Home Care in the navigation when available.',
+    q: 'How do I book psychiatry or a second opinion?',
+    a: 'Choose Psychiatry or Second Opinion from the home page. Those flows are set up for specialist evaluation and independent review without forcing a full therapy intake.',
   },
   {
     q: 'Is video calling secure?',
@@ -55,7 +55,7 @@ export default function FaqsPage() {
     <PublicPageShell
       eyebrow="Help"
       title="Frequently asked questions"
-      lead="Quick answers about therapy, medical care, home-care, and the platform."
+      lead="Quick answers about therapy, medical care, psychiatry, and the platform."
     >
       <div className="public-card" style={{ marginBottom: '1rem' }}>
         <label htmlFor="faq-filter" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: '0.35rem' }}>Search</label>

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import AdherencePanel from '../../Common/AdherencePanel';
+import RecordGapsPanel from '../../Common/RecordGapsPanel';
+import SmartDocumentUpload from '../../Common/SmartDocumentUpload';
+import CodingAssistPanel from '../../Common/CodingAssistPanel';
+import RecordExplorer from '../../Common/RecordExplorer';
 import {
   ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video,
   AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
@@ -468,6 +473,25 @@ export default function DoctorPatientDetail({ profile }) {
       <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => navigate('/dashboard/patients')} style={{ marginBottom: '1.25rem' }}>
         <ChevronLeft size={16} /> Back to Patients
       </button>
+
+      {/* How they have actually been taking their medication. Hides itself
+          when nothing has been logged — an empty chart would read as perfect
+          adherence rather than as no data. */}
+      <AdherencePanel patientId={patientId} />
+
+      {/* What is missing from this record, by rule — nothing renders when complete. */}
+      <RecordGapsPanel patientId={patientId} />
+
+      {/* A document the patient handed over: read, name-checked, filed by you. */}
+      <SmartDocumentUpload patientId={patientId} />
+
+      {/* Codes suggested from your own documentation, approved by you. */}
+      <CodingAssistPanel patientId={patientId} />
+
+      {/* Search this patient's record in plain words, and read it in order.
+          Both halves come from the same server retrieval, so they cannot
+          disagree about what is on file. */}
+      <RecordExplorer subjectId={patientId} title="This patient's record" />
 
       {/* Patient Header */}
       <div className="doctor-card" style={{ marginBottom: '1.25rem' }}>

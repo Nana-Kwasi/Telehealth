@@ -174,3 +174,18 @@
 @media (max-width: 520px) {
   .nh-notif-panel { position: fixed; top: 64px; right: 0.75rem; left: 0.75rem; width: auto; }
 }
+
+/* ── App-level mount ─────────────────────────────────────────────────────────
+   The bell is rendered once in App.js for every signed-in user, so it cannot
+   rely on any single dashboard's header for placement. Pinned below the navbar,
+   above dashboard content but below modals (which sit at 9999). */
+.nh-notif-floating {
+  position: fixed;
+  top: 74px;
+  right: 22px;
+  z-index: 900;
+}
+
+@media (max-width: 640px) {
+  .nh-notif-floating { top: 66px; right: 12px; }
+}

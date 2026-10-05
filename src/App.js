@@ -6,6 +6,7 @@ import Payment from './component/Payment/Payment';
 import Navbar from './component/Layout/Navbar';
 import { resolveRole, onAuthStateChanged, performLogout } from './component/Auth/authService';
 import { hasActiveSession } from './services/apiClient';
+import IncomingCall from './component/Common/IncomingCall';
 import { refreshCurrentLocation } from './services/liveLocation';
 import useSystemConfig, { cfg, useFeatureFlagsConfig } from './hooks/useSystemConfig';
 import { logAction, A } from './utils/auditLogger';
@@ -54,6 +55,7 @@ import ParentConsent from './component/TeenTherapy/ParentConsent';
 import CoupleInitiation from './component/CoupleTherapy/CoupleInitiation';
 import CoupleInviteEntry from './component/CoupleTherapy/CoupleInviteEntry';
 import CouplePartnerBWelcome from './component/CoupleTherapy/CouplePartnerBWelcome';
+import CoupleAccept from './component/CoupleTherapy/CoupleAccept';
 import CoupleIntake from './component/CoupleTherapy/CoupleIntake';
 import CoupleWaitingPartner from './component/CoupleTherapy/CoupleWaitingPartner';
 import CoupleDashboard from './component/CoupleTherapy/CoupleDashboard';
@@ -61,6 +63,11 @@ import MatchTherapist from './component/Match/MatchTherapist';
 import HomeCareNurseDashboard from './component/Dashboard/HomeCare/HomeCareNurseDashboard';
 import DashboardLocationGate from './component/Common/DashboardLocationGate';
 import AuthenticatedLandingRedirect from './component/Common/AuthenticatedLandingRedirect';
+import SecondOpinionIntake from './component/SecondOpinion/SecondOpinionIntake';
+import MedPsychSignUp from './component/MedPsych/MedPsychSignUp';
+import MedPsychPsychiatrists from './component/MedPsych/MedPsychPsychiatrists';
+import MedPsychBooking from './component/MedPsych/MedPsychBooking';
+import NotificationCenter from './component/Common/NotificationCenter';
 
 function LoadingScreen() {
   return (
@@ -144,6 +151,9 @@ export default function App() {
   // a denied permission keeps the last known location.
   useEffect(() => {
     if (!session.role || session.role === 'guest') return;
+    // Not inside a call: the phone app opens the call page in a web view, where
+    // this surfaced a location prompt over the call.
+    if (window.location.pathname.startsWith('/video-call')) return;
     refreshCurrentLocation().catch(() => {});
   }, [session.role]);
 
@@ -238,10 +248,25 @@ export default function App() {
 
   const hideNavbar =
     location.pathname.startsWith('/home-care') && location.pathname !== '/home-care/sign-up';
+  // The call page is full-screen: no site navbar or bell over the video.
+  const inCall = location.pathname.startsWith('/video-call');
 
   return (
     <div>
-      <Navbar session={session} />
+      {inCall ? null : <Navbar session={session} />}
+      {/* Rendered once for any signed-in user rather than per dashboard: every
+          module writes notifications, but only the therapist shell had a bell.
+          Fixed-position so it does not depend on each dashboard's own header. */}
+      {session?.role && !inCall ? (
+        <div className="nh-notif-floating">
+          <NotificationCenter />
+        </div>
+      ) : null}
+      {/* Rings over any screen when a clinician calls. Not shown inside the
+          call itself, and clinicians are never rung. */}
+      {session?.role && !location.pathname.startsWith('/video-call')
+        && !['doctor', 'therapist', 'admin'].includes(String(session.role).toLowerCase())
+        ? <IncomingCall /> : null}
       <div className={hideNavbar ? 'hcp-app-root' : 'container'}>
         <DashboardLocationGate role={session.role} profile={session.profile} activePath={location.pathname} />
         <Routes>
@@ -253,9 +278,21 @@ export default function App() {
           <Route path="/couple/initiation" element={<CoupleInitiation />} />
           <Route path="/couple/join" element={<CoupleInviteEntry />} />
           <Route path="/couple/welcome" element={<CouplePartnerBWelcome />} />
+          {/* Partner B sets a password against the draft — no account yet. */}
+          <Route path="/couple/accept" element={<CoupleAccept />} />
           <Route path="/couple/intake" element={<CoupleIntake />} />
           <Route path="/couple/waiting" element={<CoupleWaitingPartner />} />
           <Route path="/couple/dashboard" element={<CoupleDashboard />} />
+          {/* MedPsych — second-opinion psychiatry. Deliberately outside the
+              therapy onboarding: these users skip the questionnaire entirely. */}
+          <Route path="/medpsych" element={<MedPsychSignUp />} />
+          {/* Second Opinion shares the sign-up gate and the specialist/booking
+              screens; only the intake differs, so it enters at the same policy
+              gate carrying its own service type. */}
+          <Route path="/second-opinion" element={<MedPsychSignUp service="second_opinion" />} />
+          <Route path="/second-opinion/intake" element={<SecondOpinionIntake />} />
+          <Route path="/medpsych/psychiatrists" element={<MedPsychPsychiatrists />} />
+          <Route path="/medpsych/booking" element={<MedPsychBooking />} />
           <Route path="/questionnaire" element={<Questionnaire />} />
           <Route path="/payment"       element={<Payment />} />
           <Route path="/match-therapist" element={<MatchTherapist />} />

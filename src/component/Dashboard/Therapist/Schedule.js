@@ -31,6 +31,7 @@ import {
   Timestamp
 } from '../../../services/firestoreShim';
 import './Schedule.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
 
 export default function TherapistSchedule() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -273,7 +274,7 @@ export default function TherapistSchedule() {
                 <div key={therapist.id} className="therapist-item">
                   <div className="therapist-avatar">
                     {therapist.photoURL ? (
-                      <img src={therapist.photoURL} alt={therapist.name} />
+                      <img src={resolveFileUrl(therapist.photoURL)} alt={therapist.name} />
                     ) : (
                       <User size={20} />
                     )}
@@ -380,7 +381,7 @@ export default function TherapistSchedule() {
                 <div key={therapist.id} className="therapist-column-header">
                   <div className="therapist-avatar">
                     {therapist.photoURL ? (
-                      <img src={therapist.photoURL} alt={therapist.name} />
+                      <img src={resolveFileUrl(therapist.photoURL)} alt={therapist.name} />
                     ) : (
                       <User size={20} />
                     )}

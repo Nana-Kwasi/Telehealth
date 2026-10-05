@@ -1,16 +1,9 @@
+import BillingAssistantPanel from '../../Common/BillingAssistantPanel';
 import React from 'react';
+import AiAssistantFab from '../../Common/AiAssistantFab';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home,
-  MessageSquare,
-  Video,
-  Calendar,
-  BookOpen,
-  CreditCard,
-  Settings,
-  HelpCircle,
-  LogOut,
-  User
+  Home, MessageSquare, Video, Calendar, BookOpen, CreditCard, Settings, HelpCircle, LogOut, User, Bell, Sparkles, Pill, Leaf, ClipboardList, Search,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -19,6 +12,8 @@ import '../DashboardShell.css';
 
 // Import all client dashboard components
 import ClientHome from './Home';
+import SecondOpinionHome from '../../SecondOpinion/SecondOpinionHome';
+import BecomeMember from '../../SecondOpinion/BecomeMember';
 import ClientMessages from './Messages';
 import ClientVideoCall from './VideoCall';
 import ClientSchedule from './Schedule';
@@ -34,6 +29,15 @@ import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import CoupleClientGate from '../../Common/CoupleClientGate';
+import '../../../styles/zencare.css';
+import '../../../styles/zencare-therapy.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
+import NotificationCentre from '../../Common/NotificationCentre';
+import AiHealthAssistant from '../../Common/AiHealthAssistant';
+import CareCentre from '../../Common/CareCentre';
+import ClientWellness from '../../Common/ClientWellness';
+import MyCarePlan from '../../Common/MyCarePlan';
+import RecordExplorer from '../../Common/RecordExplorer';
 
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
@@ -43,13 +47,30 @@ export default function ClientDashboard({ profile }) {
   const clientData = JSON.parse(localStorage.getItem('th.onboard') || '{}');
   const therapistName = clientData.assignedTherapistName || 'Your therapist';
 
+  // A Second Opinion client bought ONE review, not a programme. Calendar and
+  // Resources describe ongoing care they do not have, so they are hidden rather
+  // than shown empty — and Home becomes the case view. The full dashboard
+  // returns the moment they convert to membership.
+  const isSecondOpinion = (profile?.membershipTier || profile?.tier) === 'second_opinion';
+
   const navigationItems = [
-    { path: '/dashboard', icon: Home, label: 'Home', component: ClientHome },
+    { path: '/dashboard', icon: Home, label: isSecondOpinion ? 'My case' : 'Home', component: ClientHome },
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Therapist', component: ClientMessages },
     { path: '/dashboard/video', icon: Video, label: 'Schedule', component: ClientVideoCall },
-    { path: '/dashboard/schedule', icon: Calendar, label: 'Calendar', component: ClientSchedule },
-    { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: ClientResources },
+    ...(isSecondOpinion ? [] : [
+      { path: '/dashboard/schedule', icon: Calendar, label: 'Calendar', component: ClientSchedule },
+      { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: ClientResources },
+      /* The receiving end of the therapist's wellness messages. Those went out
+         as email only, so there was no way to re-read one — or to see any of
+         them at all with wellness email switched off. */
+      { path: '/dashboard/wellness', icon: Leaf, label: 'Wellness', component: ClientWellness },
+      { path: '/dashboard/care-plan', icon: ClipboardList, label: 'My Care Plan', component: MyCarePlan },
+      { path: '/dashboard/my-records', icon: Search, label: 'My Records', component: RecordExplorer },
+    ]),
     { path: '/dashboard/billing', icon: CreditCard, label: 'Billing', component: ClientBilling },
+    { path: '/dashboard/notifications', icon: Bell, label: 'Notifications', component: NotificationCentre },
+    { path: '/dashboard/ai-assistant', icon: Sparkles, label: 'NessaHub Assistant', component: AiHealthAssistant },
+    { path: '/dashboard/my-care', icon: Pill, label: 'My Care', component: CareCentre },
     { path: '/dashboard/settings', icon: Settings, label: 'Settings', component: ClientSettings },
     { path: '/dashboard/support', icon: HelpCircle, label: 'Support', component: ClientSupport },
     { path: '/dashboard/report-issue', icon: User, label: 'Report Issue', component: GlobalReportForm }
@@ -96,6 +117,7 @@ export default function ClientDashboard({ profile }) {
 
   return (
     <CoupleClientGate profile={profile}>
+    <div className="zc zc-therapy zc-app-ground">
     <div className="client-dashboard">
       {/* Sidebar */}
       <aside className="client-sidebar">
@@ -106,7 +128,7 @@ export default function ClientDashboard({ profile }) {
           <div className="user-info">
             <div className="user-avatar" onClick={() => document.getElementById('profile-image-input').click()}>
               {profile?.photoURL ? (
-                <img src={profile.photoURL} alt="Profile" />
+                <img src={resolveFileUrl(profile.photoURL)} alt="Profile" />
               ) : (
                 <span>{profile?.name ? profile.name.charAt(0).toUpperCase() : 'C'}</span>
               )}
@@ -160,13 +182,27 @@ export default function ClientDashboard({ profile }) {
       <main className="client-main">
         <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
         <Routes>
-          <Route path="/" element={<ClientHome profile={profile} />} />
+          <Route
+            path="/"
+            element={isSecondOpinion
+              ? <SecondOpinionHome profile={profile} />
+              : <ClientHome profile={profile} />}
+          />
+          {/* Reachable from the case dashboard's upgrade card. Lives inside
+              the dashboard because only a signed-in limited account can use it. */}
+          <Route path="/become-member" element={<BecomeMember profile={profile} />} />
           <Route path="/messages" element={<ClientMessages />} />
           <Route path="/video" element={<ClientVideoCall profile={profile} />} />
           <Route path="/schedule" element={<ClientSchedule />} />
           <Route path="/profile" element={<ClientProfile />} />
           <Route path="/resources" element={<ClientResources />} />
-          <Route path="/billing" element={<ClientBilling />} />
+          <Route path="/wellness" element={<ClientWellness peopleNoun="therapist" />} />
+          <Route path="/care-plan" element={<MyCarePlan />} />
+          <Route path="/my-records" element={<RecordExplorer title="My records" />} />
+          <Route path="/billing" element={<><BillingAssistantPanel /><ClientBilling /></>} />
+          <Route path="/notifications" element={<NotificationCentre />} />
+          <Route path="/ai-assistant" element={<AiHealthAssistant />} />
+          <Route path="/my-care" element={<CareCentre userId={profile?.id || profile?.uid} />} />
           <Route path="/settings" element={<ClientSettings />} />
           <Route path="/support" element={<ClientSupport />} />
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="client" />} />
@@ -174,7 +210,12 @@ export default function ClientDashboard({ profile }) {
           <Route path="/resources/worksheet/:worksheetId" element={<WorksheetView />} />
           <Route path="/resources/note/:noteId" element={<NoteView />} />
         </Routes>
+        {/* Floating, so the assistant is reachable from every screen without
+            navigating away from what you are looking at. */}
+        <AiAssistantFab />
+
       </main>
+    </div>
     </div>
     </CoupleClientGate>
   );

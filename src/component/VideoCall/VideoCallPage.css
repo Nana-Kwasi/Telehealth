@@ -17,6 +17,9 @@
   bottom: 0;
   background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
   opacity: 0.3;
+  /* Decorative only. As a positioned layer it painted above the unpositioned
+     Transcribe / Ring-again bars and swallowed their clicks. */
+  pointer-events: none;
 }
 .video-call-page {
     height: 100vh;
@@ -599,5 +602,74 @@
   .video-call-page .control-btn.end-call {
     width: 72px;
     height: 46px;
+  }
+}
+
+/* ── Phones: the other person full-screen, you as a small corner tile ─────────
+   On desktop the layout is "you (300px) beside a grid of ≥400px tiles". On a
+   ~390px phone that is ~2x the width, so the other person's video was pushed
+   off the right edge. Here the remote grid fills the area and the local
+   preview floats picture-in-picture. !important beats the inline 300×200. */
+@media (max-width: 640px) {
+  .video-call-page .call-header {
+    padding: 8px 12px;
+  }
+
+  .video-call-page .call-header h1 {
+    font-size: 0.95rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .video-call-page .call-header p {
+    display: inline;
+    margin: 0 6px;
+    font-size: 0.75rem;
+  }
+
+  .video-call-page .video-container {
+    position: relative;
+    display: block;
+    padding: 8px;
+  }
+
+  .video-call-page .remote-videos {
+    height: 100%;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .video-call-page .remote-participant {
+    min-height: 0;
+    height: 100%;
+    border-width: 0;
+  }
+
+  .video-call-page .waiting-participant {
+    height: 100%;
+  }
+
+  .video-call-page .local-video-container {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+  }
+
+  .video-call-page .local-video {
+    width: 104px !important;
+    height: 148px !important;
+    min-height: 0;
+    border-width: 2px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  }
+
+  .video-call-page .local-video-container .video-label {
+    bottom: 4px;
+    left: 4px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
   }
 }

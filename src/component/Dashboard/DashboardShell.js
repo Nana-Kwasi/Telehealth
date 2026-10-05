@@ -1,11 +1,17 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { clientRoutes, therapistRoutes } from './routes';
+import { clientRoutes, therapistRoutes, secondOpinionRoutes } from './routes';
 import './DashboardShell.css';
 import { avatarUrlOf, initialsOf } from '../../utils/profileImage';
 
 export default function DashboardShell({ role, profile }) {
-  const routes = role === 'therapist' ? therapistRoutes : clientRoutes;
+  // A second-opinion client gets the narrow nav: one case, one consultation,
+  // no programme. The tier comes from the profile rather than the role, since
+  // they ARE a client — just one who has bought something smaller.
+  const tier = profile?.membershipTier || profile?.tier;
+  const routes = role === 'therapist'
+    ? therapistRoutes
+    : (tier === 'second_opinion' ? secondOpinionRoutes : clientRoutes);
 
 
   

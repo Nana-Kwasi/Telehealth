@@ -1,0 +1,269 @@
+/* This stylesheet was written for an earlier DARK navy/gold theme. The app is
+   light (--zc-bg #f1f1ef, --zc-surface #ffffff) and none of those tokens exist
+   any more, so every colour declaration referencing them was being dropped as
+   invalid at computed-value time — text fell back to inherited colours and the
+   only thing that survived was a literal dark-navy background. Remapped onto
+   the live light tokens. Contrast measured, not eyeballed: ink-4 (2.81:1) fails
+   AA, so faint text uses ink-3 (5.33:1). */
+
+/* MedPsych screens. Layout only — every colour, face and control comes from
+   the ZenCare tokens in styles/zencare.css. */
+
+.mp-signup { padding: 3.5rem 0 4rem; }
+.mp-signup-inner { max-width: 760px; }
+
+.mp-signup-title { margin: 1.1rem 0 0.85rem; }
+.mp-signup-lead { max-width: 62ch; margin-bottom: 2.25rem; }
+
+.mp-signup-card { padding: 2rem; }
+
+.mp-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.25rem;
+}
+
+.mp-optional {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--zc-ink-3);
+  opacity: 0.8;
+}
+
+.mp-policy-lead { margin-bottom: 0.9rem; }
+.mp-policy-list { gap: 0.6rem; }
+
+.mp-error {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--zc-danger);
+}
+
+.mp-submit-row { margin-top: 1.5rem; }
+
+.mp-gate-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+  color: var(--zc-accent);
+}
+
+/* The promise the flow actually keeps — worth saying plainly on the screen
+   where someone is deciding whether to type their details in. */
+.mp-nodb-note {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--zc-line);
+  text-align: center;
+}
+
+/* ── Psychiatrist picker ────────────────────────────────────────────────── */
+
+.mp-pick { padding: 3rem 0 4rem; }
+.mp-pick-head { margin-bottom: 2rem; }
+
+.mp-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.1rem;
+}
+
+/* The whole card is the target, so it is a <button> — which is why it must
+   declare its own text colour rather than inheriting the UA's black. */
+.mp-doc {
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--zc-ink-2);
+}
+.mp-doc-top { display: flex; align-items: center; gap: 0.9rem; }
+
+.mp-doc-avatar {
+  width: 54px; height: 54px; flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--zc-line-2);
+  background: var(--zc-accent-wash);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--zc-sans);
+  font-size: 1.3rem;
+  color: var(--zc-accent);
+}
+
+.mp-doc-name { font-family: var(--zc-sans); font-size: 1.25rem; color: var(--zc-ink); margin: 0; }
+.mp-doc-spec { font-size: 0.78rem; color: var(--zc-ink-3); margin: 0.15rem 0 0; }
+.mp-doc-body { margin-top: 0.9rem; font-size: 0.85rem; color: var(--zc-ink-2); line-height: 1.55; }
+
+.mp-doc-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 1.1rem; padding-top: 0.9rem;
+  border-top: 1px solid var(--zc-line);
+}
+
+.mp-doc-rate { font-family: var(--zc-sans); font-size: 1.15rem; color: var(--zc-ink); }
+.mp-doc-pick { font-size: 0.7rem; letter-spacing: var(--zc-track-wide); text-transform: uppercase; color: var(--zc-accent); font-weight: 800; }
+
+.mp-empty { text-align: center; padding: 3rem 1rem; color: var(--zc-ink-3); }
+
+/* ── Booking + payment ──────────────────────────────────────────────────── */
+
+.mp-book { padding: 3rem 0 4rem; }
+.mp-book-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.mp-summary-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 1rem; padding: 0.55rem 0;
+  font-size: 0.88rem; color: var(--zc-ink-3);
+}
+.mp-summary-row strong { color: var(--zc-ink); font-weight: 600; }
+.mp-summary-total {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-top: 0.75rem; padding-top: 0.9rem;
+  border-top: 1px solid var(--zc-line);
+  font-family: var(--zc-sans); font-size: 1.35rem; color: var(--zc-ink);
+}
+
+.mp-slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 0.5rem; }
+
+/* Labelled choices ("Current treatment plan") rather than time slots. A rigid
+   104px column broke those across three lines; these size to their own text. */
+.mp-slot-grid--labels { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* These were written against an older DARK palette: --zc-navy-line, --zc-muted,
+   --zc-gold and --zc-gold-bright are not defined anywhere, so every colour here
+   except the navy background was dropped as invalid — leaving a dark slab on a
+   white page with a selected state you could barely see. Rebuilt on the light
+   tokens, borrowing .zc-check's selection language so a chosen chip reads the
+   same here as everywhere else. */
+.mp-slot {
+  padding: 0.62rem 0.95rem;
+  border-radius: var(--zc-radius-sm);
+  border: 1px solid var(--zc-line-2);
+  background: var(--zc-surface);
+  color: var(--zc-ink-2);
+  font-family: var(--zc-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.mp-slot:hover { border-color: var(--zc-accent-light); }
+
+.mp-slot:focus-visible {
+  outline: 2px solid var(--zc-accent);
+  outline-offset: 2px;
+}
+.mp-slot--on {
+  border-color: var(--zc-accent);
+  background: var(--zc-accent-wash);
+  color: var(--zc-accent);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .mp-book-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .mp-field-grid { grid-template-columns: 1fr; }
+  .mp-signup-card { padding: 1.25rem; }
+}
+
+/* The emblem, placed as it is on the ZenCare hero: bleeding off the right edge,
+   behind the content.
+
+   The artwork has no alpha — its navy is baked in — so it cannot simply be
+   dropped on the page at partial opacity without reading as a pasted rectangle.
+   Two things make it sit properly:
+
+     1. The ground tokens are sampled from this exact file, so the colour under
+        it already matches.
+     2. A mask fades its left and bottom edges into the page, which hides the
+        seam where the artwork's own silk gradient meets ours.
+
+   It is decorative, so it never takes pointer events, and it drops out entirely
+   on small screens where it would compete with the form rather than frame it. */
+.mp-signup { position: relative; overflow: hidden; }
+
+.mp-emblem {
+  position: absolute;
+  top: 2%;
+  right: -6%;
+  width: 620px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.9;
+  -webkit-mask-image:
+    linear-gradient(to left, #000 55%, transparent 96%),
+    linear-gradient(to top, #000 60%, transparent 98%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to left, #000 55%, transparent 96%),
+    linear-gradient(to top, #000 60%, transparent 98%);
+  mask-composite: intersect;
+}
+
+.mp-signup-inner { position: relative; z-index: 1; }
+
+@media (max-width: 1280px) {
+  .mp-emblem { width: 460px; opacity: 0.5; right: -14%; }
+}
+
+@media (max-width: 980px) {
+  .mp-emblem { display: none; }
+}
+
+/* ── Second Opinion case stepper ─────────────────────────────────────────────
+   The one control these screens need that has no existing equivalent: a case
+   moving through submitted → assigned → under review → delivered.
+
+   Layout only. Every colour comes from the --zc-* tokens already defined in
+   zencare.css, so it inherits the module's palette rather than introducing a
+   second one. */
+
+.so-stages {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.so-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--zc-glass-border, rgba(255, 255, 255, 0.75));
+  background: var(--zc-glass, rgba(255, 255, 255, 0.6));
+  color: var(--zc-ink-3, #44474f);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* A completed stage is filled with the accent; the rest stay quiet, so the
+   position in the sequence reads at a glance. */
+.so-stage--done {
+  background: var(--zc-accent-wash, rgba(120, 112, 232, 0.10));
+  border-color: var(--zc-accent, #5046bd);
+  color: var(--zc-accent-deep, #3f3796);
+}
+
+@media (max-width: 560px) {
+  .so-stages { flex-direction: column; align-items: stretch; }
+  .so-stage { justify-content: flex-start; }
+}

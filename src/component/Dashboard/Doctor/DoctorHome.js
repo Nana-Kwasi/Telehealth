@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import {
+  DashboardGrid, HeroBanner, StatTile, Panel, ScoreRing, MetricTile,
+  PersonRow, ActivityRow, ShortcutTile, PromoCard, Empty,
+  TopBar, Spark, BarRow,
+} from '../../Common/dashboard/DashboardKit';
+import WeatherCard from '../../Common/WeatherCard';
+import DailyBrief from '../../Common/DailyBrief';
+import SessionsToReview from '../../Common/SessionsToReview';
+import InboxTriagePanel from '../../Common/InboxTriagePanel';
+import clinicianHero from '../../../assets/clinician-hero.jpg';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Calendar, Clock, CheckCircle, AlertCircle, FileText,
   Video, TrendingUp, Activity, Pill, ChevronRight, Star,
-  ChevronLeft, ShoppingBag, Search, X,
+  ChevronLeft, ShoppingBag, Search, X, FlaskConical, ClipboardList,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -40,9 +50,79 @@ function StatusBadge({ status }) {
   );
 }
 
+
+/* ── Render helpers ───────────────────────────────────────────────────────
+   All reading REAL appointment records. Defensive about shape because
+   appointments arrive with three different date field names. */
+
+function dApptDate(a) {
+  const raw = a?.scheduledAt || a?.scheduledTime || a?.appointmentDate || a?.date;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function apptWhen(a) {
+  const d = dApptDate(a);
+  if (!d) return 'Time not set';
+  const today = new Date();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === today.toDateString()) return `Today · ${time}`;
+  const tomorrow = new Date(today.getTime() + 86400000);
+  if (d.toDateString() === tomorrow.toDateString()) return `Tomorrow · ${time}`;
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} · ${time}`;
+}
+
+function apptInitials(name) {
+  return String(name || '?')
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w[0]).join('').toUpperCase() || '?';
+}
+
+function apptStatusLabel(a) {
+  const s = String(a?.status || '').toLowerCase();
+  if (s === 'confirmed') return 'Confirmed';
+  if (s === 'pending')   return 'Needs confirming';
+  if (s === 'completed') return 'Completed';
+  return 'Scheduled';
+}
+
+function apptStatusTone(a) {
+  const s = String(a?.status || '').toLowerCase();
+  if (s === 'confirmed') return 'confirmed';
+  if (s === 'pending')   return 'alert';
+  return 'scheduled';
+}
+
+function docActivityIcon(act) {
+  const t = String(act?.type || act?.action || '').toLowerCase();
+  if (t.includes('prescri')) return Pill;
+  if (t.includes('lab') || t.includes('scan') || t.includes('diagnos')) return FlaskConical;
+  if (t.includes('note'))    return FileText;
+  if (t.includes('appoint') || t.includes('consult')) return Calendar;
+  return Activity;
+}
+
+function docActivityTone(act) {
+  const t = String(act?.type || act?.action || '').toLowerCase();
+  if (t.includes('prescri')) return 'lilac';
+  if (t.includes('lab') || t.includes('scan')) return 'teal';
+  if (t.includes('note'))    return 'green';
+  return 'blue';
+}
+
 export default function DoctorHome({ profile }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ patients: 0, todayAppts: 0, pending: 0, completed: 0, totalRevenue: 0, weekAppts: 0 });
+
+  // Ticking clock for the hero. Declared with the other hooks so it can never
+  // sit below an early return.
+  const [clockNow, setClockNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setClockNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const [todayAppointments, setTodayAppointments] = useState([]);
   const [recentPatients, setRecentPatients] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
@@ -67,6 +147,62 @@ export default function DoctorHome({ profile }) {
   // Calendar state
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
+
+  const greetingWord = (() => {
+    const h = clockNow.getHours();
+    return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  })();
+
+
+  /** Soonest future consultation across everything loaded. */
+  const nextAppt = useMemo(() => {
+    const all = [...(todayAppointments || []), ...(allAppts || [])];
+    const seen = new Set();
+    return all
+      .filter((a) => {
+        if (!a?.id || seen.has(a.id)) return false;
+        seen.add(a.id);
+        const d = dApptDate(a);
+        return d && d.getTime() > Date.now() - 3600000
+          && String(a.status || '').toLowerCase() !== 'completed';
+      })
+      .sort((x, y) => dApptDate(x) - dApptDate(y))[0] || null;
+  }, [todayAppointments, allAppts]);
+
+  // Completed as a share of everything that is not still pending — the same
+  // definition the analytics screen uses, so the two cannot disagree.
+  const completionRate = (() => {
+    const done = Number(stats.completed) || 0;
+    const total = done + (Number(stats.pending) || 0) + (Number(stats.todayAppts) || 0);
+    return total > 0 ? Math.round((done / total) * 100) : 0;
+  })();
+
+  // Declared AFTER the state it reads. These sat above the useState calls,
+  // so `allAppts` was in its temporal dead zone and the page threw
+  // "Cannot access 'allAppts' before initialization" on first render.
+  const doctorName = profile?.name || profile?.fullName || 'Doctor';
+
+  /** Consultations grouped by month, newest twelve. Built from the real
+      appointment records already loaded, not a second fetch. */
+  const monthlyAppts = useMemo(() => {
+    const buckets = new Map();
+    (allAppts || []).forEach((a) => {
+      const d = dApptDate(a);
+      if (!d) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString(undefined, { month: 'short' });
+      const cur = buckets.get(key) || { label, count: 0 };
+      cur.count += 1;
+      buckets.set(key, cur);
+    });
+    return [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12).map(([, v]) => v);
+  }, [allAppts]);
+
+  const maxMonthlyAppts = useMemo(
+    () => Math.max(1, ...monthlyAppts.map((m) => m.count)),
+    [monthlyAppts],
+  );
 
   useEffect(() => { if (profile?.id) loadDashboardData(); }, [profile]);
 
@@ -332,98 +468,293 @@ export default function DoctorHome({ profile }) {
   const todayFmt = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   return (
-    <div className="doctor-page">
-      <LocationSummaryCard profile={profile} onEdit={() => navigate('/dashboard/settings')} />
+    <div className="dashboard-home nd-home">
+      <TopBar
+        placeholder="Search patients, prescriptions or appointments…"
+        onSearch={(q) => navigate(`/dashboard/patients${q ? `?q=${encodeURIComponent(q)}` : ''}`)}
+        pill={{ Icon: Activity, title: 'Your clinic', subtitle: 'at a glance' }}
+        avatar={profile?.photoURL}
+        name={doctorName}
+        onAvatar={() => navigate('/dashboard/settings')}
+      />
 
-      {/* ── White Welcome Banner ── */}
-      <div style={{
-        background: 'white',
-        borderRadius: 20,
-        padding: '1.75rem 2rem',
-        marginBottom: '1.5rem',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-        border: '1px solid #e2e8f0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '1.5rem',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 16,
-            background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <span style={{ fontSize: '1.6rem' }}>👨‍⚕️</span>
-          </div>
-          <div>
-            <p style={{ margin: '0 0 0.2rem', fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>{todayFmt}</p>
-            <h1 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-              {greeting}, Dr. {profile?.name?.split(' ')[0] || 'Doctor'} 👋
-            </h1>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: 20, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
-                <Activity size={11} /> {profile?.specialization || 'Medical Doctor'}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: 20, background: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0' }}>
-                <CheckCircle size={11} /> {stats.todayAppts} appt{stats.todayAppts !== 1 ? 's' : ''} today
-              </span>
-              {stats.pending > 0 && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.65rem', borderRadius: 20, background: '#fef9c3', color: '#b45309', border: '1px solid #fde68a' }}>
-                  <Clock size={11} /> {stats.pending} pending
+      <DashboardGrid>
+        {/* ── Hero ── */}
+        <HeroBanner
+          greeting={greetingWord}
+          name={doctorName}
+          headline="Your clinic"
+          accent="at a glance"
+          body={
+            nextAppt
+              ? `Your next consultation is with ${nextAppt.patientName || 'a patient'} ${apptWhen(nextAppt)}.`
+              : 'No consultations booked yet. Patients who book will appear here.'
+          }
+          actions={[
+            { label: 'Start a consultation', Icon: Video, onClick: () => navigate('/dashboard/video') },
+            { label: 'Appointments', Icon: Calendar, onClick: () => navigate('/dashboard/appointments') },
+          ]}
+          wide
+          art={clinicianHero}
+          aside={
+            <div className="nd-hero-meta">
+              <div className="nd-hero-clock">
+                <span className="nd-hero-time">
+                  {clockNow.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
-              )}
+                <span className="nd-hero-date">
+                  {clockNow.toLocaleDateString(undefined,
+                    { weekday: 'long', day: 'numeric', month: 'long' })}
+                </span>
+              </div>
+              {/* Weather moved here from the stat rail. */}
+              <div className="nd-hero-weather">
+                <WeatherCard profile={profile} compact />
+              </div>
+            </div>
+          }
+        />
+
+        {/* Counted server-side; the model only writes the sentence over those
+            figures, so the card is right even when the model is not there. */}
+        <DailyBrief role="DOCTOR" />
+
+        {/* Transcribed consultations whose notes are not saved yet. */}
+        <SessionsToReview />
+
+        {/* The companion to the brief's unread count: which of them need you
+            first. Sorted on request, because it costs a model call per message. */}
+        <InboxTriagePanel />
+
+        {/* ── Clinic overview ── */}
+        <Panel
+          title="Clinic overview"
+          subtitle="How your consultations are running."
+          action={{ label: 'Analytics', onClick: () => navigate('/dashboard/analytics') }}
+        >
+          <div className="nd-overview">
+            <ScoreRing
+              value={completionRate}
+              label="Completion rate"
+              caption="Consultations completed"
+              tone="#5b5bd6"
+            />
+            <div className="nd-metrics">
+              <MetricTile Icon={Calendar} tone="blue"   label="Today"
+                          value={stats.todayAppts} />
+              <MetricTile Icon={CheckCircle} tone="green" label="Completed"
+                          value={stats.completed} />
+              <MetricTile Icon={Clock} tone="amber"     label="Pending"
+                          value={stats.pending} />
+              <MetricTile Icon={Activity} tone="lilac"  label="This week"
+                          value={stats.weekAppts} />
             </div>
           </div>
-        </div>
+        </Panel>
 
-        <div style={{ display: 'flex', gap: '0.6rem', flexShrink: 0 }}>
-          {stats.pending > 0 && (
-            <button onClick={() => navigate('/dashboard/appointments')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.65rem 1.25rem', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: '#f59e0b', color: 'white', boxShadow: '0 4px 14px rgba(245,158,11,0.3)' }}>
-              <AlertCircle size={15} /> Review Pending
-            </button>
-          )}
-          <button onClick={() => navigate('/dashboard/patients')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.65rem 1.25rem', borderRadius: 12, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', border: '1.5px solid #e2e8f0', background: 'white', color: '#334155' }}>
-            <Users size={15} /> View Patients
-          </button>
-        </div>
-      </div>
+        {/* ── Today's consultations ── */}
+        <Panel
+          title="Today's consultations"
+          action={{ onClick: () => navigate('/dashboard/appointments') }}
+        >
+          {(todayAppointments || []).length === 0 ? (
+            <Empty>Nothing booked for today.</Empty>
+          ) : todayAppointments.slice(0, 4).map((a) => (
+            <PersonRow
+              key={a.id}
+              initials={apptInitials(a.patientName)}
+              name={a.patientName || 'Patient'}
+              meta={a.reason || a.type || 'Consultation'}
+              when={apptWhen(a)}
+              status={apptStatusLabel(a)}
+              statusTone={apptStatusTone(a)}
+              onClick={() => navigate('/dashboard/appointments')}
+            />
+          ))}
+        </Panel>
 
-      {/* ── Stat Cards ── */}
-      <div className="doctor-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <StatCard icon={Users}       value={stats.patients}   label="Total Patients"        color="#2563eb" bg="#eff6ff" onClick={() => navigate('/dashboard/patients')} />
-        <StatCard icon={Calendar}    value={stats.todayAppts} label="Today's Appointments"   color="#16a34a" bg="#dcfce7" />
-        <StatCard icon={Clock}       value={stats.pending}    label="Pending Confirmations"  color="#d97706" bg="#fef9c3" onClick={() => navigate('/dashboard/appointments')} />
-        <StatCard icon={CheckCircle} value={stats.completed}  label="Completed Sessions"     color="#7c3aed" bg="#f3e8ff" />
-        <StatCard icon={TrendingUp}  value={fmtCurrency(stats.totalRevenue)} label="Est. Revenue" color="#059669" bg="#d1fae5" />
-        <StatCard icon={Activity}    value={stats.weekAppts}  label="This Week"              color="#0284c7" bg="#e0f2fe" />
-      </div>
+        {/* ── Start a consultation ── */}
+        <PromoCard
+          Icon={Video}
+          title="Start a consultation"
+          body="Open a secure video room with a patient without scheduling ahead."
+          action={{ label: 'Open video', onClick: () => navigate('/dashboard/video') }}
+        />
 
-      {/* ── Calendar + Recent Activity Row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
+        {/* ── Recent activity ── */}
+        <Panel title="Recent activity">
+          {(recentActivity || []).length === 0 ? (
+            <Empty>Nothing yet. Activity appears here as you work.</Empty>
+          ) : recentActivity.slice(0, 5).map((act, i) => (
+            <ActivityRow
+              key={act.id || i}
+              Icon={docActivityIcon(act)}
+              tone={docActivityTone(act)}
+              title={act.title || act.action || 'Activity'}
+              subtitle={act.subtitle || act.detail || act.patientName}
+              time={act.timeAgo || act.time || ''}
+            />
+          ))}
+        </Panel>
 
-      {/* Appointment Calendar */}
-      <div className="doctor-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Appointment Calendar</h3>
-            <p style={{ margin: '0.1rem 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>Click a highlighted date to view appointments</p>
+        {/* ── Tools ── */}
+        <Panel title="Your tools" subtitle="Everything you use between consultations.">
+          <div className="nd-shortcuts">
+            <ShortcutTile Icon={Pill} tone="violet" label="Prescriptions"
+              count="Write & review" onClick={() => navigate('/dashboard/prescriptions')} />
+            <ShortcutTile Icon={FlaskConical} tone="teal" label="Lab & scans"
+              count="Order tests" onClick={() => navigate('/dashboard/diagnostic-order')} />
+            <ShortcutTile Icon={FileText} tone="green" label="Notes"
+              count="Consultation notes" onClick={() => navigate('/dashboard/notes')} />
+            <ShortcutTile Icon={ClipboardList} tone="gold" label="Check-ins"
+              count="Follow-ups" onClick={() => navigate('/dashboard/check-ins')} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button onClick={() => { if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); } else setCalMonth(m => m - 1); }} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        </Panel>
+
+        <Panel title="Quick actions">
+          <div className="nd-quick">
+            {/* One colour per action, so a doctor reaching for the same thing
+                twice finds it by colour before they read the label. Every pair
+                is measured against its own circle — see dashboard.css. */}
+            {[
+              { Icon: AlertCircle, label: 'Pending', badge: stats.pending, path: '/dashboard/appointments', tone: 'amber' },
+              { Icon: Users,       label: 'Patients',      path: '/dashboard/patients',      tone: 'blue' },
+              { Icon: FileText,    label: 'Write note',    path: '/dashboard/notes',         tone: 'violet' },
+              { Icon: Pill,        label: 'Prescriptions', path: '/dashboard/prescriptions', tone: 'green' },
+              { Icon: Video,       label: 'Video calls',   path: '/dashboard/video',         tone: 'sky' },
+              { Icon: Star,        label: 'Reviews',       path: '/dashboard/reviews',       tone: 'gold' },
+              { Icon: ShoppingBag, label: 'E-Pharmacy',    onPress: openEPharmacy,           tone: 'teal' },
+            ].map(({ Icon, label, badge, path, onPress, tone }) => (
+              <button
+                key={label}
+                type="button"
+                className="nd-quick-btn"
+                onClick={() => (onPress ? onPress() : navigate(path))}
+                title={label}
+              >
+                <span className={`nd-quick-circle nd-circle-${tone}`}>
+                  <Icon size={19} />
+                  {/* Only drawn when there is something waiting — a "0" badge
+                      is noise that trains people to ignore the real one. */}
+                  {badge > 0 ? <span className="nd-quick-badge">{badge}</span> : null}
+                </span>
+                <span className="nd-quick-label">{label}</span>
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        {/* ── Consultation activity ── */}
+        {/* ── Rail ──
+            Moved down from beside the hero, which is now full width, to sit
+            with the activity charts. ── */}
+        <div className="nd-rail">
+          <StatTile
+            Icon={Clock} tone="lilac" label="Next consultation"
+            value={nextAppt ? (nextAppt.patientName || 'Patient') : 'None booked'}
+            meta={nextAppt ? apptWhen(nextAppt) : 'Open your appointments'}
+            onClick={() => navigate('/dashboard/appointments')}
+          />
+          <StatTile
+            Icon={Users} tone="green" label="Patients"
+            value={stats.patients} meta="Under your care"
+            onClick={() => navigate('/dashboard/patients')}
+            trend={<Spark points={monthlyAppts.map((m) => m.count)} tone="#15803d" />}
+          />
+          <StatTile
+            Icon={CheckCircle} tone={stats.pending > 0 ? 'amber' : 'blue'}
+            label="Pending confirmations"
+            value={stats.pending}
+            meta={stats.pending > 0 ? 'Waiting on you' : 'All confirmed'}
+            onClick={() => navigate('/dashboard/appointments')}
+          />
+        </div>
+
+        <Panel
+          title="Consultation activity"
+          subtitle="Consultations per month."
+          span={1}
+          action={{ label: 'Analytics', onClick: () => navigate('/dashboard/analytics') }}
+        >
+          {monthlyAppts.length === 0 ? (
+            <Empty>No consultations recorded yet.</Empty>
+          ) : (
+            <div className="nd-bars">
+              {monthlyAppts.map((m) => (
+                <BarRow key={m.label} label={m.label} value={m.count}
+                        max={maxMonthlyAppts} tone="#5b5bd6" />
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        {/* Today's schedule fills the third column of that row. */}
+        <div className="nd-panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Today's Schedule</h3>
+            <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => navigate('/dashboard/appointments')}>View all</button>
+          </div>
+          {todayAppointments.length === 0 ? (
+            <div className="doctor-empty-state">
+              <Calendar size={36} color="#cbd5e1" />
+              <h3>No appointments today</h3>
+              <p>Check pending bookings or update your availability.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {todayAppointments.map(appt => (
+                <div key={appt.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                  <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#2563eb', lineHeight: 1 }}>{appt.time?.split(':')[0] || '--'}</p>
+                    <p style={{ margin: 0, fontSize: '0.6rem', color: '#93c5fd', fontWeight: 600 }}>{appt.time?.includes(':') ? ':' + appt.time.split(':')[1] : 'AM'}</p>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{appt.clientName || 'Patient'}</p>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b', textTransform: 'capitalize' }}>{appt.consultationType || 'Video'} &bull; {appt.doctorSpecialization || profile?.specialization || ''}</p>
+                  </div>
+                  <StatusBadge status={appt.status} />
+                  {appt.status === 'confirmed' && (
+                    <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={() => navigate('/dashboard/video')} style={{ padding: '0.4rem 0.7rem', gap: 0 }}>
+                      <Video size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+
+        {/* ── Appointment calendar ──
+            Doctor-specific and removed in the conversion. Restored: it is the
+            only place a doctor sees which days have appointments at a glance,
+            and the therapist dashboard has no equivalent because their
+            calendar lives on its own screen. */}
+        <Panel
+          title="Appointment calendar"
+          subtitle="Highlighted dates have appointments."
+          span={2}
+          action={{ label: 'Appointments', onClick: () => navigate('/dashboard/appointments') }}
+        >
+          <div className="nd-cal-head">
+            <button
+              type="button"
+              className="nd-cal-nav"
+              onClick={() => { if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); } else setCalMonth((m) => m - 1); }}
+              aria-label="Previous month"
+            >
               <ChevronLeft size={15} />
             </button>
-            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', minWidth: 130, textAlign: 'center' }}>{MONTHS[calMonth]} {calYear}</span>
-            <button onClick={() => { if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); } else setCalMonth(m => m + 1); }} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="nd-cal-month">{MONTHS[calMonth]} {calYear}</span>
+            <button
+              type="button"
+              className="nd-cal-nav"
+              onClick={() => { if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); } else setCalMonth((m) => m + 1); }}
+              aria-label="Next month"
+            >
               <ChevronRight size={15} />
             </button>
-            <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => navigate('/dashboard/appointments')}>
-              Full View <ChevronRight size={13} />
-            </button>
           </div>
-        </div>
-
         {/* Day headers */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
           {DAYS.map(d => (
@@ -490,73 +821,116 @@ export default function DoctorHome({ profile }) {
             </div>
           ))}
         </div>
-      </div>
+        </Panel>
 
-      {/* Recent Activity (second column of the grid row) */}
-      <div className="doctor-card">
-        <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Recent Activity</h3>
-        {recentActivity.length === 0 ? (
-          <div className="doctor-empty-state">
-            <Activity size={36} color="#cbd5e1" />
-            <h3>No recent activity</h3>
-            <p>Activity will appear as appointments are booked.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {recentActivity.map(a => {
-              const cfg = {
-                pending:   { msg: `${a.clientName || 'A patient'} booked an appointment`,   color: '#d97706', bg: '#fef9c3', icon: Clock },
-                confirmed: { msg: `Appointment confirmed with ${a.clientName || 'patient'}`, color: '#16a34a', bg: '#dcfce7', icon: CheckCircle },
-                completed: { msg: `Session completed with ${a.clientName || 'patient'}`,    color: '#2563eb', bg: '#eff6ff', icon: Star },
-                cancelled: { msg: `Appointment cancelled — ${a.clientName || 'patient'}`,   color: '#dc2626', bg: '#fee2e2', icon: AlertCircle },
-              };
-              const { msg, color, bg, icon: Icon } = cfg[a.status] || cfg.pending;
-              return (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 0.85rem', borderRadius: 10, background: '#f8fafc', border: '1px solid #f1f5f9' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon size={15} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#334155', fontWeight: 500 }}>{msg}</p>
-                    {a.date && <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>{a.date}{a.time ? ` · ${a.time}` : ''}</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        {/* ── Quick actions ──
+            Also doctor-specific: it is the only route to the E-Pharmacy modal,
+            which has no therapist counterpart. */}
 
-      </div>{/* ── end Calendar + Recent Activity row ── */}
 
-      {/* ── Quick Actions ── */}
-      <div className="doctor-card" style={{ marginBottom: '1.25rem' }}>
-        <h3 style={{ marginBottom: '1rem' }}>Quick Actions</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '0.75rem' }}>
-          {[
-            { icon: AlertCircle,  label: `Pending (${stats.pending})`, path: '/dashboard/appointments',  color: '#d97706', bg: '#fef9c3' },
-            { icon: Users,        label: 'All Patients',               path: '/dashboard/patients',      color: '#2563eb', bg: '#eff6ff' },
-            { icon: FileText,     label: 'Write Note',                 path: '/dashboard/notes',         color: '#7c3aed', bg: '#f3e8ff' },
-            { icon: Pill,         label: 'Prescriptions',              path: '/dashboard/prescriptions', color: '#059669', bg: '#d1fae5' },
-            { icon: Video,        label: 'Video Calls',                path: '/dashboard/video',         color: '#0284c7', bg: '#e0f2fe' },
-            { icon: Star,         label: 'Reviews',                    path: '/dashboard/reviews',       color: '#f59e0b', bg: '#fef3c7' },
-            { icon: ShoppingBag,  label: 'E-Pharmacy',                 onPress: openEPharmacy,           color: '#0f766e', bg: '#ccfbf1' },
-          ].map(({ icon: Icon, label, path, onPress, color, bg }) => (
-            <button key={label} onClick={() => onPress ? onPress() : navigate(path)}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.85rem 1rem', borderRadius: 12, border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left' }}
-              onMouseEnter={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = color + '60'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.transform = 'none'; }}
-            >
-              <span style={{ width: 34, height: 34, borderRadius: 9, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon size={16} />
-              </span>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155' }}>{label}</span>
-            </button>
+        {/* ── Recent patients ── */}
+        <Panel title="Recent patients" action={{ onClick: () => navigate('/dashboard/patients') }}>
+          {(recentPatients || []).length === 0 ? (
+            <Empty>No patients yet.</Empty>
+          ) : recentPatients.slice(0, 5).map((p, i) => (
+            <PersonRow
+              key={p.id || i}
+              initials={apptInitials(p.name || p.fullName)}
+              name={p.name || p.fullName || 'Patient'}
+              meta={p.email || p.condition || ''}
+              onClick={() => navigate('/dashboard/patients')}
+            />
           ))}
-        </div>
-      </div>
+        </Panel>
 
-      {/* ── E-Pharmacy Modal ── */}
+
+        {/* ── Appointment trends (2) + Session breakdown (1) = a full row ── */}
+        <div className="nd-panel nd-span-2">
+          <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Appointment Trends (6 months)</h3>
+          {allAppts.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="apptGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="patGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.8rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.78rem' }} />
+                <Area type="monotone" dataKey="appointments" name="Appointments" stroke="#2563eb" strokeWidth={2} fill="url(#apptGrad)" dot={{ r: 3, fill: '#2563eb' }} />
+                <Area type="monotone" dataKey="patients" name="Unique Patients" stroke="#7c3aed" strokeWidth={2} fill="url(#patGrad)" dot={{ r: 3, fill: '#7c3aed' }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="doctor-empty-state" style={{ height: 200 }}>
+              <TrendingUp size={36} color="#cbd5e1" /><p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>No data yet — trends will appear as appointments are booked.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="nd-panel">
+          <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Session Breakdown</h3>
+          {pieData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={150}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} paddingAngle={3} dataKey="value">
+                    {pieData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.78rem' }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
+                {pieData.map(s => (
+                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: '#475569' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+                      {s.name}
+                    </div>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a' }}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="doctor-empty-state" style={{ height: 200 }}>
+              <Activity size={36} color="#cbd5e1" /><p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>No appointment data yet.</p>
+            </div>
+          )}
+        </div>
+
+      {allAppts.length > 0 && (
+        <div className="nd-panel nd-span-3">
+          <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Monthly Completed vs Pending</h3>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.8rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.78rem' }} />
+              <Bar dataKey="completed" name="Completed" fill="#2563eb" radius={[4,4,0,0]} />
+              <Bar dataKey="appointments" name="Total Booked" fill="#bfdbfe" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+
+
+
+      </DashboardGrid>
+
       {showEPharmacy && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.52)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={() => setShowEPharmacy(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}>
@@ -717,167 +1091,6 @@ export default function DoctorHome({ profile }) {
           </div>
         </div>
       )}
-
-      {/* ── Analytics Charts ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.25rem', marginBottom: '1.25rem' }}>
-
-        {/* Area chart — 6-month appointments trend */}
-        <div className="doctor-card">
-          <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Appointment Trends (6 months)</h3>
-          {allAppts.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="apptGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="patGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.8rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.78rem' }} />
-                <Area type="monotone" dataKey="appointments" name="Appointments" stroke="#2563eb" strokeWidth={2} fill="url(#apptGrad)" dot={{ r: 3, fill: '#2563eb' }} />
-                <Area type="monotone" dataKey="patients" name="Unique Patients" stroke="#7c3aed" strokeWidth={2} fill="url(#patGrad)" dot={{ r: 3, fill: '#7c3aed' }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="doctor-empty-state" style={{ height: 200 }}>
-              <TrendingUp size={36} color="#cbd5e1" /><p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>No data yet — trends will appear as appointments are booked.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Pie chart — appointment status breakdown */}
-        <div className="doctor-card">
-          <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Session Breakdown</h3>
-          {pieData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} paddingAngle={3} dataKey="value">
-                    {pieData.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.78rem' }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
-                {pieData.map(s => (
-                  <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: '#475569' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
-                      {s.name}
-                    </div>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a' }}>{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="doctor-empty-state" style={{ height: 200 }}>
-              <Activity size={36} color="#cbd5e1" /><p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>No appointment data yet.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Monthly Bar Chart ── */}
-      {allAppts.length > 0 && (
-        <div className="doctor-card" style={{ marginBottom: '1.25rem' }}>
-          <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Monthly Completed vs Pending</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: '0.8rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.78rem' }} />
-              <Bar dataKey="completed" name="Completed" fill="#2563eb" radius={[4,4,0,0]} />
-              <Bar dataKey="appointments" name="Total Booked" fill="#bfdbfe" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <div className="doctor-grid-2">
-        {/* Today's schedule */}
-        <div className="doctor-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0 }}>Today's Schedule</h3>
-            <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => navigate('/dashboard/appointments')}>View all</button>
-          </div>
-          {todayAppointments.length === 0 ? (
-            <div className="doctor-empty-state">
-              <Calendar size={36} color="#cbd5e1" />
-              <h3>No appointments today</h3>
-              <p>Check pending bookings or update your availability.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {todayAppointments.map(appt => (
-                <div key={appt.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#2563eb', lineHeight: 1 }}>{appt.time?.split(':')[0] || '--'}</p>
-                    <p style={{ margin: 0, fontSize: '0.6rem', color: '#93c5fd', fontWeight: 600 }}>{appt.time?.includes(':') ? ':' + appt.time.split(':')[1] : 'AM'}</p>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{appt.clientName || 'Patient'}</p>
-                    <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b', textTransform: 'capitalize' }}>{appt.consultationType || 'Video'} &bull; {appt.doctorSpecialization || profile?.specialization || ''}</p>
-                  </div>
-                  <StatusBadge status={appt.status} />
-                  {appt.status === 'confirmed' && (
-                    <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={() => navigate('/dashboard/video')} style={{ padding: '0.4rem 0.7rem', gap: 0 }}>
-                      <Video size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent patients */}
-        <div className="doctor-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0 }}>Recent Patients</h3>
-            <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => navigate('/dashboard/patients')}>All patients</button>
-          </div>
-          {recentPatients.length === 0 ? (
-            <div className="doctor-empty-state">
-              <Users size={36} color="#cbd5e1" />
-              <h3>No patients yet</h3>
-              <p>Patients will appear once they book appointments.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {recentPatients.map(p => (
-                <div key={p.id} onClick={() => navigate(`/dashboard/patients/${p.id}`)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                >
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #f3e8ff, #ede9fe)', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>
-                    {(p.name || 'P')[0].toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>{p.name}</p>
-                    {p.lastDate && <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>Last visit: {p.lastDate}</p>}
-                  </div>
-                  <ChevronRight size={15} color="#cbd5e1" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
     </div>
   );
 }

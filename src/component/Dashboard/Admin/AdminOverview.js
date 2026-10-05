@@ -7,16 +7,17 @@ import {
   buildTherapyLinkedAuthUidSet,
   buildHomeCareNurseUidSet,
 } from '../../../utils/authUserFilters';
+import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
 
 const QUICK_ACTIONS = [
-  { icon: '🩺', label: 'Onboard Doctor',    path: '/dashboard/onboard-doctor' },
-  { icon: '🧠', label: 'Onboard Therapist', path: '/dashboard/onboard-therapist' },
-  { icon: '💊', label: 'Create Pharmacy',   path: '/dashboard/create-pharmacy' },
-  { icon: '🧪', label: 'Create Lab/Scan',   path: '/dashboard/create-lab-scan' },
-  { icon: '✅', label: 'Approvals',         path: '/dashboard/approvals' },
-  { icon: '👥', label: 'Manage Users',      path: '/dashboard/users' },
-  { icon: '📊', label: 'View Reports',      path: '/dashboard/reports' },
-  { icon: '📩', label: 'Reports & Feedback',path: '/dashboard/reports-center' },
+  { icon: '🩺', label: 'Onboard Doctor',       path: '/dashboard/onboard-doctor' },
+  { icon: '🧠', label: 'Onboard Therapist',    path: '/dashboard/onboard-therapist' },
+  { icon: '💊', label: 'Create Pharmacy',      path: '/dashboard/create-pharmacy' },
+  { icon: '🧪', label: 'Create Lab / Scan',    path: '/dashboard/create-lab-scan' },
+  { icon: '✅', label: 'Approvals',            path: '/dashboard/approvals' },
+  { icon: '👥', label: 'Manage Users',         path: '/dashboard/users' },
+  { icon: '📊', label: 'View Reports',         path: '/dashboard/reports' },
+  { icon: '📩', label: 'Reports & Feedback',  path: '/dashboard/reports-center' },
 ];
 
 export default function AdminOverview() {
@@ -37,7 +38,7 @@ export default function AdminOverview() {
     allRx: [],
     allHcBookings: [],
     allScheduledCalls: [],
-    providerBase: { doctors: 0, therapists: 0, pharmacies: 0, labs: 0, scans: 0, homeCareNurses: 0 },
+    providerBase: { doctors: 0, therapists: 0, pharmacies: 0, labs: 0, scans: 0 },
   });
   const [analytics, setAnalytics]       = useState({
     line: [],
@@ -255,18 +256,11 @@ export default function AdminOverview() {
       const pendingOrders = [...labOrders.docs, ...scanOrders.docs].filter(d => d.data().status === 'PENDING');
       if (pendingOrders.length)
         alertList.push({ type: 'warn', icon: '🔬', text: `${pendingOrders.length} diagnostic order(s) awaiting lab/scan center action` });
-      const pendingHcNurses = nurses.docs.filter((d) => (d.data().accountStatus || 'pending') === 'pending').length;
-      if (pendingHcNurses)
-        alertList.push({ type: 'info', icon: '🏠', text: `${pendingHcNurses} home care nurse account(s) pending approval` });
       setAlerts(alertList);
 
       // Recent prescriptions
       const rxList = rxs.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-        .slice(0, 8);
-      const hcFeed = hcBookings.docs
-        .map((d) => ({ id: d.id, _feedType: 'hc', ...d.data() }))
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
         .slice(0, 8);
       const therapyFeed = therapyCalls.docs
@@ -279,13 +273,13 @@ export default function AdminOverview() {
         .slice(0, 8);
       const feedSortSec = (row) =>
         row.createdAt?.seconds || row.scheduledTime?.seconds || 0;
-      const mergedFeed = [...rxList.map((r) => ({ ...r, _feedType: 'rx' })), ...hcFeed, ...therapyFeed]
+      const mergedFeed = [...rxList.map((r) => ({ ...r, _feedType: 'rx' })), ...therapyFeed]
         .sort((a, b) => feedSortSec(b) - feedSortSec(a))
         .slice(0, 8);
       setRecentActivity(mergedFeed);
 
       const allRx = rxs.docs.map(d => ({ id: d.id, ...d.data() }));
-      const allHcBookings = hcBookings.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const allHcBookings = [];
       const allScheduledCalls = therapyCalls.docs.map((d) => ({ id: d.id, ...d.data() }));
       const providerBase = {
         doctors: docs.size,
@@ -293,7 +287,6 @@ export default function AdminOverview() {
         pharmacies: pharmas.size,
         labs: labs.size,
         scans: scans.size,
-        homeCareNurses: nurses.size,
       };
       setAnalyticsRaw({ allRx, allHcBookings, allScheduledCalls, providerBase });
       setAnalytics(buildAnalytics(allRx, allHcBookings, allScheduledCalls, providerBase, analyticsPeriod));
@@ -315,7 +308,6 @@ export default function AdminOverview() {
         { label: 'Patients', items: authRows },
         { label: 'Doctors', items: doctorRows },
         { label: 'Therapists', items: therapistRows },
-        { label: 'Home care nurses', items: nurseRows },
         { label: 'Pharmacies', items: pharmacyRows },
         { label: 'Labs', items: labRows },
         { label: 'Scans', items: scanRows },
@@ -338,12 +330,11 @@ export default function AdminOverview() {
     { key: 'clients',       label: 'Therapy Clients',      icon: '🧘', bg: '#f5f3ff', color: '#7c3aed' },
     { key: 'doctors',       label: 'Doctors',              icon: '🩺', bg: '#f0fdf4', color: '#16a34a' },
     { key: 'therapists',    label: 'Therapists',           icon: '🧠', bg: '#fdf4ff', color: '#9333ea' },
-    { key: 'nurses',        label: 'Home Care Nurses',     icon: '🏠', bg: '#f0fdfa', color: '#0d9488' },
     { key: 'pharmacies',    label: 'Pharmacies',           icon: '💊', bg: '#fff7ed', color: '#ea580c' },
     { key: 'labs',          label: 'Lab Centers',          icon: '🧪', bg: '#f0fdf4', color: '#065f46' },
     { key: 'scanCenters',   label: 'Imaging Centers',      icon: '🩻', bg: '#faf5ff', color: '#7c3aed' },
     { key: 'prescriptions', label: 'Prescriptions',        icon: '📋', bg: '#f0fdf4', color: '#16a34a' },
-    { key: 'appointments',  label: 'Appts + therapy + HC',   icon: '📅', bg: '#fefce8', color: '#ca8a04' },
+    { key: 'appointments',  label: 'Appointments & Sessions', icon: '📅', bg: '#fefce8', color: '#ca8a04' },
     { key: 'labOrders',     label: 'Lab Orders',           icon: '🔬', bg: '#f0fdf4', color: '#059669' },
     { key: 'scanOrders',    label: 'Scan Orders',          icon: '📡', bg: '#faf5ff', color: '#6d28d9' },
   ];
@@ -392,6 +383,10 @@ export default function AdminOverview() {
         </div>
         <button className="btn btn-primary" onClick={loadData}>↻ Refresh</button>
       </div>
+
+      {/* Period-on-period platform figures, counted in SQL. A source with no
+          rows at all reads "Not recorded" rather than a misleading zero. */}
+      <PracticeAnalyticsPanel scope="platform" />
 
       {/* Stats grid */}
       <div className="admin-stats-grid">
@@ -458,7 +453,7 @@ export default function AdminOverview() {
         <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
           <div className="admin-table-card" style={{ padding: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <p className="admin-table-title" style={{ margin: 0 }}>Line Graph: Rx + therapy + home care ({analyticsPeriod === 'all' ? 'All' : analyticsPeriod})</p>
+              <p className="admin-table-title" style={{ margin: 0 }}>Line Graph: Rx + Therapy Activity ({analyticsPeriod === 'all' ? 'All' : analyticsPeriod})</p>
               <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)}>Open Report</button>
             </div>
             <svg viewBox="0 0 560 220" style={{ width: '100%', height: 220, display: 'block' }}>
@@ -607,24 +602,18 @@ export default function AdminOverview() {
             <p className="admin-table-title">Platform Breakdown</p>
           </div>
           <div style={{ padding: '0.75rem 1.1rem' }}>
-            {/* The bar scale is the largest value ACROSS THESE ROWS. It used to be
-                max(patients, nurses, appointments) only — so whenever another row
-                (e.g. lab orders or prescriptions) was the biggest, every bar
-                clamped to 100% and the chart carried no information. */}
             {(() => {
               const rows = [
-                { label: 'Medical Patients',    val: stats.patients,              color: '#1d4ed8' },
-                { label: 'Therapy Clients',     val: stats.clients,               color: '#7c3aed' },
-                { label: 'Home Care Nurses',    val: stats.nurses,                color: '#0d9488' },
-                { label: 'Doctors',             val: stats.doctors,               color: '#16a34a' },
-                { label: 'Therapists',          val: stats.therapists,            color: '#9333ea' },
-                { label: 'Pharmacies',          val: stats.pharmacies,            color: '#ea580c' },
-                { label: 'Lab Centers',         val: stats.labs,                  color: '#065f46' },
-                { label: 'Imaging Centers',     val: stats.scanCenters,           color: '#7c3aed' },
+                { label: 'Medical Patients',    val: stats.patients,           color: '#1d4ed8' },
+                { label: 'Therapy Clients',     val: stats.clients,            color: '#7c3aed' },
+                { label: 'Doctors',             val: stats.doctors,            color: '#16a34a' },
+                { label: 'Therapists',          val: stats.therapists,         color: '#9333ea' },
+                { label: 'Pharmacies',          val: stats.pharmacies,         color: '#ea580c' },
+                { label: 'Lab Centers',         val: stats.labs,               color: '#065f46' },
+                { label: 'Imaging Centers',     val: stats.scanCenters,        color: '#7c3aed' },
                 { label: 'Therapy sessions',    val: stats.therapyScheduledCalls, color: '#a855f7' },
-                { label: 'Doctor appointments', val: stats.doctorAppointments,    color: '#ca8a04' },
-                { label: 'Home care bookings',  val: stats.homeCareBookings,      color: '#0f766e' },
-                { label: 'Prescriptions',       val: stats.prescriptions,         color: '#0891b2' },
+                { label: 'Doctor appointments', val: stats.doctorAppointments, color: '#ca8a04' },
+                { label: 'Prescriptions',       val: stats.prescriptions,      color: '#0891b2' },
               ];
               const scale = Math.max(1, ...rows.map(r => Number(r.val) || 0));
               return rows.map(r => ({ ...r, val: Number(r.val) || 0, max: scale }));
@@ -649,55 +638,47 @@ export default function AdminOverview() {
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/prescriptions')}>Prescriptions</button>
           </div>
           {recentActivity.length === 0 ? (
-            <div className="admin-empty"><p>No recent prescriptions, therapy sessions, or home care bookings.</p></div>
+            <div className="admin-empty"><p>No recent prescriptions or therapy sessions.</p></div>
           ) : recentActivity.map((row, i) => (
             <div key={`${row._feedType}-${row.id || i}`} className="admin-feed-item">
               <div
                 className="admin-feed-dot"
                 style={{
                   background:
-                    row._feedType === 'hc'
-                      ? '#0d9488'
-                      : row._feedType === 'therapy'
-                        ? '#a855f7'
-                        : row.status === 'active'
-                          ? '#16a34a'
-                          : row.status === 'completed'
-                            ? '#1d4ed8'
-                            : '#94a3b8',
+                    row._feedType === 'therapy'
+                      ? '#a855f7'
+                      : row.status === 'active'
+                        ? '#16a34a'
+                        : row.status === 'completed'
+                          ? '#1d4ed8'
+                          : '#94a3b8',
                 }}
               />
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>
-                  {row._feedType === 'hc'
-                    ? `${row.bookingType === 'emergency' ? 'Emergency' : 'Home care'} · ${row.careType || 'visit'}`
-                    : row._feedType === 'therapy'
-                      ? `Therapy · ${row.sessionType || 'session'}`
-                      : (row.medications?.[0]?.name || row.medication || 'Prescription')}
+                  {row._feedType === 'therapy'
+                    ? `Therapy · ${row.sessionType || 'session'}`
+                    : (row.medications?.[0]?.name || row.medication || 'Prescription')}
                 </p>
                 <p style={{ margin: '1px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
-                  {row._feedType === 'hc'
-                    ? `${row.patientName || 'Patient'} · ${row.nurseName || 'Nurse TBD'}`
-                    : row._feedType === 'therapy'
-                      ? `${row.clientName || row.patientName || 'Client'} · ${row.therapistName || '—'}`
-                      : `${row.patientName || '—'} · Dr. ${row.doctorName || '—'}`}
+                  {row._feedType === 'therapy'
+                    ? `${row.clientName || row.patientName || 'Client'} · ${row.therapistName || '—'}`
+                    : `${row.patientName || '—'} · Dr. ${row.doctorName || '—'}`}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <span
                   className={`badge badge-${
-                    row._feedType === 'hc'
-                      ? 'green'
-                      : row._feedType === 'therapy'
-                        ? 'purple'
-                        : row.status === 'active'
-                          ? 'green'
-                          : row.status === 'completed'
-                            ? 'blue'
-                            : 'gray'
+                    row._feedType === 'therapy'
+                      ? 'purple'
+                      : row.status === 'active'
+                        ? 'green'
+                        : row.status === 'completed'
+                          ? 'blue'
+                          : 'gray'
                   }`}
                 >
-                  {row._feedType === 'hc' || row._feedType === 'therapy'
+                  {row._feedType === 'therapy'
                     ? (row.status || 'pending')
                     : (row.status || 'active')}
                 </span>

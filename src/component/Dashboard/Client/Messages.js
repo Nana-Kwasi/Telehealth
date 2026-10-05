@@ -37,6 +37,8 @@ import {
   Download
 } from 'lucide-react';
 import './Messages.css';
+import { resolveFileUrl } from '../../../utils/fileUrl';
+import ClinicianStatus, { clinicianStatusOf } from '../../Common/ClinicianStatus';
 
 // Render a presence timestamp (Firestore Timestamp, ISO string, millis, or Date)
 // the WhatsApp way: "Online" / "Last seen Xm ago".
@@ -185,10 +187,17 @@ export default function ClientMessages() {
   // never resolved and the conversation looked empty in both directions.
   // In the REST model the client id IS the signed-in user id.
   const resolveClientId = () => {
-    const stored = localStorage.getItem('th.clientId');
     const uid = auth.currentUser?.uid;
-    if (stored && !String(stored).startsWith('tmp_')) return stored;
-    return uid || null;
+    // The USER id wins, which is what the comment above always said but the
+    // code did not do. `th.clientId` holds the client_profiles_v2 ROW id — a
+    // different uuid from the user id — and chat threads are keyed by user id
+    // (chat_threads.participant_a/b are foreign keys to users). Preferring the
+    // stored value meant the thread lookup matched nothing, so the client saw
+    // an empty conversation while the therapist could read every message they
+    // had sent. Same defect as the mobile screen.
+    if (uid) return uid;
+    const stored = localStorage.getItem('th.clientId');
+    return stored && !String(stored).startsWith('tmp_') ? stored : null;
   };
 
   const getChatPath = () => `client_chats/${resolveClientId()}/messages`;
@@ -407,7 +416,7 @@ export default function ClientMessages() {
         {!isOwnMessage && (
           <div className="message-avatar">
             {assignedTherapist?.photoURL ? (
-              <img src={assignedTherapist.photoURL} alt={assignedTherapist.name} />
+              <img src={resolveFileUrl(assignedTherapist.photoURL)} alt={assignedTherapist.name} />
             ) : (
               <div className="avatar-placeholder">{assignedTherapist?.name?.charAt(0) || 'T'}</div>
             )}
@@ -522,7 +531,7 @@ export default function ClientMessages() {
         <div className="chat-user-info">
           <div className="chat-avatar">
             {assignedTherapist.photoURL ? (
-              <img src={assignedTherapist.photoURL} alt={assignedTherapist.name} />
+              <img src={resolveFileUrl(assignedTherapist.photoURL)} alt={assignedTherapist.name} />
             ) : (
               <div className="avatar-placeholder">{assignedTherapist.name.charAt(0)}</div>
             )}
@@ -532,12 +541,24 @@ export default function ClientMessages() {
             {(() => {
               const isOnline = peerPresence?.online === true;
               const label = peerPresence ? (isOnline ? 'Online' : fmtLastSeen(peerPresence.lastSeen)) : (assignedTherapist.type || 'Therapist');
+              // #166534 / #5b6170: the previous #16a34a and #94a3b8 measured
+              // 3.30:1 and 2.56:1 on this white header — both well under the
+              // 4.5:1 floor, and the last-seen line was the least readable text
+              // on the screen. These are 7.13:1 and 6.20:1.
               return (
-                <p className="chat-role" style={{ color: isOnline ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>
+                <p className="chat-role" style={{ color: isOnline ? '#166534' : '#5b6170', fontWeight: 600 }}>
                   {isOnline ? '● Online' : label}
                 </p>
               );
             })()}
+            {/* Live presence answers "are they at their desk"; this answers
+                "are they taking work", which only they can say. Shown only when
+                they have actively marked themselves unavailable — repeating
+                "Available" beside a live Online dot would add noise, and could
+                contradict it. */}
+            {clinicianStatusOf(assignedTherapist) && clinicianStatusOf(assignedTherapist) !== 'available' ? (
+              <ClinicianStatus status={assignedTherapist} />
+            ) : null}
           </div>
         </div>
       </div>
