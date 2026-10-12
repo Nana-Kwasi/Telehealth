@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/apiClient';
 import FeedbackPrompt from './FeedbackPrompt';
+import Paged from './Paged';
 
 /**
  * A person's own notifications and delivery controls.
@@ -127,7 +128,7 @@ export default function NotificationCentre() {
         <div style={{ ...card, color: '#64748b', textAlign: 'center' }}>
           Nothing here yet.
         </div>
-      ) : shown.map((n) => (
+      ) : <Paged items={shown}>{(shown) => shown.map((n) => (
         <div key={n.id} style={{ ...card, marginBottom: '0.6rem',
                                  borderLeft: n.readAt || n.read_at ? '3px solid #e2e8f0' : '3px solid #1d4ed8' }}>
           <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{n.title}</div>
@@ -136,7 +137,7 @@ export default function NotificationCentre() {
             {(n.createdAt || n.created_at) ? new Date(n.createdAt || n.created_at).toLocaleString() : ''}
           </div>
         </div>
-      ))}
+      ))}</Paged>}
     </div>
   );
 }

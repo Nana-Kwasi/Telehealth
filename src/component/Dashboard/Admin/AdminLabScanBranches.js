@@ -7,6 +7,7 @@ import {
 } from '../../../services/firestoreShim';
 import { initializeApp, getApps } from '../../../services/authShim';
 import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from '../../../services/authShim';
+import Paged from '../../Common/Paged';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI",
@@ -152,7 +153,7 @@ export default function AdminLabScanBranches() {
             <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No {typeLabel.toLowerCase()}s onboarded yet.</p>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {centers.map(c => (
+              <Paged items={centers}>{(centers) => centers.map(c => (
                 <li key={c.id}>
                   <button
                     style={{
@@ -168,7 +169,7 @@ export default function AdminLabScanBranches() {
                     <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 400 }}>{c.address || c.email}</div>
                   </button>
                 </li>
-              ))}
+              ))}</Paged>
             </ul>
           )}
         </div>
@@ -206,7 +207,7 @@ export default function AdminLabScanBranches() {
                         </tr>
                       </thead>
                       <tbody>
-                        {branches.map(b => (
+                        <Paged items={branches} table>{(branches) => branches.map(b => (
                           <tr key={b.id} className="diagnostic-branches-row">
                             <td><strong>{b.branchName}</strong></td>
                             <td>{b.address || '—'}</td>
@@ -220,7 +221,7 @@ export default function AdminLabScanBranches() {
                               </span>
                             </td>
                           </tr>
-                        ))}
+                        ))}</Paged>
                       </tbody>
                     </table>
                   </div>

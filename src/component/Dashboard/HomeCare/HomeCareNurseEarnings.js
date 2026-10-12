@@ -3,6 +3,7 @@ import { useHomeCareNurse } from './HomeCareNurseContext';
 import { addNurseEarning, fetchNurseEarnings } from '../../../services/homeCareService';
 import { formatGhs } from '../../../utils/homeCareUtils';
 import './HomeCareNurseDashboard.css';
+import Paged from '../../Common/Paged';
 
 export default function HomeCareNurseEarnings({ embedded = false }) {
   const { profile } = useHomeCareNurse();
@@ -59,12 +60,12 @@ export default function HomeCareNurseEarnings({ embedded = false }) {
       </form>
       {loading ? <p className="hcn-empty">Loading…</p> : null}
       {!loading && list.length === 0 ? <p className="hcn-empty">No earnings logged yet.</p> : null}
-      {list.map((e) => (
+      <Paged items={list}>{(list) => list.map((e) => (
         <div key={e.id} className="hcn-card">
           <strong>{formatGhs(e.amount)}</strong>
           <p className="hcn-card-meta">{e.note || '—'}</p>
         </div>
-      ))}
+      ))}</Paged>
     </>
   );
 

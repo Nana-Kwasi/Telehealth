@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { db } from '../../../services/firestoreShim';
 import { collection, addDoc, serverTimestamp, getDocs } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const AUDIENCE_OPTIONS = [
   { value: 'all',         label: 'All Users',        icon: '👥' },
@@ -218,7 +219,7 @@ export default function AdminNotifications() {
               <div className="admin-empty"><p>No notifications sent yet.</p></div>
             ) : (
               <div>
-                {history.map(n => {
+                <Paged items={history}>{(history) => history.map(n => {
                   const tc = TYPE_OPTIONS.find(t => t.value === n.type) || TYPE_OPTIONS[0];
                   return (
                     <div key={n.id} className="admin-feed-item">
@@ -232,7 +233,7 @@ export default function AdminNotifications() {
                       <div style={{ fontSize: '0.68rem', color: '#94a3b8', flexShrink: 0 }}>{fmtDate(n.sentAt)}</div>
                     </div>
                   );
-                })}
+                })}</Paged>
               </div>
             )}
           </div>

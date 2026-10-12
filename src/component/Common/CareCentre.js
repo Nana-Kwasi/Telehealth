@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { HeartPulse, Pill, CheckCircle2, MessageSquare, Clock, CalendarDays, Bell, Plus, X, Check } from 'lucide-react';
 import { api } from '../../services/apiClient';
 import './CareCentre.css';
+import Paged from './Paged';
 
 /**
  * Medication reminders and follow-up check-ins, for the person receiving care.
@@ -165,7 +166,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
       {/* ── Check-ins first: someone is waiting on these ── */}
       {followups.length ? (
         <Section icon={MessageSquare} title="From your care team" count={followups.length}>
-          {followups.map((f) => {
+          <Paged items={followups}>{(followups) => followups.map((f) => {
             const a = answers[f.id] || {};
             if (f.kind === 'weekly_checkin') {
               return (
@@ -192,7 +193,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
                 </button>
               </div>
             );
-          })}
+          })}</Paged>
         </Section>
       ) : null}
 
@@ -220,7 +221,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
       {/* ── Follow-ups your clinician planned ── */}
       {plans.length ? (
         <Section icon={CalendarDays} title="Upcoming follow-ups" count={plans.length}>
-          {plans.map((p) => {
+          <Paged items={plans}>{(plans) => plans.map((p) => {
             const d = new Date(`${p.due_on}T00:00:00`);
             return (
               <div key={p.id} className="cc-item cc-row">
@@ -246,7 +247,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
                 )}
               </div>
             );
-          })}
+          })}</Paged>
         </Section>
       ) : null}
 
@@ -313,7 +314,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
           </div>
         ) : (
           <div className="cc-grid">
-            {activeReminders.map((r) => (
+            <Paged items={activeReminders}>{(activeReminders) => activeReminders.map((r) => (
               <div key={r.id} className="cc-item cc-reminder">
                 <div className="cc-row">
                   <span className="cc-pill-icon"><Pill size={18} /></span>
@@ -327,7 +328,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
                 </div>
                 <button type="button" className="cc-stop" onClick={() => stopReminder(r.id)}>Stop reminder</button>
               </div>
-            ))}
+            ))}</Paged>
           </div>
         )}
       </Section>

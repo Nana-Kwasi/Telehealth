@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 /**
  * Milliseconds from any timestamp shape the API returns: a Firestore-style
@@ -246,7 +247,7 @@ export default function AdminReports() {
       {/* KPI Cards */}
       <p style={{ margin: '0 0 0.65rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 700 }}>Summary KPIs</p>
       <div className="admin-stats-grid" style={{ marginBottom: '1.75rem' }}>
-        {cards.map(s => (
+        <Paged items={cards}>{(cards) => cards.map(s => (
           <div key={s.label} className="admin-stat-card">
             <div className="admin-stat-icon" style={{ background: s.bg }}>{s.icon}</div>
             <div>
@@ -254,7 +255,7 @@ export default function AdminReports() {
               <div className="admin-stat-label">{s.label}</div>
             </div>
           </div>
-        ))}
+        ))}</Paged>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>

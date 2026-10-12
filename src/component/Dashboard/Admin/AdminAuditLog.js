@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, query, orderBy, limit } from '../../../services/firestoreShim';
 import useSystemConfig, { cfg } from '../../../hooks/useSystemConfig';
+import Paged from '../../Common/Paged';
 
 const ACTION_PALETTE = {
   LOGIN_SUCCESS:           { color: '#16a34a', bg: '#f0fdf4', icon: '🔓' },
@@ -217,7 +218,7 @@ export default function AdminAuditLog() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(log => (
+              <Paged items={filtered} table>{(filtered) => filtered.map(log => (
                 <tr key={log.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(log)}>
                   <td style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(log.timestamp)}</td>
                   <td><ActionBadge action={log.action} /></td>
@@ -237,7 +238,7 @@ export default function AdminAuditLog() {
                     <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setSelected(log); }}>View</button>
                   </td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         )}

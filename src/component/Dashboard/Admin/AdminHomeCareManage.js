@@ -14,6 +14,7 @@ import {
 import { formatGhs } from '../../../utils/homeCareUtils';
 import './AdminOnboardHomeCareNurse.css';
 import './AdminHomeCareManage.css';
+import Paged from '../../Common/Paged';
 
 const TABS = ['analytics', 'nurses', 'bookings', 'complaints'];
 
@@ -94,12 +95,12 @@ function BookingDetailModal({ booking, loading, onClose }) {
         </div>
         {loading ? <p className="ahcm-modal-loading">Refreshing…</p> : null}
         <dl className="ahcm-detail-dl">
-          {rows.map(([label, val]) => (
+          <Paged items={rows}>{(rows) => rows.map(([label, val]) => (
             <React.Fragment key={label}>
               <dt>{label}</dt>
               <dd>{val}</dd>
             </React.Fragment>
-          ))}
+          ))}</Paged>
         </dl>
         {vr ? (
           <section className="ahcm-modal-section">
@@ -297,7 +298,7 @@ export default function AdminHomeCareManage() {
         <div className="ahcm-panel admin-onboard-hc-scroll">
           <h2 className="ahcm-panel-title">Nurses</h2>
           <div className="ahcm-nurse-list">
-          {nurses.map((n) => (
+          <Paged items={nurses}>{(nurses) => nurses.map((n) => (
             <article key={n.id} className="ahcm-nurse-card">
               <div className="ahcm-nurse-head">
                 <div>
@@ -363,7 +364,7 @@ export default function AdminHomeCareManage() {
                 <FeeEditor nurse={n} onSave={(fees) => saveFees(n.id, fees)} />
               </div>
             </article>
-          ))}
+          ))}</Paged>
           </div>
         </div>
       )}
@@ -382,7 +383,7 @@ export default function AdminHomeCareManage() {
               </tr>
             </thead>
             <tbody>
-              {bookings.map((b) => (
+              <Paged items={bookings} table>{(bookings) => bookings.map((b) => (
                 <tr key={b.id} className="ahcm-booking-row" onClick={() => openBookingDetail(b)}>
                   <td>{b.patientName || b.patientId?.slice(0, 8)}</td>
                   <td>{b.nurseName || '—'}</td>
@@ -390,7 +391,7 @@ export default function AdminHomeCareManage() {
                   <td>{b.status}</td>
                   <td>{formatGhs(b.referenceFeeAmount || 0)}</td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         </div>
@@ -407,7 +408,7 @@ export default function AdminHomeCareManage() {
       {!loading && tab === 'complaints' && (
         <div className="ahcm-panel admin-onboard-hc-scroll">
           <h2 className="ahcm-panel-title">Complaints</h2>
-          {complaints.length === 0 ? <p>No complaints.</p> : complaints.map((c) => (
+          {complaints.length === 0 ? <p>No complaints.</p> : <Paged items={complaints}>{(complaints) => complaints.map((c) => (
             <div key={c.id} className="hc-card" style={{ marginBottom: 12 }}>
               <h3>{c.nature}</h3>
               <p className="hc-card-meta">Status: {c.status || 'open'}</p>
@@ -418,7 +419,7 @@ export default function AdminHomeCareManage() {
                 <button type="button" className="hc-btn hc-btn-outline" onClick={() => resolveComplaint(c.id, 'dismissed')}>Dismiss</button>
               </div>
             </div>
-          ))}
+          ))}</Paged>}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { FileScan, Upload, AlertTriangle, CheckCircle2, ArrowRight, Loader } from 'lucide-react';
 import { api, uploadFile } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Upload a document; the assistant says what it is, copies what it says, and
@@ -192,12 +193,12 @@ function Fields({ type, fields = {} }) {
   if (!rows.length) return null;
   return (
     <dl style={S.dl}>
-      {rows.map(([k, v]) => (
+      <Paged items={rows}>{(rows) => rows.map(([k, v]) => (
         <React.Fragment key={k}>
           <dt style={S.dt}>{k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())}</dt>
           <dd style={S.dd}>{v}</dd>
         </React.Fragment>
-      ))}
+      ))}</Paged>
     </dl>
   );
 }

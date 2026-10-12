@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Inbox, AlertTriangle, Check, CalendarClock, X } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * What has come back and not been read yet, plus the follow-ups planned ahead.
@@ -69,7 +70,7 @@ export default function CheckInReviewQueue({ people = [], nameOf = (p) => p.name
         </header>
         {queue.length === 0 ? (
           <p style={S.empty}>Nothing waiting — you are up to date.</p>
-        ) : queue.map((f) => (
+        ) : <Paged items={queue}>{(queue) => queue.map((f) => (
           <div key={f.id} style={{ ...S.item, ...(f.escalated ? S.flagged : null) }}>
             <div style={S.itemTop}>
               {f.escalated ? (
@@ -87,7 +88,7 @@ export default function CheckInReviewQueue({ people = [], nameOf = (p) => p.name
               <Check size={13} /> Mark as read
             </button>
           </div>
-        ))}
+        ))}</Paged>}
       </section>
 
       <section style={S.card} aria-label="Follow-up plans">
@@ -113,7 +114,7 @@ export default function CheckInReviewQueue({ people = [], nameOf = (p) => p.name
           <button type="button" style={S.go} onClick={createPlan}>Plan follow-up</button>
         </div>
         {note ? <p style={S.sub}>{note}</p> : null}
-        {plans.map((p) => (
+        <Paged items={plans}>{(plans) => plans.map((p) => (
           <div key={p.id} style={S.planRow}>
             <strong style={S.who}>{p.patient_name}</strong>
             <span style={S.when}>{fmtDay(p.due_on)}</span>
@@ -125,7 +126,7 @@ export default function CheckInReviewQueue({ people = [], nameOf = (p) => p.name
               <X size={13} />
             </button>
           </div>
-        ))}
+        ))}</Paged>
       </section>
     </>
   );

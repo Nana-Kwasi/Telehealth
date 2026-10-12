@@ -44,6 +44,8 @@ import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmac
 import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
 import PrescriptionRequestPanel from '../../Common/PrescriptionRequestPanel';
 import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
+import InsuranceCards from '../../Common/InsuranceCards';
+import ClaimConfirmations from '../../Common/ClaimConfirmations';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { readPendingBooking, materializePendingBooking } from '../../../utils/pendingDoctorBooking';
@@ -55,6 +57,7 @@ import FaqSection from '../../Common/FaqSection';
 import ConsentHistory from '../../Common/ConsentHistory';
 import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import EmergencyContactsEditor from '../../Common/EmergencyContactsEditor';
+import { RxCoverChip } from '../../Common/RxInsuranceCard';
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2709,6 +2712,9 @@ function MedPatInsurance({ profile }) {
         <h1>Insurance Details</h1>
         <p>Your coverage information — visible to your care team</p>
       </div>
+      {/* Cards checked live with an insurer connected to NessaHub. */}
+      <InsuranceCards />
+      <h3 style={{ margin: '0.5rem 0 0.75rem', fontSize: '0.9rem', color: '#64748b' }}>Other cover (insurers not yet connected — checked by our team)</h3>
       <form onSubmit={handleSave} style={{ maxWidth: 700 }}>
         <div className="mp-card" style={{ marginBottom: '1.25rem' }}>
           <h3 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '0.95rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Plan Information</h3>
@@ -4281,6 +4287,7 @@ export function MedPatEPharmacy({ profile }) {
                             {rx.prescriptionRef}
                           </div>
                         )}
+                        {rx.insuranceCardId && <div><RxCoverChip rxId={rx.id} cardId={rx.insuranceCardId} /></div>}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         {pm && (
@@ -4982,6 +4989,7 @@ export default function MedicalPatientDashboard({ profile }) {
         <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
         {/* Until their phone is verified (only while SMS is set up). */}
         <PhoneVerifyBanner />
+        <ClaimConfirmations />
         <Routes>
           <Route path="/"              element={<MedPatHome          profile={profile} />} />
           <Route path="/appointments"  element={<MedPatAppointments  profile={profile} />} />

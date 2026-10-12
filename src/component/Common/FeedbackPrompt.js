@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Surveys waiting for this person to answer.
@@ -49,7 +50,7 @@ export default function FeedbackPrompt() {
   return (
     <div style={{ marginBottom: '1.5rem' }}>
       {done ? <Note>{done}</Note> : null}
-      {pending.map((p) => {
+      <Paged items={pending}>{(pending) => pending.map((p) => {
         const a = answers[p.id] || {};
         return (
           <div key={p.id} style={{ background: '#eff6ff', border: '1px solid #bfdbfe',
@@ -87,7 +88,7 @@ export default function FeedbackPrompt() {
             </div>
           </div>
         );
-      })}
+      })}</Paged>
     </div>
   );
 }

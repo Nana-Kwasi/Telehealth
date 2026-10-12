@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * The pharmacist's formulary: medicines and interactions that every
@@ -96,7 +97,7 @@ export default function FormularyManager() {
         </div>
       ) : null}
 
-      {tab === 'drugs' ? drugs.map((d) => (
+      {tab === 'drugs' ? <Paged items={drugs}>{(drugs) => drugs.map((d) => (
         <div key={d.id} style={S.item}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div><b>{d.generic_name}</b> <span style={S.muted}>{d.drug_class}{d.brand_names ? ` · ${d.brand_names}` : ''}</span></div>
@@ -109,7 +110,7 @@ export default function FormularyManager() {
           {d.status !== 'approved' ? <button type="button" style={S.primary} onClick={() => review('drugs', d.id, 'approved')}>Approve</button> : null}
           {d.status !== 'retired' ? <button type="button" style={S.ghost} onClick={() => review('drugs', d.id, 'retired')}>Retire</button> : null}
         </div>
-      )) : rules.map((r) => (
+      ))}</Paged> : <Paged items={rules}>{(rules) => rules.map((r) => (
         <div key={r.id} style={S.item}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div><b>{r.subject_a}</b> + <b>{r.subject_b}</b> · <span style={{ color: r.severity === 'moderate' ? '#7a5b06' : '#8f1d17', fontWeight: 700 }}>{r.severity}</span></div>
@@ -119,7 +120,7 @@ export default function FormularyManager() {
           {r.status !== 'approved' ? <button type="button" style={S.primary} onClick={() => review('interactions', r.id, 'approved')}>Approve</button> : null}
           {r.status !== 'retired' ? <button type="button" style={S.ghost} onClick={() => review('interactions', r.id, 'retired')}>Retire</button> : null}
         </div>
-      ))}
+      ))}</Paged>}
     </div>
   );
 }

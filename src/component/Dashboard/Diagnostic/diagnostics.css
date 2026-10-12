@@ -105,3 +105,11 @@
 .dx-gauge { display: flex; align-items: center; gap: 0.9rem; }
 .dx-ring { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
 .dx-ring > div { width: 58px; height: 58px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-weight: 800; font-size: 0.95rem; }
+
+/* Insurer dashboard accent */
+.dx.dx--ins { --dx-accent: #1d4ed8; --dx-accent-soft: #dbeafe; }
+.dx-split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 0.9rem; align-items: start; }
+@media (max-width: 1100px) { .dx-split { grid-template-columns: 1fr; } }
+.dx-sla { font-size: 0.72rem; font-weight: 800; border-radius: 6px; padding: 0.1rem 0.4rem; }
+.dx-sla--ok { background: #dcfce7; color: #166534; } .dx-sla--soon { background: #fef3c7; color: #92400e; } .dx-sla--late { background: #fee2e2; color: #b91c1c; }
+.dx-ai { background: linear-gradient(135deg, #eef2ff, #f5f3ff); border: 1.5px solid #c7d2fe; border-radius: 12px; padding: 0.75rem 0.9rem; white-space: pre-wrap; font-size: 0.84rem; color: #312e81; }

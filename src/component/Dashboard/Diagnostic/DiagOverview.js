@@ -5,6 +5,7 @@ import { api } from '../../../services/apiClient';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { STAGES, PRIORITY, priorityOf, fmtHours, fmtDateTime, money } from './diagUi';
 import './diagnostics.css';
+import Paged from '../../Common/Paged';
 
 /**
  * Lab / scan dashboard home, for both the parent (whole network) and a branch.
@@ -146,7 +147,7 @@ export function OrderRows({ rows, onOpen, extra }) {
   if (!rows?.length) return null;
   return (
     <ul className="dx-list">
-      {rows.map(r => (
+      <Paged items={rows}>{(rows) => rows.map(r => (
         <li key={r.orderId} className="dx-row" onClick={() => onOpen?.(r)}>
           <PriorityPill priority={r.priority} />
           <div className="dx-row-main">
@@ -155,7 +156,7 @@ export function OrderRows({ rows, onOpen, extra }) {
           </div>
           {extra?.(r)}
         </li>
-      ))}
+      ))}</Paged>
     </ul>
   );
 }
@@ -168,7 +169,7 @@ export function BranchTable({ branches, onOpen, currency = 'GHS' }) {
       <table className="dx-table">
         <thead><tr><th>Branch</th><th>Status</th><th>Orders</th><th>Open</th><th>Done</th><th>Overdue</th><th>Avg TAT</th><th>Completion</th><th>Revenue</th></tr></thead>
         <tbody>
-          {branches.map(b => (
+          <Paged items={branches} table>{(branches) => branches.map(b => (
             <tr key={b.branchId} className="dx-click" onClick={() => onOpen?.(b)}>
               <td><b>{b.name || 'Branch'}</b>{best && best.branchId === b.branchId ? <span className="dx-pill" style={{ background: '#dcfce7', color: '#166534', marginLeft: 6 }}>Fastest</span> : null}<div className="dx-card-hint">{b.city || ''}</div></td>
               <td><span className="dx-pill" style={b.status === 'active' ? { background: '#dcfce7', color: '#166534' } : { background: '#fee2e2', color: '#991b1b' }}>{b.status}</span></td>
@@ -182,7 +183,7 @@ export function BranchTable({ branches, onOpen, currency = 'GHS' }) {
               </td>
               <td style={{ whiteSpace: 'nowrap' }}>{money(b.revenue, currency)}</td>
             </tr>
-          ))}
+          ))}</Paged>
         </tbody>
       </table>
     </div>

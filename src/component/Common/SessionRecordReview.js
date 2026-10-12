@@ -51,6 +51,9 @@ export default function SessionRecordReview({ id, onClose, onSaved }) {
   const [busy, setBusy] = useState('loading');
   const [msg, setMsg] = useState('');
   const [attempt, setAttempt] = useState(0);
+  // Consultation: what goes into the patient's record besides the note.
+  const [rec, setRec] = useState({ allergies: '', medications: '', followUpDate: '', followUpPrompt: '' });
+  const [updated, setUpdated] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +70,9 @@ export default function SessionRecordReview({ id, onClose, onSaved }) {
         setData(d);
         setNoteText(toNote(d.kind, d.draft));
         setHomework((d.draft?.homework || []).map((h) => ({ title: h.title || '', instructions: h.instructions || '', dueDate: '' })));
+        const list = (v) => (Array.isArray(v) ? v : (v ? String(v).split(/[,;]/) : [])).map((x) => String(x).trim()).filter(Boolean).join(', ');
+        setRec({ allergies: list(d.draft?.allergies), medications: list(d.draft?.medications), followUpDate: '',
+          followUpPrompt: d.draft?.followUp ? `Your doctor asked to check in: ${d.draft.followUp}. How are you doing?` : '' });
       } catch (e) {
         if (!cancelled) setMsg(e?.message || 'This session could not be loaded.');
       } finally {
@@ -80,9 +86,17 @@ export default function SessionRecordReview({ id, onClose, onSaved }) {
     setBusy('saving'); setMsg('');
     try {
       const res = await api(`/api/v1/ai/sessions/${id}/save`, {
-        method: 'POST', body: { noteText, homework: homework.filter((h) => h.title.trim()) },
+        method: 'POST', body: {
+          noteText, homework: homework.filter((h) => h.title.trim()),
+          ...(data.kind === 'therapy' ? {} : {
+            allergies: rec.allergies.split(/[,;]/).map((x) => x.trim()).filter(Boolean),
+            currentMedications: rec.medications.split(/[,;]/).map((x) => x.trim()).filter(Boolean),
+            followUpDate: rec.followUpDate || null, followUpPrompt: rec.followUpPrompt || null,
+          }),
+        },
       });
       setMsg(res.message);
+      setUpdated(res.updated || []);
       setData((d) => ({ ...d, savedAt: new Date().toISOString() }));
       onSaved?.();
     } catch (e) { setMsg(e?.message || 'Could not save.'); } finally { setBusy(''); }
@@ -115,6 +129,27 @@ export default function SessionRecordReview({ id, onClose, onSaved }) {
           disabled={!!data.savedAt} />
       </label>
 
+      {!therapy ? (
+        <div style={S.record}>
+          <div style={{ ...S.label, marginBottom: 2 }}>Also add to the patient's record</div>
+          <p style={{ ...S.muted, margin: 0 }}>Check these against the transcript. Allergies feed the prescribing safety check; a follow-up date sends the patient a check-in that day.</p>
+          <label style={S.label}>Allergies mentioned (comma-separated)
+            <input style={S.input} value={rec.allergies} disabled={!!data.savedAt} onChange={(e) => setRec({ ...rec, allergies: e.target.value })} placeholder="e.g. penicillin, peanuts" />
+          </label>
+          <label style={S.label}>Medicines the patient is taking (comma-separated)
+            <input style={S.input} value={rec.medications} disabled={!!data.savedAt} onChange={(e) => setRec({ ...rec, medications: e.target.value })} placeholder="e.g. amlodipine 5mg" />
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: '0.5rem' }}>
+            <label style={S.label}>Follow-up date
+              <input type="date" style={S.input} value={rec.followUpDate} disabled={!!data.savedAt} onChange={(e) => setRec({ ...rec, followUpDate: e.target.value })} />
+            </label>
+            <label style={S.label}>Check-in question for the patient
+              <input style={S.input} value={rec.followUpPrompt} disabled={!!data.savedAt || !rec.followUpDate} onChange={(e) => setRec({ ...rec, followUpPrompt: e.target.value })} placeholder="How are you feeling since the consultation?" />
+            </label>
+          </div>
+        </div>
+      ) : null}
+
       {therapy ? (
         <div style={{ marginTop: '0.7rem' }}>
           <div style={S.label}>Homework (sent to the client as worksheets)</div>
@@ -141,6 +176,7 @@ export default function SessionRecordReview({ id, onClose, onSaved }) {
       {showTranscript ? <pre style={S.transcript}>{data.transcript || 'No transcript.'}</pre> : null}
 
       {msg ? <p style={S.msg}>{msg}</p> : null}
+      {updated.length ? <ul style={{ ...S.msg, margin: '0 0 0.4rem', paddingLeft: '1.1rem' }}>{updated.map((u) => <li key={u}>✓ {u}</li>)}</ul> : null}
       {!data.draft && !data.savedAt ? (
         <button type="button" style={S.ghost} onClick={() => { setMsg(''); setBusy('loading'); setAttempt((n) => n + 1); }}>
           Try drafting again
@@ -174,5 +210,6 @@ const S = {
   ghost: { padding: '0.45rem 0.85rem', borderRadius: 999, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' },
   link: { background: 'none', border: 'none', color: '#2b5ce6', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: '0.82rem' },
   msg: { fontSize: '0.86rem', color: '#166534' },
+  record: { display: 'grid', gap: '0.5rem', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, padding: '0.7rem 0.8rem', marginTop: '0.7rem' },
   saved: { fontSize: '0.86rem', color: '#166534', fontWeight: 700 },
 };

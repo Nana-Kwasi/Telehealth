@@ -186,6 +186,7 @@ const SUGGESTIONS = [
   'How did this month compare with last month?',
   'Which providers are busiest?',
   'Are there any security concerns?',
+  'Who joined this week?',
 ];
 
 /** The admin AI assistant, as a side panel. Read-only; answers from live figures. */
@@ -220,7 +221,7 @@ function AdminAssistantPanel({ seed, pages = [], onClose }) {
     setThread((t) => [...t, { role: 'me', text: question }]);
     try {
       const d = await api('/api/v1/admin/assistant', { method: 'POST', body: { question, history } });
-      setThread((t) => [...t, { role: 'ai', text: d.answer }]);
+      setThread((t) => [...t, { role: 'ai', text: d.answer, people: Array.isArray(d.people) ? d.people : [] }]);
     } catch (e) {
       setThread((t) => [...t, { role: 'ai', text: e?.message || 'The assistant could not answer right now.' }]);
     } finally {
@@ -253,7 +254,7 @@ function AdminAssistantPanel({ seed, pages = [], onClose }) {
         <div className="ai-drawer-body">
           {thread.length === 0 ? (
             <div className="ai-drawer-intro">
-              <p>Ask about activity, queues, providers or sign-ins. I can't change anything — I point you to the right screen.</p>
+              <p>Ask about any user by name (even just a first name), or about activity, queues, providers and sign-ins. Medical details stay private. I can't change anything — I point you to the right screen.</p>
               <div className="ai-drawer-chips">
                 {SUGGESTIONS.map((s) => <button key={s} type="button" onClick={() => ask(s)}>{s}</button>)}
               </div>
@@ -266,6 +267,15 @@ function AdminAssistantPanel({ seed, pages = [], onClose }) {
                 return (
                   <>
                     <AiMarkdown text={clean} />
+                    {m.people?.length ? (
+                      <div className="ai-links">
+                        {m.people.map((p) => (
+                          <button key={p.id} type="button" title={`Open ${p.name}'s profile`} onClick={() => { navigate(pathFor('people', p)); onClose(); }}>
+                            {p.name} · {String(p.role || '').toLowerCase()}{m.people.length > 1 && p.joined ? ` · ${p.joined}` : ''} <ArrowUp size={12} style={{ transform: 'rotate(45deg)' }} />
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                     {links.length ? (
                       <div className="ai-links">
                         {links.map((l) => (

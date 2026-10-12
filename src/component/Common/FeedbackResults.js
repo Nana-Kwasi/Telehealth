@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Feedback results for doctors and therapists.
@@ -45,7 +46,7 @@ export default function FeedbackResults() {
         <div style={{ ...card, color: '#64748b', textAlign: 'center' }}>
           No feedback surveys have been run yet.
         </div>
-      ) : rows.map((r) => {
+      ) : <Paged items={rows}>{(rows) => rows.map((r) => {
         const total = Number(r.responses || 0);
         return (
           <div key={r.id} style={{ ...card, marginBottom: '1rem' }}>
@@ -91,7 +92,7 @@ export default function FeedbackResults() {
             ) : null}
           </div>
         );
-      })}
+      })}</Paged>}
     </div>
   );
 }

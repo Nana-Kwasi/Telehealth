@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Promotions a provider has been asked to appear in.
@@ -65,7 +66,7 @@ export default function ProviderPromotions() {
                       padding: '2rem', textAlign: 'center', color: '#64748b' }}>
           Nothing waiting for your approval.
         </div>
-      ) : pending.map((p) => (
+      ) : <Paged items={pending}>{(pending) => pending.map((p) => (
         <div key={p.campaign_id}
           style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
                    padding: '1.25rem', marginBottom: '1rem' }}>
@@ -95,7 +96,7 @@ export default function ProviderPromotions() {
             </button>
           </div>
         </div>
-      ))}
+      ))}</Paged>}
     </div>
   );
 }

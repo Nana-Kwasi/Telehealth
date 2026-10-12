@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Leaf, Mail, MailOpen, User } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Wellness content a client or patient has RECEIVED.
@@ -61,7 +62,7 @@ export default function ClientWellness({ peopleNoun = 'therapist' }) {
             appear here — you do not have to do anything to receive it.
           </p>
         </section>
-      ) : items.map((m) => {
+      ) : <Paged items={items}>{(items) => items.map((m) => {
         const open = openId === m.id;
         const body = toPlainText(m.body_html);
         return (
@@ -105,7 +106,7 @@ export default function ClientWellness({ peopleNoun = 'therapist' }) {
             ) : null}
           </article>
         );
-      })}
+      })}</Paged>}
     </div>
   );
 }

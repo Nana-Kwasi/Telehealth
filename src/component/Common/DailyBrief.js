@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sunrise, ArrowRight } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * "What needs me today", on the clinician's own dashboard.
@@ -58,7 +59,7 @@ export default function DailyBrief({ role }) {
 
       {!nothing ? (
         <div style={S.rows}>
-          {actionable.map((i) => (
+          <Paged items={actionable}>{(actionable) => actionable.map((i) => (
             <button
               key={i.key}
               type="button"
@@ -69,7 +70,7 @@ export default function DailyBrief({ role }) {
               <span style={S.label}>{i.label}</span>
               <ArrowRight size={14} style={{ flexShrink: 0, color: '#5b6170' }} />
             </button>
-          ))}
+          ))}</Paged>
         </div>
       ) : null}
     </section>

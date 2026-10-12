@@ -5,6 +5,7 @@ import { useDiagDashboard, Kpi, TrendChart, TestMix, HourlyLoad, TatGauge, Branc
 import { ResultView } from './DiagWorklist';
 import { fmtHours, money, exportCsv, fmtDateTime } from './diagUi';
 import './diagnostics.css';
+import Paged from '../../Common/Paged';
 
 /** Period reports with CSV export (parent: network + branches; branch: itself). */
 export function DiagReports({ type = 'lab', mode = 'branch' }) {
@@ -101,7 +102,7 @@ export function DiagResultsLog({ type = 'lab' }) {
         {loading ? <p className="dx-empty">Loading…</p> : shown.length === 0 ? <p className="dx-empty">No results.</p> : (
           <div className="dx-table-wrap"><table className="dx-table">
             <thead><tr><th>Date</th><th>Patient</th><th>Test</th><th>Order</th><th>Branch</th><th>Flags</th><th>Doctor</th><th /></tr></thead>
-            <tbody>{shown.map(r => (
+            <tbody><Paged items={shown} table>{(shown) => shown.map(r => (
               <React.Fragment key={r.id}>
                 <tr className="dx-click" onClick={() => setOpen(open === r.id ? null : r.id)}>
                   <td className="dx-card-hint">{fmtDateTime(r.createdAt)}</td><td><b>{r.patientName || '—'}</b></td><td>{r.testType || '—'}</td>
@@ -112,7 +113,7 @@ export function DiagResultsLog({ type = 'lab' }) {
                 </tr>
                 {open === r.id && <tr><td colSpan={8} style={{ background: '#f8fafc' }}><ResultView r={r} /></td></tr>}
               </React.Fragment>
-            ))}</tbody>
+            ))}</Paged></tbody>
           </table></div>
         )}
       </div>

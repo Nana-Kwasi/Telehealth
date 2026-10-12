@@ -4,6 +4,7 @@ import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 import { getStoredUserId } from '../../../services/apiClient';
+import Paged from '../../Common/Paged';
 
 const generateDoctorToken = httpsCallable(functions, 'generateDoctorToken');
 
@@ -233,7 +234,7 @@ export default function DoctorVideoCall({ profile }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(appt => (
+              <Paged items={filtered} table>{(filtered) => filtered.map(appt => (
                 <tr key={appt.id}>
                   <td style={{ fontWeight: 500 }}>{appt.clientName || 'Patient'}</td>
                   <td>{appt.date || '—'}</td>
@@ -287,7 +288,7 @@ export default function DoctorVideoCall({ profile }) {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         )}

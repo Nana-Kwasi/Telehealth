@@ -39,6 +39,7 @@ import {
 } from '../../../services/firestoreShim';
 import './Notes.css';
 import AiNoteDraft from '../../Common/AiNoteDraft';
+import Paged from '../../Common/Paged';
 
 export default function TherapistNotes() {
   const navigate = useNavigate();
@@ -689,7 +690,7 @@ export default function TherapistNotes() {
         
       {/* Notes List */}
         <div className="notes-list">
-        {filteredNotes.map((note) => (
+        <Paged items={filteredNotes}>{(filteredNotes) => filteredNotes.map((note) => (
           <div key={note.id} className="note-card">
             <div className="note-header">
               <div className="note-info">
@@ -790,7 +791,7 @@ export default function TherapistNotes() {
                           )}
                         </div>
           </div>
-        ))}
+        ))}</Paged>
       </div>
 
       {/* Create/Edit Note Modal */}
@@ -841,7 +842,7 @@ export default function TherapistNotes() {
                       <div className="form-group">
                         <label>Clients</label>
                         <div className="checkbox-list">
-                          {clients.map(client => (
+                          <Paged items={clients}>{(clients) => clients.map(client => (
                             <label key={client.id} className="checkbox-item">
                               <input
                                 type="checkbox"
@@ -866,7 +867,7 @@ export default function TherapistNotes() {
                               />
                               <span className="checkbox-label">{client.name || client.email}</span>
                             </label>
-                          ))}
+                          ))}</Paged>
                         </div>
                       </div>
                       <div className="form-group">

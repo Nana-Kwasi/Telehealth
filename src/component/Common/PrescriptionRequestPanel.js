@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
 import PhoneForSms from './PhoneForSms';
+import Paged from './Paged';
 
 /**
  * Patient / psychiatry-client side of prescription requests, shown at the top of
@@ -161,7 +162,7 @@ export default function PrescriptionRequestPanel() {
             {(type === 'NEW_PRESCRIPTION' || !sourceId) && (
               <div style={{ display: 'grid', gap: '0.4rem' }}>
                 <label style={{ fontSize: '0.8rem', color: '#475569' }}>Medicines (name and strength if you know it)</label>
-                {items.map((it, i) => (
+                <Paged items={items}>{(items) => items.map((it, i) => (
                   <div key={i} style={{ display: 'flex', gap: '0.4rem' }}>
                     <input style={{ ...input, flex: 2 }} placeholder="e.g. Amlodipine" value={it.name}
                       onChange={e => setItems(arr => arr.map((x, k) => k === i ? { ...x, name: e.target.value } : x))} />
@@ -169,7 +170,7 @@ export default function PrescriptionRequestPanel() {
                       onChange={e => setItems(arr => arr.map((x, k) => k === i ? { ...x, strength: e.target.value } : x))} />
                     {items.length > 1 && <button type="button" onClick={() => setItems(arr => arr.filter((_, k) => k !== i))} style={btn('#fff', '#b91c1c', '1.5px solid #fecaca')}>×</button>}
                   </div>
-                ))}
+                ))}</Paged>
                 {items.length < 10 && <button type="button" onClick={() => setItems(arr => [...arr, { name: '', strength: '' }])} style={{ ...btn('#fff', '#0369a1', '1.5px dashed #7dd3fc'), justifySelf: 'start' }}>+ Add medicine</button>}
               </div>
             )}

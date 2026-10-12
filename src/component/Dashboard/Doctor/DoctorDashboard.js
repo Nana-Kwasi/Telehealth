@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ProviderPreauthList, LicencePanel } from '../../Common/ProviderInsurance';
 import AiAssistantFab from '../../Common/AiAssistantFab';
 import CarePlanComposer from '../../Common/CarePlanComposer';
 import ReferralComposer from '../../Common/ReferralComposer';
@@ -78,6 +79,7 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/fee-offers', icon: Tag, label: 'Offers on my fee' },
     { path: '/dashboard/diagnostic-order', icon: FlaskConical, label: 'Order Lab / Scan' },
     { path: '/dashboard/diagnostic-results', icon: ClipboardList, label: 'Lab & Scan Results' },
+    { path: '/dashboard/preauth', icon: ClipboardList, label: 'Insurer approvals' },
     { path: '/dashboard/reviews', icon: Star, label: 'Reviews' },
     { path: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
     { path: '/dashboard/report-issue', icon: FileText, label: 'Report Issue' },
@@ -182,7 +184,8 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/reviews" element={<DoctorReviews profile={profile} />} />
           <Route path="/analytics" element={<DoctorAnalytics profile={profile} />} />
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="doctor" />} />
-          <Route path="/settings" element={<DoctorSettings profile={profile} />} />
+          <Route path="/settings" element={<><div className="doctor-page" style={{ paddingBottom: 0 }}><LicencePanel /></div><DoctorSettings profile={profile} /></>} />
+          <Route path="/preauth" element={<ProviderPreauthList title="Insurer approvals" />} />
         </Routes>
         {/* Floating, so the assistant is reachable from every screen without
             navigating away from what you are looking at. */}

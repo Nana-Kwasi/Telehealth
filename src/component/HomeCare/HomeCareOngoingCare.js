@@ -5,6 +5,7 @@ import { fetchPatientOngoingBookings, fetchVisitLogs } from '../../services/home
 import { statusLabel } from '../../utils/homeCareUtils';
 import { isPackageDuration, packageSpanDaysInclusive } from '../../utils/homeCarePackage';
 import './HomeCare.css';
+import Paged from '../Common/Paged';
 
 function formatVisitDisplayDate(ymd) {
   if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) return ymd || '—';
@@ -74,7 +75,7 @@ function EngagementCard({ booking, navigate }) {
             </div>
           ) : (
             <ul className="hc-visit-log-list">
-              {logs.map((l) => (
+              <Paged items={logs}>{(logs) => logs.map((l) => (
                 <li key={l.id} className="hc-visit-log-card">
                   <div className="hc-visit-log-card-top">
                     <time dateTime={l.visitDate || undefined} className="hc-visit-log-date">
@@ -131,7 +132,7 @@ function EngagementCard({ booking, navigate }) {
                     </div>
                   ) : null}
                 </li>
-              ))}
+              ))}</Paged>
             </ul>
           )}
         </div>
@@ -169,9 +170,9 @@ export default function HomeCareOngoingCare() {
       <p className="hc-sub">Weekly, monthly, and yearly engagements in progress.</p>
       {loading ? <p className="hc-empty">Loading…</p> : null}
       {!loading && list.length === 0 ? <p className="hc-empty">No ongoing care packages.</p> : null}
-      {list.map((b) => (
+      <Paged items={list}>{(list) => list.map((b) => (
         <EngagementCard key={b.id} booking={b} navigate={navigate} />
-      ))}
+      ))}</Paged>
     </div>
   );
 }

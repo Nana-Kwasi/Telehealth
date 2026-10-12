@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Promotions on MY fee — a doctor or therapist deciding whether to take part.
@@ -85,7 +86,7 @@ export default function ProviderPricePromotions() {
       {pending.length > 0 ? (
         <>
           <h2 style={S.h2}>Waiting for your decision</h2>
-          {pending.map((r) => (
+          <Paged items={pending}>{(pending) => pending.map((r) => (
             <div key={r.id} style={S.card}>
               <div style={S.cardTop}>
                 <span style={S.name}>{r.name}</span>
@@ -128,7 +129,7 @@ export default function ProviderPricePromotions() {
                 </div>
               )}
             </div>
-          ))}
+          ))}</Paged>
         </>
       ) : null}
 

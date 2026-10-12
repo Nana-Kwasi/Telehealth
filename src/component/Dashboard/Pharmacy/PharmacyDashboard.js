@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsurance';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { signOut, updatePassword } from '../../../services/authShim';
 import { auth, db } from '../../../services/firestoreShim';
@@ -16,6 +17,7 @@ import PharmacySettings from './PharmacySettings';
 import FormularyManager from '../../Common/FormularyManager';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import RoleAssistant from '../../Common/RoleAssistant';
 
 const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
@@ -23,6 +25,8 @@ const NAV = [
   { path: '/dashboard/prescriptions',label: 'Prescriptions', icon: '💊' },
   { path: '/dashboard/open-prescriptions', label: 'Open Prescriptions', icon: '📬' },
   { path: '/dashboard/reports',      label: 'Reports',       icon: '📈' },
+  { path: '/dashboard/insurance-claims', label: 'Insurance claims', icon: '🧾' },
+  { path: '/dashboard/preauth',      label: 'Pre-authorisations', icon: '✅' },
   { path: '/dashboard/formulary',    label: 'Formulary',     icon: '📚' },
   { path: '/dashboard/report-issue', label: 'Report Issue',  icon: '📩' },
   { path: '/dashboard/settings',     label: 'Settings',      icon: '⚙️' },
@@ -112,6 +116,7 @@ export default function PharmacyDashboard({ profile }) {
       </aside>
 
       <main className="pharmacy-main">
+        <RoleAssistant kind="pharmacy" accent="#0f766e" />
         {mfaRequired && !hasMfaFactor && (
           <div style={{ margin: '1rem', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '0.85rem 1rem', color: '#9a3412', fontSize: '0.86rem', fontWeight: 600 }}>
             Multi-factor authentication is required for this parent pharmacy account. Please enroll MFA in your account settings flow before production rollout.
@@ -166,6 +171,8 @@ export default function PharmacyDashboard({ profile }) {
           <Route path="/prescriptions" element={<PharmacyPrescriptions profile={profile} />} />
           <Route path="/open-prescriptions" element={<OpenPrescriptions />} />
           <Route path="/reports"       element={<PharmacyReports       profile={profile} />} />
+          <Route path="/insurance-claims" element={<ProviderClaims />} />
+          <Route path="/preauth" element={<ProviderPreauthList />} />
           <Route path="/formulary"     element={<FormularyManager />} />
           <Route path="/report-issue"  element={<GlobalReportForm profile={profile} reporterType="pharmacy_parent" />} />
           <Route path="/settings"      element={<PharmacySettings      profile={profile} />} />

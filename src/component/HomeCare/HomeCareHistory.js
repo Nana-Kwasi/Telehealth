@@ -4,6 +4,7 @@ import { auth } from '../../services/firestoreShim';
 import { fetchPatientBookings } from '../../services/homeCareService';
 import { statusLabel } from '../../utils/homeCareUtils';
 import './HomeCare.css';
+import Paged from '../Common/Paged';
 
 export default function HomeCareHistory() {
   const navigate = useNavigate();
@@ -31,13 +32,13 @@ export default function HomeCareHistory() {
       <h1>My visits</h1>
       {loading ? <p className="hc-empty">Loading…</p> : null}
       {!loading && list.length === 0 ? <p className="hc-empty">No bookings yet.</p> : null}
-      {list.map((b) => (
+      <Paged items={list}>{(list) => list.map((b) => (
         <div key={b.id} className="hc-card" style={{ cursor: 'pointer' }} onClick={() => navigate(`/home-care/booking/${b.id}`)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate(`/home-care/booking/${b.id}`)}>
           <span className="hc-status">{statusLabel(b.status)}</span>
           <h3>{b.nurseName}</h3>
           <p className="hc-card-meta">{b.startDate} · {b.careType}</p>
         </div>
-      ))}
+      ))}</Paged>
     </div>
   );
 }

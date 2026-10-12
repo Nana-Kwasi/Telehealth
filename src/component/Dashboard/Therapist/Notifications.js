@@ -4,6 +4,7 @@ import { db, auth } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit } from '../../../services/firestoreShim';
 import { ArrowLeft, Bell, MessageSquare, Calendar, Video, AlertCircle, CheckCircle } from 'lucide-react';
 import './Notifications.css';
+import Paged from '../../Common/Paged';
 
 const getNotificationIcon = (type) => {
   const icons = {
@@ -114,7 +115,7 @@ export default function Notifications() {
           </div>
         ) : (
           <div className="notifications-list">
-            {notifications.map(notification => (
+            <Paged items={notifications}>{(notifications) => notifications.map(notification => (
               <div 
                 key={notification.id} 
                 className={`notification-item ${notification.unread ? 'unread' : ''}`}
@@ -130,7 +131,7 @@ export default function Notifications() {
                 </div>
                 {notification.unread && <div className="unread-indicator"></div>}
               </div>
-            ))}
+            ))}</Paged>
           </div>
         )}
       </div>

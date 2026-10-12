@@ -16,6 +16,7 @@ import { downloadFile } from '../../../utils/downloadFile';
 import ChatImage from '../../Common/ChatImage';
 import './Messages.css';
 import { resolveFileUrl } from '../../../utils/fileUrl';
+import Paged from '../../Common/Paged';
 
 // Render a presence timestamp (Firestore Timestamp, ISO string, millis, or Date)
 // the WhatsApp way: "Online" / "Last seen Xm ago".
@@ -396,7 +397,7 @@ export default function TherapistMessages() {
         </div>
 
         <div className="conversations-list">
-          {filteredTherapists.map((therapist) => (
+          <Paged items={filteredTherapists}>{(filteredTherapists) => filteredTherapists.map((therapist) => (
             <div
               key={therapist.id}
               className={`conversation-item ${selectedTherapist?.id === therapist.id ? 'active' : ''}`}
@@ -447,7 +448,7 @@ export default function TherapistMessages() {
                 </div>
               )}
             </div>
-          ))}
+          ))}</Paged>
         </div>
       </div>
 

@@ -12,7 +12,9 @@ import AppointmentRiskPanel from '../../Common/AppointmentRiskPanel';
 import { auth, db, collection, query, where, getDocs, doc, updateDoc } from '../../../services/firestoreShim';
 import { Calendar, Clock, Check, X, RefreshCw } from 'lucide-react';
 import ActionButton from '../../Common/ActionButton';
+import { VisitTranscriptChip } from '../../Common/PatientTranscripts';
 import './Appointments.css';
+import Paged from '../../Common/Paged';
 
 const FILTERS = [
   { id: 'requests', label: 'Requests' },
@@ -177,7 +179,7 @@ export default function TherapistAppointments() {
         </div>
       ) : (
         <div className="ta-list">
-          {filtered.map((call) => {
+          <Paged items={filtered}>{(filtered) => filtered.map((call) => {
             const pending = isPending(call);
             const status = String(call.status || 'scheduled').toLowerCase();
             return (
@@ -193,6 +195,9 @@ export default function TherapistAppointments() {
                     {call.durationMinutes || call.duration || 30} min
                   </div>
                   {call.notes && <p className="ta-card-notes">{call.notes}</p>}
+                  {(status === 'completed' || (callDate(call) && callDate(call) < new Date())) && status !== 'cancelled' && (
+                    <div style={{ marginTop: 6 }}><VisitTranscriptChip visitId={call.id} /></div>
+                  )}
                 </div>
 
                 <div className="ta-card-actions">
@@ -221,7 +226,7 @@ export default function TherapistAppointments() {
                 </div>
               </div>
             );
-          })}
+          })}</Paged>
         </div>
       )}
 

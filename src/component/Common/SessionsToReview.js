@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FileAudio } from 'lucide-react';
 import { api } from '../../services/apiClient';
 import SessionRecordReview from './SessionRecordReview';
+import Paged from './Paged';
 
 /**
  * Transcribed sessions whose notes have not been saved yet — for a clinician
@@ -27,7 +28,7 @@ export default function SessionsToReview() {
           <p style={S.sub}>Transcribed with the patient's consent. Review the drafted notes and save them to the record.</p>
         </div>
       </header>
-      {rows.map((r) => (
+      <Paged items={rows}>{(rows) => rows.map((r) => (
         <div key={r.id} style={S.row}>
           {open === r.id ? (
             <div style={{ width: '100%' }}>
@@ -40,7 +41,7 @@ export default function SessionsToReview() {
             </>
           )}
         </div>
-      ))}
+      ))}</Paged>
     </section>
   );
 }

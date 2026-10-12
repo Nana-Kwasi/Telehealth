@@ -4,6 +4,7 @@ import {
   collection, doc, updateDoc, serverTimestamp, onSnapshot,
 } from '../../../services/firestoreShim';
 import { NURSE_ACCOUNT_STATUS, NURSE_PRESENCE } from '../../../constants/homeCareConstants';
+import Paged from '../../Common/Paged';
 
 const QUEUES = [
   { key: 'pharmacies', label: 'Pharmacies', icon: '💊', col: 'pharmacies', nameField: 'pharmacyName', statusField: 'status' },
@@ -312,7 +313,7 @@ export default function AdminApprovals() {
               </tr>
             </thead>
             <tbody>
-              {currentList.map((item) => (
+              <Paged items={currentList} table>{(currentList) => currentList.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.85rem' }}>{getName(item)}</div>
@@ -376,7 +377,7 @@ export default function AdminApprovals() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         </div>

@@ -4,6 +4,7 @@ import { onAuthStateChanged } from '../../../services/authShim';
 import { db, auth } from '../../../services/firestoreShim';
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import Paged from '../../Common/Paged';
 
 const STATUS_LABEL = {
   sent: 'Incoming',
@@ -418,7 +419,7 @@ export default function PharmacyOverview({ profile }) {
               </div>
             ) : (
               <ul className="pharmacy-overview-queue">
-                {attentionQueue.map(({ rx, kind, branchLabel, ageMs }) => {
+                <Paged items={attentionQueue}>{(attentionQueue) => attentionQueue.map(({ rx, kind, branchLabel, ageMs }) => {
                   const meta = ATTENTION_KIND[kind];
                   const q = new URLSearchParams({ filter: meta.filter, rx: rx.id });
                   return (
@@ -431,7 +432,7 @@ export default function PharmacyOverview({ profile }) {
                       </Link>
                     </li>
                   );
-                })}
+                })}</Paged>
               </ul>
             )}
           </div>
@@ -444,7 +445,7 @@ export default function PharmacyOverview({ profile }) {
               </div>
             ) : (
               <ul className="pharmacy-overview-branch-list">
-                {branchSnapshots.map(b => (
+                <Paged items={branchSnapshots}>{(branchSnapshots) => branchSnapshots.map(b => (
                   <li key={b.id}>
                     <Link className="pharmacy-overview-branch-row" to={`/dashboard/branches/${b.id}`}>
                       <span className="pharmacy-overview-branch-name">{b.name}</span>
@@ -457,7 +458,7 @@ export default function PharmacyOverview({ profile }) {
                       )}
                     </Link>
                   </li>
-                ))}
+                ))}</Paged>
               </ul>
             )}
           </div>
@@ -478,7 +479,7 @@ export default function PharmacyOverview({ profile }) {
               </div>
             ) : (
               <ul className="pharmacy-overview-feed">
-                {activityFeed.map(row => (
+                <Paged items={activityFeed}>{(activityFeed) => activityFeed.map(row => (
                   <li key={row.id}>
                     <Link to={`/dashboard/prescriptions?rx=${encodeURIComponent(row.id)}`} className="pharmacy-overview-feed-link">
                       <span className="pharmacy-overview-feed-time">
@@ -490,7 +491,7 @@ export default function PharmacyOverview({ profile }) {
                       </span>
                     </Link>
                   </li>
-                ))}
+                ))}</Paged>
               </ul>
             )}
           </div>

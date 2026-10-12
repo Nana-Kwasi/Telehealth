@@ -53,6 +53,7 @@ import {
 } from '../../../services/firestoreShim';
 import './Resources.css';
 import ActionButton from '../../Common/ActionButton';
+import Paged from '../../Common/Paged';
 
 export default function TherapistResources() {
   const [activeTab, setActiveTab] = useState('resources');
@@ -2520,7 +2521,7 @@ export default function TherapistResources() {
                     <div className="client-section">
                       <h3>Your Assigned Clients</h3>
                       <div className="client-list">
-                        {assignedClients.map(client => (
+                        <Paged items={assignedClients}>{(assignedClients) => assignedClients.map(client => (
                           <div key={client.id} className="client-item">
                             <label>
                               <input
@@ -2534,7 +2535,7 @@ export default function TherapistResources() {
                               </div>
                             </label>
                           </div>
-                        ))}
+                        ))}</Paged>
                       </div>
                     </div>
 
@@ -2589,7 +2590,7 @@ export default function TherapistResources() {
                 <div className="client-section">
                   <h3>Your Assigned Clients</h3>
                   <div className="client-list">
-                    {assignedClients.map(client => (
+                    <Paged items={assignedClients}>{(assignedClients) => assignedClients.map(client => (
                       <div key={client.id} className="client-item">
                         <label>
                           <input
@@ -2603,7 +2604,7 @@ export default function TherapistResources() {
                           </div>
                         </label>
                       </div>
-                    ))}
+                    ))}</Paged>
                   </div>
                 </div>
 

@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { useHomeCareNurse } from './HomeCareNurseContext';
 import { fetchUserNotifications, markNotificationRead } from '../../../services/homeCareService';
 import './HomeCareNurseDashboard.css';
+import Paged from '../../Common/Paged';
 
 function fmtWhen(ts) {
   if (!ts?.seconds) return '';
@@ -54,7 +55,7 @@ export default function HomeCareNurseNotifications({ embedded = false, onClose }
       </button>
       {loading ? <p className="hcn-empty">Loading…</p> : null}
       {!loading && list.length === 0 ? <p className="hcn-empty">No notifications yet.</p> : null}
-      {list.map((n) => (
+      <Paged items={list}>{(list) => list.map((n) => (
         <button
           key={n.id}
           type="button"
@@ -65,7 +66,7 @@ export default function HomeCareNurseNotifications({ embedded = false, onClose }
           <p className="hcn-card-meta">{n.body || ''}</p>
           {fmtWhen(n.createdAt) ? <p className="hcn-card-meta">{fmtWhen(n.createdAt)}</p> : null}
         </button>
-      ))}
+      ))}</Paged>
     </>
   );
 

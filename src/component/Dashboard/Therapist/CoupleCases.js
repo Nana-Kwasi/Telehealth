@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Users, ArrowLeft, ShieldAlert, RefreshCw } from 'lucide-react';
 import { listMyCouples, getCoupleCaseForTherapist } from '../../../services/coupleTherapyService';
 import './CoupleCases.css';
+import Paged from '../../Common/Paged';
 
 // Web counterpart of the mobile TherapistCoupleCaseScreen. A therapist matched to
 // a couple had no way to open the case on web at all — the couple lives in
@@ -207,7 +208,7 @@ export default function CoupleCases() {
         </div>
       ) : (
         <div className="cc-grid">
-          {couples.map((c) => (
+          <Paged items={couples}>{(couples) => couples.map((c) => (
             <button key={c.id || c.coupleId} className="cc-card" onClick={() => openCase(c.coupleId || c.id)}>
               <div className="cc-card-top">
                 <Users size={18} />
@@ -223,7 +224,7 @@ export default function CoupleCases() {
                 Intake: {c.partnerAIntakeComplete ? '✓' : '⏳'} A · {c.partnerBIntakeComplete ? '✓' : '⏳'} B
               </p>
             </button>
-          ))}
+          ))}</Paged>
         </div>
       )}
     </div>

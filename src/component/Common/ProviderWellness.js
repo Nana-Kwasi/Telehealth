@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Leaf, Send, Users } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Wellness content a provider sends to their OWN people.
@@ -144,7 +145,7 @@ export default function ProviderWellness({ audience = 'my_clients', peopleNoun =
             You have not sent any wellness messages yet. The first one you send appears here.
           </p>
         </section>
-      ) : sent.map((c) => (
+      ) : <Paged items={sent}>{(sent) => sent.map((c) => (
         <section key={c.id} style={S.sentCard}>
           <div style={S.sentTop}>
             <span style={S.sentTitle}>{c.title}</span>
@@ -156,7 +157,7 @@ export default function ProviderWellness({ audience = 'my_clients', peopleNoun =
               { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not sent yet'}
           </div>
         </section>
-      ))}
+      ))}</Paged>}
     </div>
   );
 }

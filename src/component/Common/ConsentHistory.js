@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
 import { NESSA_HUB_POLICY_LINKS, nessaHubPolicyUrl } from '../../utils/nessaHubPolicies';
+import Paged from './Paged';
 
 /**
  * What this person has agreed to, read-only, grouped by where they agreed.
@@ -68,7 +69,7 @@ export default function ConsentHistory() {
       {[...groups.entries()].map(([ctx, list]) => (
         <div key={ctx} style={S.card}>
           <h3 style={S.h3}>{CONTEXT_LABELS[ctx] || ctx}</h3>
-          {list.map((r) => {
+          <Paged items={list}>{(list) => list.map((r) => {
             const link = policyLink(r.consent_key);
             return (
               <div key={`${r.consent_key}-${r.policy_version}`} style={S.row}>
@@ -83,7 +84,7 @@ export default function ConsentHistory() {
                 {link ? <a href={link} target="_blank" rel="noreferrer" style={S.read}>Read</a> : null}
               </div>
             );
-          })}
+          })}</Paged>
         </div>
       ))}
     </div>

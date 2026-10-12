@@ -15,6 +15,7 @@ import AdminLocationCard from './AdminLocationCard';
 import AdminBriefing from './AdminBriefing';
 import { subscribeLocationUpdate, applyLocationPatch } from '../../../utils/locationBus';
 import './AdminOverview.css';
+import Paged from '../../Common/Paged';
 
 /**
  * Super admin home.
@@ -173,7 +174,7 @@ export default function AdminOverview({ profile }) {
 
       {/* ── Needs attention ── */}
       <section className="ov-attention">
-        {attention.map((a) => {
+        <Paged items={attention}>{(attention) => attention.map((a) => {
           const n = Number(queues[a.key] || 0);
           return (
             <button key={a.key} type="button" className={`ov-attn ${n ? `tone-${a.tone}` : 'clear'}`} onClick={() => navigate(a.path)}>
@@ -185,7 +186,7 @@ export default function AdminOverview({ profile }) {
               {n ? <ChevronRight size={16} className="ov-attn-go" /> : <CheckCircle2 size={16} className="ov-attn-ok" />}
             </button>
           );
-        })}
+        })}</Paged>
       </section>
 
       {/* ── AI briefing ── */}

@@ -36,6 +36,7 @@ import {
   Eye,
   Flag
 } from 'lucide-react';
+import Paged from '../../Common/Paged';
 
 export default function ClientSupport() {
   const [clientData, setClientData] = useState(null);
@@ -645,7 +646,7 @@ export default function ClientSupport() {
                 <div className="table-cell">Date Created</div>
                 <div className="table-cell">Actions</div>
               </div>
-              {incidents.map((incident) => (
+              <Paged items={incidents}>{(incidents) => incidents.map((incident) => (
                 <div key={incident.id} className="table-row">
                   <div className="table-cell">
                     <span className="incident-id">{incident.incidentId}</span>
@@ -683,7 +684,7 @@ export default function ClientSupport() {
                     </button>
                   </div>
                 </div>
-              ))}
+              ))}</Paged>
             </div>
           </div>
         )}
@@ -703,7 +704,7 @@ export default function ClientSupport() {
         <div className="support-tickets">
           <h2 className="section-title">Your Support Tickets</h2>
           <div className="tickets-list">
-            {supportTickets.map((ticket) => (
+            <Paged items={supportTickets}>{(supportTickets) => supportTickets.map((ticket) => (
               <div key={ticket.id} className="ticket-card">
                 <div className="ticket-header">
                   <h4>{ticket.title}</h4>
@@ -726,7 +727,7 @@ export default function ClientSupport() {
                   </span>
                 </div>
               </div>
-            ))}
+            ))}</Paged>
           </div>
         </div>
       )}
@@ -1000,12 +1001,12 @@ export default function ClientSupport() {
             </div>
             
             <div className="faq-list">
-              {filteredFAQ.map((item) => (
+              <Paged items={filteredFAQ}>{(filteredFAQ) => filteredFAQ.map((item) => (
                 <div key={item.id} className="faq-item">
                   <h4>{item.question}</h4>
                   <p>{item.answer}</p>
                 </div>
-              ))}
+              ))}</Paged>
             </div>
           </div>
         </div>

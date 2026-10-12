@@ -6,6 +6,7 @@ import { initializeApp, getApps } from '../../../services/authShim';
 import { getAuth, createUserWithEmailAndPassword, signOut as fbSignOut } from '../../../services/authShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import { formatDashboardLocationLine } from '../../Common/LocationSummaryCard';
+import Paged from '../../Common/Paged';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI",
@@ -266,7 +267,7 @@ export default function PharmacyBranches({ profile }) {
               </tr>
             </thead>
             <tbody>
-              {branches.map(b => (
+              <Paged items={branches} table>{(branches) => branches.map(b => (
                 <tr
                   key={b.id}
                   className="diagnostic-branches-row"
@@ -294,7 +295,7 @@ export default function PharmacyBranches({ profile }) {
                   </td>
                   <td className="parent-branches-chevron-col" style={{ color: '#94a3b8', fontWeight: 700 }}>→</td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         </div>

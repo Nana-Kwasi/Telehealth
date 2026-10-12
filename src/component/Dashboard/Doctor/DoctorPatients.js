@@ -3,6 +3,7 @@ import { Search, Users, Calendar, MessageSquare, ChevronRight } from 'lucide-rea
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, getDoc, doc, query, where } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const PATIENT_TABS = ['All', 'Active'];
 
@@ -169,7 +170,7 @@ export default function DoctorPatients({ profile }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(patient => {
+              <Paged items={filtered} table>{(filtered) => filtered.map(patient => {
                 const ss = STATUS_STYLE[patient.patientStatus] || STATUS_STYLE.active;
                 return (
                   <tr key={patient.id} style={{ cursor: 'pointer' }}
@@ -211,7 +212,7 @@ export default function DoctorPatients({ profile }) {
                     </td>
                   </tr>
                 );
-              })}
+              })}</Paged>
             </tbody>
           </table>
         )}

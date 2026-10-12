@@ -8,6 +8,7 @@ import {
 import './DoctorProfilePage.css';
 import { savePendingBooking } from '../../utils/pendingDoctorBooking';
 import { payForBooking } from '../../services/paystack';
+import Paged from '../Common/Paged';
 
 function getInitials(name) {
   if (!name) return 'Dr';
@@ -383,7 +384,7 @@ export default function DoctorProfilePage({ session }) {
                 <div className="dp-empty-reviews">
                   <p>No reviews yet. Be the first to leave one after your consultation.</p>
                 </div>
-              ) : reviews.map(r => (
+              ) : <Paged items={reviews}>{(reviews) => reviews.map(r => (
                 <div key={r.id} className="dp-review-card">
                   <div className="dp-review-header">
                     <div className="dp-reviewer-avatar">{r.clientName?.[0]?.toUpperCase() || 'P'}</div>
@@ -400,7 +401,7 @@ export default function DoctorProfilePage({ session }) {
                     </div>
                   )}
                 </div>
-              ))}
+              ))}</Paged>}
             </div>
           )}
         </div>

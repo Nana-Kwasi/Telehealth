@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getStoredRole } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * The FAQ, from the backend (/api/v1/faq) — one source for the web home, every
@@ -136,7 +137,7 @@ export default function FaqSection({ audience, compact = false, limit = 6, title
       {groups.map(([category, list]) => (
         <div key={category || 'all'}>
           {category ? <h3 style={S.cat}>{category}</h3> : null}
-          {list.map((f) => (
+          <Paged items={list}>{(list) => list.map((f) => (
             <div key={f.id} id={`faq-${f.id}`} style={S.item}>
               <button type="button" style={S.q} onClick={() => toggle(f.id)} aria-expanded={open.has(f.id)}>
                 <span>{f.question}</span>
@@ -144,7 +145,7 @@ export default function FaqSection({ audience, compact = false, limit = 6, title
               </button>
               {open.has(f.id) ? <div style={S.a}>{f.answer}</div> : null}
             </div>
-          ))}
+          ))}</Paged>
         </div>
       ))}
     </section>

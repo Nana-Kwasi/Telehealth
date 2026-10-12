@@ -8,8 +8,7 @@ import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import {
   LayoutDashboard, Users, BadgeCheck, CalendarDays, Pill, Building2, Stethoscope, Brain, Home, HeartHandshake,
   FlaskConical, BarChart3, FileDown, Inbox, ShieldCheck, BookOpen, Radar, ScrollText, Bell, Mail, Megaphone, Tag,
-  Sparkles, Settings, LogOut, Menu, ChevronRight,
-} from 'lucide-react';
+  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity } from 'lucide-react';
 import { api } from '../../../services/apiClient';
 import AdminGlobalSearch from './AdminGlobalSearch';
 import './AdminDashboard.css';
@@ -19,6 +18,7 @@ import AdminUserManagement    from './AdminUserManagement';
 import AdminCreatePharmacy    from './AdminCreatePharmacy';
 import AdminPrescriptionMonitor from './AdminPrescriptionMonitor';
 import AdminSmsFollowUp from './AdminSmsFollowUp';
+import AdminInsurance from './AdminInsurance';
 import AdminSystemConfig      from './AdminSystemConfig';
 import OnboardDoctor          from './OnboardDoctor';
 import OnboardTherapist       from './OnboardTherapist';
@@ -38,6 +38,7 @@ import FormularyManager from '../../Common/FormularyManager';
 import AdminRiskAlerts from './AdminRiskAlerts';
 import AdminSystemPdfExport   from './AdminSystemPdfExport';
 import AdminAuditLog          from './AdminAuditLog';
+import AdminActivityMonitor   from './AdminActivityMonitor';
 import AdminApprovals         from './AdminApprovals';
 import AdminUserDetail        from './AdminUserDetail';
 
@@ -49,6 +50,7 @@ const NAV = [
   { path: '/dashboard/appointments',      label: 'Appointments',          icon: CalendarDays,    section: 'PLATFORM' },
   { path: '/dashboard/prescriptions',     label: 'Prescription Monitor',  icon: Pill,            section: 'PLATFORM' },
   { path: '/dashboard/sms-follow-up',     label: 'SMS Follow-up',         icon: Pill,            section: 'PLATFORM' },
+  { path: '/dashboard/insurers',          label: 'Insurers & Claims',     icon: ShieldCheck,     section: 'PLATFORM' },
   // ONBOARDING
   { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: Building2,       section: 'ONBOARDING' },
   { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: Stethoscope,     section: 'ONBOARDING' },
@@ -63,6 +65,7 @@ const NAV = [
   { path: '/dashboard/insurance-verification', label: 'Insurance & Claims', icon: ShieldCheck,   section: 'ANALYTICS' },
   { path: '/dashboard/formulary',         label: 'Formulary',             icon: BookOpen,        section: 'ANALYTICS' },
   { path: '/dashboard/risk-alerts',       label: 'Patterns to review',    icon: Radar,           section: 'ANALYTICS', count: 'riskAlerts' },
+  { path: '/dashboard/activity',          label: 'Activity monitor',      icon: Activity,        section: 'ANALYTICS' },
   { path: '/dashboard/audit-log',         label: 'Audit Log',             icon: ScrollText,      section: 'ANALYTICS' },
   // ENGAGEMENT
   { path: '/dashboard/notifications',     label: 'Notifications',         icon: Bell,            section: 'ENGAGEMENT' },
@@ -196,6 +199,7 @@ export default function AdminDashboard({ profile }) {
           <Route path="/appointments"        element={<AdminAppointments />} />
           <Route path="/prescriptions"       element={<AdminPrescriptionMonitor />} />
           <Route path="/sms-follow-up"       element={<AdminSmsFollowUp />} />
+          <Route path="/insurers"            element={<AdminInsurance />} />
           <Route path="/create-pharmacy"     element={<AdminCreatePharmacy />} />
           <Route path="/onboard-doctor"      element={<OnboardDoctor />} />
           <Route path="/onboard-therapist"   element={<OnboardTherapist />} />
@@ -213,6 +217,7 @@ export default function AdminDashboard({ profile }) {
           <Route path="/promotions" element={<AdminPromotions />} />
           <Route path="/price-promotions" element={<AdminPricePromotions />} />
           <Route path="/ai-knowledge" element={<AdminAiKnowledge />} />
+          <Route path="/activity"            element={<AdminActivityMonitor />} />
           <Route path="/audit-log"           element={<AdminAuditLog />} />
           <Route path="/system-config"       element={<AdminSystemConfig />} />
         </Routes>

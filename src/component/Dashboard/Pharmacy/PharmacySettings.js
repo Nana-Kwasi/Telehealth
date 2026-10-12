@@ -21,11 +21,13 @@ import {
 } from '../../../services/authShim';
 import { SUPPORTED_COUNTRIES } from '../../../utils/featureFlags';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import InsuranceNetworks from '../../Common/InsuranceNetworks';
 
 const SETTINGS_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'preferences', label: 'Preferences' },
   { id: 'business', label: 'Business' },
+  { id: 'insurance', label: 'Insurance' },
   { id: 'security', label: 'Security' },
   { id: 'data', label: 'Data & session' },
 ];
@@ -706,6 +708,12 @@ export default function PharmacySettings({ profile }) {
                 </div>
               </form>
             </section>
+          </div>
+        )}
+
+        {settingsTab === 'insurance' && (
+          <div className="pharmacy-settings-tab-panel" role="tabpanel" id="settings-panel-insurance">
+            <InsuranceNetworks />
           </div>
         )}
 

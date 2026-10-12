@@ -42,6 +42,8 @@ import RecordExplorer from '../../Common/RecordExplorer';
 import { MedPatSettings, MedPatPrescriptions, MedPatEPharmacy, MedPatTimeline } from '../MedicalPatient/MedicalPatientDashboard';
 import { api, getStoredUserId } from '../../../services/apiClient';
 import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
+import InsuranceCards from '../../Common/InsuranceCards';
+import ClaimConfirmations from '../../Common/ClaimConfirmations';
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -92,6 +94,7 @@ export default function ClientDashboard({ profile }) {
       { path: '/dashboard/my-records', icon: Search, label: 'My Records', component: RecordExplorer },
     ]),
     { path: '/dashboard/billing', icon: CreditCard, label: 'Billing', component: ClientBilling },
+    { path: '/dashboard/insurance', icon: CreditCard, label: 'Insurance', component: InsuranceCards },
     { path: '/dashboard/notifications', icon: Bell, label: 'Notifications', component: NotificationCentre },
     { path: '/dashboard/ai-assistant', icon: Sparkles, label: 'NessaHub Assistant', component: AiHealthAssistant },
     { path: '/dashboard/my-care', icon: Pill, label: 'My Care', component: CareCentre },
@@ -207,6 +210,8 @@ export default function ClientDashboard({ profile }) {
         <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
         {/* Until their phone is verified (only while SMS is set up). */}
         <PhoneVerifyBanner />
+        {/* Medicine billed to their insurer, waiting for them to confirm receipt. */}
+        <ClaimConfirmations />
         <Routes>
           <Route
             path="/"
@@ -226,6 +231,7 @@ export default function ClientDashboard({ profile }) {
           <Route path="/care-plan" element={<MyCarePlan />} />
           <Route path="/my-records" element={<RecordExplorer title="My records" />} />
           <Route path="/billing" element={<><BillingAssistantPanel /><ClientBilling /></>} />
+          <Route path="/insurance" element={<div className="mp-page"><InsuranceCards accent="#5046bd" /></div>} />
           <Route path="/notifications" element={<NotificationCentre />} />
           <Route path="/ai-assistant" element={<AiHealthAssistant />} />
           <Route path="/my-care" element={<CareCentre variant="therapy" userId={profile?.id || profile?.uid} />} />

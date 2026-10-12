@@ -4,6 +4,7 @@ import { db } from '../../services/firestoreShim';
 import { collection, doc, getDocs, setDoc } from '../../services/firestoreShim';
 import './TherapistSelectionModal.css';
 import { resolveFileUrl } from '../../utils/fileUrl';
+import Paged from '../Common/Paged';
 
 export default function TherapistSelectionModal() {
   const navigate = useNavigate();
@@ -200,7 +201,7 @@ export default function TherapistSelectionModal() {
         {therapists.length > 0 ? (
           <>
             <div className="therapists-grid">
-              {therapists.map((therapist) => (
+              <Paged items={therapists}>{(therapists) => therapists.map((therapist) => (
                 <div key={therapist.id} className="therapist-card">
                   <div className="therapist-avatar">
                     {therapist.photoURL ? (
@@ -225,7 +226,7 @@ export default function TherapistSelectionModal() {
                     Select This Therapist
                   </button>
                 </div>
-              ))}
+              ))}</Paged>
             </div>
             
 

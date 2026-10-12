@@ -35,6 +35,7 @@ import {
 import { downloadNotePdf, downloadResourcePdf } from '../../../utils/brandedPdf';
 import { hydrateBookContent } from '../../../utils/noteSections';
 import ResourceMedia from '../../Common/ResourceMedia';
+import Paged from '../../Common/Paged';
 
 /** Tags may be an array or a comma-separated string, depending on where saved. */
 // A multi-answer worksheet field comes back in three shapes depending on where it
@@ -594,7 +595,7 @@ export default function ClientResources() {
         </div>
       ) : (
         <div className={`resources-container ${viewMode}`}>
-          {filteredResources.map((item) => (
+          <Paged items={filteredResources}>{(filteredResources) => filteredResources.map((item) => (
             <div key={item.id} className="resource-card">
               <div className="resource-header">
                 <div className="resource-icon">
@@ -847,7 +848,7 @@ export default function ClientResources() {
                 </div>
               </div>
             </div>
-          ))}
+          ))}</Paged>
         </div>
       )}
 

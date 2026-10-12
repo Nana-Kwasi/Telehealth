@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Receipt, ShieldCheck, FileCheck2, Printer } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Invoices, insurance and claims, for the patient.
@@ -106,7 +107,7 @@ export default function BillingAssistantPanel() {
           <div><h2 style={S.title}>Invoices</h2>
             <p style={S.sub}>One for every payment. Insured? Prepare a claim from an invoice.</p></div>
         </header>
-        {invoices.length === 0 ? <p style={S.sub}>No invoices yet.</p> : invoices.map((inv) => (
+        {invoices.length === 0 ? <p style={S.sub}>No invoices yet.</p> : <Paged items={invoices}>{(invoices) => invoices.map((inv) => (
           <div key={inv.id} style={S.line}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={S.strong}>{inv.invoice_number} · {money(inv.amount_cents, inv.currency)}</div>
@@ -122,7 +123,7 @@ export default function BillingAssistantPanel() {
               <button type="button" style={S.ghost} onClick={() => prepareClaim(inv.id)}>Claim</button>
             ) : <span style={{ ...S.badge, color: STATUS_TONE[inv.claim_status] }}>Claim {inv.claim_status}</span>}
           </div>
-        ))}
+        ))}</Paged>}
       </section>
 
       {/* ── Claims ── */}
@@ -132,7 +133,7 @@ export default function BillingAssistantPanel() {
             <span style={S.icon}><FileCheck2 size={17} /></span>
             <div><h2 style={S.title}>Insurance claims</h2></div>
           </header>
-          {claims.map((c) => (
+          <Paged items={claims}>{(claims) => claims.map((c) => (
             <div key={c.id} style={S.line}>
               <div style={{ flex: 1 }}>
                 <div style={{ ...S.strong, color: STATUS_TONE[c.status] }}>
@@ -143,7 +144,7 @@ export default function BillingAssistantPanel() {
                 {parseList(c.missing_json).map((m) => <div key={m} style={S.sub}>• {m}</div>)}
               </div>
             </div>
-          ))}
+          ))}</Paged>
         </section>
       ) : null}
     </div>

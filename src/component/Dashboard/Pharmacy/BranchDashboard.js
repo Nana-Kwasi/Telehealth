@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsurance';
+import InsuranceNetworks from '../../Common/InsuranceNetworks';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { signOut, updatePassword } from '../../../services/authShim';
 import { auth, db } from '../../../services/firestoreShim';
@@ -15,6 +17,7 @@ import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
 import './PharmacyDashboard.css';
+import Paged from '../../Common/Paged';
 
 function branchRxEventLabel(action) {
   const m = {
@@ -153,7 +156,7 @@ function BranchPrescriptions({ profile }) {
         </div>
       ) : (
         <div className="rx-list">
-          {prescriptions.map(rx => {
+          <Paged items={prescriptions}>{(prescriptions) => prescriptions.map(rx => {
             const incomingTransferMeds = (rx.medications || []).filter(m => (m.transferBranchId || '') === (profile.id || ''));
             const isIncomingTransfer = (rx.branchId || '') !== (profile.id || '') && incomingTransferMeds.length > 0;
             const sourceBranch = incomingTransferMeds[0]?.transferFromBranchName || rx.branchName || 'Branch';
@@ -195,7 +198,7 @@ function BranchPrescriptions({ profile }) {
                 📅 {rx.date || '—'} · {displayMeds.length} drug(s)
               </div>
             </div>
-          )})}
+          )})}</Paged>
         </div>
       )}
     </div>
@@ -319,7 +322,7 @@ function BranchOverview({ profile }) {
             <p className="branch-home-empty">No prescriptions yet.</p>
           ) : (
             <ul className="branch-home-rx-list">
-              {recent.map(r => {
+              <Paged items={recent}>{(recent) => recent.map(r => {
                 const sm = rxMeta(r);
                 const ts = r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000) : null;
                 return (
@@ -339,7 +342,7 @@ function BranchOverview({ profile }) {
                     </button>
                   </li>
                 );
-              })}
+              })}</Paged>
             </ul>
           )}
         </div>
@@ -412,7 +415,7 @@ function BranchOverview({ profile }) {
           <p className="branch-home-empty">No audit events yet — updates appear when you change drug or Rx status.</p>
         ) : (
           <ul className="branch-home-activity-timeline">
-            {events.map(e => (
+            <Paged items={events}>{(events) => events.map(e => (
               <li key={e.id} className="branch-home-activity-item">
                 <span className="branch-home-activity-dot" aria-hidden />
                 <div className="branch-home-activity-body">
@@ -428,7 +431,7 @@ function BranchOverview({ profile }) {
                     : '—'}
                 </time>
               </li>
-            ))}
+            ))}</Paged>
           </ul>
         )}
       </div>
@@ -506,7 +509,7 @@ function BranchTransfers({ profile }) {
               <tr><th>Direction</th><th>Drug</th><th>Counterparty</th><th>Patient</th><th>Ref</th><th>Stage</th><th>Updated</th><th /></tr>
             </thead>
             <tbody>
-              {visible.map(r => {
+              <Paged items={visible} table>{(visible) => visible.map(r => {
                 const tone = TONE[r.stage.tone] || TONE.info;
                 return (
                   <tr key={r.key}>
@@ -531,7 +534,7 @@ function BranchTransfers({ profile }) {
                     </td>
                   </tr>
                 );
-              })}
+              })}</Paged>
             </tbody>
           </table>
         </div>
@@ -561,7 +564,7 @@ function BranchActivity({ profile }) {
       <p className="pharmacy-page-sub">Latest branch actions on prescriptions</p>
       {loading ? <p>Loading…</p> : events.length === 0 ? <p style={{ color: '#94a3b8' }}>No activity yet.</p> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {events.map(e => (
+          <Paged items={events}>{(events) => events.map(e => (
             <div key={e.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.75rem 0.9rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                 <b style={{ fontSize: '0.82rem', color: '#0f172a' }}>{e.action}</b>
@@ -574,7 +577,7 @@ function BranchActivity({ profile }) {
               </div>
               {e.note ? <div style={{ fontSize: '0.78rem', color: '#475569' }}>{e.note}</div> : null}
             </div>
-          ))}
+          ))}</Paged>
         </div>
       )}
     </div>
@@ -677,6 +680,10 @@ function BranchSettings({ profile }) {
           </div>
         </div>
       </div>
+
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', marginTop: '1rem' }}>
+        <InsuranceNetworks />
+      </div>
     </div>
   );
 }
@@ -689,6 +696,8 @@ const NAV = [
   { path: '/dashboard/transfers',    label: 'Transfers',     icon: '↔️' },
   { path: '/dashboard/activity',     label: 'Activity',      icon: '🧾' },
   { path: '/dashboard/reports',      label: 'Reports',       icon: '📈' },
+  { path: '/dashboard/insurance-claims', label: 'Insurance claims', icon: '🧾' },
+  { path: '/dashboard/preauth',      label: 'Pre-authorisations', icon: '✅' },
   { path: '/dashboard/report-issue', label: 'Report Issue',  icon: '📩' },
   { path: '/dashboard/settings',     label: 'Settings',      icon: '⚙️' },
 ];
@@ -801,6 +810,8 @@ export default function BranchDashboard({ profile }) {
           <Route path="/transfers"     element={<BranchTransfers profile={profile} />} />
           <Route path="/activity"      element={<BranchActivity profile={profile} />} />
           <Route path="/reports"       element={<BranchReports profile={profile} />} />
+          <Route path="/insurance-claims" element={<ProviderClaims />} />
+          <Route path="/preauth" element={<ProviderPreauthList />} />
           <Route path="/walkin" element={<Navigate to="/dashboard/prescriptions#branch-walkin-verify" replace />} />
           <Route path="/report-issue"  element={<GlobalReportForm profile={profile} reporterType="pharmacy_branch" />} />
           <Route path="/settings"      element={<BranchSettings profile={profile} />} />

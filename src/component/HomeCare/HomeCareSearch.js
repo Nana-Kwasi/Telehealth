@@ -6,6 +6,7 @@ import { formatDistanceKm, parseCoords } from '../../utils/homeCareGeo';
 import { requireHomeCarePatient } from '../../utils/homeCarePatientAuth';
 import NurseAvatar from '../Dashboard/HomeCare/NurseAvatar';
 import './HomeCare.css';
+import Paged from '../Common/Paged';
 
 export default function HomeCareSearch() {
   const [params] = useSearchParams();
@@ -51,7 +52,7 @@ export default function HomeCareSearch() {
       <h1>{specialty || 'Search results'}</h1>
       {loading ? <p className="hc-empty">Loading…</p> : null}
       <div className="hc-grid">
-        {nurses.map((n) => {
+        <Paged items={nurses}>{(nurses) => nurses.map((n) => {
           const daily = feeForDuration(n, 'daily');
           const dist =
             n.distanceKm != null && parseCoords(n) ? ` · ${formatDistanceKm(n.distanceKm)}` : '';
@@ -71,7 +72,7 @@ export default function HomeCareSearch() {
               </div>
             </div>
           );
-        })}
+        })}</Paged>
       </div>
     </div>
   );

@@ -43,6 +43,7 @@ import 'jspdf-autotable';
 import { db, auth } from '../../../services/firestoreShim';
 import './Calendar.css';
 import { resolveFileUrl } from '../../../utils/fileUrl';
+import Paged from '../../Common/Paged';
 
 // Scheduled times come back from the REST API as ISO strings, but this screen was
 // written against Firestore Timestamps and called `scheduledTime?.toDate()`. On a
@@ -2174,7 +2175,7 @@ const TherapistCalendar = () => {
               <h3 className="tc-requests-title">
                 Session requests ({pendingRequests.length})
               </h3>
-              {pendingRequests.map((call) => (
+              <Paged items={pendingRequests}>{(pendingRequests) => pendingRequests.map((call) => (
                 <div key={call.id} className="tc-request">
                   <div className="tc-request-info">
                     <strong>{call.clientName || 'Client'}</strong>
@@ -2206,7 +2207,7 @@ const TherapistCalendar = () => {
                     </ActionButton>
                   </div>
                 </div>
-              ))}
+              ))}</Paged>
             </div>
           )}
           <div className="calendar-main">

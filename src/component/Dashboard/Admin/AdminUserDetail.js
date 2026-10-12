@@ -9,6 +9,8 @@ import { logAction, A } from '../../../utils/auditLogger';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
 import { api } from '../../../services/apiClient';
+import AdminUserActivity from './AdminUserActivity';
+import Paged from '../../Common/Paged';
 /** Collections whose `name` is the person's own name (not an organisation's). */
 const PERSON_COLLECTIONS = ['auth', 'clients', 'doctors', 'therapists', 'homeCareNurses'];
 
@@ -258,7 +260,8 @@ export default function AdminUserDetail() {
         // concepts a therapy client can never have, so querying them just produced
         // permanently-empty "Prescriptions (0)" cards on a therapy record.
         promises.push(getDocs(query(collection(db, 'scheduledCalls'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Therapy Session' }))).catch(() => []));
-        promises.push(getDocs(query(collection(db, 'clinicalNotes'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, ...d.data(), _type: 'Clinical Note' }))).catch(() => []));
+        // Clinical notes are health data: only how many exist and when, never their content or titles.
+        promises.push(getDocs(query(collection(db, 'clinicalNotes'), where('clientId', '==', userId))).then(s => s.docs.map(d => ({ id: d.id, createdAt: d.data().createdAt, therapistName: d.data().therapistName, _type: 'Clinical Note' }))).catch(() => []));
       } else if (col === 'auth') {
         // An `auth` row can be either product line, so load both and let the
         // role-type detection below decide what this account actually is.
@@ -616,15 +619,20 @@ export default function AdminUserDetail() {
   const statusSelectOptions = col === 'homeCareNurses'
     ? ['pending', 'approved', 'suspended', 'rejected']
     : ['active', 'suspended', 'pending', 'inactive', 'rejected'];
-  const SKIP = new Set(['id', '_col', '_roleLabel', 'password', 'uid']);
+  // Health fields never show on the admin screen, even in raw data.
+  const SKIP = new Set(['id', '_col', '_roleLabel', 'password', 'uid', 'allergies', 'medicalHistory', 'medical_history', 'conditions', 'medications',
+    'currentMedications', 'emergencyNotes', 'emergency_notes', 'vitals', 'vitalsLatest', 'diagnosis', 'symptoms', 'healthConditions', 'intake']);
   const allFields = Object.entries(user).filter(([k]) => !SKIP.has(k)).sort(([a], [b]) => a.localeCompare(b));
 
   const TABS = [
     { key: 'profile',  icon: '👤', label: 'Profile'  },
+    { key: 'trail',    icon: '🛰️', label: 'Activity trail' },
+    { key: 'security', icon: '🔐', label: 'Security & devices' },
+    { key: 'activity', icon: '📋', label: 'Care records'  },
     { key: 'edit',     icon: '✏️', label: 'Edit'     },
-    { key: 'activity', icon: '📋', label: 'Activity'  },
     { key: 'raw',      icon: '🗂️', label: 'Raw Data'  },
   ];
+  const trailUserId = user.authUid || user.clientId || user.userId || userId;
 
   return (
     <div className="admin-page">
@@ -827,7 +835,7 @@ export default function AdminUserDetail() {
                   <p style={{ color: '#94a3b8' }}>No branches linked to this parent yet.</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    {branches.map(b => (
+                    <Paged items={branches}>{(branches) => branches.map(b => (
                       <div key={b.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.65rem 0.75rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <div>
@@ -846,7 +854,7 @@ export default function AdminUserDetail() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    ))}</Paged>
                   </div>
                 )}
               </SectionCard>
@@ -966,7 +974,7 @@ export default function AdminUserDetail() {
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0891b2', marginTop: 5, flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>
-                          {n.title || n.noteType || 'Session note'}
+                          Session note <span style={{ fontWeight: 500, color: '#94a3b8' }}>· contents private</span>
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
                           {n.therapistName || '—'} · {fmtShort(n.createdAt)}
@@ -985,11 +993,10 @@ export default function AdminUserDetail() {
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', marginTop: 5, flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>
-                          {rx.medications?.[0]?.name || rx.medication || 'Prescription'}
-                          {rx.medications?.length > 1 ? ` +${rx.medications.length - 1} more` : ''}
+                          Prescription{rx.medications?.length ? ` · ${rx.medications.length} item${rx.medications.length === 1 ? '' : 's'}` : ''} <span style={{ fontWeight: 500, color: '#94a3b8' }}>· medicines private</span>
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
-                          {rx.diagnosis || '—'} · Dr. {rx.doctorName || '—'} · {fmtShort(rx.createdAt)}
+                          Dr. {rx.doctorName || '—'} · {fmtShort(rx.createdAt)}{rx.prescriptionRef ? ` · ${rx.prescriptionRef}` : ''}
                         </p>
                       </div>
                       <span style={{ padding: '0.2rem 0.65rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, background: rx.status === 'active' ? '#f0fdf4' : '#f8fafc', color: rx.status === 'active' ? '#16a34a' : '#64748b', border: `1px solid ${rx.status === 'active' ? '#bbf7d0' : '#e2e8f0'}` }}>
@@ -1006,7 +1013,7 @@ export default function AdminUserDetail() {
                     <div key={o.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', marginTop: 5, flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>{o.testType || o.testName || 'Diagnostic Order'} — {o.centerType?.toUpperCase() || ''}</p>
+                        <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>{(o.centerType || o.diagnosticType || 'Lab').toString().toUpperCase()} order <span style={{ fontWeight: 500, color: '#94a3b8' }}>· test private</span></p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#64748b' }}>{o.centerName || '—'} · {fmtShort(o.createdAt)}</p>
                       </div>
                       <span style={{ padding: '0.2rem 0.65rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, background: '#faf5ff', color: '#7c3aed', border: '1px solid #e9d5ff' }}>{o.status || '—'}</span>
@@ -1020,6 +1027,9 @@ export default function AdminUserDetail() {
           )}
         </div>
       )}
+
+      {activeTab === 'trail' && <AdminUserActivity userId={trailUserId} name={user.fullName || user.name || user.displayName} view="trail" />}
+      {activeTab === 'security' && <AdminUserActivity userId={trailUserId} name={user.fullName || user.name || user.displayName} view="security" />}
 
       {/* ── Raw Data tab ── */}
       {activeTab === 'raw' && (

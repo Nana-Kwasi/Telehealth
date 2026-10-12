@@ -13,6 +13,7 @@ import {
 import ChatModal from './ChatModal';
 import './Clients.css';
 import { enrichClientRecord } from '../../../utils/clientTherapyMetrics';
+import Paged from '../../Common/Paged';
 
 // ── Therapy Note Modal ──────────────────────────────────────────────────────
 function TherapyNoteModal({ client, onClose, onSave }) {
@@ -503,7 +504,7 @@ export default function TherapistClients({ profile }) {
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:'1rem' }}>
-            {filtered.map(client => {
+            <Paged items={filtered}>{(filtered) => filtered.map(client => {
               const sc = statusColor(client.status);
               return (
                 <div key={client.id} style={{ background:'white', borderRadius:14, border:'1.5px solid #e2e8f0', padding:'1.25rem', boxShadow:'0 1px 4px rgba(0,0,0,0.04)', transition:'all 0.18s', cursor:'default', position:'relative' }}
@@ -615,7 +616,7 @@ export default function TherapistClients({ profile }) {
                   </div>
                 </div>
               );
-            })}
+            })}</Paged>
           </div>
         )}
       </div>
@@ -660,7 +661,7 @@ export default function TherapistClients({ profile }) {
             <div style={{ padding:'1rem' }}>
               {allTherapists.length === 0 ? (
                 <p style={{ textAlign:'center', color:'#94a3b8', padding:'2rem' }}>No therapists found</p>
-              ) : allTherapists.map(t => {
+              ) : <Paged items={allTherapists}>{(allTherapists) => allTherapists.map(t => {
                 const isCurrent = reassignClient.therapistId === t.id;
                 return (
                   <button
@@ -682,7 +683,7 @@ export default function TherapistClients({ profile }) {
                     {reassigning && !isCurrent && <div style={{ width:16, height:16, border:'2px solid #e2e8f0', borderTopColor:'#4f46e5', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />}
                   </button>
                 );
-              })}
+              })}</Paged>}
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CalendarClock, Check } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Upcoming appointments worth chasing, and why.
@@ -58,7 +59,7 @@ export default function AppointmentRiskPanel() {
         </div>
       </header>
 
-      {worthChasing.map((r) => {
+      <Paged items={worthChasing}>{(worthChasing) => worthChasing.map((r) => {
         const tone = TONES[r.band] || TONES.medium;
         return (
           <div key={r.appointmentId} style={{ ...S.row, borderColor: tone.border, background: tone.bg }}>
@@ -84,7 +85,7 @@ export default function AppointmentRiskPanel() {
             </div>
           </div>
         );
-      })}
+      })}</Paged>
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { therapistFee, formatFee } from '../../utils/therapistFee';
 import { resolveFileUrl } from '../../utils/fileUrl';
 import '../../styles/zencare.css';
 import './MedPsych.css';
+import Paged from '../Common/Paged';
 
 /**
  * Choose a psychiatrist for the second-opinion consultation.
@@ -85,7 +86,7 @@ export default function MedPsychPsychiatrists() {
           </div>
         ) : (
           <div className="mp-pick-grid">
-            {list.map((t) => {
+            <Paged items={list}>{(list) => list.map((t) => {
               const id = t.id || t.uid;
               const name = t.name || t.fullName || (isSecondOpinion ? 'Specialist' : 'Therapist');
               const selected = flow.therapist?.id === id;
@@ -122,7 +123,7 @@ export default function MedPsychPsychiatrists() {
                   </div>
                 </button>
               );
-            })}
+            })}</Paged>
           </div>
         )}
       </div>

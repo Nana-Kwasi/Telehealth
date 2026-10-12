@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
+import Paged from '../../Common/Paged';
 
 /**
  * Collapsible read-only view of everything the doctor put on a prescription.
@@ -109,12 +110,12 @@ export default function RxFullDetails({ rx }) {
                 </p>
                 {rows.length > 0 ? (
                   <div style={grid}>
-                    {rows.map(([k, v]) => (
+                    <Paged items={rows}>{(rows) => rows.map(([k, v]) => (
                       <div key={k}>
                         <div style={cellLabel}>{k}</div>
                         <div style={cellValue}>{v}</div>
                       </div>
-                    ))}
+                    ))}</Paged>
                   </div>
                 ) : (
                   <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>No further prescribing detail recorded.</p>
@@ -125,11 +126,11 @@ export default function RxFullDetails({ rx }) {
                     {m.alternativeRationale ? ` · Why: ${m.alternativeRationale}` : ''}
                   </p>
                 )}
-                {notes.map((n, ni) => (
+                <Paged items={notes}>{(notes) => notes.map((n, ni) => (
                   <p key={ni} style={{ margin: '0.35rem 0 0', fontSize: '0.8rem', color: '#475569' }}>
                     💊 <b>{n.label || 'Pharmacy note'}</b>: {n.note}
                   </p>
-                ))}
+                ))}</Paged>
               </div>
             );
           })}

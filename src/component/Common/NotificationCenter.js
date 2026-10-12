@@ -7,6 +7,7 @@ import {
 import { api, getStoredUserId } from '../../services/apiClient';
 import { subscribeToTopic } from '../../services/notificationStream';
 import './NotificationCenter.css';
+import Paged from './Paged';
 
 /**
  * The notification bell: unread badge, list, and a detail view for one item.
@@ -205,7 +206,7 @@ export default function NotificationCenter() {
                     <p>You are all caught up</p>
                     <p className="nh-notif-empty-sub">New activity will appear here.</p>
                   </div>
-                ) : items.map((n) => {
+                ) : <Paged items={items}>{(items) => items.map((n) => {
                   const Icon = iconFor(n.eventType);
                   return (
                     <button
@@ -222,7 +223,7 @@ export default function NotificationCenter() {
                       <span className="nh-notif-item-time">{ago(n.createdAt)}</span>
                     </button>
                   );
-                })}
+                })}</Paged>}
               </div>
             </>
           )}

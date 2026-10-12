@@ -20,6 +20,7 @@ import { api } from '../../../services/apiClient';
 import ChatModal from './ChatModal';
 import WeeklyCheckInPanel from '../../Common/WeeklyCheckInPanel';
 import PreSessionBrief from '../../Common/PreSessionBrief';
+import PatientTranscripts from '../../Common/PatientTranscripts';
 import RecordGapsPanel from '../../Common/RecordGapsPanel';
 import CodingAssistPanel from '../../Common/CodingAssistPanel';
 import './ClientDetails.css';
@@ -40,6 +41,7 @@ import {
   toFirestoreDate,
 } from '../../../utils/clientTherapyMetrics';
 import { getNoteSections, getNotePreview, getNoteTitle } from '../../../utils/noteDisplayUtils';
+import Paged from '../../Common/Paged';
 
 const noteCardStyle = {
   padding: '1.2rem',
@@ -995,6 +997,7 @@ export default function ClientDetails() {
       {/* Opt-in weekly check-in and this week's answers against last week's. */}
       {/* What the client has shared since last time, before you start. */}
       <PreSessionBrief clientId={clientId} />
+      <PatientTranscripts patientId={clientId} accent="#7c3aed" />
       <WeeklyCheckInPanel clientId={clientId} />
       <RecordGapsPanel patientId={clientId} />
       <CodingAssistPanel patientId={clientId} />
@@ -1045,7 +1048,7 @@ export default function ClientDetails() {
               <div className="doctor-empty-state"><Pill size={36} /><p>No prescriptions issued yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {prescriptions.map(rx => {
+                <Paged items={prescriptions}>{(prescriptions) => prescriptions.map(rx => {
                   const isDone = rx.status === 'completed';
                   const medName = rx.medication || rx.medications?.[0]?.name || 'Medication';
                   const altMed = (rx.medications || []).find(m => m.alternativeSuggested);
@@ -1096,7 +1099,7 @@ export default function ClientDetails() {
                       <p style={{ margin: '0.4rem 0 0', fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right' }}>Tap card for full details</p>
                     </div>
                   );
-                })}
+                })}</Paged>
               </div>
             )}
           </div>
@@ -1434,7 +1437,7 @@ export default function ClientDetails() {
             <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No sessions found.</div>
           ) : (
             <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
-              {sessions.map(sess => {
+              <Paged items={sessions}>{(sessions) => sessions.map(sess => {
                 const sc = sessionStatusColor(sess.status);
                 return (
                   <div key={sess.id} style={{
@@ -1471,7 +1474,7 @@ export default function ClientDetails() {
                     </span>
                   </div>
                 );
-              })}
+              })}</Paged>
             </div>
           )}
         </div>
@@ -1492,9 +1495,9 @@ export default function ClientDetails() {
               <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No therapy notes yet.</div>
             ) : (
               <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
-                {therapyNotes.map((note) => (
+                <Paged items={therapyNotes}>{(therapyNotes) => therapyNotes.map((note) => (
                   <NoteListCard key={note.id} note={note} kind="therapy" onOpen={openNoteDetail} />
-                ))}
+                ))}</Paged>
               </div>
             )}
           </div>
@@ -1508,9 +1511,9 @@ export default function ClientDetails() {
               <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No clinical notes found.</div>
             ) : (
               <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
-                {clinicalNotes.map((note) => (
+                <Paged items={clinicalNotes}>{(clinicalNotes) => clinicalNotes.map((note) => (
                   <NoteListCard key={note.id} note={note} kind="clinical" onOpen={openNoteDetail} />
-                ))}
+                ))}</Paged>
               </div>
             )}
           </div>
@@ -1527,7 +1530,7 @@ export default function ClientDetails() {
             <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No mood entries found.</div>
           ) : (
             <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
-              {moodEntries.map(entry => {
+              <Paged items={moodEntries}>{(moodEntries) => moodEntries.map(entry => {
                 // `mood` holds the LABEL ("Sad", "😔"), not a number — and it is
                 // truthy, so it won this || chain and Number("Sad") gave NaN → 0.
                 // Every card therefore read "Unknown" and "0/10" even though the
@@ -1569,7 +1572,7 @@ export default function ClientDetails() {
                     )}
                   </div>
                 );
-              })}
+              })}</Paged>
             </div>
           )}
         </div>
@@ -1642,7 +1645,7 @@ export default function ClientDetails() {
             </div>
           ) : (
             <div style={{ padding: '0.75rem 1.5rem 1.5rem' }}>
-              {goals.map(goal => {
+              <Paged items={goals}>{(goals) => goals.map(goal => {
                 const priorityColor = { high: '#dc2626', medium: '#d97706', low: '#16a34a' }[goal.priority] || '#64748b';
                 const priorityBg = { high: '#fee2e2', medium: '#fef3c7', low: '#dcfce7' }[goal.priority] || '#f1f5f9';
                 const isDone = goal.status === 'completed';
@@ -1669,7 +1672,7 @@ export default function ClientDetails() {
                     </div>
                   </div>
                 );
-              })}
+              })}</Paged>
             </div>
           )}
         </div>

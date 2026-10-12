@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Plus, Search, Save, Trash2, ChevronDown, Layers } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, orderBy, serverTimestamp } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const NOTE_TEMPLATES = [
   {
@@ -270,12 +271,12 @@ export default function DoctorNotes({ profile }) {
               </div>
               {showPatientPicker && (
                 <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', background: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                  {patients.map(p => (
+                  <Paged items={patients}>{(patients) => patients.map(p => (
                     <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.55rem 0.85rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: form.patientIds.includes(p.id) ? '#eff6ff' : 'transparent' }}>
                       <input type="checkbox" checked={form.patientIds.includes(p.id)} onChange={() => togglePatient(p.id)} />
                       <span style={{ fontSize: '0.875rem', color: '#0f172a' }}>{p.name || 'Unknown Patient'}</span>
                     </label>
-                  ))}
+                  ))}</Paged>
                 </div>
               )}
               {form.patientIds.length === 0 && (
@@ -354,7 +355,7 @@ export default function DoctorNotes({ profile }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {filtered.map(note => {
+            <Paged items={filtered}>{(filtered) => filtered.map(note => {
               const typeInfo = noteTypes[note.type] || noteTypes.general;
               return (
                 <div key={note.id} style={{
@@ -389,7 +390,7 @@ export default function DoctorNotes({ profile }) {
                   </p>
                 </div>
               );
-            })}
+            })}</Paged>
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../services/apiClient';
 import { LAB_TEMPLATES, MODALITIES, parseParams, money, exportCsv, SPECIMENS } from './diagUi';
 import './diagnostics.css';
+import Paged from '../../Common/Paged';
 
 /**
  * Test / scan catalog: what the centre offers, price, turnaround target,
@@ -148,7 +149,7 @@ export default function DiagCatalog({ type = 'lab', mode = 'parent' }) {
             <table className="dx-table">
               <thead><tr><th>Name</th><th>Code</th><th>Price</th><th>Turnaround</th>{type === 'lab' ? <th>Specimen</th> : <th>Preparation</th>}{type === 'lab' && <th>Ranges</th>}<th>Status</th>{canEdit && <th />}</tr></thead>
               <tbody>
-                {shown.map(i => (
+                <Paged items={shown} table>{(shown) => shown.map(i => (
                   <tr key={i.id} className={canEdit ? 'dx-click' : undefined} onClick={canEdit ? () => openEdit(i) : undefined}>
                     <td><b>{i.name}</b>{i.description ? <div className="dx-card-hint">{i.description}</div> : null}</td>
                     <td style={{ fontFamily: 'monospace' }}>{i.code}</td>
@@ -159,7 +160,7 @@ export default function DiagCatalog({ type = 'lab', mode = 'parent' }) {
                     <td><span className="dx-pill" style={i.active ? { background: '#dcfce7', color: '#166534' } : { background: '#f1f5f9', color: '#475569' }}>{i.active ? 'Active' : 'Inactive'}</span></td>
                     {canEdit && <td onClick={e => e.stopPropagation()}><button type="button" className="dx-btn dx-btn--sm" onClick={() => toggle(i)}>{i.active ? 'Deactivate' : 'Activate'}</button></td>}
                   </tr>
-                ))}
+                ))}</Paged>
               </tbody>
             </table>
           </div>

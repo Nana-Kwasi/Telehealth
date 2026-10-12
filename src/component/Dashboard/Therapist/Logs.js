@@ -25,6 +25,7 @@ import {
 } from '../../../services/firestoreShim';
 import './Logs.css';
 import { downloadLogsPdf } from '../../../utils/brandedPdf';
+import Paged from '../../Common/Paged';
 
 export default function TherapistLogs() {
   const [selectedLogType, setSelectedLogType] = useState('all');
@@ -405,7 +406,7 @@ export default function TherapistLogs() {
           </div>
         ) : (
           <div className="logs-list">
-            {filteredLogs.map((log, index) => (
+            <Paged items={filteredLogs}>{(filteredLogs) => filteredLogs.map((log, index) => (
               <div key={`${log.type}-${log.id || index}`} className="log-item">
                 <div className="log-header">
                   <div className="log-type">
@@ -493,7 +494,7 @@ export default function TherapistLogs() {
                   )}
                 </div>
               </div>
-            ))}
+            ))}</Paged>
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PublicPageShell from './PublicPageShell';
 import { NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
+import Paged from '../Common/Paged';
 
 const TOPICS = [
   { title: 'Getting started', desc: 'Choose therapy, medical care, psychiatry, or second opinion and create your account.', to: '/' },
@@ -39,7 +40,7 @@ export default function HelpCenterPage() {
       </div>
 
       <div style={{ display: 'grid', gap: '0.65rem' }}>
-        {list.map((t) => (
+        <Paged items={list}>{(list) => list.map((t) => (
           <div key={t.title} className="public-card" style={{ marginBottom: 0 }}>
             <h2>{t.title}</h2>
             <p style={{ marginBottom: '0.75rem' }}>{t.desc}</p>
@@ -51,7 +52,7 @@ export default function HelpCenterPage() {
               <Link to={t.to} className="public-btn public-btn-primary">Go</Link>
             )}
           </div>
-        ))}
+        ))}</Paged>
       </div>
 
       {list.length === 0 ? <p style={{ color: '#64748b', marginTop: '1rem' }}>No topics match that search.</p> : null}

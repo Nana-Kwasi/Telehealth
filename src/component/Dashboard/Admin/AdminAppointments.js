@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 export default function AdminAppointments() {
   const [appointments, setAppointments] = useState([]);
@@ -252,7 +253,7 @@ export default function AdminAppointments() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(appt => (
+              <Paged items={filtered} table>{(filtered) => filtered.map(appt => (
                 <tr key={`${appt._source}-${appt.id}`}>
                   <td>
                     <span className={`badge ${typeBadge(appt).cls}`}>
@@ -289,7 +290,7 @@ export default function AdminAppointments() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         )}

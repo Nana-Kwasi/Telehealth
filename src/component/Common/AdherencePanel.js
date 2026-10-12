@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Pill } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * How a patient has actually been taking their medication.
@@ -46,7 +47,7 @@ export default function AdherencePanel({ patientId, days = 30 }) {
         </div>
       </header>
 
-      {rows.map((m) => {
+      <Paged items={rows}>{(rows) => rows.map((m) => {
         const total = (m.taken || 0) + (m.missed || 0) + (m.skipped || 0);
         const pct = total ? Math.round(((m.taken || 0) / total) * 100) : 0;
         const concerning = (m.missed || 0) >= 3;
@@ -68,7 +69,7 @@ export default function AdherencePanel({ patientId, days = 30 }) {
             </div>
           </div>
         );
-      })}
+      })}</Paged>
     </section>
   );
 }

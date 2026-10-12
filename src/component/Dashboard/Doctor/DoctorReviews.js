@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, Search, MessageSquare } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, orderBy, serverTimestamp } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 export default function DoctorReviews({ profile }) {
   const [reviews, setReviews] = useState([]);
@@ -135,7 +136,7 @@ export default function DoctorReviews({ profile }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {filtered.map(review => (
+            <Paged items={filtered}>{(filtered) => filtered.map(review => (
               <div key={review.id} style={{
                 padding: '1rem 1.25rem', background: '#f8fafc', borderRadius: 10,
                 borderLeft: `4px solid ${review.rating >= 4 ? '#10b981' : review.rating >= 3 ? '#f59e0b' : '#ef4444'}`,
@@ -194,7 +195,7 @@ export default function DoctorReviews({ profile }) {
                   </div>
                 )}
               </div>
-            ))}
+            ))}</Paged>
           </div>
         )}
       </div>

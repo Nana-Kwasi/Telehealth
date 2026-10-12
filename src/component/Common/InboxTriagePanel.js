@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Inbox, AlertTriangle, RefreshCw } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * Unread messages, sorted by how soon they need attention.
@@ -61,7 +62,7 @@ export default function InboxTriagePanel({ onOpen }) {
         <p style={S.empty}>Nothing unread. Your inbox is clear.</p>
       ) : null}
 
-      {sorted.map((m) => {
+      <Paged items={sorted}>{(sorted) => sorted.map((m) => {
         const tone = TONES[m.tone] || TONES.neutral;
         return (
           <button
@@ -81,7 +82,7 @@ export default function InboxTriagePanel({ onOpen }) {
             <span style={S.why}>{m.reason}</span>
           </button>
         );
-      })}
+      })}</Paged>
     </section>
   );
 }

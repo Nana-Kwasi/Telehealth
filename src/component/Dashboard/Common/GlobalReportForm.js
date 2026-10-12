@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { addDoc, collection, query, where, getDocs, serverTimestamp } from '../../../services/firestoreShim';
 import { db } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const CATEGORIES = ['complaint', 'feedback', 'technical', 'billing', 'emergency', 'other'];
 
@@ -181,7 +182,7 @@ export default function GlobalReportForm({ profile, reporterType = 'user' }) {
                 </tr>
               </thead>
               <tbody>
-                {reports.map(r => {
+                <Paged items={reports} table>{(reports) => reports.map(r => {
                   const sm = statusMeta(r.status);
                   return (
                     <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(r)} title="View report details">
@@ -200,7 +201,7 @@ export default function GlobalReportForm({ profile, reporterType = 'user' }) {
                       </td>
                     </tr>
                   );
-                })}
+                })}</Paged>
               </tbody>
             </table>
           </div>
@@ -241,12 +242,12 @@ export default function GlobalReportForm({ profile, reporterType = 'user' }) {
               {/* Body */}
               <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: '0.6rem 1.1rem', marginBottom: '1rem' }}>
-                  {rows.map(([k, v]) => (
+                  <Paged items={rows}>{(rows) => rows.map(([k, v]) => (
                     <div key={k}>
                       <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k}</div>
                       <div style={{ fontSize: '0.85rem', color: '#0f172a', wordBreak: 'break-word', textTransform: k === 'Category' || k === 'Severity' ? 'capitalize' : 'none' }}>{v}</div>
                     </div>
-                  ))}
+                  ))}</Paged>
                 </div>
 
                 <div style={{ marginBottom: '1rem' }}>

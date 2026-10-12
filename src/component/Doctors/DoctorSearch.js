@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../../services/firestoreShim';
 import { collection, getDocs } from '../../services/firestoreShim';
 import './DoctorSearch.css';
+import Paged from '../Common/Paged';
 
 const SPECIALTIES = [
   'All Specialties', 'General Practice', 'Internal Medicine', 'Family Medicine',
@@ -252,7 +253,7 @@ export default function DoctorSearch({ session }) {
             </div>
           ) : (
             <div className="ds-cards">
-              {filtered.map(doctor => {
+              <Paged items={filtered}>{(filtered) => filtered.map(doctor => {
                 const types = getConsultTypes(doctor.consultationTypes);
                 const rating = doctor.averageRating || 0;
                 const reviews = doctor.totalReviews || 0;
@@ -319,7 +320,7 @@ export default function DoctorSearch({ session }) {
                     </div>
                   </div>
                 );
-              })}
+              })}</Paged>
             </div>
           )}
         </main>

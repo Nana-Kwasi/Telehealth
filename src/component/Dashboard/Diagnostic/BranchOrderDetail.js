@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc } from '../../../services/firestoreShim';
 import { db } from '../../../services/firestoreShim';
 import { getDoctorDisplayName } from '../../../utils/doctorDisplayName';
+import Paged from '../../Common/Paged';
 
 function fmtTs(ts) {
   if (!ts?.seconds) return '—';
@@ -111,12 +112,12 @@ export default function BranchOrderDetail({ type }) {
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1.25rem', marginBottom: 16 }}>
         <table className="admin-table" style={{ margin: 0 }}>
           <tbody>
-            {rows.map(([k, v]) => (
+            <Paged items={rows} table>{(rows) => rows.map(([k, v]) => (
               <tr key={k}>
                 <td style={{ fontWeight: 700, color: '#64748b', width: 220, verticalAlign: 'top' }}>{k}</td>
                 <td style={{ wordBreak: 'break-word' }}>{v}</td>
               </tr>
-            ))}
+            ))}</Paged>
           </tbody>
         </table>
       </div>

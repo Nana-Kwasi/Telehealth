@@ -25,6 +25,7 @@ import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { dedupePatientPharmacies, hasPatientPharmacy } from '../../../utils/patientPharmacyDedupe';
 
 import FaqSection from '../../Common/FaqSection';
+import Paged from '../../Common/Paged';
 const TODAY = new Date().toISOString().split('T')[0];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -703,7 +704,7 @@ export default function DoctorHome({ profile }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {todayAppointments.map(appt => (
+              <Paged items={todayAppointments}>{(todayAppointments) => todayAppointments.map(appt => (
                 <div key={appt.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.8rem', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
                   <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#2563eb', lineHeight: 1 }}>{appt.time?.split(':')[0] || '--'}</p>
@@ -720,7 +721,7 @@ export default function DoctorHome({ profile }) {
                     </button>
                   )}
                 </div>
-              ))}
+              ))}</Paged>
             </div>
           )}
         </div>
@@ -1043,7 +1044,7 @@ export default function DoctorHome({ profile }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', maxHeight: 240, overflowY: 'auto' }}>
                   {allPatientsList.length === 0 ? (
                     <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}>No patients found</p>
-                  ) : ephPatients.map(p => {
+                  ) : <Paged items={ephPatients}>{(ephPatients) => ephPatients.map(p => {
                     const isSel = selectedPatientIds.has(p.id);
                     return (
                       <button key={p.id} type="button" onClick={() => toggleEphPatient(p.id)}
@@ -1058,7 +1059,7 @@ export default function DoctorHome({ profile }) {
                         </div>
                       </button>
                     );
-                  })}
+                  })}</Paged>}
                 </div>
               </div>
 

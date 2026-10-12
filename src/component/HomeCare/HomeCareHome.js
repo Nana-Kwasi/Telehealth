@@ -8,6 +8,7 @@ import { formatDistanceKm, parseCoords } from '../../utils/homeCareGeo';
 import { requireHomeCarePatient } from '../../utils/homeCarePatientAuth';
 import NurseAvatar from '../Dashboard/HomeCare/NurseAvatar';
 import './HomeCare.css';
+import Paged from '../Common/Paged';
 
 function NurseCard({ nurse, onBook, onProfile }) {
   const daily = feeForDuration(nurse, 'daily');
@@ -109,9 +110,9 @@ export default function HomeCareHome() {
         <>
           <h2 style={{ fontSize: '1rem', color: '#134e4a', margin: '1rem 0 0.75rem' }}>Recently hired</h2>
           <div className="hc-grid">
-            {recent.map((n) => (
+            <Paged items={recent}>{(recent) => recent.map((n) => (
               <NurseCard key={n.id} nurse={n} onProfile={() => navigate(`/home-care/nurse/${n.id}`)} onBook={() => book(n)} />
-            ))}
+            ))}</Paged>
           </div>
         </>
       ) : null}

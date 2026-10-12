@@ -12,6 +12,7 @@ import {
 import './MoodDashboard.css';
 import { api } from '../../../services/apiClient';
 import { resolveFileUrl } from '../../../utils/fileUrl';
+import Paged from '../../Common/Paged';
 
 const MOOD_EMOJI = { 9:'😄', 8:'😊', 7:'🙂', 6:'🙂', 5:'😐', 4:'😰', 3:'😔', 2:'😢', 1:'😭' };
 const MOOD_COLOR = (v) => v >= 7 ? '#10B981' : v >= 5 ? '#F59E0B' : '#EF4444';
@@ -302,7 +303,7 @@ export default function TherapistMoodDashboard() {
           </div>
         ) : (
           <div className="mood-roster">
-            {visibleRoster.map((c) => {
+            <Paged items={visibleRoster}>{(visibleRoster) => visibleRoster.map((c) => {
               const latest = c.latest_value == null ? null : Number(c.latest_value);
               const tone = moodTone(latest);
               return (
@@ -355,7 +356,7 @@ export default function TherapistMoodDashboard() {
                   </span>
                 </button>
               );
-            })}
+            })}</Paged>
           </div>
         )}
       </div>
@@ -449,7 +450,7 @@ export default function TherapistMoodDashboard() {
               </div>
             ) : (
               <div className="mood-entries-list">
-                {moodEntries.map(entry => {
+                <Paged items={moodEntries}>{(moodEntries) => moodEntries.map(entry => {
                   const val = Number(entry.moodValue) || 5;
                   return (
                     <div key={entry.id} className="mood-entry-row">
@@ -466,7 +467,7 @@ export default function TherapistMoodDashboard() {
                       <div className="mood-entry-date">{fmtDate(entry.createdAt || entry.date)}</div>
                     </div>
                   );
-                })}
+                })}</Paged>
               </div>
             )}
           </div>

@@ -5,6 +5,7 @@ import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
+import Paged from '../../Common/Paged';
 
 const MS_48H = 48 * 3600000;
 
@@ -282,7 +283,7 @@ export default function PharmacyPrescriptions({ profile }) {
         </div>
       ) : (
         <div className="rx-list">
-          {filtered.map(rx => (
+          <Paged items={filtered}>{(filtered) => filtered.map(rx => (
             <div key={rx.id} className="rx-card" onClick={() => navigate(`/dashboard/prescriptions/${rx.id}`)}>
               <div className="rx-card-header">
                 <div>
@@ -306,7 +307,7 @@ export default function PharmacyPrescriptions({ profile }) {
               </div>
               <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>📅 {rx.date || '—'} · {(rx.medications || []).length} drug(s)</div>
             </div>
-          ))}
+          ))}</Paged>
         </div>
       )}
 

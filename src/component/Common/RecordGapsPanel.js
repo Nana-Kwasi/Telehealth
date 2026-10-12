@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ListChecks } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * What is missing from this record — allergies never asked, consultations
@@ -36,7 +37,7 @@ export default function RecordGapsPanel({ patientId }) {
           <p style={S.sub}>Checked against the record itself — each one is something actually missing.</p>
         </div>
       </header>
-      {gaps.map((g) => (
+      <Paged items={gaps}>{(gaps) => gaps.map((g) => (
         <div key={g.key} style={S.row}>
           <span style={{ ...S.dot, background: LEVEL[g.level] || LEVEL.low }} aria-hidden />
           <div>
@@ -44,7 +45,7 @@ export default function RecordGapsPanel({ patientId }) {
             <div style={S.detail}>{g.detail}</div>
           </div>
         </div>
-      ))}
+      ))}</Paged>
     </section>
   );
 }

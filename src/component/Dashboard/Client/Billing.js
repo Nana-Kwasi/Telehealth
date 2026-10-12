@@ -27,6 +27,7 @@ import {
   Filter,
   Search
 } from 'lucide-react';
+import Paged from '../../Common/Paged';
 
 export default function ClientBilling() {
   const [billingHistory, setBillingHistory] = useState([]);
@@ -399,7 +400,7 @@ export default function ClientBilling() {
               <div className="col">Actions</div>
             </div>
             <div className="table-body">
-              {filteredHistory.map((item) => (
+              <Paged items={filteredHistory}>{(filteredHistory) => filteredHistory.map((item) => (
                 <div key={item.id} className="table-row">
                   <div className="col">
                     <span className="invoice-number">
@@ -445,7 +446,7 @@ export default function ClientBilling() {
                     </div>
                   </div>
                 </div>
-              ))}
+              ))}</Paged>
             </div>
           </div>
         )}

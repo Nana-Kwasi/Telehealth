@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../../services/apiClient';
+import Paged from '../../Common/Paged';
 
 /**
  * Prescriptions a prescriber offered to every approved NessaHub pharmacy.
@@ -65,7 +66,7 @@ export default function OpenPrescriptions() {
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {rows.map(rx => (
+          <Paged items={rows}>{(rows) => rows.map(rx => (
             <div key={rx.id} style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '1rem 1.1rem', display: 'flex', gap: '1rem', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: 220 }}>
                 <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#0f172a', fontSize: '0.9rem' }}>
@@ -87,7 +88,7 @@ export default function OpenPrescriptions() {
                 {takingId === rx.id ? 'Taking…' : 'Take this prescription'}
               </button>
             </div>
-          ))}
+          ))}</Paged>
         </div>
       )}
     </div>

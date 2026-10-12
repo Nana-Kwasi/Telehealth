@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../../services/apiClient';
+import Paged from '../../Common/Paged';
 
 /**
  * Price promotions — the offers that actually change what people pay.
@@ -438,14 +439,14 @@ export default function AdminPricePromotions() {
             >
               <div style={S.providerBox}>
                 {providers.length === 0 ? <span style={S.hint}>No providers loaded.</span> : null}
-                {providers.map((p) => (
+                <Paged items={providers}>{(providers) => providers.map((p) => (
                   <label key={p.id} style={S.providerRow}>
                     <input type="checkbox" checked={form.providerIds.includes(p.id)}
                       onChange={() => toggleIn('providerIds', p.id)} />
                     <span>{p.name || p.email}</span>
                     <span style={S.roleTag}>{p.role}</span>
                   </label>
-                ))}
+                ))}</Paged>
               </div>
             </Field>
           ) : null}
@@ -491,7 +492,7 @@ export default function AdminPricePromotions() {
           <p style={S.empty}>Nothing yet. Create one, or start from a template above.</p>
         ) : (
           <div style={S.table}>
-            {promotions.map((p) => {
+            <Paged items={promotions}>{(promotions) => promotions.map((p) => {
               const expired = p.expired;
               const live = p.live;
               const waiting = p.requires_consent && Number(p.approved_count) === 0;
@@ -545,7 +546,7 @@ export default function AdminPricePromotions() {
                   </div>
                 </div>
               );
-            })}
+            })}</Paged>
           </div>
         )}
       </div>

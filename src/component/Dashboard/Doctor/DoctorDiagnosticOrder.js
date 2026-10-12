@@ -7,6 +7,7 @@ import {
 } from '../../../services/firestoreShim';
 import { useLocation } from 'react-router-dom';
 import { enrichPatientNames } from '../../../utils/enrichPatientNames';
+import Paged from '../../Common/Paged';
 
 const LAB_TESTS = [
   'Blood Count (CBC)', 'Liver Function Test (LFT)', 'Kidney Function Test (KFT)',
@@ -601,7 +602,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
                   <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>No patients found.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 360, overflowY: 'auto' }}>
-                    {filteredPatients.map(p => (
+                    <Paged items={filteredPatients}>{(filteredPatients) => filteredPatients.map(p => (
                       <button key={p.id} onClick={() => setSelectedPatient(p)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem',
@@ -618,7 +619,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
                         </div>
                         {selectedPatient?.id === p.id && <Check size={16} color="#1e6bb8" />}
                       </button>
-                    ))}
+                    ))}</Paged>
                   </div>
                 )}
               </div>

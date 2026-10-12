@@ -11,6 +11,7 @@ import {
 import { statusLabel, formatGhs, bookingStatusTone } from '../../utils/homeCareUtils';
 import NurseAvatar from '../Dashboard/HomeCare/NurseAvatar';
 import './HomeCare.css';
+import Paged from '../Common/Paged';
 
 const QUICK_ACTIONS = [
   { to: '/home-care/browse', label: 'Find nurses', sub: 'Browse verified professionals', icon: '🔍', primary: true },
@@ -132,9 +133,9 @@ export default function HomeCarePatientDashboard() {
           ) : null}
 
           <div className="hc-dash-bookings-list">
-            {active.map((b) => (
+            <Paged items={active}>{(active) => active.map((b) => (
               <BookingCard key={b.id} booking={b} onOpen={() => navigate(`/home-care/booking/${b.id}`)} />
-            ))}
+            ))}</Paged>
           </div>
         </section>
       </div>

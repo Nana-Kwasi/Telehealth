@@ -15,6 +15,7 @@ import {
   awaitingDoctorDecision,
   doctorDecisionReason,
 } from '../../../utils/pharmacyRxStatus';
+import Paged from '../../Common/Paged';
 
 const DRUG_STATUS_META = {
   pending: { label: 'Pending', icon: '⏳', color: '#f59e0b' },
@@ -672,7 +673,7 @@ export default function PrescriptionOps({ profile, mode = 'branch' }) {
                 )}
                 {rankedBranches.length === 0 ? (
                   <p style={{ margin: 0, padding: 10, fontSize: '0.82rem', color: '#94a3b8' }}>No other active branches found.</p>
-                ) : rankedBranches.map(b => {
+                ) : <Paged items={rankedBranches}>{(rankedBranches) => rankedBranches.map(b => {
                   const city = b.city || b.location?.city || '';
                   const near = patientCity && city.toLowerCase() === patientCity;
                   const distanceText = Number.isFinite(b._distanceKm) ? `${b._distanceKm.toFixed(1)} km` : '';
@@ -688,7 +689,7 @@ export default function PrescriptionOps({ profile, mode = 'branch' }) {
                       <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{b.address || city || 'No location'}</div>
                     </button>
                   );
-                })}
+                })}</Paged>}
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

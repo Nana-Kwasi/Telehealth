@@ -38,6 +38,7 @@ import { payForBooking } from '../../../services/paystack';
 import { therapistFee } from '../../../utils/therapistFee';
 import './VideoCall.css';
 import { resolveFileUrl } from '../../../utils/fileUrl';
+import Paged from '../../Common/Paged';
 
 const ClientVideoCall = ({ profile }) => {
   const navigate = useNavigate();
@@ -946,7 +947,7 @@ const ClientVideoCall = ({ profile }) => {
                 </tr>
               </thead>
               <tbody>
-                {scheduledCalls.map((session) => {
+                <Paged items={scheduledCalls} table>{(scheduledCalls) => scheduledCalls.map((session) => {
                   const timeInfo = formatSessionDateParts(session.scheduledTime);
                   const sessionDate = session.scheduledTime?.toDate?.() || session.scheduledTime;
                   const isUpcoming = sessionDate > new Date();
@@ -1032,7 +1033,7 @@ const ClientVideoCall = ({ profile }) => {
                       </td>
                     </tr>
                   );
-                })}
+                })}</Paged>
               </tbody>
             </table>
           </div>

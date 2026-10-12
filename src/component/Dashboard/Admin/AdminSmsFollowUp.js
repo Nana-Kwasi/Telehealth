@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../services/apiClient';
+import Paged from '../../Common/Paged';
 
 /**
  * Incoming SMS that could not be turned into a request automatically — the
@@ -40,7 +41,7 @@ export default function AdminSmsFollowUp() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', background: '#fff' }}>
           <thead><tr style={{ textAlign: 'left', color: '#64748b' }}><th style={{ padding: 8 }}>Received</th><th>From</th><th>Message</th><th>Outcome</th><th>Detail</th></tr></thead>
           <tbody>
-            {rows.map(r => (
+            <Paged items={rows} table>{(rows) => rows.map(r => (
               <tr key={r.id} style={{ borderTop: '1px solid #f1f5f9' }}>
                 <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>{r.phone || '—'}{r.user_id ? ' · patient' : ''}</td>
@@ -48,7 +49,7 @@ export default function AdminSmsFollowUp() {
                 <td>{r.outcome || r.status}</td>
                 <td style={{ color: '#64748b', maxWidth: 260 }}>{r.detail || ''}</td>
               </tr>
-            ))}
+            ))}</Paged>
           </tbody>
         </table>
       )}

@@ -4,6 +4,7 @@ import { Search, FileText, X, Save, FlaskConical, Download, Share2 } from 'lucid
 import { api } from '../../../services/apiClient';
 import { db, auth } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const TYPE_CFG = {
   lab:  { label: 'Lab Result',  emoji: '🧪', bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' },
@@ -228,7 +229,7 @@ export default function DoctorDiagnosticResults({ profile }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => {
+              <Paged items={filtered} table>{(filtered) => filtered.map(r => {
                 const t = rowType(r);
                 const cfg = TYPE_CFG[t] || TYPE_CFG.lab;
                 const isReady = r.kind === 'result';
@@ -291,7 +292,7 @@ export default function DoctorDiagnosticResults({ profile }) {
                     </td>
                   </tr>
                 );
-              })}
+              })}</Paged>
             </tbody>
           </table>
         )}

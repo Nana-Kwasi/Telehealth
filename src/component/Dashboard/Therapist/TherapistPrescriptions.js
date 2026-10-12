@@ -4,6 +4,8 @@
 // checks and approvals. Differences from the doctor copy are marked "Psychiatry:".
 // Keep fixes to the shared flow in step with Doctor/DoctorPrescriptions.js.
 import React, { useState, useEffect } from 'react';
+import RxAdvicePanel from '../../Common/RxAdvicePanel';
+import { RxInsurancePicker, RxEstimateCard, attachRxCard } from '../../Common/RxInsuranceCard';
 import '../Doctor/DoctorDashboard.css';
 import PrescriptionAssistant from '../../Common/PrescriptionAssistant';
 import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
@@ -12,6 +14,7 @@ import { FileText, Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDo
 import { db } from '../../../services/firestoreShim';
 import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const FREQUENCY_OPTIONS = [
   'Single Dose', 'Once per Day', 'BID (2x/day)', 'TID (3x/day)',
@@ -157,6 +160,9 @@ export default function TherapistPrescriptions({ profile }) {
     medications: [{ ...EMPTY_MED }],
   });
   const [warnings, setWarnings] = useState([]);
+  // Insurance card chosen for this prescription (undefined = not loaded, '' = self-pay).
+  const [rxCardId, setRxCardId] = useState(undefined);
+  const [rxEstimate, setRxEstimate] = useState(null);
   const [patientAllergies, setPatientAllergies] = useState([]);
   const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [showBranchDirectoryPicker, setShowBranchDirectoryPicker] = useState(false);
@@ -437,6 +443,8 @@ export default function TherapistPrescriptions({ profile }) {
           // Approving a request: the server links it and enforces the formulary check.
           ...(requestId ? { requestId, safetyAcknowledged: ack === true } : {}),
         });
+        // Insured e-prescription: attach the card; the patient is sent the estimate.
+        if (rxCardId && newRef?.id) attachRxCard(newRef.id, rxCardId).then(est => est && setRxEstimate(est));
         // Write timeline event
         addDoc(collection(db, 'patientTimeline'), {
           patientId: form.patientId,
@@ -452,6 +460,7 @@ export default function TherapistPrescriptions({ profile }) {
       setShowForm(false);
       setEditing(null);
       setWarnings([]);
+      setRxCardId(undefined);
       if (requestId && !editing) {
         setRequestId(null);
         alert('Request approved. The prescription has been issued and the patient notified.');
@@ -657,6 +666,7 @@ export default function TherapistPrescriptions({ profile }) {
       </div>
 
       {/* ── NEW / EDIT FORM ── */}
+      <RxEstimateCard estimate={rxEstimate} onClose={() => setRxEstimate(null)} />
       {showForm && (
         <div className="doctor-card" style={{ marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
@@ -705,12 +715,12 @@ export default function TherapistPrescriptions({ profile }) {
                 {showPatientPicker && (
                   <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: 'auto', background: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', position: 'relative', zIndex: 10 }}>
                     {patients.length === 0 && <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No psychiatry clients yet. Only clients on the psychiatry track can be prescribed for.</div>}
-                    {patients.map(p => (
+                    <Paged items={patients}>{(patients) => patients.map(p => (
                       <div key={p.id} onClick={() => { setForm(prev => ({ ...prev, patientId: p.id, patientName: p.name })); setShowPatientPicker(false); loadPatientAllergies(p.id); }}
                         style={{ padding: '0.55rem 0.85rem', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', borderBottom: '1px solid #f1f5f9', background: form.patientId === p.id ? '#eff6ff' : 'transparent' }}>
                         {p.name || 'Unknown Client'}
                       </div>
-                    ))}
+                    ))}</Paged>
                   </div>
                 )}
               </div>
@@ -786,7 +796,7 @@ export default function TherapistPrescriptions({ profile }) {
                   {branchDirectory.length === 0 && !loadingBranchDirectory && (
                     <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No active branches found.</div>
                   )}
-                  {branchDirectory.map(row => (
+                  <Paged items={branchDirectory}>{(branchDirectory) => branchDirectory.map(row => (
                     <div key={`${row.pharmacyId}-${row.branchId}`} onClick={() => {
                       setForm(p => ({
                         ...p,
@@ -801,7 +811,7 @@ export default function TherapistPrescriptions({ profile }) {
                       <div style={{ fontWeight: 600 }}>{row.branchName}</div>
                       {row.addressLine && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.addressLine}</div>}
                     </div>
-                  ))}
+                  ))}</Paged>
                 </div>
               )}
             </div>
@@ -818,6 +828,10 @@ export default function TherapistPrescriptions({ profile }) {
             )}
           </div>
 
+          {/* Insurance cover, cheaper same-ingredient options and diagnosis fit. */}
+          {!editing && <RxInsurancePicker patientId={form.patientId} value={rxCardId} onChange={setRxCardId} />}
+          <RxAdvicePanel patientId={form.patientId} patientName={form.patientName} medications={form.medications} diagnosis={form.diagnosis}
+            onSwitch={(i, name, strength) => i >= 0 && setForm(p => ({ ...p, medications: p.medications.map((m, j) => (j === i ? { ...m, name, strength: strength || m.strength } : m)) }))} />
           {/* ── MEDICATIONS ── */}
           <div style={{ marginBottom: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -1116,7 +1130,7 @@ export default function TherapistPrescriptions({ profile }) {
               <tr><th>Client</th><th>Diagnosis</th><th>Ref / Branch</th><th>Rx Status</th><th>Status</th><th>Date</th><th>Actions</th></tr>
             </thead>
             <tbody>
-              {filtered.map(rx => {
+              <Paged items={filtered} table>{(filtered) => filtered.map(rx => {
                 const sm = STATUS_META[rx.status] || STATUS_META.active;
                 const pm = rx.pharmacyStatus ? (PHARMACY_STATUS_META[rx.pharmacyStatus] || null) : null;
                 const meds = rx.medications?.length ? rx.medications : rx.medication ? [{ name: rx.medication, dosage: rx.dosage }] : [];
@@ -1202,7 +1216,7 @@ export default function TherapistPrescriptions({ profile }) {
                     </td>
                   </tr>
                 );
-              })}
+              })}</Paged>
             </tbody>
           </table>
         )}

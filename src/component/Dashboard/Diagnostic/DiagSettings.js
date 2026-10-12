@@ -6,6 +6,7 @@ import {
   EmailAuthProvider, reauthenticateWithCredential, sendPasswordResetEmail, signOut, updatePassword,
 } from '../../../services/authShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
+import InsuranceNetworks from '../../Common/InsuranceNetworks';
 
 /**
  * Lab / scan Settings — same layout and styles as the pharmacy Settings page
@@ -127,7 +128,7 @@ export default function DiagSettings({ type = 'lab', profile, mode = 'parent' })
   const st = data?.stats || {};
   const parentOps = data?.parentSettings || {};
   const kindLabel = type === 'lab' ? 'Lab' : 'Scan centre';
-  const TABS = [['overview', 'Overview'], ['profile', isBranch ? 'Branch profile' : 'Business profile'], ['operations', 'Operations'], ['preferences', 'Preferences'], ['security', 'Security'], ['data', 'Data & session']];
+  const TABS = [['overview', 'Overview'], ['profile', isBranch ? 'Branch profile' : 'Business profile'], ['operations', 'Operations'], ['insurance', 'Insurance'], ['preferences', 'Preferences'], ['security', 'Security'], ['data', 'Data & session']];
 
   return (
     <div className="pharmacy-page pharmacy-settings-page pharmacy-settings-page--wide">
@@ -310,6 +311,12 @@ export default function DiagSettings({ type = 'lab', profile, mode = 'parent' })
                 <div className="pharmacy-settings-actions"><button type="submit" className="pharmacy-settings-btn pharmacy-settings-btn--primary" disabled={saving}>{saving ? 'Saving…' : 'Save operations'}</button></div>
               </section>
             </form>
+          </div>
+        )}
+
+        {tab === 'insurance' && (
+          <div className="pharmacy-settings-tab-panel" role="tabpanel">
+            <InsuranceNetworks accent={type === 'scan' ? '#6d28d9' : '#0f766e'} />
           </div>
         )}
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import Paged from './Paged';
 
 /**
  * The patient's own care plan.
@@ -55,7 +56,7 @@ export default function MyCarePlan() {
             shares it with you.
           </p>
         </section>
-      ) : plans.map((p) => (
+      ) : <Paged items={plans}>{(plans) => plans.map((p) => (
         <section key={p.id} style={S.card}>
           <div style={S.meta}>
             {p.approved_at ? `Shared ${fmt(p.approved_at)}` : `Added ${fmt(p.created_at)}`}
@@ -66,7 +67,7 @@ export default function MyCarePlan() {
             ))}
           </div>
         </section>
-      ))}
+      ))}</Paged>}
     </div>
   );
 }

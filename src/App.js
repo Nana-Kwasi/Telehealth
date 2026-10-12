@@ -18,6 +18,8 @@ import TherapistDashboard from './component/Dashboard/Therapist/TherapistDashboa
 import DoctorDashboard from './component/Dashboard/Doctor/DoctorDashboard';
 import RxLinkPage from './component/Common/RxLinkPage';
 import AdminDashboard from './component/Dashboard/Admin/AdminDashboard';
+import InsurerDashboard from './component/Dashboard/Insurer/InsurerDashboard';
+import FacilityDashboard from './component/Dashboard/Facility/FacilityDashboard';
 import PharmacyDashboard from './component/Dashboard/Pharmacy/PharmacyDashboard';
 import BranchDashboard from './component/Dashboard/Pharmacy/BranchDashboard';
 import LabDashboard from './component/Dashboard/Lab/LabDashboard';
@@ -255,6 +257,8 @@ export default function App() {
     session.role === 'therapist'                              ? <TherapistDashboard      profile={session.profile} /> :
     session.role === 'doctor'                                 ? <DoctorDashboard         profile={session.profile} /> :
     session.role === 'homecare_nurse'                         ? <HomeCareNurseDashboard  profile={session.profile} /> :
+    session.role === 'insurer'                                ? <InsurerDashboard        profile={session.profile} /> :
+    session.role === 'facility'                               ? <FacilityDashboard       profile={session.profile} /> :
     session.profile?.userIntent === 'medical'                 ? <MedicalPatientDashboard profile={session.profile} /> :
                                                                 <ClientDashboard         profile={session.profile} />;
 

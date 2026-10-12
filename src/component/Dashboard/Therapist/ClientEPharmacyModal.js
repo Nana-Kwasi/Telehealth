@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ShoppingBag, Search, X } from 'lucide-react';
 import { db, collection, query, where, getDocs, doc, getDoc, setDoc } from '../../../services/firestoreShim';
 import { dedupePatientPharmacies, hasPatientPharmacy } from '../../../utils/patientPharmacyDedupe';
+import Paged from '../../Common/Paged';
 
 export default function ClientEPharmacyModal({ open, onClose, therapistId }) {
   const [showEPharmacy, setShowEPharmacy] = useState(false);
@@ -312,7 +313,7 @@ export default function ClientEPharmacyModal({ open, onClose, therapistId }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', maxHeight: 240, overflowY: 'auto' }}>
                   {allPatientsList.length === 0 ? (
                     <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}>No psychiatry clients found</p>
-                  ) : ephPatients.map(p => {
+                  ) : <Paged items={ephPatients}>{(ephPatients) => ephPatients.map(p => {
                     const isSel = selectedPatientIds.has(p.id);
                     return (
                       <button key={p.id} type="button" onClick={() => toggleEphPatient(p.id)}
@@ -327,7 +328,7 @@ export default function ClientEPharmacyModal({ open, onClose, therapistId }) {
                         </div>
                       </button>
                     );
-                  })}
+                  })}</Paged>}
                 </div>
               </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, doc, getDoc } from '../../../services/firestoreShim';
 import { collection, getDocs } from '../../../services/firestoreShim';
 import RxFullDetails from '../Pharmacy/RxFullDetails';
+import Paged from '../../Common/Paged';
 
 const normalizePrescription = async (raw = {}) => {
   const medications = Array.isArray(raw.medications) && raw.medications.length > 0
@@ -148,7 +149,7 @@ export default function AdminPrescriptionMonitor() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(rx => (
+              <Paged items={filtered} table>{(filtered) => filtered.map(rx => (
                 <tr key={rx.id}>
                   <td style={{ fontWeight: 600 }}>{rx.patientName || '—'}</td>
                   <td>{rx.doctorName || '—'}</td>
@@ -173,7 +174,7 @@ export default function AdminPrescriptionMonitor() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setSelected(rx)}>View</button>
                   </td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         )}

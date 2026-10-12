@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Share2, Sparkles, Loader, Send, Check, CheckCircle2, User, Stethoscope, ClipboardList, FileText, History, Pill, FlaskConical, Save, Mail, X, Inbox } from 'lucide-react';
 import { api, getStoredUserId } from '../../services/apiClient';
 import './ReferralComposer.css';
+import Paged from './Paged';
 
 /**
  * Prepare a referral: the clinician states who and why, and the packet the
@@ -234,13 +235,13 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
                   <input className="rf-input" placeholder="Search doctors and therapists by name…" value={search}
                     onChange={(e) => setSearch(e.target.value)} />
                   <div className="rf-matches">
-                    {matches.map((m) => (
+                    <Paged items={matches}>{(matches) => matches.map((m) => (
                       <button key={m.id} type="button" onClick={() => setRecipient(m)}>
                         <span className="rf-avatar">{(m.name || '?').charAt(0)}</span>
                         <span>{m.name}</span>
                         <small>{m.role === 'DOCTOR' ? 'Doctor' : 'Therapist'}</small>
                       </button>
-                    ))}
+                    ))}</Paged>
                     {matches.length === 0 ? <p className="rf-hint">No clinicians match that name.</p> : null}
                   </div>
                 </>

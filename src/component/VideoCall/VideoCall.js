@@ -633,6 +633,7 @@ import { Phone, Calendar, Clock, MoreVertical, Edit, Trash2 } from 'lucide-react
 import { onAuthStateChanged } from '../../services/authShim';
 import './VideoCall.css';
 import { resolveFileUrl } from '../../utils/fileUrl';
+import Paged from '../Common/Paged';
 
 /**
  * One person you can call.
@@ -1572,7 +1573,7 @@ const VideoCall = ({ user }) => {
           </div>
         ) : scheduledCalls.length > 0 ? (
           <div className="calls-grid">
-            {scheduledCalls.map((call) => {
+            <Paged items={scheduledCalls}>{(scheduledCalls) => scheduledCalls.map((call) => {
               const canJoin = isCallTimeReached(call.scheduledTime);
               const timeUntil = getTimeUntilCall(call.scheduledTime);
               const canManage = canManageCall(call);
@@ -1642,7 +1643,7 @@ const VideoCall = ({ user }) => {
                   </div>
                 </div>
               );
-            })}
+            })}</Paged>
           </div>
         ) : (
           <div className="empty-state">

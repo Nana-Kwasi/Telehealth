@@ -15,6 +15,7 @@ import {
 } from '../../services/coupleTherapyService';
 import { therapistFee } from '../../utils/therapistFee';
 import { resolveFileUrl } from '../../utils/fileUrl';
+import Paged from '../Common/Paged';
 
 
 /** A therapist's own per-session charge (stored in their profile metadata). */
@@ -299,7 +300,7 @@ export default function MatchTherapist() {
         <div className="loading-card">Loading matches…</div>
       ) : therapists.length ? (
         <div className="card-grid">
-          {therapists.map((t) => (
+          <Paged items={therapists}>{(therapists) => therapists.map((t) => (
             <div key={t.id} className="therapist-card">
               <div className="therapist-avatar">{t.photoURL ? <img alt="" src={resolveFileUrl(t.photoURL)} /> : '🧑‍⚕️'}</div>
               <div className="therapist-info">
@@ -329,7 +330,7 @@ export default function MatchTherapist() {
                 </button>
               </div>
             </div>
-          ))}
+          ))}</Paged>
         </div>
       ) : (
         <div className="no-matches-card">No exact matches yet. We'll assign the best available therapist shortly.</div>

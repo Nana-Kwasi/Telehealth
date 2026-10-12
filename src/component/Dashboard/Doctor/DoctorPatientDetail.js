@@ -5,6 +5,7 @@ import RecordGapsPanel from '../../Common/RecordGapsPanel';
 import SmartDocumentUpload from '../../Common/SmartDocumentUpload';
 import CodingAssistPanel from '../../Common/CodingAssistPanel';
 import RecordExplorer from '../../Common/RecordExplorer';
+import PatientTranscripts from '../../Common/PatientTranscripts';
 import {
   ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video,
   AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
@@ -17,6 +18,7 @@ import {
 } from '../../../services/firestoreShim';
 import { hasPatientPharmacy, patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
+import Paged from '../../Common/Paged';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -495,6 +497,9 @@ export default function DoctorPatientDetail({ profile }) {
           adherence rather than as no data. */}
       <AdherencePanel patientId={patientId} />
 
+      {/* Transcribed consultations with this patient: to review, and saved ones to re-read. */}
+      <PatientTranscripts patientId={patientId} accent="#1e6bb8" />
+
       {/* What is missing from this record, by rule — nothing renders when complete. */}
       <RecordGapsPanel patientId={patientId} />
 
@@ -673,7 +678,7 @@ export default function DoctorPatientDetail({ profile }) {
             <table className="doctor-table">
               <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
-                {appointments.map(a => (
+                <Paged items={appointments} table>{(appointments) => appointments.map(a => (
                   <tr key={a.id}>
                     <td style={{ fontWeight: 600 }}>{fmtDate(a.date)}</td>
                     <td>{a.time || '—'}</td>
@@ -695,7 +700,7 @@ export default function DoctorPatientDetail({ profile }) {
                       )}
                     </td>
                   </tr>
-                ))}
+                ))}</Paged>
               </tbody>
             </table>
           )}
@@ -747,7 +752,7 @@ export default function DoctorPatientDetail({ profile }) {
               <div className="doctor-empty-state"><FileText size={36} /><p>No notes for this patient yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {notes.map(n => (
+                <Paged items={notes}>{(notes) => notes.map(n => (
                   <div key={n.id} style={{ padding: '1rem 1.25rem', background: '#f8fafc', borderRadius: 10, borderLeft: `4px solid ${noteTypeColors[n.type] || '#64748b'}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
                       <div>
@@ -761,7 +766,7 @@ export default function DoctorPatientDetail({ profile }) {
                     </div>
                     <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{n.content}</p>
                   </div>
-                ))}
+                ))}</Paged>
               </div>
             )}
           </div>
@@ -793,7 +798,7 @@ export default function DoctorPatientDetail({ profile }) {
               <div className="doctor-empty-state"><Pill size={36} /><p>No prescriptions issued yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {prescriptions.map(rx => {
+                <Paged items={prescriptions}>{(prescriptions) => prescriptions.map(rx => {
                   const isDone = rx.status === 'completed';
                   const medName = rx.medication || rx.medications?.[0]?.name || 'Medication';
                   const altMed = (rx.medications || []).find(m => m.alternativeSuggested);
@@ -844,7 +849,7 @@ export default function DoctorPatientDetail({ profile }) {
                       <p style={{ margin: '0.4rem 0 0', fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right' }}>Tap card for full details</p>
                     </div>
                   );
-                })}
+                })}</Paged>
               </div>
             )}
           </div>
@@ -1250,7 +1255,7 @@ export default function DoctorPatientDetail({ profile }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {dailyFeelings.map(f => {
+              <Paged items={dailyFeelings}>{(dailyFeelings) => dailyFeelings.map(f => {
                 const MOOD_META = {
                   great: { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', emoji: '😊' },
                   good:  { color: '#65a30d', bg: '#f7fee7', border: '#d9f99d', emoji: '🙂' },
@@ -1305,7 +1310,7 @@ export default function DoctorPatientDetail({ profile }) {
                     </button>
                   </div>
                 );
-              })}
+              })}</Paged>
             </div>
           )}
         </div>
@@ -1389,7 +1394,7 @@ export default function DoctorPatientDetail({ profile }) {
                   <div>
                     <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Symptoms</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                      {symptomList.map((s, i) => <span key={i} style={{ background: '#fff0f0', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 20, padding: '0.3rem 0.75rem', fontSize: '0.85rem', fontWeight: 600 }}>{s}</span>)}
+                      <Paged items={symptomList}>{(symptomList) => symptomList.map((s, i) => <span key={i} style={{ background: '#fff0f0', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 20, padding: '0.3rem 0.75rem', fontSize: '0.85rem', fontWeight: 600 }}>{s}</span>)}</Paged>
                     </div>
                   </div>
                 )}
@@ -1471,7 +1476,7 @@ export default function DoctorPatientDetail({ profile }) {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {timeline.map(evt => {
+                <Paged items={timeline}>{(timeline) => timeline.map(evt => {
                   const cfg = EVENT_CFG[evt.type] || EVENT_CFG.APPOINTMENT;
                   const sc = STATUS_COL[evt.status] || STATUS_COL.COMPLETED;
                   return (
@@ -1490,7 +1495,7 @@ export default function DoctorPatientDetail({ profile }) {
                       <span style={{ fontSize: '0.72rem', color: '#94a3b8', flexShrink: 0, whiteSpace: 'nowrap' }}>{fmtTs(evt.createdAt)}</span>
                     </div>
                   );
-                })}
+                })}</Paged>
               </div>
             )}
           </div>

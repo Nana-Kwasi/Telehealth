@@ -7,6 +7,7 @@ import {
   buildTherapyLinkedAuthUidSet,
   buildHomeCareNurseUidSet,
 } from '../../../utils/authUserFilters';
+import Paged from '../../Common/Paged';
 
 /** A therapy client's tier decides which of the two client tabs they belong in. */
 const isSecondOpinionRow = (r) =>
@@ -220,7 +221,7 @@ export default function AdminUserManagement() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, idx) => (
+              <Paged items={filtered} table>{(filtered) => filtered.map((row, idx) => (
                 <tr key={row.id} style={{ cursor: 'pointer' }}
                   onClick={() => navigate(`/dashboard/users/${row._col}/${row.id}`)}>
                   <td style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{idx + 1}</td>
@@ -260,7 +261,7 @@ export default function AdminUserManagement() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              ))}</Paged>
             </tbody>
           </table>
         )}

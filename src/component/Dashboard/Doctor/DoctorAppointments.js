@@ -12,7 +12,9 @@ import {
   setDoc, addDoc, serverTimestamp,
 } from '../../../services/firestoreShim';
 import { logAction, A } from '../../../utils/auditLogger';
+import { VisitTranscriptChip } from '../../Common/PatientTranscripts';
 import { getConfigOnce } from '../../../hooks/useSystemConfig';
+import Paged from '../../Common/Paged';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -305,6 +307,8 @@ export default function DoctorAppointments({ profile }) {
           <Check size={13} /> Complete
         </button>
       </>)}
+      {/* Past visits: open the transcript of the call, if it was transcribed. */}
+      {(appt.status === 'completed' || (appt.date && appt.date <= TODAY && appt.status !== 'cancelled')) && <VisitTranscriptChip visitId={appt.id} />}
       {(appt.status === 'pending' || appt.status === 'confirmed') && (
         <button className="doctor-btn doctor-btn-sm doctor-btn-outline" onClick={() => openReschedule(appt)} style={{ color: '#7c3aed', borderColor: '#7c3aed' }}>
           <Clock size={13} /> Reschedule
@@ -517,7 +521,7 @@ export default function DoctorAppointments({ profile }) {
               <table className="doctor-table">
                 <thead><tr><th>Patient</th><th>Date</th><th>Time</th><th>Type</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
-                  {filtered.map(appt => (
+                  <Paged items={filtered} table>{(filtered) => filtered.map(appt => (
                     <tr key={appt.id} style={{ cursor: 'pointer' }} onClick={() => setDetailAppt(appt)} title="View appointment details">
                       <td style={{ fontWeight: 600 }}>{appt.clientName || 'Patient'}</td>
                       <td>{appt.date || '—'}</td>
@@ -532,7 +536,7 @@ export default function DoctorAppointments({ profile }) {
                       <td><StatusBadge status={appt.status} /></td>
                       <td onClick={e => e.stopPropagation()}><ActionBtns appt={appt} /></td>
                     </tr>
-                  ))}
+                  ))}</Paged>
                 </tbody>
               </table>
             )}
@@ -558,7 +562,7 @@ export default function DoctorAppointments({ profile }) {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {modalAppts.map(appt => (
+                  <Paged items={modalAppts}>{(modalAppts) => modalAppts.map(appt => (
                     <div key={appt.id} className="da-modal-appt-card" style={{ borderLeft: `4px solid ${STATUS_CONFIG[appt.status]?.border || '#e2e8f0'}` }}>
                       <div className="da-modal-appt-header">
                         <div className="da-modal-appt-avatar">{getInitials(appt.clientName)}</div>
@@ -575,7 +579,7 @@ export default function DoctorAppointments({ profile }) {
                       </div>
                       <div className="da-modal-appt-actions"><ActionBtns appt={appt} /></div>
                     </div>
-                  ))}
+                  ))}</Paged>
                 </div>
               )}
             </div>

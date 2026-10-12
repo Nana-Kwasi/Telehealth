@@ -3,6 +3,7 @@ import { db } from '../../../services/firestoreShim';
 import {
   collection, getDocs, doc, updateDoc, serverTimestamp
 } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 const CATEGORIES = ['complaint', 'feedback', 'technical', 'billing', 'emergency', 'other'];
 const REPORTER_TYPES = ['', 'patient', 'client', 'doctor', 'therapist', 'pharmacy', 'pharmacy_parent', 'pharmacy_branch', 'lab', 'scan'];
@@ -254,7 +255,7 @@ export default function AdminReportsCenter() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(r => {
+                <Paged items={filtered} table>{(filtered) => filtered.map(r => {
                   const cc = CAT_COLORS[r.category] || CAT_COLORS.other;
                   const sc = STATUS_COLORS[r.status] || STATUS_COLORS.open;
                   return (
@@ -295,7 +296,7 @@ export default function AdminReportsCenter() {
                       </td>
                     </tr>
                   );
-                })}
+                })}</Paged>
               </tbody>
             </table>
           </div>

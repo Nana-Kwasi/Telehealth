@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../../services/apiClient';
 import { resolveFileUrl } from '../../../utils/fileUrl';
+import Paged from '../../Common/Paged';
 
 /**
  * Promotional campaigns.
@@ -204,7 +205,7 @@ export default function AdminPromotions() {
             <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0.5rem' }}>
               {providers.length === 0 ? (
                 <div style={{ color: '#64748b', fontSize: '0.83rem', padding: '0.5rem' }}>No providers found.</div>
-              ) : providers.map((p) => {
+              ) : <Paged items={providers}>{(providers) => providers.map((p) => {
                 const id = p.id || p.userId;
                 const on = form.providerIds.includes(id);
                 return (
@@ -218,7 +219,7 @@ export default function AdminPromotions() {
                     <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{p.role}</span>
                   </label>
                 );
-              })}
+              })}</Paged>}
             </div>
           </Field>
 
@@ -236,7 +237,7 @@ export default function AdminPromotions() {
             <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b' }}>
               No promotions yet.
             </div>
-          ) : campaigns.map((c) => (
+          ) : <Paged items={campaigns}>{(campaigns) => campaigns.map((c) => (
             <button key={c.id} onClick={() => openDetail(c.id)}
               style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
                        background: detail?.campaign?.id === c.id ? '#e9f3ec' : 'transparent',
@@ -246,7 +247,7 @@ export default function AdminPromotions() {
                 <StatusPill status={c.status} /> · sent to {c.sent_count ?? 0}
               </div>
             </button>
-          ))}
+          ))}</Paged>}
         </div>
 
         {detail ? (

@@ -8,6 +8,8 @@ import {
 } from './diagUi';
 import { StagePill, PriorityPill } from './DiagOverview';
 import './diagnostics.css';
+import { PreauthRequestModal } from '../../Common/ProviderInsurance';
+import Paged from '../../Common/Paged';
 
 const OPS = '/api/v1/diagnostics/operations';
 
@@ -400,7 +402,7 @@ export default function DiagWorklist({ type = 'lab', profile, mode = 'branch' })
                 <th>Patient</th><th>Test</th><th>Order</th>{isParent && <th>Branch</th>}<th>Status</th><th>Time</th>{type === 'scan' && <th>Booked for</th>}<th>Actions</th>
               </tr></thead>
               <tbody>
-                {shown.map(o => {
+                <Paged items={shown} table>{(shown) => shown.map(o => {
                   const st = stageOf(o.status);
                   const ts = tatState(o, type);
                   return (
@@ -415,7 +417,7 @@ export default function DiagWorklist({ type = 'lab', profile, mode = 'branch' })
                       <td>{actions.buttons(o, { compact: true })}</td>
                     </tr>
                   );
-                })}
+                })}</Paged>
               </tbody>
             </table>
           </div>
@@ -458,6 +460,55 @@ export function ResultView({ r }) {
     </div>
   );
 }
+
+/** Bill the patient's insurer for this test (checked live; the patient confirms by SMS). */
+function InsuranceBillCard({ order, type }) {
+  const [info, setInfo] = useState(null);
+  const [cardId, setCardId] = useState('');
+  const [price, setPrice] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(false);
+  useEffect(() => {
+    api(`${OPS}/orders/${order.id}/insurance`).then(d => {
+      setInfo(d);
+      const usable = (d.cards || []).filter(c => c.status === 'VERIFIED' && c.inNetwork);
+      if (usable[0]) setCardId(usable[0].id);
+      if (d.price != null) setPrice(String(d.price));
+    }).catch(() => setInfo({ cards: [] }));
+  }, [order.id]);
+  if (!info || (!(info.cards || []).some(c => c.status === 'VERIFIED')) ) return null;
+  const usable = (info.cards || []).filter(c => c.status === 'VERIFIED' && c.inNetwork);
+  const bill = async () => {
+    setBusy(true); setError('');
+    try { setResult(await api(`${OPS}/orders/${order.id}/bill-insurance`, { method: 'POST', body: { cardId, unitPrice: price === '' ? null : Number(price) } })); setInfo(i => ({ ...i, billed: true })); }
+    catch (e) { setError(e?.message || 'Could not bill the insurer.'); } finally { setBusy(false); }
+  };
+  return (
+    <div style={{ border: '1.5px solid #bfdbfe', background: '#eff6ff', borderRadius: 12, padding: '0.75rem 0.85rem', margin: '0.75rem 0' }}>
+      <div className="dx-kpi-label" style={{ marginBottom: 6 }}>🛡️ Insurance</div>
+      {info.billed && !result ? <p style={{ margin: 0, fontSize: '0.84rem' }}>Already billed to the insurer. See Insurance claims.</p> : result ? (
+        <p style={{ margin: 0, fontSize: '0.84rem', color: '#166534' }}>✓ Billed to {result.insurerName}: insurer pays GHS {Number(result.coveredTotal).toFixed(2)}, patient GHS {Number(result.patientTotal).toFixed(2)}. The patient has been asked to confirm the test.</p>
+      ) : usable.length === 0 ? (
+        <p style={{ margin: 0, fontSize: '0.82rem', color: '#92400e' }}>The patient has {(info.cards || []).map(c => c.insurerName).join(', ')} cover, but this centre has no verified provider code for it (Settings → Insurance).</p>
+      ) : (
+        <div style={{ display: 'grid', gap: 6 }}>
+          <select className="dx-select" value={cardId} onChange={e => setCardId(e.target.value)}>{usable.map(c => <option key={c.id} value={c.id}>{c.insurerName} · {c.planName || ''} · {c.memberNo}</option>)}</select>
+          <input className="dx-input" type="number" placeholder="Price (GHS)" value={price} onChange={e => setPrice(e.target.value)} />
+          <button type="button" className="dx-btn dx-btn--primary" disabled={busy || !cardId || price === ''} onClick={bill}>{busy ? 'Checking with insurer…' : 'Check cover & bill insurer'}</button>
+          {error && <p style={{ margin: 0, color: '#b91c1c', fontSize: '0.8rem' }}>{error}</p>}
+          {/pre-approval/i.test(error) && <button type="button" className="dx-btn" onClick={() => setAsk(true)}>Ask the insurer for approval</button>}
+        </div>
+      )}
+      {ask && <PreauthRequestModal patientId={order.patientId} patientName={order.patientName} cards={usable.map(c => ({ id: c.id, insurerName: c.insurerName, planName: c.planName, memberNo: c.memberNo }))} cardId={cardId}
+        serviceType={type === 'scan' ? 'SCAN' : 'LAB'} sourceType="DIAGNOSTIC_ORDER" sourceId={order.id} diagnosisText={order.notes}
+        initialItems={[{ description: order.testType || 'Test', code: '', quantity: 1, unitPrice: price === '' ? '' : Number(price) }]}
+        onClose={() => setAsk(false)} onDone={() => { setAsk(false); setError('Approval requested — bill again once the insurer approves.'); }} />}
+    </div>
+  );
+}
+
 
 export function DiagOrderDetail({ type = 'lab' }) {
   const { orderId } = useParams();
@@ -514,7 +565,7 @@ export function DiagOrderDetail({ type = 'lab' }) {
           </div>
           {st === 'REJECTED' && <div className="dx-alert dx-alert--red" style={{ marginTop: 12, marginBottom: 0 }}><div><strong>Rejected</strong><p>{order.rejectReason || 'No reason recorded.'}</p></div></div>}
           <div style={{ marginTop: '1rem', display: 'grid', gap: 8 }}>
-            {results.length ? results.map(r => <ResultView key={r.id} r={r} />) : <p className="dx-empty">No result yet.</p>}
+            {results.length ? <Paged items={results}>{(results) => results.map(r => <ResultView key={r.id} r={r} />)}</Paged> : <p className="dx-empty">No result yet.</p>}
           </div>
         </section>
         <section className="dx-card dx-span-4">
@@ -526,15 +577,16 @@ export function DiagOrderDetail({ type = 'lab' }) {
           ].filter(([, v]) => v).map(([k, v]) => (
             <div key={k} style={{ marginBottom: 8 }}><div className="dx-kpi-label">{k}</div><div style={{ fontSize: '0.86rem', fontWeight: 600, whiteSpace: 'pre-wrap' }}>{v}</div></div>
           ))}
+          <InsuranceBillCard order={order} type={type} />
           <div className="dx-card-head" style={{ marginTop: '1rem' }}><h2 className="dx-card-title">Activity</h2></div>
           {events.length ? (
-            <ul className="dx-list">{events.map(e => (
+            <ul className="dx-list"><Paged items={events}>{(events) => events.map(e => (
               <li key={e.id} style={{ fontSize: '0.8rem', borderLeft: '3px solid var(--dx-accent)', paddingLeft: 8 }}>
                 <b>{eventLabel(e)}</b>{e.fromStatus || e.toStatus ? <span className="dx-card-hint"> · {(STAGES[e.fromStatus]?.short || e.fromStatus || '—')} → {(STAGES[e.toStatus]?.short || e.toStatus || '—')}</span> : null}
                 {e.notes && <div className="dx-card-hint">{e.notes}</div>}
                 <div className="dx-card-hint">{fmtDateTime(e.createdAt)}</div>
               </li>
-            ))}</ul>
+            ))}</Paged></ul>
           ) : <p className="dx-empty">No activity yet.</p>}
         </section>
       </div>

@@ -16,6 +16,9 @@ import DiagWorklist, { DiagOrderDetail } from './DiagWorklist';
 import DiagCatalog from './DiagCatalog';
 import { DiagReports, DiagResultsLog } from './DiagReports';
 import DiagSettings from './DiagSettings';
+import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsurance';
+import RoleAssistant from '../../Common/RoleAssistant';
+import Paged from '../../Common/Paged';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI',
@@ -242,7 +245,7 @@ function ParentBranches({ type, profile }) {
                 </tr>
               </thead>
               <tbody>
-                {branches.map(b => (
+                <Paged items={branches} table>{(branches) => branches.map(b => (
                   <tr
                     key={b.id}
                     className="diagnostic-branches-row"
@@ -263,7 +266,7 @@ function ParentBranches({ type, profile }) {
                       <button type="button" className="btn btn-danger btn-sm" onClick={() => deleteBranch(b)}>Delete</button>
                     </td>
                   </tr>
-                ))}
+                ))}</Paged>
               </tbody>
             </table>
           </div>
@@ -564,6 +567,8 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
     { path: '/dashboard/branches', label: 'Branches', icon: '🏪' },
     { path: '/dashboard/catalog', label: type === 'lab' ? 'Test Catalog' : 'Scan Catalog', icon: '🏷️' },
     { path: '/dashboard/reports', label: 'Reports', icon: '📈' },
+    { path: '/dashboard/insurance-claims', label: 'Insurance claims', icon: '🧾' },
+    { path: '/dashboard/preauth', label: 'Pre-authorisations', icon: '✅' },
     { path: '/dashboard/report-issue', label: 'Report Issue', icon: '📩' },
     { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
   ]), [type]);
@@ -609,6 +614,7 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
       </aside>
 
       <main className="pharmacy-main">
+        <RoleAssistant kind="lab" accent="#0e7490" />
         <ForcedPasswordChangeOverlay
           profile={profile}
           firestoreCollection={type === 'lab' ? 'labs' : 'scanCenters'}
@@ -619,6 +625,8 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
           <Route path="/orders" element={<DiagWorklist type={type} profile={profile} mode="parent" />} />
           <Route path="/results" element={<DiagResultsLog type={type} />} />
           <Route path="/catalog" element={<DiagCatalog type={type} mode="parent" />} />
+          <Route path="/insurance-claims" element={<ProviderClaims />} />
+          <Route path="/preauth" element={<ProviderPreauthList />} />
           <Route path="/reports" element={<DiagReports type={type} mode="parent" />} />
           <Route path="/branches/:branchId" element={<ParentBranchDetail type={type} profile={profile} />} />
           <Route path="/branches" element={<ParentBranches type={type} profile={profile} />} />

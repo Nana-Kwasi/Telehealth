@@ -6,6 +6,7 @@ import {
   orderBy, onSnapshot, serverTimestamp, setDoc,
 } from '../../../services/firestoreShim';
 import { ref as storageRef, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
+import Paged from '../../Common/Paged';
 
 function getInitials(name) {
   if (!name) return 'P';
@@ -331,7 +332,7 @@ export default function DoctorMessages({ profile }) {
                   <MessageSquare size={32} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
                   <p style={{ margin: 0, fontSize: '0.85rem' }}>{search ? 'No patients found' : 'No patients yet'}</p>
                 </div>
-              ) : filteredPatients.map(p => {
+              ) : <Paged items={filteredPatients}>{(filteredPatients) => filteredPatients.map(p => {
                 const last = lastMsgs[p.id];
                 const isActive = activePatient?.id === p.id;
                 return (
@@ -353,7 +354,7 @@ export default function DoctorMessages({ profile }) {
                     </div>
                   </div>
                 );
-              })}
+              })}</Paged>}
           </div>
         </div>
 
