@@ -4,6 +4,8 @@ import { signOut, updatePassword } from '../../../services/authShim';
 import { auth, db } from '../../../services/firestoreShim';
 import { doc, updateDoc, getDocs, query, collection, where, serverTimestamp, orderBy, limit, onSnapshot } from '../../../services/firestoreShim';
 import { PharmacyWalkInVerifyPanel } from './PharmacyWalkIn';
+import PrescriptionCodeVerify from './PrescriptionCodeVerify';
+import OpenPrescriptions from './OpenPrescriptions';
 import BranchPrescriptionOps from './BranchPrescriptionOps';
 import BranchReports from './BranchReports';
 import GlobalReportForm from '../Common/GlobalReportForm';
@@ -135,6 +137,8 @@ function BranchPrescriptions({ profile }) {
 
   return (
     <div className="pharmacy-page branch-prescriptions-page">
+      {/* QR / 8-digit code verification (server-checked), then the existing walk-in search. */}
+      <PrescriptionCodeVerify />
       <PharmacyWalkInVerifyPanel profile={profile} embedded />
 
       <h1 className="pharmacy-page-title">Incoming Prescriptions</h1>
@@ -681,6 +685,7 @@ function BranchSettings({ profile }) {
 const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
   { path: '/dashboard/prescriptions',label: 'Prescriptions', icon: '💊' },
+  { path: '/dashboard/open-prescriptions', label: 'Open Prescriptions', icon: '📬' },
   { path: '/dashboard/transfers',    label: 'Transfers',     icon: '↔️' },
   { path: '/dashboard/activity',     label: 'Activity',      icon: '🧾' },
   { path: '/dashboard/reports',      label: 'Reports',       icon: '📈' },
@@ -792,6 +797,7 @@ export default function BranchDashboard({ profile }) {
           <Route path="/"              element={<BranchOverview      profile={profile} />} />
           <Route path="/prescriptions" element={<BranchPrescriptions profile={profile} />} />
           <Route path="/prescriptions/:rxId" element={<BranchPrescriptionOps profile={profile} />} />
+          <Route path="/open-prescriptions" element={<OpenPrescriptions />} />
           <Route path="/transfers"     element={<BranchTransfers profile={profile} />} />
           <Route path="/activity"      element={<BranchActivity profile={profile} />} />
           <Route path="/reports"       element={<BranchReports profile={profile} />} />

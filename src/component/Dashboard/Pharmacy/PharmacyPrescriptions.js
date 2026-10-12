@@ -1,3 +1,4 @@
+import PrescriptionCodeVerify from './PrescriptionCodeVerify';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
@@ -238,6 +239,9 @@ export default function PharmacyPrescriptions({ profile }) {
     <div className="pharmacy-page">
       <h1 className="pharmacy-page-title">Prescriptions</h1>
       <p className="pharmacy-page-sub">All prescriptions routed to {profile?.pharmacyName || 'your pharmacy'} (across all branches).</p>
+
+      {/* Patient's QR / 8-digit code — server-checked. */}
+      <PrescriptionCodeVerify />
 
       {!loading && prescriptions.length > 0 && (
         <div className="pharmacy-rx-filters" role="toolbar" aria-label="Filter prescriptions">

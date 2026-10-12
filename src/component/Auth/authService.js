@@ -155,7 +155,17 @@ export async function findUserByUsernameOrEmail(identifier) {
 // ── signInWithEmailOrUsername ─────────────────────────────────────────────────
 // Main login entry point — called by Login.js.
 
+// Per-user ids left in localStorage by the PREVIOUS account on this browser.
+// `th.clientId` survived logout, so the next person to sign in had ~40 client
+// screens reading the previous client's record (e.g. "find a therapist" for
+// someone assigned long ago). Cleared on sign-in and sign-out.
+function clearPreviousUserIds() {
+  // Only the id: th.onboard etc. carry a visitor's questionnaire INTO sign-in.
+  try { localStorage.removeItem('th.clientId'); } catch { /* storage unavailable */ }
+}
+
 export async function signInWithEmailOrUsername(identifier, password) {
+  clearPreviousUserIds();
   const looksLikeEmail = /@/.test(identifier.trim());
   let email = looksLikeEmail ? identifier.trim() : null;
 
@@ -182,6 +192,27 @@ export async function signInWithEmailOrUsername(identifier, password) {
     throw err;
   }
 
+  // Two-step sign-in is on: the password was right but this is NOT a session
+  // yet. The web ignored this and tried to finish with a null token, so the
+  // code was emailed but there was nowhere to type it.
+  if (loginData?.twoFactorRequired) {
+    return { twoFactorRequired: true, challengeId: loginData.challengeId, email: loginData.email || email };
+  }
+
+  return finishWebSession(loginData, identifier);
+}
+
+/** Exchange the emailed two-step code for a session (same end state as a password login). */
+export async function completeTwoFactorSignIn(challengeId, code) {
+  const data = await api('/api/v1/auth/2fa/verify', {
+    method: 'POST',
+    authenticated: false,
+    body: { challengeId, code: String(code || '').trim() },
+  });
+  return finishWebSession(data, data?.email || '');
+}
+
+async function finishWebSession(loginData, identifier) {
   const { token, refreshToken, userId, role: rawRole } = loginData;
 
   // Persist tokens immediately so resolveRole's api() call is authenticated
@@ -244,6 +275,7 @@ export async function logUserLogout(userId, userRole, profile) {
 
 export async function performLogout({ userId, role, profile } = {}) {
   const uid = userId || getStoredUserId();
+  clearPreviousUserIds();
 
   // Log the logout event (best-effort)
   if (uid) {
@@ -315,9 +347,12 @@ function _logLoginActivity({ userId, role, success, errorMessage, identifier } =
   };
 
   // Fire-and-forget — never block login on analytics
+  // Only successful sign-ins are sent, with the new session: the server records
+  // failures itself and no longer accepts login history from unsigned callers.
+  if (!success) return;
   api('/api/v1/auth/mobile/login-logs', {
     method:        'POST',
-    authenticated: false,
+    authenticated: true,
     body:          payload,
   }).catch(() => {});
 }

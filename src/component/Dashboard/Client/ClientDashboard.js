@@ -3,7 +3,7 @@ import React from 'react';
 import AiAssistantFab from '../../Common/AiAssistantFab';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, MessageSquare, Video, Calendar, BookOpen, CreditCard, Settings, HelpCircle, LogOut, User, Bell, Sparkles, Pill, Leaf, ClipboardList, Search,
+  Home, MessageSquare, Video, Calendar, BookOpen, CreditCard, Settings, HelpCircle, LogOut, User, Bell, Sparkles, Pill, Leaf, ClipboardList, Search, Clock,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -39,6 +39,9 @@ import ClientWellness from '../../Common/ClientWellness';
 import MyCarePlan from '../../Common/MyCarePlan';
 import RecordExplorer from '../../Common/RecordExplorer';
 
+import { MedPatSettings, MedPatPrescriptions, MedPatEPharmacy, MedPatTimeline } from '../MedicalPatient/MedicalPatientDashboard';
+import { api, getStoredUserId } from '../../../services/apiClient';
+import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -53,10 +56,31 @@ export default function ClientDashboard({ profile }) {
   // returns the moment they convert to membership.
   const isSecondOpinion = (profile?.membershipTier || profile?.tier) === 'second_opinion';
 
+  // Psychiatry clients are prescribed for by their psychiatrist, so they get the
+  // medical patient's Prescriptions and E-Pharmacy screens. The care track lives
+  // in the client profile; /medpsych/me reports it (mobile reads the same call).
+  const [isPsychiatry, setIsPsychiatry] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    api('/api/v1/medpsych/me')
+      .then((me) => { if (!cancelled) setIsPsychiatry(String(me?.careTrack || '').toLowerCase() === 'psychiatry'); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const selfProfile = React.useMemo(
+    () => ({ ...(profile || {}), id: getStoredUserId(), uid: getStoredUserId() }),
+    [profile],
+  );
+
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: isSecondOpinion ? 'My case' : 'Home', component: ClientHome },
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Therapist', component: ClientMessages },
     { path: '/dashboard/video', icon: Video, label: 'Schedule', component: ClientVideoCall },
+    ...(isPsychiatry ? [
+      { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: MedPatPrescriptions },
+      { path: '/dashboard/epharmacy', icon: Pill, label: 'E-Pharmacy', component: MedPatEPharmacy },
+      { path: '/dashboard/timeline', icon: Clock, label: 'Health Timeline', component: MedPatTimeline },
+    ] : []),
     ...(isSecondOpinion ? [] : [
       { path: '/dashboard/schedule', icon: Calendar, label: 'Calendar', component: ClientSchedule },
       { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: ClientResources },
@@ -181,6 +205,8 @@ export default function ClientDashboard({ profile }) {
       {/* Main Content */}
       <main className="client-main">
         <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
+        {/* Until their phone is verified (only while SMS is set up). */}
+        <PhoneVerifyBanner />
         <Routes>
           <Route
             path="/"
@@ -202,8 +228,13 @@ export default function ClientDashboard({ profile }) {
           <Route path="/billing" element={<><BillingAssistantPanel /><ClientBilling /></>} />
           <Route path="/notifications" element={<NotificationCentre />} />
           <Route path="/ai-assistant" element={<AiHealthAssistant />} />
-          <Route path="/my-care" element={<CareCentre userId={profile?.id || profile?.uid} />} />
-          <Route path="/settings" element={<ClientSettings />} />
+          <Route path="/my-care" element={<CareCentre variant="therapy" userId={profile?.id || profile?.uid} />} />
+          {/* Same settings as the app: the patient benchmark in its therapy variant.
+              The account id (not a profile-row id) is what the settings load by. */}
+          <Route path="/prescriptions" element={<MedPatPrescriptions profile={selfProfile} />} />
+          <Route path="/epharmacy" element={<MedPatEPharmacy profile={selfProfile} />} />
+          <Route path="/timeline" element={<MedPatTimeline profile={selfProfile} />} />
+          <Route path="/settings" element={<MedPatSettings variant="therapy" profile={{ ...(profile || {}), id: getStoredUserId(), uid: getStoredUserId() }} />} />
           <Route path="/support" element={<ClientSupport />} />
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType="client" />} />
           <Route path="/therapist/:therapistId" element={<TherapistDetails />} />

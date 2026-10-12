@@ -1,744 +1,432 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../../services/firestoreShim';
-import { collection, getDocs, query, where, orderBy, limit } from '../../../services/firestoreShim';
 import {
-  isMedicalPatientAuthDoc,
-  buildTherapyLinkedAuthUidSet,
-  buildHomeCareNurseUidSet,
-} from '../../../utils/authUserFilters';
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
+} from 'recharts';
+import {
+  RefreshCw, TrendingUp, TrendingDown, UserPlus, CalendarDays, Brain, Pill, FlaskConical, MessageSquare,
+  BadgeCheck, Inbox, Radar, Clock, ChevronRight, Stethoscope, Building2, Users, Bell, FileDown,
+  LogIn, ShieldAlert, Activity, CheckCircle2,
+} from 'lucide-react';
+import { api } from '../../../services/apiClient';
 import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
+import WeatherCard from '../../Common/WeatherCard';
+import AdminLocationCard from './AdminLocationCard';
+import AdminBriefing from './AdminBriefing';
+import { subscribeLocationUpdate, applyLocationPatch } from '../../../utils/locationBus';
+import './AdminOverview.css';
 
-const QUICK_ACTIONS = [
-  { icon: '🩺', label: 'Onboard Doctor',       path: '/dashboard/onboard-doctor' },
-  { icon: '🧠', label: 'Onboard Therapist',    path: '/dashboard/onboard-therapist' },
-  { icon: '💊', label: 'Create Pharmacy',      path: '/dashboard/create-pharmacy' },
-  { icon: '🧪', label: 'Create Lab / Scan',    path: '/dashboard/create-lab-scan' },
-  { icon: '✅', label: 'Approvals',            path: '/dashboard/approvals' },
-  { icon: '👥', label: 'Manage Users',         path: '/dashboard/users' },
-  { icon: '📊', label: 'View Reports',         path: '/dashboard/reports' },
-  { icon: '📩', label: 'Reports & Feedback',  path: '/dashboard/reports-center' },
+/**
+ * Super admin home.
+ *
+ * One request (GET /api/v1/admin/overview) counted in the database, replacing
+ * fourteen whole collections pulled into the browser. Leads with what is
+ * waiting on an admin, then how the platform is moving, then who is on it.
+ */
+const KPI_META = {
+  signups:       { icon: UserPlus,      color: '#3f7a55', series: 'signups' },
+  appointments:  { icon: CalendarDays,  color: '#1e6bb8', series: 'appointments' },
+  sessions:      { icon: Brain,         color: '#5046bd', series: 'sessions' },
+  prescriptions: { icon: Pill,          color: '#b8860b', series: 'prescriptions' },
+  orders:        { icon: FlaskConical,  color: '#0d9488', series: null },
+  messages:      { icon: MessageSquare, color: '#c2410c', series: null },
+};
+
+const ROLES = [
+  ['CLIENT', 'Therapy clients', '#5046bd'],
+  ['PATIENT', 'Medical patients', '#1e6bb8'],
+  ['THERAPIST', 'Therapists', '#8b7fe0'],
+  ['DOCTOR', 'Doctors', '#3f7a55'],
+  ['PHARMACY', 'Pharmacies', '#b8860b'],
+  ['LAB', 'Labs & scan centres', '#0d9488'],
+  ['HOME_CARE_NURSE', 'Home-care nurses', '#e07a5f'],
+  ['ADMIN', 'Admins', '#64748b'],
 ];
 
-export default function AdminOverview() {
+const STATUS_COLORS = {
+  confirmed: '#3f7a55', completed: '#1e6bb8', pending: '#b8860b', requested: '#b8860b',
+  cancelled: '#c0262d', missed: '#c2410c', no_show: '#c2410c',
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+function pct(cur, prev) {
+  if (!prev) return cur ? null : 0;
+  return Math.round(((cur - prev) / prev) * 100);
+}
+
+function timeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  const m = Math.round(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+const ACTION_LABELS = {
+  LOGIN_SUCCESS: ['Signed in', '#3f7a55'],
+  LOGIN_FAILED: ['Failed sign-in', '#c0262d'],
+  LOGOUT: ['Signed out', '#64748b'],
+  ADMIN_USER_EDITED: ['Account edited by admin', '#1e6bb8'],
+  ADMIN_USER_DELETED: ['Account deleted by admin', '#c0262d'],
+  ADMIN_TEMP_PASSWORD_SET: ['Temporary password set', '#b8860b'],
+  APPOINTMENT_BOOKED: ['Appointment booked', '#1e6bb8'],
+};
+
+export default function AdminOverview({ profile }) {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    patients: 0, clients: 0, doctors: 0, therapists: 0, nurses: 0, pharmacies: 0,
-    labs: 0, scanCenters: 0, prescriptions: 0, appointments: 0,
-    doctorAppointments: 0, therapyScheduledCalls: 0, homeCareBookings: 0,
-    labOrders: 0, scanOrders: 0,
-  });
-  const [alerts, setAlerts]             = useState([]);
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [location, setLocation]         = useState({ country: '—', city: '—', ip: '—', flag: '' });
-  const [loading, setLoading]           = useState(true);
-  const [now, setNow]                   = useState(new Date());
-  const [analyticsPeriod, setAnalyticsPeriod] = useState('30d');
-  const [analyticsRaw, setAnalyticsRaw] = useState({
-    allRx: [],
-    allHcBookings: [],
-    allScheduledCalls: [],
-    providerBase: { doctors: 0, therapists: 0, pharmacies: 0, labs: 0, scans: 0 },
-  });
-  const [analytics, setAnalytics]       = useState({
-    line: [],
-    pie: [],
-    bar: [],
-    topDoctors: [],
-    topPharmacies: [],
-  });
-  const [locationCoverage, setLocationCoverage] = useState([]);
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  // The admin's own profile, kept current when the location is changed here.
+  const [me, setMe] = useState(profile);
+  useEffect(() => { setMe(profile); }, [profile]);
+  useEffect(() => subscribeLocationUpdate((patch) => setMe((p) => applyLocationPatch(p, patch))), []);
 
-  // Clock tick
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // IP-based location
-  useEffect(() => {
-    fetch('https://ipapi.co/json/')
-      .then(r => r.json())
-      .then(d => setLocation({
-        country: d.country_name || '—',
-        city: d.city || '—',
-        region: d.region || '',
-        ip: d.ip || '—',
-        flag: d.country_code ? `https://flagcdn.com/24x18/${d.country_code.toLowerCase()}.png` : '',
-        timezone: d.timezone || '',
-        currency: d.currency || '',
-        org: d.org || '',
-      }))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => { loadData(); }, []);
-  useEffect(() => {
-    if (
-      analyticsRaw.allRx.length ||
-      analyticsRaw.allHcBookings?.length ||
-      analyticsRaw.allScheduledCalls?.length ||
-      Object.values(analyticsRaw.providerBase).some(Boolean)
-    ) {
-      setAnalytics(
-        buildAnalytics(
-          analyticsRaw.allRx,
-          analyticsRaw.allHcBookings || [],
-          analyticsRaw.allScheduledCalls || [],
-          analyticsRaw.providerBase,
-          analyticsPeriod
-        )
-      );
-    }
-  }, [analyticsPeriod, analyticsRaw]);
-
-  const getWindowStartMs = (period) => {
-    const nowMs = Date.now();
-    if (period === '7d') return nowMs - (7 * 24 * 60 * 60 * 1000);
-    if (period === '30d') return nowMs - (30 * 24 * 60 * 60 * 1000);
-    if (period === '90d') return nowMs - (90 * 24 * 60 * 60 * 1000);
-    return 0;
-  };
-
-  const therapyActivityMs = (c = {}) => {
-    if (c?.createdAt?.seconds) return c.createdAt.seconds * 1000;
-    if (c?.scheduledTime?.seconds) return c.scheduledTime.seconds * 1000;
-    return 0;
-  };
-
-  const buildAnalytics = (allRx = [], allHcBookings = [], allScheduledCalls = [], providerBase = {}, period = '30d') => {
-    const windowStartMs = getWindowStartMs(period);
-    const filteredRx = !windowStartMs
-      ? allRx
-      : allRx.filter((rx) => {
-          const ms = rx?.createdAt?.seconds ? rx.createdAt.seconds * 1000 : 0;
-          return ms >= windowStartMs;
-        });
-    const filteredHc = !windowStartMs
-      ? allHcBookings
-      : allHcBookings.filter((b) => {
-          const ms = b?.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
-          return ms >= windowStartMs;
-        });
-    const filteredTh = !windowStartMs
-      ? allScheduledCalls
-      : allScheduledCalls.filter((c) => therapyActivityMs(c) >= windowStartMs);
-
-    const dayCount = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 14;
-    const tick = period === '7d' ? 1 : period === '30d' ? 5 : period === '90d' ? 15 : 1;
-    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const lineBuckets = Array.from({ length: dayCount }, (_, i) => {
-      const dt = new Date();
-      dt.setHours(0, 0, 0, 0);
-      dt.setDate(dt.getDate() - (dayCount - 1 - i));
-      const dayStart = dt.getTime();
-      const dayEnd = dayStart + (24 * 60 * 60 * 1000);
-      const rxCount = filteredRx.filter((rx) => {
-        const ms = rx?.createdAt?.seconds ? rx.createdAt.seconds * 1000 : 0;
-        return ms >= dayStart && ms < dayEnd;
-      }).length;
-      const hcCount = filteredHc.filter((b) => {
-        const ms = b?.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
-        return ms >= dayStart && ms < dayEnd;
-      }).length;
-      const thCount = filteredTh.filter((c) => {
-        const ms = therapyActivityMs(c);
-        return ms >= dayStart && ms < dayEnd;
-      }).length;
-      const value = rxCount + hcCount + thCount;
-      const label = (i % tick === 0 || i === dayCount - 1) ? weekDays[dt.getDay()] : '';
-      return { label, value };
-    });
-
-    const pieMap = { active: 0, completed: 0, partially_fulfilled: 0, cancelled: 0, other: 0 };
-    filteredRx.forEach((rx) => {
-      const s = String(rx.status || 'active').toLowerCase();
-      if (s in pieMap) pieMap[s] += 1;
-      else pieMap.other += 1;
-    });
-    const pie = [
-      { label: 'Active', value: pieMap.active, color: '#16a34a' },
-      { label: 'Completed', value: pieMap.completed, color: '#2563eb' },
-      { label: 'Partial', value: pieMap.partially_fulfilled, color: '#f59e0b' },
-      { label: 'Cancelled', value: pieMap.cancelled, color: '#ef4444' },
-      { label: 'Other', value: pieMap.other, color: '#64748b' },
-    ];
-
-    const bar = [
-      { label: 'Doctors', value: providerBase.doctors || 0, color: '#22c55e', path: '/dashboard/users' },
-      { label: 'Therapists', value: providerBase.therapists || 0, color: '#a855f7', path: '/dashboard/users' },
-      { label: 'Pharmacies', value: providerBase.pharmacies || 0, color: '#fb923c', path: '/dashboard/users' },
-      { label: 'Labs', value: providerBase.labs || 0, color: '#10b981', path: '/dashboard/users' },
-      { label: 'Scans', value: providerBase.scans || 0, color: '#8b5cf6', path: '/dashboard/users' },
-    ];
-
-    const topDoctorMap = {};
-    const topPharmacyMap = {};
-    filteredRx.forEach((rx) => {
-      const docName = rx?.doctorName || 'Unknown doctor';
-      topDoctorMap[docName] = (topDoctorMap[docName] || 0) + 1;
-      const pharmName = rx?.branchName || rx?.pharmacyName || 'Unassigned';
-      topPharmacyMap[pharmName] = (topPharmacyMap[pharmName] || 0) + 1;
-    });
-    const topDoctors = Object.entries(topDoctorMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-    const topPharmacies = Object.entries(topPharmacyMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-
-    return { line: lineBuckets, pie, bar, topDoctors, topPharmacies };
-  };
-
-  const loadData = async () => {
+  const load = useCallback(async () => {
+    setBusy(true); setError('');
     try {
-      const [pats, docs, thers, nurses, pharmas, rxs, appts, therapyCalls, hcBookings, labs, scans, labOrders, scanOrders, clientsSnap] = await Promise.all([
-        getDocs(collection(db, 'auth')),
-        getDocs(collection(db, 'doctors')),
-        getDocs(collection(db, 'therapists')),
-        getDocs(collection(db, 'homeCareNurses')),
-        getDocs(collection(db, 'pharmacies')),
-        getDocs(collection(db, 'doctorPrescriptions')),
-        getDocs(collection(db, 'doctorAppointments')),
-        getDocs(collection(db, 'scheduledCalls')),
-        getDocs(collection(db, 'homeCareBookings')),
-        getDocs(collection(db, 'labs')),
-        getDocs(collection(db, 'scanCenters')),
-        getDocs(query(collection(db, 'diagnosticOrders'), where('centerType', '==', 'lab'))),
-        getDocs(query(collection(db, 'diagnosticOrders'), where('centerType', '==', 'scan'))),
-        getDocs(collection(db, 'clients')),
-      ]);
-
-      const therapyUids = buildTherapyLinkedAuthUidSet(clientsSnap);
-      const nurseUids = buildHomeCareNurseUidSet(nurses);
-
-      const medicalAuthDocs = pats.docs.filter((d) =>
-        isMedicalPatientAuthDoc({ id: d.id, ...d.data() }, therapyUids, nurseUids)
-      );
-
-      const hcBookingCount = hcBookings.size;
-      const drApptCount = appts.size;
-      const therapyCount = therapyCalls.size;
-      setStats({
-        patients:      medicalAuthDocs.length,
-        // Therapy clients were already fetched (to classify medical patients) but
-        // the count was never surfaced — the dashboard showed every product line
-        // except therapy.
-        clients:       clientsSnap.size,
-        doctors:       docs.size,
-        therapists:    thers.docs.filter(d => (d.data()?.role || '') !== 'admin').length,
-        nurses:        nurses.size,
-        pharmacies:    pharmas.size,
-        prescriptions: rxs.size,
-        appointments:  drApptCount + therapyCount + hcBookingCount,
-        doctorAppointments: drApptCount,
-        therapyScheduledCalls: therapyCount,
-        homeCareBookings: hcBookingCount,
-        labs:          labs.size,
-        scanCenters:   scans.size,
-        labOrders:     labOrders.size,
-        scanOrders:    scanOrders.size,
-      });
-
-      // Build alerts
-      const alertList = [];
-      const pendingPharm = pharmas.docs.filter(d => d.data().status === 'pending');
-      if (pendingPharm.length)
-        alertList.push({ type: 'warn', icon: '⚠️', text: `${pendingPharm.length} pharmacy account(s) pending approval` });
-      const flaggedRx = rxs.docs.filter(d => (d.data().warnings?.length || 0) > 0);
-      if (flaggedRx.length)
-        alertList.push({ type: 'danger', icon: '🚨', text: `${flaggedRx.length} prescription(s) flagged with drug interaction warnings` });
-      const suspDocs = docs.docs.filter(d => d.data().status === 'suspended');
-      if (suspDocs.length)
-        alertList.push({ type: 'info', icon: 'ℹ️', text: `${suspDocs.length} suspended doctor account(s) require attention` });
-      const pendingOrders = [...labOrders.docs, ...scanOrders.docs].filter(d => d.data().status === 'PENDING');
-      if (pendingOrders.length)
-        alertList.push({ type: 'warn', icon: '🔬', text: `${pendingOrders.length} diagnostic order(s) awaiting lab/scan center action` });
-      setAlerts(alertList);
-
-      // Recent prescriptions
-      const rxList = rxs.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-        .slice(0, 8);
-      const therapyFeed = therapyCalls.docs
-        .map((d) => ({ id: d.id, _feedType: 'therapy', ...d.data() }))
-        .sort((a, b) => {
-          const as = a.createdAt?.seconds || a.scheduledTime?.seconds || 0;
-          const bs = b.createdAt?.seconds || b.scheduledTime?.seconds || 0;
-          return bs - as;
-        })
-        .slice(0, 8);
-      const feedSortSec = (row) =>
-        row.createdAt?.seconds || row.scheduledTime?.seconds || 0;
-      const mergedFeed = [...rxList.map((r) => ({ ...r, _feedType: 'rx' })), ...therapyFeed]
-        .sort((a, b) => feedSortSec(b) - feedSortSec(a))
-        .slice(0, 8);
-      setRecentActivity(mergedFeed);
-
-      const allRx = rxs.docs.map(d => ({ id: d.id, ...d.data() }));
-      const allHcBookings = [];
-      const allScheduledCalls = therapyCalls.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const providerBase = {
-        doctors: docs.size,
-        therapists: thers.docs.filter(d => (d.data()?.role || '') !== 'admin').length,
-        pharmacies: pharmas.size,
-        labs: labs.size,
-        scans: scans.size,
-      };
-      setAnalyticsRaw({ allRx, allHcBookings, allScheduledCalls, providerBase });
-      setAnalytics(buildAnalytics(allRx, allHcBookings, allScheduledCalls, providerBase, analyticsPeriod));
-
-      const hasLocation = (row = {}) => {
-        const lat = Number(row?.latitude ?? row?.locationMeta?.latitude ?? row?.location?.latitude);
-        const lng = Number(row?.longitude ?? row?.locationMeta?.longitude ?? row?.location?.longitude);
-        const structured = !!(row?.country || row?.city || row?.area || row?.region || row?.street || row?.locationMeta?.country || row?.locationMeta?.city);
-        return Number.isFinite(lat) && Number.isFinite(lng) && structured;
-      };
-      const authRows = medicalAuthDocs.map((d) => d.data());
-      const doctorRows = docs.docs.map(d => d.data());
-      const therapistRows = thers.docs.map(d => d.data()).filter(d => (d?.role || '') !== 'admin');
-      const pharmacyRows = pharmas.docs.map(d => d.data());
-      const labRows = labs.docs.map(d => d.data());
-      const scanRows = scans.docs.map(d => d.data());
-      const nurseRows = nurses.docs.map((d) => d.data());
-      const rows = [
-        { label: 'Patients', items: authRows },
-        { label: 'Doctors', items: doctorRows },
-        { label: 'Therapists', items: therapistRows },
-        { label: 'Pharmacies', items: pharmacyRows },
-        { label: 'Labs', items: labRows },
-        { label: 'Scans', items: scanRows },
-      ].map(({ label, items }) => {
-        const total = items.length;
-        const withLocation = items.filter(hasLocation).length;
-        const missing = Math.max(0, total - withLocation);
-        return { label, total, withLocation, missing, pct: total ? Math.round((withLocation / total) * 100) : 0 };
-      });
-      setLocationCoverage(rows);
+      const d = await api(`/api/v1/admin/overview?days=${days}`);
+      setData(d);
+      setUpdatedAt(new Date());
     } catch (e) {
-      console.error('AdminOverview error:', e);
+      setError(e?.message || 'The overview could not be loaded.');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
+  }, [days]);
 
-  const STAT_CARDS = [
-    { key: 'patients',      label: 'Medical Patients',     icon: '👥', bg: '#eff6ff', color: '#1d4ed8' },
-    { key: 'clients',       label: 'Therapy Clients',      icon: '🧘', bg: '#f5f3ff', color: '#7c3aed' },
-    { key: 'doctors',       label: 'Doctors',              icon: '🩺', bg: '#f0fdf4', color: '#16a34a' },
-    { key: 'therapists',    label: 'Therapists',           icon: '🧠', bg: '#fdf4ff', color: '#9333ea' },
-    { key: 'pharmacies',    label: 'Pharmacies',           icon: '💊', bg: '#fff7ed', color: '#ea580c' },
-    { key: 'labs',          label: 'Lab Centers',          icon: '🧪', bg: '#f0fdf4', color: '#065f46' },
-    { key: 'scanCenters',   label: 'Imaging Centers',      icon: '🩻', bg: '#faf5ff', color: '#7c3aed' },
-    { key: 'prescriptions', label: 'Prescriptions',        icon: '📋', bg: '#f0fdf4', color: '#16a34a' },
-    { key: 'appointments',  label: 'Appointments & Sessions', icon: '📅', bg: '#fefce8', color: '#ca8a04' },
-    { key: 'labOrders',     label: 'Lab Orders',           icon: '🔬', bg: '#f0fdf4', color: '#059669' },
-    { key: 'scanOrders',    label: 'Scan Orders',          icon: '📡', bg: '#faf5ff', color: '#6d28d9' },
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const t = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const series = useMemo(() => (data?.series || []).map((r) => ({
+    ...r,
+    label: new Date(`${r.day}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+  })), [data]);
+
+  const roleSlices = useMemo(() => ROLES
+    .map(([key, label, color]) => ({ key, label, color, value: Number(data?.people?.[key] || 0) }))
+    .filter((r) => r.value > 0), [data]);
+
+  const queues = data?.queues || {};
+  const attention = [
+    { key: 'approvals', label: 'Accounts to approve', icon: BadgeCheck, path: '/dashboard/approvals', tone: 'gold' },
+    { key: 'reports', label: 'Open reports & tickets', icon: Inbox, path: '/dashboard/reports-center', tone: 'red' },
+    { key: 'riskAlerts', label: 'Patterns to review', icon: Radar, path: '/dashboard/risk-alerts', tone: 'purple' },
+    { key: 'pendingOrders', label: 'Lab & scan orders waiting', icon: FlaskConical, path: '/dashboard/reports', tone: 'teal' },
   ];
+  const waiting = attention.reduce((n, a) => n + Number(queues[a.key] || 0), 0);
+  const name = (profile?.name || profile?.fullName || '').split(' ')[0];
 
-  const fmtTime = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const fmtDate = (d) => d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const fmtTs   = (ts) => ts?.seconds ? new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-  const pieTotal = analytics.pie.reduce((sum, x) => sum + x.value, 0);
-  const pieCirc = 2 * Math.PI * 54;
-  let pieOffset = 0;
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '0.75rem' }}>
-      <div style={{ width: 24, height: 24, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      Loading system overview…
-    </div>
-  );
+  const statusRows = data?.appointmentStatus || [];
+  const statusTotal = statusRows.reduce((n, r) => n + Number(r.n || 0), 0);
+  const logins = data?.logins24h || {};
+  const loginTotal = Number(logins.success || 0) + Number(logins.failed || 0);
+  const failRate = loginTotal ? Math.round((Number(logins.failed || 0) / loginTotal) * 100) : 0;
 
   return (
-    <div className="admin-page">
-      {/* Location + Clock Banner */}
-      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)', borderRadius: 14, padding: '1.25rem 1.5rem', marginBottom: '1.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 4px 20px rgba(15,23,42,0.25)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {location.flag && <img src={location.flag} alt="" style={{ height: 22, borderRadius: 3, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Current Location</span>
-            </div>
-            <p style={{ margin: 0, fontWeight: 800, color: '#fff', fontSize: '1rem' }}>
-              {location.city}{location.region ? `, ${location.region}` : ''} — <span style={{ color: '#93c5fd' }}>{location.country}</span>
-            </p>
-            {location.timezone && <p style={{ margin: 0, fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)' }}>Timezone: {location.timezone} · IP: {location.ip}</p>}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 800, color: '#93c5fd', letterSpacing: '0.05em' }}>{fmtTime(now)}</p>
-          <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)' }}>{fmtDate(now)}</p>
-        </div>
-      </div>
-
-      {/* Page header */}
-      <div className="admin-page-header">
+    <div className="admin-page ov">
+      {/* ── Header ── */}
+      <header className="ov-hero">
         <div>
-          <h1 className="admin-page-title">System Overview</h1>
-          <p className="admin-page-sub">Real-time metrics and platform health — NessaHub Telehealth</p>
+          <p className="ov-eyebrow">Super admin</p>
+          <h1>{greeting()}{name ? `, ${name}` : ''}</h1>
+          <p className="ov-hero-sub">
+            {waiting
+              ? `${waiting} item${waiting === 1 ? '' : 's'} need${waiting === 1 ? 's' : ''} your attention.`
+              : 'Nothing is waiting on you right now.'}
+            {' '}Here is how NessaHub has moved over the last {days} days.
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={loadData}>↻ Refresh</button>
-      </div>
+        <div className="ov-hero-actions">
+          <div className="ov-period" role="tablist" aria-label="Period">
+            {[7, 30, 90].map((d) => (
+              <button key={d} type="button" role="tab" aria-selected={days === d}
+                className={days === d ? 'on' : ''} onClick={() => setDays(d)}>{d} days</button>
+            ))}
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={load} disabled={busy}>
+            <RefreshCw size={14} className={busy ? 'ov-spin' : ''} /> Refresh
+          </button>
+          {updatedAt ? <span className="ov-updated">Updated {updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : null}
+        </div>
+      </header>
 
-      {/* Period-on-period platform figures, counted in SQL. A source with no
-          rows at all reads "Not recorded" rather than a misleading zero. */}
-      <PracticeAnalyticsPanel scope="platform" />
+      {error ? <div className="admin-alert admin-alert-danger">{error}</div> : null}
 
-      {/* Stats grid */}
-      <div className="admin-stats-grid">
-        {STAT_CARDS.map(card => (
-          <div key={card.key} className="admin-stat-card">
-            <div className="admin-stat-icon" style={{ background: card.bg }}>
-              {card.icon}
+      {/* ── Where you are, and the weather there ── */}
+      <section className="ov-context">
+        <AdminLocationCard profile={me} onSaved={(patch) => setMe((p) => applyLocationPatch(p, patch))} />
+        <div className="ov-weather"><WeatherCard profile={me} compact /></div>
+      </section>
+
+      {/* ── Needs attention ── */}
+      <section className="ov-attention">
+        {attention.map((a) => {
+          const n = Number(queues[a.key] || 0);
+          return (
+            <button key={a.key} type="button" className={`ov-attn ${n ? `tone-${a.tone}` : 'clear'}`} onClick={() => navigate(a.path)}>
+              <span className="ov-attn-icon"><a.icon size={18} /></span>
+              <span className="ov-attn-body">
+                <strong>{data ? n : '–'}</strong>
+                <span>{a.label}</span>
+              </span>
+              {n ? <ChevronRight size={16} className="ov-attn-go" /> : <CheckCircle2 size={16} className="ov-attn-ok" />}
+            </button>
+          );
+        })}
+      </section>
+
+      {/* ── AI briefing ── */}
+      <AdminBriefing days={days} />
+
+      {/* ── KPIs ── */}
+      <section className="ov-kpis">
+        {(data?.kpis || Object.keys(KPI_META).map((key) => ({ key, label: '', current: null }))).map((k) => {
+          const meta = KPI_META[k.key] || KPI_META.signups;
+          const change = k.current == null ? null : pct(k.current, k.previous);
+          const spark = meta.series ? series.map((r) => ({ v: Number(r[meta.series] || 0) })) : null;
+          return (
+            <div key={k.key} className="ov-kpi">
+              <div className="ov-kpi-top">
+                <span className="ov-kpi-icon" style={{ background: `${meta.color}14`, color: meta.color }}><meta.icon size={18} /></span>
+                {change === null || k.current == null ? (
+                  <span className="ov-delta flat">{k.current == null ? '' : 'new'}</span>
+                ) : (
+                  <span className={`ov-delta ${change > 0 ? 'up' : change < 0 ? 'down' : 'flat'}`}>
+                    {change > 0 ? <TrendingUp size={13} /> : change < 0 ? <TrendingDown size={13} /> : null}
+                    {change > 0 ? '+' : ''}{change}%
+                  </span>
+                )}
+              </div>
+              <div className="ov-kpi-value">{k.current == null ? <span className="ov-skel" /> : k.current.toLocaleString()}</div>
+              <div className="ov-kpi-label">{k.label || ' '}</div>
+              <div className="ov-kpi-foot">
+                {k.current == null ? '' : `vs ${Number(k.previous || 0).toLocaleString()} before · ${Number(k.total || 0).toLocaleString()} all time`}
+              </div>
+              {spark && spark.length > 1 ? (
+                <div className="ov-spark" aria-hidden="true">
+                  <ResponsiveContainer width="100%" height={36}>
+                    <AreaChart data={spark} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id={`sp-${k.key}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={meta.color} stopOpacity={0.3} />
+                          <stop offset="100%" stopColor={meta.color} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Area type="monotone" dataKey="v" stroke={meta.color} strokeWidth={2} fill={`url(#sp-${k.key})`} isAnimationActive={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
             </div>
+          );
+        })}
+      </section>
+
+      {/* ── Outcomes, sign-ins, quick actions ── */}
+      <section className="ov-row ov-row-3">
+        <div className="ov-card">
+          <div className="ov-card-head">
             <div>
-              <div className="admin-stat-value" style={{ color: card.color }}>{stats[card.key]}</div>
-              <div className="admin-stat-label">{card.label}</div>
+              <h2>Appointment outcomes</h2>
+              <p>Doctor appointments created in the last {days} days</p>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Alerts */}
-      {alerts.length > 0 && (
-        <div style={{ marginBottom: '1.75rem' }}>
-          <p className="admin-section-title">🔔 System Alerts</p>
-          {alerts.map((a, i) => (
-            <div key={i} className={`admin-alert admin-alert-${a.type}`}>
-              <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{a.icon}</span>
-              <span>{a.text}</span>
-            </div>
-          ))}
+          {statusRows.length === 0 ? (
+            <p className="ov-muted">No appointments in this period.</p>
+          ) : (
+            <ul className="ov-bars">
+              {statusRows.map((r) => {
+                const n = Number(r.n || 0);
+                const color = STATUS_COLORS[r.status] || '#64748b';
+                return (
+                  <li key={r.status}>
+                    <div className="ov-bar-label">
+                      <span>{String(r.status).replace(/_/g, ' ')}</span>
+                      <strong>{n}</strong>
+                    </div>
+                    <div className="ov-bar-track"><div className="ov-bar-fill" style={{ width: `${(n / statusTotal) * 100}%`, background: color }} /></div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
-      )}
 
-      {/* Quick Actions */}
-      <div style={{ marginBottom: '1.75rem' }}>
-        <p className="admin-section-title">⚡ Quick Actions</p>
-        <div className="admin-quick-grid">
-          {QUICK_ACTIONS.map(a => (
-            <div key={a.path} className="admin-quick-card" onClick={() => navigate(a.path)}>
-              <div className="admin-quick-icon">{a.icon}</div>
-              <div className="admin-quick-label">{a.label}</div>
+        <div className="ov-card">
+          <div className="ov-card-head">
+            <div>
+              <h2>Sign-in health</h2>
+              <p>Last 24 hours</p>
             </div>
-          ))}
+          </div>
+          <div className="ov-logins">
+            <div className="ov-login ok">
+              <LogIn size={18} />
+              <strong>{Number(logins.success || 0)}</strong>
+              <span>successful</span>
+            </div>
+            <div className={`ov-login ${Number(logins.failed || 0) ? 'bad' : 'ok'}`}>
+              <ShieldAlert size={18} />
+              <strong>{Number(logins.failed || 0)}</strong>
+              <span>failed</span>
+            </div>
+          </div>
+          <p className={`ov-note ${failRate >= 25 ? 'warn' : ''}`}>
+            {loginTotal
+              ? failRate >= 25
+                ? `${failRate}% of sign-ins failed — check the audit log for repeated attempts.`
+                : `${failRate}% of sign-ins failed. Nothing unusual.`
+              : 'No sign-ins recorded in the last day.'}
+          </p>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/audit-log')}>
+            Open audit log <ChevronRight size={14} />
+          </button>
         </div>
-      </div>
 
-      {/* Charts + tables */}
-      <div style={{ marginBottom: '1.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.8rem', flexWrap: 'wrap' }}>
-          <p className="admin-section-title" style={{ marginBottom: 0 }}>📈 Analytics Snapshot</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="ov-card">
+          <div className="ov-card-head">
+            <div>
+              <h2>Quick actions</h2>
+              <p>Common admin tasks</p>
+            </div>
+          </div>
+          <div className="ov-quick">
             {[
-              ['7d', 'Last 7d'],
-              ['30d', 'Last 30d'],
-              ['90d', 'Last 90d'],
-              ['all', 'All'],
-            ].map(([k, label]) => (
-              <button
-                key={k}
-                className={`btn btn-sm ${analyticsPeriod === k ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setAnalyticsPeriod(k)}
-              >
+              ['Onboard doctor', Stethoscope, '/dashboard/onboard-doctor', '#3f7a55'],
+              ['Onboard therapist', Brain, '/dashboard/onboard-therapist', '#5046bd'],
+              ['Create pharmacy', Building2, '/dashboard/create-pharmacy', '#b8860b'],
+              ['Create lab / scan', FlaskConical, '/dashboard/create-lab-scan', '#0d9488'],
+              ['Send notification', Bell, '/dashboard/notifications', '#1e6bb8'],
+              ['Export PDF report', FileDown, '/dashboard/system-pdf-export', '#c2410c'],
+            ].map(([label, Icon, path, color]) => (
+              <button key={label} type="button" onClick={() => navigate(path)}>
+                <span style={{ background: `${color}14`, color }}><Icon size={17} /></span>
                 {label}
               </button>
             ))}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-          <div className="admin-table-card" style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <p className="admin-table-title" style={{ margin: 0 }}>Line Graph: Rx + Therapy Activity ({analyticsPeriod === 'all' ? 'All' : analyticsPeriod})</p>
-              <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)}>Open Report</button>
+      </section>
+
+      {/* ── Trend + people ── */}
+      <section className="ov-row ov-row-2-1">
+        <div className="ov-card">
+          <div className="ov-card-head">
+            <div>
+              <h2>Activity</h2>
+              <p>New appointments, therapy sessions, prescriptions and accounts, day by day.</p>
             </div>
-            <svg viewBox="0 0 560 220" style={{ width: '100%', height: 220, display: 'block' }}>
-              {Array.from({ length: 4 }).map((_, i) => (
-                <line key={i} x1="40" y1={35 + i * 45} x2="535" y2={35 + i * 45} stroke="#e2e8f0" strokeWidth="1" />
-              ))}
-              {(() => {
-                const max = Math.max(...analytics.line.map(p => p.value), 1);
-                const points = analytics.line.map((p, i) => {
-                  const x = 55 + i * 78;
-                  const y = 190 - ((p.value / max) * 145);
-                  return { x, y, label: p.label, value: p.value };
-                });
-                const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+          </div>
+          <div className="ov-chart">
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={series} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
+                <defs>
+                  {[['appointments', '#1e6bb8'], ['sessions', '#5046bd'], ['prescriptions', '#b8860b'], ['signups', '#3f7a55']].map(([k, c]) => (
+                    <linearGradient key={k} id={`g-${k}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={c} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={c} stopOpacity={0} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e8edf2" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#5b6577' }} tickLine={false} axisLine={false} minTickGap={24} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#5b6577' }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e3e8ef', fontSize: 12 }} />
+                <Area isAnimationActive={false} type="monotone" name="Appointments" dataKey="appointments" stroke="#1e6bb8" strokeWidth={2} fill="url(#g-appointments)" />
+                <Area isAnimationActive={false} type="monotone" name="Therapy sessions" dataKey="sessions" stroke="#5046bd" strokeWidth={2} fill="url(#g-sessions)" />
+                <Area isAnimationActive={false} type="monotone" name="Prescriptions" dataKey="prescriptions" stroke="#b8860b" strokeWidth={2} fill="url(#g-prescriptions)" />
+                <Area isAnimationActive={false} type="monotone" name="New accounts" dataKey="signups" stroke="#3f7a55" strokeWidth={2} fill="url(#g-signups)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="ov-legend">
+            {[['Appointments', '#1e6bb8'], ['Therapy sessions', '#5046bd'], ['Prescriptions', '#b8860b'], ['New accounts', '#3f7a55']].map(([l, c]) => (
+              <span key={l}><i style={{ background: c }} />{l}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="ov-card">
+          <div className="ov-card-head">
+            <div>
+              <h2>People on NessaHub</h2>
+              <p>{Number(data?.people?.TOTAL || 0).toLocaleString()} accounts in total</p>
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/users')}>
+              <Users size={14} /> Manage
+            </button>
+          </div>
+          <div className="ov-donut">
+            <ResponsiveContainer width="100%" height={190}>
+              <PieChart>
+                <Pie data={roleSlices} dataKey="value" nameKey="label" innerRadius={58} outerRadius={86} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                  {roleSlices.map((r) => <Cell key={r.key} fill={r.color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e3e8ef', fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="ov-donut-center">
+              <strong>{Number(data?.people?.TOTAL || 0).toLocaleString()}</strong>
+              <span>accounts</span>
+            </div>
+          </div>
+          <ul className="ov-roles">
+            {roleSlices.map((r) => (
+              <li key={r.key}>
+                <i style={{ background: r.color }} />
+                <span>{r.label}</span>
+                <strong>{r.value}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ── Recent activity + platform figures ── */}
+      <section className="ov-row ov-row-1-2">
+        <div className="ov-card">
+          <div className="ov-card-head">
+            <div>
+              <h2>Recent activity</h2>
+              <p>Latest events across the platform</p>
+            </div>
+            <Activity size={16} className="ov-muted-icon" />
+          </div>
+          {(data?.recent || []).length === 0 ? <p className="ov-muted">No recent events.</p> : (
+            <ul className="ov-feed">
+              {data.recent.map((e, i) => {
+                const [label, color] = ACTION_LABELS[e.action] || [String(e.action || 'Event').replace(/_/g, ' ').toLowerCase(), '#64748b'];
                 return (
-                  <>
-                    <path d={path} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
-                    {points.map((p) => (
-                      <g key={`${p.label}-${p.x}`} onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)} style={{ cursor: 'pointer' }}>
-                        <circle cx={p.x} cy={p.y} r="4" fill="#2563eb" />
-                        <text x={p.x} y={210} textAnchor="middle" fontSize="11" fill="#64748b">{p.label}</text>
-                        <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fill="#1e3a8a" fontWeight="700">{p.value}</text>
-                      </g>
-                    ))}
-                  </>
+                  <li key={i}>
+                    <i style={{ background: color }} />
+                    <div>
+                      <strong>{label}</strong>
+                      <span>{[e.user_name, e.user_type, e.platform].filter(Boolean).join(' · ')}</span>
+                    </div>
+                    <time><Clock size={11} /> {timeAgo(e.at)}</time>
+                  </li>
                 );
-              })()}
-            </svg>
-          </div>
-
-          <div className="admin-table-card" style={{ padding: '1rem' }}>
-            <p className="admin-table-title" style={{ margin: '0 0 0.75rem' }}>Pie Chart: Rx Status Mix</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
-              <svg viewBox="0 0 140 140" width="140" height="140" style={{ flexShrink: 0 }}>
-                <circle cx="70" cy="70" r="54" fill="none" stroke="#e2e8f0" strokeWidth="18" />
-                {analytics.pie.map((slice) => {
-                  const len = pieTotal ? ((slice.value / pieTotal) * pieCirc) : 0;
-                  const node = (
-                    <circle
-                      key={slice.label}
-                      cx="70"
-                      cy="70"
-                      r="54"
-                      fill="none"
-                      stroke={slice.color}
-                      strokeWidth="18"
-                      strokeDasharray={`${len} ${pieCirc - len}`}
-                      strokeDashoffset={-pieOffset}
-                      transform="rotate(-90 70 70)"
-                      strokeLinecap="butt"
-                      onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                  );
-                  pieOffset += len;
-                  return node;
-                })}
-                <text x="70" y="66" textAnchor="middle" fontSize="12" fill="#64748b">Total</text>
-                <text x="70" y="84" textAnchor="middle" fontSize="16" fontWeight="700" fill="#0f172a">{pieTotal}</text>
-              </svg>
-              <div style={{ display: 'grid', gap: 6 }}>
-                {analytics.pie.map((slice) => (
-                  <div key={slice.label} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)}>
-                    <span style={{ width: 10, height: 10, borderRadius: 999, background: slice.color, display: 'inline-block' }} />
-                    <span style={{ fontSize: '0.79rem', color: '#334155', minWidth: 72 }}>{slice.label}</span>
-                    <b style={{ fontSize: '0.79rem', color: '#0f172a' }}>{slice.value}</b>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+              })}
+            </ul>
+          )}
         </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div className="admin-table-card" style={{ padding: '1rem' }}>
-            <p className="admin-table-title" style={{ margin: '0 0 0.75rem' }}>Bar Chart: Provider & Partner Base</p>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.55rem', height: 170 }}>
-              {(() => {
-                const max = Math.max(...analytics.bar.map(b => b.value), 1);
-                return analytics.bar.map((b) => (
-                  <div key={b.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => navigate(b.path)}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>{b.value}</span>
-                    <div style={{ width: '100%', maxWidth: 54, borderRadius: '8px 8px 0 0', background: b.color, height: Math.max((b.value / max) * 120, b.value > 0 ? 10 : 0), transition: 'height 0.3s ease' }} />
-                    <span style={{ fontSize: '0.68rem', color: '#64748b', textAlign: 'center' }}>{b.label}</span>
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-
-          <div className="admin-table-card">
-            <div className="admin-table-header">
-              <p className="admin-table-title">Table: Top Doctors by Rx Volume</p>
-            </div>
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Doctor</th>
-                  <th>Prescriptions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analytics.topDoctors.length === 0 ? (
-                  <tr><td colSpan={2} style={{ color: '#94a3b8' }}>No data</td></tr>
-                ) : analytics.topDoctors.map((row) => (
-                  <tr key={row.name} onClick={() => navigate(`/dashboard/reports?focus=activity&period=${analyticsPeriod}`)} style={{ cursor: 'pointer' }}>
-                    <td>{row.name}</td>
-                    <td><span className="badge badge-blue">{row.count}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="ov-figures">
+          <PracticeAnalyticsPanel scope="platform" />
         </div>
-
-        <div className="admin-table-card" style={{ marginTop: '1rem' }}>
-          <div className="admin-table-header">
-            <p className="admin-table-title">Table: Top Pharmacy Branches / Routing Targets</p>
-          </div>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Branch / Pharmacy</th>
-                <th>Routed Prescriptions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analytics.topPharmacies.length === 0 ? (
-                <tr><td colSpan={2} style={{ color: '#94a3b8' }}>No routing data yet.</td></tr>
-              ) : analytics.topPharmacies.map((row) => (
-                <tr key={row.name} onClick={() => navigate('/dashboard/users')} style={{ cursor: 'pointer' }}>
-                  <td>{row.name}</td>
-                  <td><span className="badge badge-purple">{row.count}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Platform breakdown + Recent activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        {/* Platform health */}
-        <div className="admin-table-card">
-          <div className="admin-table-header">
-            <p className="admin-table-title">Platform Breakdown</p>
-          </div>
-          <div style={{ padding: '0.75rem 1.1rem' }}>
-            {(() => {
-              const rows = [
-                { label: 'Medical Patients',    val: stats.patients,           color: '#1d4ed8' },
-                { label: 'Therapy Clients',     val: stats.clients,            color: '#7c3aed' },
-                { label: 'Doctors',             val: stats.doctors,            color: '#16a34a' },
-                { label: 'Therapists',          val: stats.therapists,         color: '#9333ea' },
-                { label: 'Pharmacies',          val: stats.pharmacies,         color: '#ea580c' },
-                { label: 'Lab Centers',         val: stats.labs,               color: '#065f46' },
-                { label: 'Imaging Centers',     val: stats.scanCenters,        color: '#7c3aed' },
-                { label: 'Therapy sessions',    val: stats.therapyScheduledCalls, color: '#a855f7' },
-                { label: 'Doctor appointments', val: stats.doctorAppointments, color: '#ca8a04' },
-                { label: 'Prescriptions',       val: stats.prescriptions,      color: '#0891b2' },
-              ];
-              const scale = Math.max(1, ...rows.map(r => Number(r.val) || 0));
-              return rows.map(r => ({ ...r, val: Number(r.val) || 0, max: scale }));
-            })().map(row => (
-              <div key={row.label} style={{ marginBottom: '0.85rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>{row.label}</span>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: row.color }}>{row.val}</span>
-                </div>
-                <div style={{ height: 6, background: '#f1f5f9', borderRadius: 10, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', background: row.color, borderRadius: 10, width: `${Math.min((row.val / row.max) * 100, 100)}%`, transition: 'width 0.6s ease' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent prescriptions */}
-        <div className="admin-table-card">
-          <div className="admin-table-header">
-            <p className="admin-table-title">Recent activity</p>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/prescriptions')}>Prescriptions</button>
-          </div>
-          {recentActivity.length === 0 ? (
-            <div className="admin-empty"><p>No recent prescriptions or therapy sessions.</p></div>
-          ) : recentActivity.map((row, i) => (
-            <div key={`${row._feedType}-${row.id || i}`} className="admin-feed-item">
-              <div
-                className="admin-feed-dot"
-                style={{
-                  background:
-                    row._feedType === 'therapy'
-                      ? '#a855f7'
-                      : row.status === 'active'
-                        ? '#16a34a'
-                        : row.status === 'completed'
-                          ? '#1d4ed8'
-                          : '#94a3b8',
-                }}
-              />
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>
-                  {row._feedType === 'therapy'
-                    ? `Therapy · ${row.sessionType || 'session'}`
-                    : (row.medications?.[0]?.name || row.medication || 'Prescription')}
-                </p>
-                <p style={{ margin: '1px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
-                  {row._feedType === 'therapy'
-                    ? `${row.clientName || row.patientName || 'Client'} · ${row.therapistName || '—'}`
-                    : `${row.patientName || '—'} · Dr. ${row.doctorName || '—'}`}
-                </p>
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <span
-                  className={`badge badge-${
-                    row._feedType === 'therapy'
-                      ? 'purple'
-                      : row.status === 'active'
-                        ? 'green'
-                        : row.status === 'completed'
-                          ? 'blue'
-                          : 'gray'
-                  }`}
-                >
-                  {row._feedType === 'therapy'
-                    ? (row.status || 'pending')
-                    : (row.status || 'active')}
-                </span>
-                <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#94a3b8' }}>
-                  {fmtTs(row.createdAt?.seconds ? row.createdAt : row.scheduledTime)}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Location coverage audit */}
-      <div className="admin-table-card">
-        <div className="admin-table-header">
-          <p className="admin-table-title">Location Coverage Audit</p>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/users')}>Review Users</button>
-        </div>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Segment</th>
-              <th>Total</th>
-              <th>With Location</th>
-              <th>Coverage</th>
-              <th>Missing</th>
-            </tr>
-          </thead>
-          <tbody>
-            {locationCoverage.length === 0 ? (
-              <tr><td colSpan={5} style={{ color: '#94a3b8' }}>No coverage data.</td></tr>
-            ) : locationCoverage.map((r) => (
-              <tr key={r.label}>
-                <td>{r.label}</td>
-                <td>{r.total}</td>
-                <td>{r.withLocation}</td>
-                <td><span className={`badge ${r.pct >= 90 ? 'badge-green' : r.pct >= 70 ? 'badge-yellow' : 'badge-red'}`}>{r.pct}%</span></td>
-                <td><span className={`badge ${r.missing === 0 ? 'badge-green' : 'badge-orange'}`}>{r.missing}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* System info footer */}
-      <div style={{ marginTop: '1.75rem', background: '#f8fafc', borderRadius: 12, padding: '1.1rem 1.35rem', border: '1px solid #e2e8f0', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        {[
-          ['Platform', 'NessaHub Telehealth v2.0'],
-          ['Environment', 'Production'],
-          ['Database', 'Firebase Firestore'],
-          ['Auth', 'Firebase Auth'],
-          ['Currency', location.currency || '—'],
-          ['Network Org', location.org || '—'],
-        ].map(([label, val]) => (
-          <div key={label}>
-            <p style={{ margin: 0, fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</p>
-            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>{val}</p>
-          </div>
-        ))}
-      </div>
+      </section>
     </div>
   );
 }

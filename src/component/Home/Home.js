@@ -7,6 +7,7 @@ import { NESSA_HUB_POLICY_LINKS } from '../../constants/nessaHubPolicies';
 import { beginTherapySession } from '../../utils/patientSessionIntent';
 import TherapyTypeModal, { THERAPY_TYPES, PSYCHIATRY_TYPES } from './TherapyTypeModal';
 
+import FaqSection from '../Common/FaqSection';
 const steps = [
   { n: '1', title: 'Choose your service',       desc: 'Select therapy, medical care, psychiatry, or second opinion.' },
   { n: '2', title: 'Match with a professional', desc: 'We pair you with the right therapist or doctor based on your needs.' },
@@ -285,6 +286,11 @@ export default function Home() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* ── FAQ ── shared with the dashboards and the app (backend /api/v1/faq) */}
+      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '1rem 16px 2.5rem' }}>
+        <FaqSection compact audience="visitor" limit={8} />
       </section>
 
       {/* ── FOOTER ── */}

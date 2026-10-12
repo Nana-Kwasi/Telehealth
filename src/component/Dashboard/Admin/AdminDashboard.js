@@ -5,12 +5,20 @@ import { auth, db } from '../../../services/firestoreShim';
 import { doc, getDoc } from '../../../services/firestoreShim';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
+import {
+  LayoutDashboard, Users, BadgeCheck, CalendarDays, Pill, Building2, Stethoscope, Brain, Home, HeartHandshake,
+  FlaskConical, BarChart3, FileDown, Inbox, ShieldCheck, BookOpen, Radar, ScrollText, Bell, Mail, Megaphone, Tag,
+  Sparkles, Settings, LogOut, Menu, ChevronRight,
+} from 'lucide-react';
+import { api } from '../../../services/apiClient';
+import AdminGlobalSearch from './AdminGlobalSearch';
 import './AdminDashboard.css';
 
 import AdminOverview          from './AdminOverview';
 import AdminUserManagement    from './AdminUserManagement';
 import AdminCreatePharmacy    from './AdminCreatePharmacy';
 import AdminPrescriptionMonitor from './AdminPrescriptionMonitor';
+import AdminSmsFollowUp from './AdminSmsFollowUp';
 import AdminSystemConfig      from './AdminSystemConfig';
 import OnboardDoctor          from './OnboardDoctor';
 import OnboardTherapist       from './OnboardTherapist';
@@ -35,39 +43,57 @@ import AdminUserDetail        from './AdminUserDetail';
 
 const NAV = [
   // PLATFORM
-  { path: '/dashboard',                   label: 'Overview',              icon: '📊', section: 'PLATFORM' },
-  { path: '/dashboard/users',             label: 'User Management',       icon: '👥', section: 'PLATFORM' },
-  { path: '/dashboard/approvals',         label: 'Account Approvals',     icon: '✅', section: 'PLATFORM' },
-  { path: '/dashboard/appointments',      label: 'Appointments',          icon: '📅', section: 'PLATFORM' },
-  { path: '/dashboard/prescriptions',     label: 'Prescription Monitor',  icon: '💊', section: 'PLATFORM' },
+  { path: '/dashboard',                   label: 'Overview',              icon: LayoutDashboard, section: 'PLATFORM' },
+  { path: '/dashboard/users',             label: 'User Management',       icon: Users,           section: 'PLATFORM' },
+  { path: '/dashboard/approvals',         label: 'Account Approvals',     icon: BadgeCheck,      section: 'PLATFORM', count: 'approvals' },
+  { path: '/dashboard/appointments',      label: 'Appointments',          icon: CalendarDays,    section: 'PLATFORM' },
+  { path: '/dashboard/prescriptions',     label: 'Prescription Monitor',  icon: Pill,            section: 'PLATFORM' },
+  { path: '/dashboard/sms-follow-up',     label: 'SMS Follow-up',         icon: Pill,            section: 'PLATFORM' },
   // ONBOARDING
-  { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: '🏥', section: 'ONBOARDING' },
-  { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: '🩺', section: 'ONBOARDING' },
-  { path: '/dashboard/onboard-therapist', label: 'Onboard Therapist',     icon: '🧠', section: 'ONBOARDING' },
-  { path: '/dashboard/onboard-homecare-nurse', label: 'Onboard Home-Care Nurse', icon: '🏠', section: 'ONBOARDING' },
-  { path: '/dashboard/home-care-manage', label: 'Home Care Manage', icon: '🩹', section: 'ONBOARDING' },
-  { path: '/dashboard/create-lab-scan',   label: 'Create Lab / Scan',     icon: '🧪', section: 'ONBOARDING' },
-  // ANALYTICS & COMMS
-  { path: '/dashboard/reports',           label: 'Analytics & Reports',   icon: '📈', section: 'ANALYTICS' },
-  { path: '/dashboard/system-pdf-export', label: 'System PDF export',     icon: '📄', section: 'ANALYTICS' },
-  { path: '/dashboard/reports-center',    label: 'Reports & Feedback',    icon: '📩', section: 'ANALYTICS' },
-  { path: '/dashboard/insurance-verification', label: 'Insurance & Claims', icon: '🛡️', section: 'ANALYTICS' },
-  { path: '/dashboard/formulary', label: 'Formulary', icon: '📚', section: 'ANALYTICS' },
-  { path: '/dashboard/risk-alerts', label: 'Patterns to review', icon: '🔎', section: 'ANALYTICS' },
-  { path: '/dashboard/notifications',     label: 'Notifications',         icon: '📣', section: 'ANALYTICS' },
-  { path: '/dashboard/notification-templates', label: 'Message Templates', icon: '✉️', section: 'ANALYTICS' },
-  { path: '/dashboard/promotions',        label: 'Promo Campaigns',       icon: '📣', section: 'ANALYTICS' },
-  { path: '/dashboard/price-promotions',  label: 'Price Promotions',      icon: '🏷️', section: 'ANALYTICS' },
-  { path: '/dashboard/ai-knowledge',      label: 'AI Knowledge Base',     icon: '🧠', section: 'SYSTEM' },
-  { path: '/dashboard/audit-log',         label: 'Audit Log',             icon: '🔍', section: 'ANALYTICS' },
+  { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: Building2,       section: 'ONBOARDING' },
+  { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: Stethoscope,     section: 'ONBOARDING' },
+  { path: '/dashboard/onboard-therapist', label: 'Onboard Therapist',     icon: Brain,           section: 'ONBOARDING' },
+  { path: '/dashboard/onboard-homecare-nurse', label: 'Onboard Home-Care Nurse', icon: Home,     section: 'ONBOARDING' },
+  { path: '/dashboard/home-care-manage', label: 'Home Care Manage',       icon: HeartHandshake,  section: 'ONBOARDING' },
+  { path: '/dashboard/create-lab-scan',   label: 'Create Lab / Scan',     icon: FlaskConical,    section: 'ONBOARDING' },
+  // ANALYTICS
+  { path: '/dashboard/reports',           label: 'Analytics & Reports',   icon: BarChart3,       section: 'ANALYTICS' },
+  { path: '/dashboard/system-pdf-export', label: 'System PDF export',     icon: FileDown,        section: 'ANALYTICS' },
+  { path: '/dashboard/reports-center',    label: 'Reports & Feedback',    icon: Inbox,           section: 'ANALYTICS', count: 'reports' },
+  { path: '/dashboard/insurance-verification', label: 'Insurance & Claims', icon: ShieldCheck,   section: 'ANALYTICS' },
+  { path: '/dashboard/formulary',         label: 'Formulary',             icon: BookOpen,        section: 'ANALYTICS' },
+  { path: '/dashboard/risk-alerts',       label: 'Patterns to review',    icon: Radar,           section: 'ANALYTICS', count: 'riskAlerts' },
+  { path: '/dashboard/audit-log',         label: 'Audit Log',             icon: ScrollText,      section: 'ANALYTICS' },
+  // ENGAGEMENT
+  { path: '/dashboard/notifications',     label: 'Notifications',         icon: Bell,            section: 'ENGAGEMENT' },
+  { path: '/dashboard/notification-templates', label: 'Message Templates', icon: Mail,           section: 'ENGAGEMENT' },
+  { path: '/dashboard/promotions',        label: 'Promo Campaigns',       icon: Megaphone,       section: 'ENGAGEMENT' },
+  { path: '/dashboard/price-promotions',  label: 'Price Promotions',      icon: Tag,             section: 'ENGAGEMENT' },
   // SYSTEM
-  { path: '/dashboard/system-config',     label: 'System Config',         icon: '⚙️', section: 'SYSTEM' },
+  { path: '/dashboard/ai-knowledge',      label: 'AI Knowledge Base',     icon: Sparkles,        section: 'SYSTEM' },
+  { path: '/dashboard/system-config',     label: 'System Config',         icon: Settings,        section: 'SYSTEM' },
 ];
 
 export default function AdminDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [forcedPwCollection, setForcedPwCollection] = useState(null);
+  const [navOpen, setNavOpen] = useState(false);
+  const [counts, setCounts] = useState({});
+
+  // Queue sizes beside the menu items that have work waiting.
+  useEffect(() => {
+    let alive = true;
+    const load = () => api('/api/v1/admin/overview?days=7')
+      .then((d) => { if (alive) setCounts(d?.queues || {}); })
+      .catch(() => {});
+    load();
+    const t = setInterval(load, 2 * 60 * 1000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  // A menu choice closes the drawer on small screens.
+  useEffect(() => { setNavOpen(false); }, [location.pathname]);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -83,16 +109,21 @@ export default function AdminDashboard({ profile }) {
   };
 
   const isActive = (path) =>
-    path === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(path);
+    // Exact, or a sub-page of it — a plain prefix made /dashboard/reports light
+    // up on /dashboard/reports-center too.
+    path === '/dashboard'
+      ? location.pathname === '/dashboard'
+      : location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const sections = [...new Set(NAV.map(n => n.section))];
 
   return (
-    <div className="admin-dashboard">
-      <aside className="admin-sidebar">
+    <div className={`admin-dashboard ${navOpen ? 'nav-open' : ''}`}>
+      <div className="admin-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      <aside className="admin-sidebar" aria-label="Admin menu">
         <div className="admin-sidebar-header">
           <div className="admin-logo">
-            <span>🏥</span>
+            <span className="admin-logo-mark">N</span>
             <h2>NessaHub</h2>
             <span className="admin-logo-badge">Admin</span>
           </div>
@@ -115,9 +146,13 @@ export default function AdminDashboard({ profile }) {
                   <li key={item.path}>
                     <button
                       className={`admin-nav-item ${isActive(item.path) ? 'active' : ''}`}
-                      onClick={() => navigate(item.path)}>
-                      <span>{item.icon}</span>
+                      onClick={() => navigate(item.path)}
+                      aria-current={isActive(item.path) ? 'page' : undefined}>
+                      <item.icon size={17} strokeWidth={2} />
                       <span>{item.label}</span>
+                      {item.count && counts[item.count] ? (
+                        <span className="admin-nav-count" aria-label={`${counts[item.count]} waiting`}>{counts[item.count]}</span>
+                      ) : null}
                     </button>
                   </li>
                 ))}
@@ -128,22 +163,39 @@ export default function AdminDashboard({ profile }) {
 
         <div className="admin-sidebar-footer">
           <button className="admin-logout-btn" onClick={handleLogout}>
-            🚪 <span>Logout</span>
+            <LogOut size={16} /> <span>Log out</span>
           </button>
         </div>
       </aside>
 
       <main className="admin-main">
+        <header className="admin-topbar">
+          <button type="button" className="admin-menu-btn" onClick={() => setNavOpen(true)} aria-label="Open menu">
+            <Menu size={18} />
+          </button>
+          <nav className="admin-crumbs" aria-label="Breadcrumb">
+            <span>Admin</span>
+            <ChevronRight size={14} />
+            <strong>{(NAV.find((n) => isActive(n.path)) || NAV[0]).label}</strong>
+          </nav>
+          <AdminGlobalSearch pages={NAV} />
+          <div className="admin-topbar-right">
+            <span className="admin-date">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+        </header>
         {forcedPwCollection ? (
           <ForcedPasswordChangeOverlay profile={profile} firestoreCollection={forcedPwCollection} />
         ) : null}
         <Routes>
-          <Route path="/"                    element={<AdminOverview />} />
+          <Route path="/"                    element={<AdminOverview profile={profile} />} />
           <Route path="/users"               element={<AdminUserManagement />} />
           <Route path="/users/:col/:userId"  element={<AdminUserDetail />} />
           <Route path="/approvals"           element={<AdminApprovals />} />
           <Route path="/appointments"        element={<AdminAppointments />} />
           <Route path="/prescriptions"       element={<AdminPrescriptionMonitor />} />
+          <Route path="/sms-follow-up"       element={<AdminSmsFollowUp />} />
           <Route path="/create-pharmacy"     element={<AdminCreatePharmacy />} />
           <Route path="/onboard-doctor"      element={<OnboardDoctor />} />
           <Route path="/onboard-therapist"   element={<OnboardTherapist />} />

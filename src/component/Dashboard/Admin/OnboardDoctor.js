@@ -159,7 +159,7 @@ export default function OnboardDoctor({ profile }) {
 
   return (
     <div className="doctor-page">
-      <div className="doctor-page-header" style={{ background: 'linear-gradient(135deg, #1e6bb8 0%, #155a9c 100%)' }}>
+      <div className="doctor-page-header">
         <h1>Onboard Medical Doctor</h1>
         <p>Register a new doctor on the platform</p>
       </div>

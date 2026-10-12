@@ -70,6 +70,8 @@ import './Settings.css';
 import { uploadAvatar } from '../../../utils/profileImage';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
+import { TwoStepSignIn, ChangePasswordCard, ClinicianAccountNote } from '../../Common/AccountSecurityCards';
+import ConsentHistory from '../../Common/ConsentHistory';
 export default function TherapistSettings() {
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState({});
@@ -211,7 +213,7 @@ export default function TherapistSettings() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!['profile', 'security', 'availability', 'notifications'].includes(activeTab)) setActiveTab('profile');
+    if (!['profile', 'security', 'availability', 'notifications', 'legal'].includes(activeTab)) setActiveTab('profile');
   }, [activeTab]);
 
   // Handle image upload
@@ -496,6 +498,7 @@ export default function TherapistSettings() {
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'availability', label: 'Availability', icon: Calendar },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'legal', label: 'Legal', icon: FileText },
   ];
 
   const AVAILABILITY_STATUSES = [
@@ -876,6 +879,13 @@ export default function TherapistSettings() {
           )}
 
           {/* Security Tab */}
+          {activeTab === 'legal' && (
+            <div className="settings-section">
+              <h2>Consents &amp; agreements</h2>
+              <ConsentHistory />
+            </div>
+          )}
+
           {activeTab === 'security' && (
             <div className="settings-section">
               <h2>Security Settings</h2>
@@ -914,53 +924,12 @@ export default function TherapistSettings() {
                 </form>
               </div>
 
-              <div className="security-options">
-                <div className="security-item">
-                  <div className="security-info">
-                    <Lock size={20} />
-                    <div>
-                      <h4>Two-Factor Authentication</h4>
-                      <p>Add an extra layer of security to your account</p>
-                    </div>
-                  </div>
-                  <button 
-                    className="btn-secondary"
-                    onClick={() => setShowPasswordModal(true)}
-                  >
-                    {systemForm.twoFactorAuth ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-
-                <div className="security-item">
-                  <div className="security-info">
-                    <Clock size={20} />
-                    <div>
-                      <h4>Session Timeout</h4>
-                      <p>Automatically log out after inactivity</p>
-                    </div>
-                  </div>
-                  <select
-                    value={systemForm.sessionTimeout}
-                    onChange={(e) => setSystemForm(prev => ({ ...prev, sessionTimeout: e.target.value }))}
-                  >
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="60">1 hour</option>
-                    <option value="120">2 hours</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="security-actions">
-                <button className="btn-secondary">
-                  <Download size={16} />
-                  Export Data
-                </button>
-                <button className="btn-secondary">
-                  <Database size={16} />
-                  Backup Settings
-                </button>
-              </div>
+              {/* Real controls. The old "Two-Factor → Enable" opened the password
+                  dialog, the timeout select saved nothing, and Export/Backup had
+                  no handlers. */}
+              <TwoStepSignIn />
+              <ChangePasswordCard />
+              <ClinicianAccountNote />
             </div>
           )}
 

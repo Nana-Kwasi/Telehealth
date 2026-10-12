@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PrescriptionCodeVerify from './PrescriptionCodeVerify';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
@@ -280,6 +281,7 @@ export function PharmacyWalkInVerifyPanel({ profile, embedded = false }) {
 export default function PharmacyWalkIn({ profile }) {
   return (
     <div className="pharmacy-page">
+      <PrescriptionCodeVerify />
       <PharmacyWalkInVerifyPanel profile={profile} embedded={false} />
     </div>
   );

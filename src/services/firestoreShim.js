@@ -909,7 +909,14 @@ async function resolveCollection(path, constraints) {
     }
 
     case 'pharmacyRxEvents': {
-      const data = await api('/api/v1/entity-operations/pharmacy/events').catch(() => []);
+      // Ask the server for this pharmacy's or branch's events. Unfiltered, it used
+      // to return an unsorted 200-row slice of EVERY pharmacy's feed, which the
+      // in-memory filter then thinned — so a pharmacy's own events went missing.
+      const evOrg = asUuid(getWhereValue(constraints, 'pharmacyId')) || asUuid(getWhereValue(constraints, 'organizationId'));
+      const evBranch = asUuid(getWhereValue(constraints, 'branchId'));
+      // Branch is the narrower filter, and branch-posted events may carry no org id.
+      const evQs = evBranch ? `?branchId=${evBranch}&limit=500` : evOrg ? `?organizationId=${evOrg}&limit=500` : '?limit=500';
+      const data = await api(`/api/v1/entity-operations/pharmacy/events${evQs}`).catch(() => []);
       const items = (Array.isArray(data) ? data : (data?.events || [])).map(_normalizeTimestamps);
       return toQuerySnapshot(applyInMemoryFilters(items, constraints));
     }
@@ -1907,6 +1914,11 @@ export async function addDoc(colRef, data) {
           pharmacyId: data.pharmacyId || null,
           pharmacyBranchId: data.branchId || data.pharmacyBranchId || null,
           status: data.status || 'active',
+          followUpDate: data.followUpDate || null,
+          // "Open to all NessaHub pharmacies" instead of one branch.
+          openToAll: data.openToAll === true,
+          // Approving a prescription request (server links it, enforces the safety check).
+          ...(data.requestId ? { requestId: data.requestId, safetyAcknowledged: data.safetyAcknowledged === true } : {}),
         } });
       case 'homeCareBookings': {
         // Emergencies have their OWN endpoint: it sets isEmergency/urgency and
@@ -2158,8 +2170,9 @@ export async function addDoc(colRef, data) {
           conclusion: data.conclusion || null,
           reportUrl: data.reportUrl || data.fileUrl || null,
           status: data.status || 'completed',
-          releasedToPatient: data.releasedToPatient ?? true,
-          releasedToDoctor: data.releasedToDoctor ?? true,
+          // Never released by the lab: the ordering doctor shares it with the patient
+          // (POST /results/{id}/share). The server ignores releasedToPatient here.
+          releasedToDoctor: true,
         } });
       case 'patientNotifications':
         return { id: `tmp_${Date.now()}` };
@@ -2284,7 +2297,12 @@ export async function updateDoc(docRef, data) {
         // therapist-accessible status route; reassignment (therapistId) is handled
         // separately via the assignments endpoint, so it's a no-op here.
         if (data.status !== undefined && !isSelf && (role === 'therapist' || role === 'admin')) {
-          return api(`/api/v1/clients/${id}/status`, { method: 'PATCH', body: { status: data.status } });
+          const statusResult = await api(`/api/v1/clients/${id}/status`, { method: 'PATCH', body: { status: data.status } });
+          // An admin's edit form sends status WITH phone and intake fields; this
+          // used to return here and silently drop everything else. Therapists
+          // may only change status, so only an admin falls through.
+          const rest = Object.keys(data).filter((k) => !['status', 'statusUpdatedAt', 'updatedAt'].includes(k));
+          if (role !== 'admin' || rest.length === 0) return statusResult;
         }
         if (data.therapistId !== undefined && Object.keys(data).length === 1) {
           return null; // reassignment already performed via /assignments
@@ -2390,13 +2408,23 @@ export async function updateDoc(docRef, data) {
       }
       case 'doctorAppointments':
         return api(`/api/v1/medical/appointments/${id}`, { method: 'PATCH', body: data });
-      case 'doctorPrescriptions':
+      case 'doctorPrescriptions': {
+        // Patients are refused the general PATCH (doctor/pharmacy only). The one
+        // write a patient makes is closing their own course, which has its own
+        // narrow endpoint — anything else from a patient has nowhere to go.
+        const rxRole = (getStoredRole() || '').toLowerCase();
+        if (rxRole === 'patient' || rxRole === 'client') {
+          if (data.status === undefined) return { id };
+          return api(`/api/v1/medical/prescriptions/${id}/patient-status`, { method: 'PATCH', body: { status: data.status } });
+        }
         // The ops screens send `pharmacyStatus` (workflow state) and the full
         // `medications` array (per-drug state lives in medicationsJson). Forward all
         // of them; the backend maps pharmacyStatus→rxStatus and branchId→branch.
         return api(`/api/v1/medical/prescriptions/${id}`, { method: 'PATCH', body: {
           ...(data.medications !== undefined ? { medicationsJson: JSON.stringify(data.medications) } : {}),
           ...(data.pharmacyStatus !== undefined ? { pharmacyStatus: data.pharmacyStatus } : {}),
+          ...(asUuid(data.pharmacyId) ? { pharmacyId: asUuid(data.pharmacyId) } : {}),
+          ...(data.openToAll !== undefined ? { openToAll: data.openToAll === true } : {}),
           ...(data.status !== undefined ? { rxStatus: data.status } : {}),
           ...(data.branchId !== undefined ? { pharmacyBranchId: data.branchId } : {}),
           ...(data.refCode !== undefined ? { refCode: data.refCode } : {}),
@@ -2408,6 +2436,7 @@ export async function updateDoc(docRef, data) {
           ...(data.coldChainStorageHandling !== undefined ? { coldChainStorageHandling: data.coldChainStorageHandling } : {}),
           ...(data.dispenseExceptionDetail !== undefined ? { dispenseExceptionDetail: data.dispenseExceptionDetail } : {}),
         } });
+      }
       case 'notifications':
         return api(`/api/v1/therapy-management/notifications/read`, { method: 'POST', body: { notificationId: id } });
       case 'clinicalNotes':

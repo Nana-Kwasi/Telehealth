@@ -15,14 +15,14 @@ const FEATURE_META = {
 };
 
 const CONFIG_SECTIONS = [
-  { key: 'general',       label: '🏥 General Platform',    icon: '🏥' },
-  { key: 'appointments',  label: '📅 Appointments',        icon: '📅' },
-  { key: 'prescriptions', label: '💊 Prescriptions',       icon: '💊' },
-  { key: 'notifications', label: '🔔 Notifications',       icon: '🔔' },
-  { key: 'security',      label: '🔐 Security & Access',   icon: '🔐' },
-  { key: 'payments',      label: '💳 Payments & Currency', icon: '💳' },
-  { key: 'dataRetention', label: '🗄 Data & Retention',    icon: '🗄' },
-  { key: 'flags',         label: '🌍 Country Feature Flags', icon: '🌍' },
+  { key: 'general',       label: 'General Platform',    icon: '🏥' },
+  { key: 'appointments',  label: 'Appointments',        icon: '📅' },
+  { key: 'prescriptions', label: 'Prescriptions',       icon: '💊' },
+  { key: 'notifications', label: 'Notifications',       icon: '🔔' },
+  { key: 'security',      label: 'Security & Access',   icon: '🔐' },
+  { key: 'payments',      label: 'Payments & Currency', icon: '💳' },
+  { key: 'dataRetention', label: 'Data & Retention',    icon: '🗄' },
+  { key: 'flags',         label: 'Country Feature Flags', icon: '🌍' },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS = {
     autoFlagDrugInteractions: { label: 'Auto-Flag Drug Interactions', type: 'toggle', value: true, desc: 'Automatically detect and flag dangerous drug combinations' },
     allowRefills:             { label: 'Allow Refills', type: 'toggle', value: true, desc: 'Allow pharmacies to process prescription refills' },
     maxRefillCount:           { label: 'Max Refill Count', type: 'number', value: 3, desc: 'Maximum times a prescription can be refilled' },
+    openRxHoldHours:          { label: 'Open Rx Hold (hours)', type: 'number', value: 24, desc: 'How long a pharmacy may hold an "open to all" prescription without an update before it is offered to other pharmacies again' },
   },
   notifications: {
     emailNotifications:   { label: 'Email Notifications', type: 'toggle', value: true, desc: 'Send email alerts for appointments, prescriptions, results' },
@@ -168,7 +169,7 @@ export default function AdminSystemConfig() {
             <input type="checkbox" checked={!!val} onChange={e => updateSetting(section, key, e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
             <span style={{
               position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-              background: val ? '#2563eb' : '#cbd5e1', borderRadius: 24, transition: '0.2s',
+              background: val ? '#3f7a55' : '#cbd5e1', borderRadius: 24, transition: '0.2s',
             }}>
               <span style={{
                 position: 'absolute', height: 18, width: 18, left: val ? 23 : 3, bottom: 3,
@@ -232,8 +233,8 @@ export default function AdminSystemConfig() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.6rem', width: '100%',
                 padding: '0.6rem 0.85rem', border: 'none', borderRadius: 8, cursor: 'pointer',
-                background: activeSection === s.key ? '#eff6ff' : 'transparent',
-                color: activeSection === s.key ? '#2563eb' : '#475569',
+                background: activeSection === s.key ? '#e9f3ec' : 'transparent',
+                color: activeSection === s.key ? '#3f7a55' : '#475569',
                 fontWeight: activeSection === s.key ? 700 : 500, fontSize: '0.82rem',
                 marginBottom: '2px', textAlign: 'left',
               }}>
@@ -253,7 +254,7 @@ export default function AdminSystemConfig() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                   <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{sectionCfg?.label}</h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {saved === activeSection && <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 600 }}>✓ Saved</span>}
+                    {saved === activeSection && <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 600 }}>Saved</span>}
                     <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveSection(activeSection)}>
                       {saving ? 'Saving…' : '💾 Save Section'}
                     </button>
@@ -269,11 +270,11 @@ export default function AdminSystemConfig() {
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>🌍 Country Feature Flags</h3>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Country Feature Flags</h3>
                   <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#64748b' }}>Enable or disable platform features per country. Changes sync across web and mobile instantly.</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {saved === 'flags' && <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 700 }}>✓ All changes saved</span>}
+                  {saved === 'flags' && <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 700 }}>All changes saved</span>}
                   <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveSection('flags')}>
                     {saving ? 'Saving…' : '💾 Save All Flags'}
                   </button>
@@ -291,18 +292,18 @@ export default function AdminSystemConfig() {
                       onClick={() => setActiveCountry(isSelected ? '' : c.code)}
                       style={{
                         background: '#fff', borderRadius: 14,
-                        border: `2px solid ${isSelected ? '#2563eb' : '#e2e8f0'}`,
-                        boxShadow: isSelected ? '0 0 0 4px #dbeafe' : '0 1px 4px rgba(0,0,0,0.04)',
+                        border: `2px solid ${isSelected ? '#3f7a55' : '#e2e8f0'}`,
+                        boxShadow: isSelected ? '0 0 0 4px #dcefe2' : '0 1px 4px rgba(0,0,0,0.04)',
                         cursor: 'pointer', overflow: 'hidden', transition: 'all 0.15s',
                       }}>
                       {/* Country header */}
-                      <div style={{ padding: '0.9rem 1.1rem', background: isSelected ? '#eff6ff' : '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ padding: '0.9rem 1.1rem', background: isSelected ? '#e9f3ec' : '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                           <img src={`https://flagcdn.com/24x18/${c.code.toLowerCase()}.png`}
                             alt={c.code} style={{ height: 18, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}
                             onError={e => { e.target.style.display = 'none'; }} />
                           <div>
-                            <div style={{ fontWeight: 800, fontSize: '0.88rem', color: isSelected ? '#1d4ed8' : '#0f172a' }}>{c.label}</div>
+                            <div style={{ fontWeight: 800, fontSize: '0.88rem', color: isSelected ? '#2f5e40' : '#0f172a' }}>{c.label}</div>
                             <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600 }}>{c.code}</div>
                           </div>
                         </div>
@@ -316,7 +317,7 @@ export default function AdminSystemConfig() {
 
                       {/* Progress bar */}
                       <div style={{ height: 4, background: '#f1f5f9' }}>
-                        <div style={{ height: '100%', width: `${(activeCount / totalCount) * 100}%`, background: activeCount === totalCount ? '#16a34a' : activeCount === 0 ? '#e2e8f0' : '#2563eb', transition: 'width 0.3s ease' }} />
+                        <div style={{ height: '100%', width: `${(activeCount / totalCount) * 100}%`, background: activeCount === totalCount ? '#16a34a' : activeCount === 0 ? '#e2e8f0' : '#3f7a55', transition: 'width 0.3s ease' }} />
                       </div>
 
                       {/* Feature toggles (expanded when selected) */}
@@ -333,7 +334,7 @@ export default function AdminSystemConfig() {
                                 </div>
                                 <label style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, flexShrink: 0, cursor: 'pointer' }}>
                                   <input type="checkbox" checked={isOn} onChange={e => toggleFlag(c.code, key, e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                                  <span style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: isOn ? '#2563eb' : '#cbd5e1', borderRadius: 22, transition: '0.2s', cursor: 'pointer' }}>
+                                  <span style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: isOn ? '#3f7a55' : '#cbd5e1', borderRadius: 22, transition: '0.2s', cursor: 'pointer' }}>
                                     <span style={{ position: 'absolute', height: 16, width: 16, left: isOn ? 21 : 3, bottom: 3, background: '#fff', borderRadius: '50%', transition: '0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                                   </span>
                                 </label>
@@ -367,7 +368,7 @@ export default function AdminSystemConfig() {
               {/* Reference summary table */}
               <div className="admin-table-card">
                 <div className="admin-table-header">
-                  <p className="admin-table-title">📊 Full Reference — All Countries × All Features</p>
+                  <p className="admin-table-title">Full Reference — All Countries × All Features</p>
                 </div>
                 <div style={{ overflowX: 'auto', padding: '0 0 0.5rem' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>

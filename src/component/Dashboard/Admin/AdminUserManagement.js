@@ -135,7 +135,7 @@ export default function AdminUserManagement() {
           <h1 className="admin-page-title">User Management</h1>
           <p className="admin-page-sub">Click any user to view full profile and apply super admin actions</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { loadAllCounts(); loadTab(tab); }}>↻ Refresh</button>
+        <button className="btn btn-primary" onClick={() => { loadAllCounts(); loadTab(tab); }}>Refresh</button>
       </div>
 
       {/* Entity tabs */}
@@ -145,7 +145,7 @@ export default function AdminUserManagement() {
             style={{
               padding: '0.45rem 0.9rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600,
               fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem',
-              background: tab === t.key ? '#1d4ed8' : '#f1f5f9',
+              background: tab === t.key ? '#2f5e40' : '#f1f5f9',
               color: tab === t.key ? '#fff' : '#475569', transition: 'all 0.15s',
             }}>
             {t.icon} {t.key}
@@ -175,7 +175,7 @@ export default function AdminUserManagement() {
           {statusFilter && (
             <button onClick={() => setStatusFilter('')}
               style={{ padding: '0.25rem 0.7rem', borderRadius: 20, border: '1.5px solid #e2e8f0', background: 'transparent', color: '#94a3b8', fontSize: '0.76rem', cursor: 'pointer' }}>
-              ✕ Clear
+              Clear
             </button>
           )}
         </div>
@@ -225,7 +225,7 @@ export default function AdminUserManagement() {
                   onClick={() => navigate(`/dashboard/users/${row._col}/${row.id}`)}>
                   <td style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{idx + 1}</td>
                   <td>
-                    <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.85rem', textDecoration: 'underline' }}>{getName(row)}</div>
+                    <div style={{ fontWeight: 700, color: '#2f5e40', fontSize: '0.85rem', textDecoration: 'underline' }}>{getName(row)}</div>
                     {row.licenseNumber && <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Lic: {row.licenseNumber}</div>}
                     {tab === 'Medical Patients' && (
                       <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Medical patient</div>

@@ -101,7 +101,7 @@ export default function AdminPrescriptionMonitor() {
 
       {flagCount > 0 && (
         <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1.25rem' }}>
-          🚨 {flagCount} prescription{flagCount > 1 ? 's' : ''} flagged with safety warnings
+          {flagCount} prescription{flagCount > 1 ? 's' : ''} flagged with safety warnings
         </div>
       )}
 
@@ -164,9 +164,9 @@ export default function AdminPrescriptionMonitor() {
                   </td>
                   <td>
                     {rx.warnings?.length > 0 ? (
-                      <span className="badge badge-red">⚠️ {rx.warnings.length}</span>
+                      <span className="badge badge-red">{rx.warnings.length}</span>
                     ) : (
-                      <span className="badge badge-green">✓ Clear</span>
+                      <span className="badge badge-green">Clear</span>
                     )}
                   </td>
                   <td>
@@ -185,7 +185,7 @@ export default function AdminPrescriptionMonitor() {
           <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h3 className="admin-modal-title">Prescription Detail</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕ Close</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>Close</button>
             </div>
             <RxFullDetails rx={selected} />
           </div>

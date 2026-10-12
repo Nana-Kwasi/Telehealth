@@ -9,7 +9,7 @@ const REPORTER_TYPES = ['', 'patient', 'client', 'doctor', 'therapist', 'pharmac
 
 const CAT_COLORS = {
   complaint:  { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-  feedback:   { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+  feedback:   { bg: '#e9f3ec', color: '#3f7a55', border: '#c4dccb' },
   technical:  { bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
   billing:    { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
   emergency:  { bg: '#fff1f2', color: '#be123c', border: '#fecdd3' },
@@ -151,13 +151,13 @@ export default function AdminReportsCenter() {
           <h1 className="admin-page-title">Reports & Feedback Center</h1>
           <p className="admin-page-sub">Unified queue for global reports, support tickets, and incident reports from all roles</p>
         </div>
-        <button className="btn btn-primary" onClick={loadReports}>↻ Refresh</button>
+        <button className="btn btn-primary" onClick={loadReports}>Refresh</button>
       </div>
 
       {/* Stats */}
       <div className="admin-stats-grid" style={{ marginBottom: '1.5rem' }}>
         {[
-          { label: 'Total Reports',   val: stats.total,     color: '#1d4ed8', bg: '#eff6ff', icon: '📋' },
+          { label: 'Total Reports',   val: stats.total,     color: '#2f5e40', bg: '#e9f3ec', icon: '📋' },
           { label: 'Open',            val: stats.open,      color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
           { label: 'In Review',       val: stats.inReview,  color: '#d97706', bg: '#fffbeb', icon: '🟡' },
           { label: 'Resolved',        val: stats.resolved,  color: '#16a34a', bg: '#f0fdf4', icon: '🟢' },
@@ -176,7 +176,7 @@ export default function AdminReportsCenter() {
       {/* Emergency alert */}
       {stats.emergency > 0 && (
         <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1.25rem' }}>
-          🚨 {stats.emergency} emergency report{stats.emergency !== 1 ? 's' : ''} require immediate attention!
+          {stats.emergency} emergency report{stats.emergency !== 1 ? 's' : ''} require immediate attention!
           <button className="btn btn-sm btn-danger" style={{ marginLeft: '1rem' }}
             onClick={() => { setCatFilter('emergency'); setStatusFilter(''); }}>
             View Emergency Reports
@@ -197,9 +197,9 @@ export default function AdminReportsCenter() {
             <button key={v} onClick={() => setStatusFilter(v)}
               style={{
                 padding: '0.38rem 0.75rem', borderRadius: 8, border: '1.5px solid',
-                borderColor: statusFilter === v ? '#2563eb' : '#e2e8f0',
-                background: statusFilter === v ? '#eff6ff' : '#fff',
-                color: statusFilter === v ? '#2563eb' : '#64748b',
+                borderColor: statusFilter === v ? '#3f7a55' : '#e2e8f0',
+                background: statusFilter === v ? '#e9f3ec' : '#fff',
+                color: statusFilter === v ? '#3f7a55' : '#64748b',
                 fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer',
               }}>{l}</button>
           ))}
@@ -269,7 +269,7 @@ export default function AdminReportsCenter() {
                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {r.subject || '(No subject)'}
                         </div>
-                        {r.category === 'emergency' && <span style={{ fontSize: '0.65rem', color: '#dc2626', fontWeight: 800 }}>⚠️ URGENT</span>}
+                        {r.category === 'emergency' && <span style={{ fontSize: '0.65rem', color: '#dc2626', fontWeight: 800 }}>URGENT</span>}
                       </td>
                       <td>
                         <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{r.reporterName || '—'}</div>
@@ -339,8 +339,8 @@ export default function AdminReportsCenter() {
                   <div style={{ marginBottom: '1rem' }}>
                     <p style={{ margin: '0 0 0.5rem', fontSize: '0.78rem', fontWeight: 700, color: '#374151' }}>Admin Replies</p>
                     {(selected.adminReplies || []).map((rp, i) => (
-                      <div key={i} style={{ background: '#eff6ff', borderRadius: 8, padding: '0.65rem', marginBottom: '0.4rem', fontSize: '0.8rem' }}>
-                        <p style={{ margin: '0 0 2px', fontWeight: 700, color: '#1d4ed8' }}>Admin</p>
+                      <div key={i} style={{ background: '#e9f3ec', borderRadius: 8, padding: '0.65rem', marginBottom: '0.4rem', fontSize: '0.8rem' }}>
+                        <p style={{ margin: '0 0 2px', fontWeight: 700, color: '#2f5e40' }}>Admin</p>
                         <p style={{ margin: 0, color: '#334155' }}>{rp.text}</p>
                         <p style={{ margin: '4px 0 0', fontSize: '0.68rem', color: '#94a3b8' }}>{fmtDate(rp.sentAt)}</p>
                       </div>

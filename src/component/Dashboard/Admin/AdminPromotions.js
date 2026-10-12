@@ -239,7 +239,7 @@ export default function AdminPromotions() {
           ) : campaigns.map((c) => (
             <button key={c.id} onClick={() => openDetail(c.id)}
               style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-                       background: detail?.campaign?.id === c.id ? '#eff6ff' : 'transparent',
+                       background: detail?.campaign?.id === c.id ? '#e9f3ec' : 'transparent',
                        borderRadius: 8, padding: '0.7rem', marginBottom: 2 }}>
               <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>

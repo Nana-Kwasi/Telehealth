@@ -2824,7 +2824,8 @@
    Their own row, on the same three-column rhythm as everything else. */
 .ch-meta-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Location · weather · therapist · round check-in */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 1rem;
   margin-bottom: 1rem;
   align-items: stretch;
@@ -2873,6 +2874,39 @@
 
 @media (max-width: 1180px) { .ch-meta-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px)  { .ch-meta-row { grid-template-columns: 1fr; } }
+
+/* ── Assigned therapist (in the row) ─────────────────────────────────── */
+.ch-therapist-card { gap: 0.8rem; padding: 0.75rem 0.9rem; }
+.ch-therapist-card > * { width: auto; }
+.ch-therapist-avatar {
+  width: 52px; height: 52px; flex-shrink: 0; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #ded9fa, #c7d2fe); color: #3f3796; font-size: 1.15rem; font-weight: 800;
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #a5b4fc;
+}
+.ch-therapist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ch-therapist-who { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; min-width: 0; line-height: 1.25; }
+.ch-therapist-who em { font-style: normal; font-size: 0.72rem; font-weight: 600; color: #5a5d73; text-transform: uppercase; letter-spacing: 0.04em; }
+.ch-therapist-who strong { font-size: 1rem; font-weight: 800; color: #171a3d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-therapist-msg {
+  flex-shrink: 0; padding: 0.5rem 0.9rem; border-radius: 999px; border: none; cursor: pointer; font-family: inherit;
+  background: #5046bd; color: #fff; font-weight: 700; font-size: 0.82rem;
+}
+.ch-therapist-msg:hover { background: #3f3796; }
+
+/* ── Check-in: round white button with a red cross ──────────────────── */
+.ch-checkin-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem; padding: 0 0.25rem; }
+.ch-checkin-round {
+  width: 58px; height: 58px; border-radius: 50%; border: 1px solid #fde2e2; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: #ffffff; color: #dc2626;
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ch-checkin-round:hover { transform: scale(1.06); box-shadow: 0 12px 26px rgba(220, 38, 38, 0.28); }
+.ch-checkin-round:focus-visible { outline: 3px solid #fca5a5; outline-offset: 3px; }
+.ch-checkin-caption { font-size: 0.72rem; font-weight: 700; color: #5a5d73; }
+@media (max-width: 760px) { .ch-checkin-wrap { flex-direction: row; justify-content: flex-start; } }
 
 @media (prefers-reduced-motion: reduce) {
   .ch-checkin-card { transition: none; }

@@ -460,7 +460,7 @@ export default function OnboardTherapist() {
 
           {/* Professional Credentials */}
           <div className="form-section">
-            <h3 style={{ color: 'white' }}>🎓 Professional Credentials</h3>
+            <h3 style={{ color: 'white' }}>Professional Credentials</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="licenseNumber">License / Registration Number *</label>
@@ -578,7 +578,7 @@ export default function OnboardTherapist() {
 
           {/* Practice Details */}
           <div className="form-section">
-            <h3 style={{ color: 'white' }}>🏥 Practice Details</h3>
+            <h3 style={{ color: 'white' }}>Practice Details</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="practiceName">Practice / Clinic Name</label>
@@ -708,7 +708,7 @@ export default function OnboardTherapist() {
 
           {/* Profile Image */}
           <div className="form-section">
-            <h3 style={{ color: 'white' }}>📷 Profile Picture</h3>
+            <h3 style={{ color: 'white' }}>Profile Picture</h3>
             <div className="image-upload-container">
               {imagePreview ? (
                 <div className="image-preview">
@@ -741,7 +741,7 @@ export default function OnboardTherapist() {
 
           {/* Background & Bio */}
           <div className="form-section">
-            <h3 style={{ color: 'white' }}>📚 Background & Bio</h3>
+            <h3 style={{ color: 'white' }}>Background & Bio</h3>
             <div className="form-grid">
               <div className="form-group">
                 <label htmlFor="bio">Short Biography / Introduction *</label>

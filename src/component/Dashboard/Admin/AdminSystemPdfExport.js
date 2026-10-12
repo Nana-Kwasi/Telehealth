@@ -120,7 +120,7 @@ export default function AdminSystemPdfExport() {
             ['Doctors', String(doctorsSnap.size)],
             ['Therapists', String(therapistsSnap.size)],
             ['Home care nurses', String(hcNursesSnap.size)],
-            ['Therapy sessions (scheduledCalls, all time)', String(therapySnap.size)],
+            ['Therapy sessions (all time)', String(therapySnap.size)],
             ['Home care bookings (all time)', String(hcBookingsSnap.size)],
             ['Parent pharmacies', String(pharmSnap.size)],
             ['Pharmacy branches', String(branchesSnap.size)],
@@ -151,7 +151,7 @@ export default function AdminSystemPdfExport() {
           heading: `Doctor + therapy appointments in period (${appts.length + therapyCalls.length})`,
           rows: [
             ['Doctor rows in range', String(appts.length)],
-            ['Therapy (scheduledCalls) rows in range', String(therapyCalls.length)],
+            ['Therapy sessions in range', String(therapyCalls.length)],
             ...Object.entries(apptBy).map(([k, v]) => [`Combined status: ${k}`, String(v)]),
           ],
         },
@@ -218,7 +218,7 @@ export default function AdminSystemPdfExport() {
     <div className="admin-page" style={{ maxWidth: 900 }}>
       <h1 className="admin-page-title">System PDF export</h1>
       <p className="admin-page-sub" style={{ marginBottom: '0.5rem' }}>
-        Super-admin snapshot: aggregates across users, providers, therapy sessions (scheduledCalls), home care nurses & bookings, pharmacies, prescriptions, appointments, diagnostics, and pharmacy activity logs.
+        Super-admin snapshot: aggregates across users, providers, therapy sessions, home care nurses & bookings, pharmacies, prescriptions, appointments, diagnostics, and pharmacy activity logs.
         Large tenants may take a few seconds.
       </p>
 

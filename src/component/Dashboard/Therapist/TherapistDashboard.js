@@ -5,7 +5,7 @@ import ReferralComposer from '../../Common/ReferralComposer';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature,
+  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature, Pill,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth, db, doc, getDoc } from '../../../services/firestoreShim';
@@ -28,6 +28,8 @@ import CoupleCases from './CoupleCases';
 import TherapistLogs from './Logs';
 import MoodDashboard from './MoodDashboard';
 import ClientDetails from './ClientDetails';
+import TherapistPrescriptions from './TherapistPrescriptions';
+import PrescriptionRequestsInbox from '../../Common/PrescriptionRequestsInbox';
 import ViewNote from './ViewNote';
 import ReportDetails from './ReportDetails';
 import Notifications from './Notifications';
@@ -87,6 +89,9 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
+    // Psychiatry: prescribing for psychiatry-track clients — the doctor's flow, copied.
+    { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: TherapistPrescriptions },
+    { path: '/dashboard/prescription-requests', icon: Pill, label: 'Prescription Requests', component: PrescriptionRequestsInbox },
     { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans', component: CarePlanComposer },
     { path: '/dashboard/documents', icon: FileSignature, label: 'Documents', component: AdminDocComposer },
     { path: '/dashboard/referrals', icon: Share2, label: 'Referrals', component: ReferralComposer },
@@ -221,6 +226,8 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/appointments" element={<TherapistAppointments />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
+          <Route path="/prescriptions" element={<TherapistPrescriptions profile={profile} />} />
+          <Route path="/prescription-requests" element={<PrescriptionRequestsInbox />} />
           <Route path="/care-plans" element={<CarePlanComposer role="THERAPIST" />} />
           <Route path="/documents" element={<AdminDocComposer role="THERAPIST" />} />
           <Route path="/referrals" element={<ReferralComposer role="THERAPIST" />} />

@@ -265,7 +265,7 @@ function Chip({ on, onClick, children }) {
     <button onClick={onClick} style={{
       border: 'none', cursor: 'pointer', borderRadius: 999, padding: '0.35rem 0.85rem',
       fontSize: '0.8rem', fontWeight: 600,
-      background: on ? '#1d4ed8' : '#f1f5f9', color: on ? '#fff' : '#475569',
+      background: on ? '#2f5e40' : '#f1f5f9', color: on ? '#fff' : '#475569',
     }}>{children}</button>
   );
 }

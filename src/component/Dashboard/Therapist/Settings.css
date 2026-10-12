@@ -890,3 +890,7 @@ input:checked + .slider:before { transform: translateX(22px); }
   border-radius: 50%;
   flex-shrink: 0;
 }
+
+
+/* Shared cards (security, consents) pick up the therapy violet. */
+.settings-dashboard { --nh-accent: #5046bd; }

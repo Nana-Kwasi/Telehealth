@@ -6,6 +6,9 @@ import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import { refreshSession } from '../../Auth/authService';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
+import { TwoStepSignIn, ChangePasswordCard, ClinicianAccountNote } from '../../Common/AccountSecurityCards';
+import ConsentHistory from '../../Common/ConsentHistory';
+import NotificationCentre from '../../Common/NotificationCentre';
 // Map a doctor record (session profile and/or the full /doctors/{id} document,
 // whose metadataJson-preserved fields are expanded by the shim) to the form shape.
 function mapDoctorToForm(src = {}) {
@@ -189,9 +192,13 @@ export default function DoctorSettings({ profile }) {
     }));
   };
 
+  // Same sections as the app's doctor settings (and the therapist's).
   const tabs = [
     { key: 'profile', label: 'Profile' },
+    { key: 'security', label: 'Security' },
     { key: 'availability', label: 'Availability' },
+    { key: 'notifications', label: 'Notifications' },
+    { key: 'legal', label: 'Legal' },
   ];
 
   return (
@@ -354,6 +361,18 @@ export default function DoctorSettings({ profile }) {
           </button>
         </div>
       )}
+
+      {activeTab === 'security' && (
+        <div style={{ maxWidth: 720 }}>
+          <TwoStepSignIn />
+          <ChangePasswordCard />
+          <ClinicianAccountNote />
+        </div>
+      )}
+
+      {activeTab === 'notifications' && <NotificationCentre />}
+
+      {activeTab === 'legal' && <ConsentHistory />}
 
       {activeTab === 'availability' && (
         <>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ScheduleCallModal from './ScheduleCallModal';
+import ClientEPharmacyModal from './ClientEPharmacyModal';
 import clinicianHero from '../../../assets/clinician-hero.jpg';
 import {
   DashboardGrid, HeroBanner, StatTile, Panel, ScoreRing, MetricTile,
@@ -9,7 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Calendar, FileText, TrendingUp, ChevronRight, Clock, CheckCircle, Activity,
-  Heart, Video, ClipboardList, BookOpen,
+  Heart, Video, ClipboardList, BookOpen, ShoppingBag, Pill,
 } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import {
@@ -31,6 +32,7 @@ import SessionsToReview from '../../Common/SessionsToReview';
 import InboxTriagePanel from '../../Common/InboxTriagePanel';
 import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
 import { getJoinWindow } from '../../../utils/sessionJoinWindow';
+import FaqSection from '../../Common/FaqSection';
 import {
   enrichClientRecord,
   getClientDisplayName,
@@ -139,6 +141,8 @@ export default function TherapistHome({ profile }) {
   // cell used to navigate to '/dashboard/schedule' — a route the therapist
   // dashboard does not define — so it landed on a blank page.
   const [scheduleDate, setScheduleDate] = useState(null);
+  // Psychiatry: the doctor home's E-Pharmacy action, for psychiatry clients.
+  const [showEPharmacy, setShowEPharmacy] = useState(false);
 
   const currentUser = auth.currentUser;
 
@@ -797,15 +801,8 @@ export default function TherapistHome({ profile }) {
         avatar={therapistProfile?.photoURL || profile?.photoURL}
         name={displayName}
         onAvatar={() => navigate('/dashboard/settings')}
-        weather={
-          locationProfile?.weather
-            ? {
-                icon: locationProfile.weather.icon || '☀️',
-                temp: locationProfile.weather.temperature ? `${Math.round(locationProfile.weather.temperature)}°C` : '29°C',
-                label: locationProfile.weather.label || locationProfile.weather.summary || 'Clear sky',
-              }
-            : { icon: '☀️', temp: '29°C', label: 'Clear sky' }
-        }
+        // No weather in the top bar: it fell back to a made-up "☀️ 29°C Clear
+        // sky" whenever no live reading was attached. The real card is below.
         status={
           clinicianStatusOf(therapistProfile)
             ? {
@@ -832,10 +829,22 @@ export default function TherapistHome({ profile }) {
           actions={[
             { label: 'Start a session', Icon: Video, onClick: () => navigate('/dashboard/video') },
             { label: 'Schedule', Icon: Calendar, onClick: () => setScheduleDate(todayYmd()) },
+            // Psychiatry: same shortcuts the doctor home offers.
+            { label: 'Prescriptions', Icon: Pill, onClick: () => navigate('/dashboard/prescriptions') },
+            { label: 'E-Pharmacy', Icon: ShoppingBag, onClick: () => setShowEPharmacy(true) },
           ]}
           wide
           art={clinicianHero}
         />
+
+        <ClientEPharmacyModal
+          open={showEPharmacy}
+          onClose={() => setShowEPharmacy(false)}
+          therapistId={profile?.id || auth.currentUser?.uid}
+        />
+
+        {/* Real conditions at the therapist's saved location (Common/WeatherCard). */}
+        <WeatherCard profile={locationProfile || profile} />
 
         {/* Counted server-side; the model only writes the sentence over those
             figures, so the card is right even when the model is not there. */}
@@ -1040,6 +1049,9 @@ export default function TherapistHome({ profile }) {
         onClose={() => setScheduleDate(null)}
         onScheduled={() => { setScheduleDate(null); loadDashboardData(); }}
       />
+
+      {/* Shared FAQ (backend /api/v1/faq) — same answers as the website and the app. */}
+      <FaqSection compact audience="clinician" title="Questions & answers" />
     </div>
   );
 }

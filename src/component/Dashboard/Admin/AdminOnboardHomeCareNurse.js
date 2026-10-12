@@ -124,7 +124,7 @@ export default function AdminOnboardHomeCareNurse() {
       <header className="hc-onboard-hero">
         <h1>Onboard Home-Care Nurse</h1>
         <p>
-          Creates a Firebase Auth user and a <code>homeCareNurses</code> document (ID = UID).
+          Creates the nurse's NessaHub account and home-care profile.
           Approved nurses appear in patient browse when their status is online.
         </p>
       </header>

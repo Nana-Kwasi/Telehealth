@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, X, Save, FlaskConical, Download } from 'lucide-react';
+import { Search, FileText, X, Save, FlaskConical, Download, Share2 } from 'lucide-react';
+import { api } from '../../../services/apiClient';
 import { db, auth } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from '../../../services/firestoreShim';
 
@@ -59,6 +60,7 @@ export default function DoctorDiagnosticResults({ profile }) {
   const [viewing, setViewing] = useState(null);
   const [doctorNote, setDoctorNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => { loadResults(); }, [profile]);
 
@@ -104,7 +106,25 @@ export default function DoctorDiagnosticResults({ profile }) {
     finally { setSavingNote(false); }
   };
 
+  // Patients never see a result until the ordering doctor shares it. Sharing
+  // saves the note typed above (if any) and notifies and emails the patient.
+  const shareWithPatient = async () => {
+    if (!viewing) return;
+    if (!window.confirm(`Share this result with ${viewing.patientName || 'the patient'}? They will be notified and can then see it.`)) return;
+    setSharing(true);
+    try {
+      const saved = await api(`/api/v1/diagnostics/operations/results/${viewing.id}/share`, {
+        method: 'POST', body: { doctorNote: doctorNote.trim() || null },
+      });
+      const patch = { releasedToPatient: true, doctorNote: saved?.doctorNote ?? viewing.doctorNote };
+      setResults(prev => prev.map(r => r.id === viewing.id ? { ...r, ...patch } : r));
+      setViewing(prev => ({ ...prev, ...patch }));
+    } catch (e) { console.error(e); alert(e?.message || 'Could not share the result.'); }
+    finally { setSharing(false); }
+  };
+
   const readyCount = results.filter(r => r.kind === 'result').length;
+  const toShareCount = results.filter(r => r.kind === 'result' && !r.releasedToPatient).length;
 
   const filtered = results.filter(r => {
     // "Ready" = the centre has uploaded findings, i.e. this row is a result.
@@ -135,6 +155,7 @@ export default function DoctorDiagnosticResults({ profile }) {
         {[
           { label: 'Orders & Results', count: results.length, color: '#1e6bb8', bg: '#eff6ff' },
           { label: 'Results Ready', count: readyCount, color: '#92400e', bg: '#fef3c7' },
+          { label: 'Not yet shared', count: toShareCount, color: '#b45309', bg: '#ffedd5' },
           { label: 'Lab', count: results.filter(r => rowType(r) === 'lab').length, color: '#065f46', bg: '#d1fae5' },
           { label: 'Scan', count: results.filter(r => rowType(r) === 'scan').length, color: '#4c1d95', bg: '#ede9fe' },
         ].map(({ label, count, color, bg }) => (
@@ -248,6 +269,11 @@ export default function DoctorDiagnosticResults({ profile }) {
                       <span style={{ background: smt.bg, color: smt.color, padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
                         {isReady ? 'RESULT READY' : statusKey}
                       </span>
+                      {isReady && (
+                        <div style={{ marginTop: 4, fontSize: '0.7rem', fontWeight: 700, color: r.releasedToPatient ? '#15803d' : '#b45309' }}>
+                          {r.releasedToPatient ? '✓ Shared with patient' : 'Not shared yet'}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {r.doctorNote ? (
@@ -346,6 +372,15 @@ export default function DoctorDiagnosticResults({ profile }) {
                   </div>
                 )}
 
+                {viewing.conclusion && (
+                  <div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Conclusion</p>
+                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '1rem', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a', whiteSpace: 'pre-wrap' }}>
+                      {viewing.conclusion}
+                    </div>
+                  </div>
+                )}
+
                 {/* Technician note */}
                 {viewing.techNote && (
                   <div>
@@ -366,11 +401,21 @@ export default function DoctorDiagnosticResults({ profile }) {
                     value={doctorNote}
                     onChange={e => setDoctorNote(e.target.value)}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                    <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={saveNote} disabled={savingNote}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={saveNote} disabled={savingNote}>
                       <Save size={13} /> {savingNote ? 'Saving…' : 'Save Note'}
                     </button>
+                    {!viewing.releasedToPatient && (
+                      <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={shareWithPatient} disabled={sharing}>
+                        <Share2 size={13} /> {sharing ? 'Sharing…' : 'Share with patient'}
+                      </button>
+                    )}
                   </div>
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: viewing.releasedToPatient ? '#15803d' : '#92400e' }}>
+                    {viewing.releasedToPatient
+                      ? '✓ Shared. The patient can see this result and your note.'
+                      : 'The patient cannot see this result until you share it. Your note is shared with it.'}
+                  </p>
                 </div>
                 )}
               </div>

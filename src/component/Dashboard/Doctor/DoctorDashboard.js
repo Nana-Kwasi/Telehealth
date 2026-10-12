@@ -22,6 +22,7 @@ import DoctorMessages from './DoctorMessages';
 import DoctorNotes from './DoctorNotes';
 import DoctorVideoCall from './DoctorVideoCall';
 import DoctorPrescriptions from './DoctorPrescriptions';
+import PrescriptionRequestsInbox from '../../Common/PrescriptionRequestsInbox';
 import DoctorReviews from './DoctorReviews';
 import DoctorAnalytics from './DoctorAnalytics';
 import DoctorSettings from './DoctorSettings';
@@ -64,6 +65,7 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/dashboard/notes', icon: FileText, label: 'Notes' },
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions' },
+    { path: '/dashboard/prescription-requests', icon: Pill, label: 'Prescription Requests' },
     { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans' },
     { path: '/dashboard/documents', icon: FileSignature, label: 'Documents' },
     { path: '/dashboard/referrals', icon: Share2, label: 'Referrals' },
@@ -164,6 +166,7 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/messages" element={<DoctorMessages profile={profile} />} />
           <Route path="/notes" element={<DoctorNotes profile={profile} />} />
           <Route path="/prescriptions" element={<DoctorPrescriptions profile={profile} />} />
+          <Route path="/prescription-requests" element={<PrescriptionRequestsInbox />} />
           <Route path="/care-plans" element={<CarePlanComposer role="DOCTOR" />} />
           <Route path="/documents" element={<AdminDocComposer role="DOCTOR" />} />
           <Route path="/referrals" element={<ReferralComposer role="DOCTOR" />} />

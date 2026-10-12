@@ -204,9 +204,9 @@ export default function AdminApprovals() {
             style={{
               padding: '0.55rem 1.25rem',
               borderRadius: 10,
-              border: listTab === t.key ? '2px solid #1d4ed8' : '1.5px solid #e2e8f0',
-              background: listTab === t.key ? '#eff6ff' : '#fff',
-              color: listTab === t.key ? '#1d4ed8' : '#64748b',
+              border: listTab === t.key ? '2px solid #2f5e40' : '1.5px solid #e2e8f0',
+              background: listTab === t.key ? '#e9f3ec' : '#fff',
+              color: listTab === t.key ? '#2f5e40' : '#64748b',
               fontWeight: 800,
               fontSize: '0.88rem',
               cursor: 'pointer',
@@ -216,7 +216,7 @@ export default function AdminApprovals() {
             <span
               style={{
                 marginLeft: 8,
-                background: listTab === t.key ? '#dbeafe' : '#f1f5f9',
+                background: listTab === t.key ? '#dcefe2' : '#f1f5f9',
                 padding: '2px 8px',
                 borderRadius: 12,
                 fontSize: '0.75rem',
@@ -249,7 +249,7 @@ export default function AdminApprovals() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.4rem',
-                background: entityTab === q.key ? '#1d4ed8' : '#f1f5f9',
+                background: entityTab === q.key ? '#2f5e40' : '#f1f5f9',
                 color: entityTab === q.key ? '#fff' : '#475569',
                 transition: 'all 0.15s',
               }}
@@ -352,7 +352,7 @@ export default function AdminApprovals() {
                             disabled={acting === item.id}
                             onClick={() => approve(item)}
                           >
-                            ✓ Approve
+                            Approve
                           </button>
                           <button
                             type="button"
@@ -363,7 +363,7 @@ export default function AdminApprovals() {
                               setRejectReason('');
                             }}
                           >
-                            ✕ Reject
+                            Reject
                           </button>
                         </>
                       )}
@@ -450,9 +450,9 @@ export default function AdminApprovals() {
                       fontSize: '0.8rem',
                     }}
                   >
-                    📎 {docu.name || `Document ${i + 1}`}
+                    {docu.name || `Document ${i + 1}`}
                     {docu.url && (
-                      <a href={docu.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb', marginLeft: 'auto' }}>
+                      <a href={docu.url} target="_blank" rel="noreferrer" style={{ color: '#3f7a55', marginLeft: 'auto' }}>
                         View
                       </a>
                     )}
@@ -470,7 +470,7 @@ export default function AdminApprovals() {
                     disabled={acting === selected.id}
                     onClick={() => approve(selected)}
                   >
-                    ✓ Approve
+                    Approve
                   </button>
                   <button
                     type="button"
@@ -482,7 +482,7 @@ export default function AdminApprovals() {
                       setRejectReason('');
                     }}
                   >
-                    ✕ Reject
+                    Reject
                   </button>
                 </>
               )}

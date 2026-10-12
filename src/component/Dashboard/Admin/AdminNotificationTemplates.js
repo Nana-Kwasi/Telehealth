@@ -174,7 +174,7 @@ export default function AdminNotificationTemplates() {
             original wording.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={load}>↻ Refresh</button>
+        <button className="btn btn-primary" onClick={load}>Refresh</button>
       </div>
 
       {error ? (
@@ -213,7 +213,7 @@ export default function AdminNotificationTemplates() {
                       <button key={t.template_key} onClick={() => openTemplate(t)}
                         style={{
                           display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-                          background: active ? '#1d4ed8' : 'transparent',
+                          background: active ? '#2f5e40' : 'transparent',
                           color: active ? '#fff' : '#334155',
                           borderRadius: 8, padding: '0.5rem 0.6rem', marginBottom: 2, fontSize: '0.83rem',
                         }}>
@@ -242,8 +242,8 @@ export default function AdminNotificationTemplates() {
               <code style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{current.template_key}</code>
 
               {!current.body_html ? (
-                <div style={{ marginTop: '1rem', background: '#eff6ff', border: '1px solid #bfdbfe',
-                              color: '#1e40af', padding: '0.7rem 0.9rem', borderRadius: 8, fontSize: '0.82rem' }}>
+                <div style={{ marginTop: '1rem', background: '#e9f3ec', border: '1px solid #c4dccb',
+                              color: '#2f5e40', padding: '0.7rem 0.9rem', borderRadius: 8, fontSize: '0.82rem' }}>
                   This message currently uses its built-in wording. Type a body below to take over —
                   you can always revert.
                 </div>

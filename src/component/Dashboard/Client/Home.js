@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard } from 'lucide-react';
+import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard, Plus, Pill } from 'lucide-react';
 import './Home.css';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
 import { buildProgressMetrics, overallProgressScore } from '../../../utils/clientDashboardMetrics';
@@ -36,10 +36,13 @@ import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/l
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import ClinicianStatus from '../../Common/ClinicianStatus';
 import WeatherCard from '../../Common/WeatherCard';
+import TodaysMedsCard from '../../Common/TodaysMedsCard';
+import { api, getStoredUserId } from '../../../services/apiClient';
 import patientHero from '../../../assets/patient-hero.jpg';
 import { subscribeLocationUpdate, applyLocationPatch } from '../../../utils/locationBus';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
+import FaqSection from '../../Common/FaqSection';
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
@@ -56,6 +59,24 @@ ChartJS.register(
 
 export default function ClientHome({ profile }) {
   const navigate = useNavigate();
+
+  // Psychiatry: the medical patient home's Prescriptions card and shortcuts.
+  const [isPsychiatry, setIsPsychiatry] = useState(false);
+  const [rxList, setRxList] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const me = await api('/api/v1/medpsych/me').catch(() => null);
+      const psych = String(me?.careTrack || '').toLowerCase() === 'psychiatry';
+      if (cancelled) return;
+      setIsPsychiatry(psych);
+      if (!psych) return;
+      const uid = getStoredUserId();
+      const rows = uid ? await api(`/api/v1/medical/prescriptions/patient/${uid}`).catch(() => []) : [];
+      if (!cancelled) setRxList((rows || []).filter(r => r.status !== 'completed').slice(0, 3));
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [clientData, setClientData] = useState({});
@@ -1949,27 +1970,6 @@ export default function ClientHome({ profile }) {
                 Good {currentTime.getHours() < 12 ? 'morning' : currentTime.getHours() < 17 ? 'afternoon' : 'evening'},{' '}
                 <span className="ch-hero-name">{profile?.name?.split(' ')[0] || 'there'}</span>
               </h1>
-              {therapistData ? (
-                <button
-                  type="button"
-                  className="ch-hero-therapist"
-                  onClick={() => navigate('/dashboard/messages')}
-                >
-                  {therapistData.photoURL
-                    ? <img src={resolveFileUrl(therapistData.photoURL)} alt="" />
-                    : <span className="ch-hero-therapist-initial">
-                        {(therapistData.name || 'T').charAt(0).toUpperCase()}
-                      </span>}
-                  <span>
-                    <em>Your therapist</em>
-                    <strong>{therapistData.name || 'Assigned'}</strong>
-                    {/* Their own declared availability. Renders nothing when
-                        they have never set one, rather than claiming a status
-                        on their behalf. */}
-                    <ClinicianStatus status={therapistData} />
-                  </span>
-                </button>
-              ) : null}
             </div>
           </div>
 
@@ -1994,14 +1994,74 @@ export default function ClientHome({ profile }) {
         <div className="ch-meta-card">
           <WeatherCard profile={locationProfile || mergeLocationProfile(profile, clientData)} compact />
         </div>
-        <button type="button" className="ch-checkin-card" onClick={() => setShowMoodModal(true)}>
-          <span className="ch-checkin-icon"><Activity size={20} /></span>
-          <span className="ch-checkin-text">
-            <strong>Log how you feel</strong>
-            <em>A quick check-in your therapist can see</em>
-          </span>
-        </button>
+        {/* The therapist lives in this row now, not over the hero image. */}
+        {therapistData ? (
+          <div className="ch-meta-card ch-therapist-card">
+            <span className="ch-therapist-avatar">
+              {therapistData.photoURL
+                ? <img src={resolveFileUrl(therapistData.photoURL)} alt="" />
+                : (therapistData.name || 'T').charAt(0).toUpperCase()}
+            </span>
+            <span className="ch-therapist-who">
+              <em>Your therapist</em>
+              <strong>{therapistData.name || 'Assigned'}</strong>
+              {/* Their own declared availability; nothing when never set. */}
+              <ClinicianStatus status={therapistData} />
+            </span>
+            <button type="button" className="ch-therapist-msg" onClick={() => navigate('/dashboard/messages')}>
+              Message
+            </button>
+          </div>
+        ) : null}
+        {/* Check-in: a small round button (white, red cross) instead of a big banner. */}
+        <div className="ch-checkin-wrap">
+          <button
+            type="button"
+            className="ch-checkin-round"
+            onClick={() => setShowMoodModal(true)}
+            aria-label="Log how you feel — a quick check-in your therapist can see"
+            title="Log how you feel"
+          >
+            <Plus size={30} strokeWidth={3} aria-hidden="true" />
+          </button>
+          <span className="ch-checkin-caption">Log mood</span>
+        </div>
       </div>
+
+      {/* Medication reminders set in My Care, with today's doses. */}
+      <TodaysMedsCard accent="#5046bd" />
+
+      {/* Psychiatry: copied from the medical patient home (Recent Prescriptions + shortcuts). */}
+      {isPsychiatry && (
+        <div className="mp-card">
+          <div className="mp-card-header">
+            <h3>Prescriptions</h3>
+            <button className="mp-card-link" onClick={() => navigate('/dashboard/prescriptions')}>View all</button>
+          </div>
+          {rxList.length === 0 ? (
+            <div className="mp-empty-small"><Pill size={32} /><p>No prescriptions yet</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {rxList.map(rx => (
+                <div key={rx.id} className="mp-rx-row">
+                  <div className="mp-rx-icon"><Pill size={16} /></div>
+                  <div className="mp-rx-info">
+                    <p className="mp-rx-name">{rx.medication || rx.medications?.[0]?.name || 'Medication'}</p>
+                    <p className="mp-rx-meta">{rx.dosage || ''}{rx.medications?.[0]?.frequency ? ' · ' + rx.medications[0].frequency : ''}</p>
+                    <p className="mp-rx-doctor">{rx.doctorName || 'Your psychiatrist'}</p>
+                  </div>
+                  <span className="mp-rx-badge">Active</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <button className="mp-card-link" onClick={() => navigate('/dashboard/prescriptions')}>Prescriptions</button>
+            <button className="mp-card-link" onClick={() => navigate('/dashboard/epharmacy')}>E-Pharmacy</button>
+            <button className="mp-card-link" onClick={() => navigate('/dashboard/timeline')}>Health Timeline</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Today band ───────────────────────────────────────────────────────
           Replaces the full-width red alarm bar. That banner shouted at every
@@ -2606,6 +2666,9 @@ export default function ClientHome({ profile }) {
         </div>
       )}
 
+
+      {/* Shared FAQ (backend /api/v1/faq) — same answers as the website and the app. */}
+      <FaqSection compact audience="client" title="Questions & answers" />
     </div>
   );
 }

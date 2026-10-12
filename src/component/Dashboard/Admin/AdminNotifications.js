@@ -12,7 +12,7 @@ const AUDIENCE_OPTIONS = [
 ];
 
 const TYPE_OPTIONS = [
-  { value: 'info',        label: 'Information',   color: '#1d4ed8', bg: '#eff6ff' },
+  { value: 'info',        label: 'Information',   color: '#2f5e40', bg: '#e9f3ec' },
   { value: 'warning',     label: 'Warning',       color: '#d97706', bg: '#fffbeb' },
   { value: 'critical',    label: 'Critical',      color: '#dc2626', bg: '#fef2f2' },
   { value: 'maintenance', label: 'Maintenance',   color: '#7c3aed', bg: '#faf5ff' },
@@ -79,7 +79,7 @@ export default function AdminNotifications() {
         {/* Compose */}
         <div className="admin-table-card" style={{ padding: '1.5rem' }}>
           <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            📣 Compose Notification
+            Compose Notification
           </h3>
 
           {/* Audience */}
@@ -90,9 +90,9 @@ export default function AdminNotifications() {
                 <button key={opt.value} onClick={() => setForm(f => ({ ...f, audience: opt.value }))}
                   style={{
                     padding: '0.35rem 0.8rem', borderRadius: 20, border: '1.5px solid',
-                    borderColor: form.audience === opt.value ? '#1d4ed8' : '#e2e8f0',
-                    background: form.audience === opt.value ? '#eff6ff' : '#fff',
-                    color: form.audience === opt.value ? '#1d4ed8' : '#64748b',
+                    borderColor: form.audience === opt.value ? '#2f5e40' : '#e2e8f0',
+                    background: form.audience === opt.value ? '#e9f3ec' : '#fff',
+                    color: form.audience === opt.value ? '#2f5e40' : '#64748b',
                     fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
                   }}>
                   {opt.icon} {opt.label}
@@ -168,7 +168,7 @@ export default function AdminNotifications() {
               style={{ minWidth: 140 }}>
               {sending ? 'Sending…' : '📣 Send Now'}
             </button>
-            {sent && <span style={{ color: '#16a34a', fontSize: '0.875rem', fontWeight: 600 }}>✓ Notification sent!</span>}
+            {sent && <span style={{ color: '#16a34a', fontSize: '0.875rem', fontWeight: 600 }}>Notification sent!</span>}
           </div>
         </div>
 

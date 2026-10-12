@@ -162,7 +162,7 @@ export default function AdminCreateLabScan() {
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
             <button className="btn btn-ghost" onClick={() => copyToClipboard(
               `Username: ${credentials.username}\nPassword: ${credentials.tempPassword}\nEmail: ${credentials.email}`
-            )}>📋 Copy All</button>
+            )}>Copy All</button>
             <button className="btn btn-primary" onClick={() => setCredentials(null)}>+ Create Another</button>
           </div>
         </div>
@@ -170,7 +170,7 @@ export default function AdminCreateLabScan() {
         <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: '100%' }}>
           {error && (
             <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1rem' }}>
-              🚨 {error}
+              {error}
             </div>
           )}
 
@@ -180,8 +180,8 @@ export default function AdminCreateLabScan() {
               <div className="admin-field">
                 <label>Center Type *</label>
                 <select value={form.type} onChange={e => update('type', e.target.value)} required>
-                  <option value="lab">🧪 Laboratory</option>
-                  <option value="scan">🩻 Scan / Imaging Center</option>
+                  <option value="lab">Laboratory</option>
+                  <option value="scan">Scan / Imaging Center</option>
                 </select>
               </div>
               <div className="admin-field">
@@ -268,7 +268,7 @@ export default function AdminCreateLabScan() {
           </div>
           {!isEnabled(form.country, form.type === 'lab' ? 'labOrdering' : 'scanOrdering') && (
             <div className="admin-alert admin-alert-warning" style={{ marginBottom: '1.25rem' }}>
-              ⚠️ {form.type === 'lab' ? 'Lab' : 'Scan'} onboarding is disabled for {form.country}. Enable it in System Config → Country Feature Flags.
+              {form.type === 'lab' ? 'Lab' : 'Scan'} onboarding is disabled for {form.country}. Enable it in System Config → Country Feature Flags.
             </div>
           )}
 

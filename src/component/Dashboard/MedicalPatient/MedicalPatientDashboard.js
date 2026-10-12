@@ -29,17 +29,21 @@ import { auth, db, storage } from '../../../services/firestoreShim';
 import { api } from '../../../services/apiClient';
 import {
   collection, query, where, getDocs, doc, getDoc, setDoc,
-  addDoc, updateDoc, orderBy, onSnapshot, serverTimestamp,
+  addDoc, orderBy, onSnapshot, serverTimestamp,
 } from '../../../services/firestoreShim';
 import { ref as storageRef, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import './MedicalPatientDashboard.css';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
+import TodaysMedsCard from '../../Common/TodaysMedsCard';
 import WeatherCard from '../../Common/WeatherCard';
 import { subscribeLocationUpdate, applyLocationPatch, publishLocationUpdate } from '../../../utils/locationBus';
 import { patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
 import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
+import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
+import PrescriptionRequestPanel from '../../Common/PrescriptionRequestPanel';
+import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { readPendingBooking, materializePendingBooking } from '../../../utils/pendingDoctorBooking';
@@ -47,6 +51,10 @@ import { getJoinWindow } from '../../../utils/sessionJoinWindow';
 import { payForBooking } from '../../../services/paystack';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
+import FaqSection from '../../Common/FaqSection';
+import ConsentHistory from '../../Common/ConsentHistory';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
+import EmergencyContactsEditor from '../../Common/EmergencyContactsEditor';
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -507,7 +515,9 @@ function MedPatHome({ profile }) {
           calendar. ── */}
       <div className="mp-top-strip">
         <LocationSummaryCard profile={liveProfile} compact onEdit={() => navigate('/dashboard/settings')} />
-        <WeatherCard profile={liveProfile} />
+        {/* Compact, like the client row: the full card was twice the height of
+            its neighbours and left the row lopsided. */}
+        <WeatherCard profile={liveProfile} compact />
         {/* Your Doctor Card */}
         {primaryDoctor && (
           <div className="mp-your-doctor-card">
@@ -535,6 +545,8 @@ function MedPatHome({ profile }) {
           </div>
         )}
       </div>
+      {/* Medication reminders set in My Care, with today's doses. */}
+      <TodaysMedsCard accent="#1e6bb8" />
       {/* No-doctor CTA banner */}
       {!loading && !primaryDoctor && !lastBookedDoctor && (
         <div className="mp-find-doctor-banner">
@@ -1159,6 +1171,8 @@ function MedPatHome({ profile }) {
         )}
       </ModalHost>
 
+      {/* Shared FAQ (backend /api/v1/faq) — same answers as the website and the app. */}
+      <FaqSection compact audience="patient" title="Questions & answers" />
     </div>
   );
 }
@@ -1803,7 +1817,8 @@ function MedPatVideoCalls({ profile }) {
 }
 
 // ─── Prescriptions Screen ─────────────────────────────────────────────────────
-function MedPatPrescriptions({ profile }) {
+// Also mounted on the client dashboard for psychiatry clients (ClientDashboard.js).
+export function MedPatPrescriptions({ profile }) {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [completingRx, setCompletingRx] = useState(null);
@@ -1832,13 +1847,15 @@ function MedPatPrescriptions({ profile }) {
     if (!completingRx) return;
     setUpdating(true);
     try {
-      await updateDoc(doc(db, 'doctorPrescriptions', completingRx.id), {
-        status: 'completed', completedAt: serverTimestamp(),
+      // The general prescription PATCH is doctor/pharmacy only; patients have
+      // their own narrow endpoint for closing a course.
+      await api(`/api/v1/medical/prescriptions/${completingRx.id}/patient-status`, {
+        method: 'PATCH', body: { status: 'completed' },
       });
       setPrescriptions(prev => prev.map(r => r.id === completingRx.id ? { ...r, status: 'completed' } : r));
       setShowWarning(false);
       setCompletingRx(null);
-    } catch (_) { alert('Could not update prescription. Please try again.'); }
+    } catch (e) { alert(e?.message || 'Could not update prescription. Please try again.'); }
     finally { setUpdating(false); }
   };
 
@@ -1877,6 +1894,7 @@ function MedPatPrescriptions({ profile }) {
             {m.dosage && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Dosage</span><span>{m.dosage}</span></div>}
             {m.frequency && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Frequency</span><span>{m.frequency}</span></div>}
             {m.duration && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Duration</span><span>{m.duration}</span></div>}
+            {m.quantity && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Quantity</span><span>{m.quantity}{m.quantityUnit ? ` ${m.quantityUnit}` : ''}</span></div>}
             {i === 0 && rx.createdAt?.toDate && <div className="mp-rx-detail-item"><span className="mp-rx-detail-label">Date</span><span>{rx.createdAt.toDate().toLocaleDateString()}</span></div>}
           </div>
         ))}
@@ -1884,6 +1902,12 @@ function MedPatPrescriptions({ profile }) {
           <div className="mp-rx-instructions">
             <p className="mp-rx-detail-label">Instructions</p>
             <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>{rx.instructions}</p>
+          </div>
+        )}
+        {/* QR + collection code to show at the pharmacy, and what has been dispensed. */}
+        {!isDone && (
+          <div style={{ marginTop: '0.75rem' }}>
+            <PrescriptionCodeCard prescription={rx} />
           </div>
         )}
         {isDone && (
@@ -1902,6 +1926,9 @@ function MedPatPrescriptions({ profile }) {
         <h1>Prescriptions</h1>
         <p>Tap the circle to mark a prescription as completed</p>
       </div>
+
+      {/* My doctor, request a refill / new prescription, and my requests. */}
+      <PrescriptionRequestPanel />
 
       {loading ? <p className="mp-loading-text">Loading…</p> : prescriptions.length === 0 ? (
         <div className="mp-card" style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
@@ -3226,7 +3253,6 @@ function MedPatHealthRecords({ profile }) {
 const DEF_PRIVACY = { dataSharing: { records: true, prescriptions: true, appointments: true, labResults: true }, profileVisible: true };
 const DEF_SECURITY = { twoFAEnabled: false, biometricEnabled: false };
 const DEF_EMERGENCY = { medicalNotes: '', organDonor: false, preferredHospital: '', emergencyAccess: true };
-const DEF_LEGAL = { termsAccepted: false, privacyAccepted: false, hipaaAccepted: false, dataSharingConsent: true };
 
 function Toggle({ on, onChange, color = '#2563eb' }) {
   return (
@@ -3237,8 +3263,20 @@ function Toggle({ on, onChange, color = '#2563eb' }) {
   );
 }
 
-function MedPatSettings({ profile }) {
+/**
+ * Settings for medical patients and — with variant="therapy" — therapy clients,
+ * matching the app (where clients also use the patient settings screen). The
+ * client web screen was a separate layout with different sections; one
+ * screen keeps web and app, and both roles, in step.
+ */
+export function MedPatSettings({ profile, variant = 'medical' }) {
+  const therapy = variant === 'therapy';
+  // Therapy clients get the therapy violet, not the medical blue.
+  const ACCENT = therapy ? '#5046bd' : '#2563eb';
+  const ACCENT_LIGHT = therapy ? '#eeecfb' : '#eff6ff';
+  const who = therapy ? 'therapist' : 'doctor';
   const [tab, setTab] = useState('profile');
+  const [therapyIntake, setTherapyIntake] = useState({});
   const [loading, setLoading] = useState(true);
 
   // Profile
@@ -3282,14 +3320,20 @@ function MedPatSettings({ profile }) {
   const [insuranceInfo, setInsuranceInfo] = useState(null);
 
   // Legal
-  const [legal, setLegal] = useState(DEF_LEGAL);
-  const [savingLegal, setSavingLegal] = useState(false);
   const [consentLogs, setConsentLogs] = useState([]);
 
   // Discharge
   const [dischargeForm, setDischargeForm] = useState({ reason: '', message: '', confirmed: false });
   const [submittingDischarge, setSubmittingDischarge] = useState(false);
   const [alreadyDischarged, setAlreadyDischarged] = useState(false);
+
+  useEffect(() => {
+    if (!therapy || !profile?.id) return;
+    // The signup questionnaire lives on the CLIENT profile (preferencesJson).
+    api(`/api/v1/clients/${profile.uid || profile.id}`)
+      .then((cp) => { try { setTherapyIntake(cp?.preferencesJson ? JSON.parse(cp.preferencesJson) || {} : {}); } catch { setTherapyIntake({}); } })
+      .catch(() => setTherapyIntake({}));
+  }, [therapy, profile?.id, profile?.uid]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -3335,7 +3379,7 @@ function MedPatSettings({ profile }) {
           if (d.security) setSecurity(s => ({ ...s, ...d.security }));
           if (d.privacy) setPrivacy(p => ({ ...DEF_PRIVACY, ...d.privacy, dataSharing: { ...DEF_PRIVACY.dataSharing, ...(d.privacy.dataSharing || {}) } }));
           if (d.emergency) setEmergency(e => ({ ...DEF_EMERGENCY, ...d.emergency }));
-          if (d.legal) { setLegal(l => ({ ...DEF_LEGAL, ...d.legal })); setConsentLogs(d.legal.consentLogs || []); }
+          if (d.legal) setConsentLogs(d.legal.consentLogs || []);
           if (d.billingHistory) setBillingHistory(d.billingHistory);
           if (d.insurance) setInsuranceInfo(d.insurance);
           if (d.status === 'self-discharged') setAlreadyDischarged(true);
@@ -3498,17 +3542,6 @@ function MedPatSettings({ profile }) {
     finally { setSavingEmergency(false); }
   };
 
-  const saveLegal = async () => {
-    setSavingLegal(true);
-    try {
-      const log = { action: 'Legal consent updated', timestamp: new Date().toISOString() };
-      const updatedLogs = [...consentLogs.slice(-49), log];
-      setConsentLogs(updatedLogs);
-      await setDoc(doc(db, 'patientProfiles', profile.id), { legal: { ...legal, consentLogs: updatedLogs }, updatedAt: serverTimestamp() }, { merge: true });
-      flash('Legal preferences saved.');
-    } catch { flash('Failed to save.'); }
-    finally { setSavingLegal(false); }
-  };
 
   const submitDischarge = async () => {
     if (!dischargeForm.reason.trim()) { alert('Please provide a reason.'); return; }
@@ -3541,12 +3574,18 @@ function MedPatSettings({ profile }) {
     { key: 'billing',   label: '💳 Billing' },
     { key: 'legal',     label: '📋 Legal' },
     { key: 'discharge', label: '🚪 Discharge', danger: true },
-  ];
+  ].flatMap((t) => {
+    // Therapy: intake answers after Profile; no Discharge (patient-only flow).
+    if (!therapy) return [t];
+    if (t.key === 'discharge') return [];
+    if (t.key === 'profile') return [t, { key: 'therapy', label: '💚 Therapy' }];
+    return [t];
+  });
 
   const tabBtn = (t) => ({
-    padding: '0.55rem 1.1rem', borderRadius: 20, border: `1.5px solid ${tab === t.key ? (t.danger ? '#dc2626' : '#2563eb') : '#e2e8f0'}`,
-    background: tab === t.key ? (t.danger ? '#fef2f2' : '#eff6ff') : '#fff', cursor: 'pointer',
-    fontSize: '0.82rem', fontWeight: 700, color: tab === t.key ? (t.danger ? '#dc2626' : '#2563eb') : '#64748b',
+    padding: '0.55rem 1.1rem', borderRadius: 20, border: `1.5px solid ${tab === t.key ? (t.danger ? '#dc2626' : ACCENT) : '#e2e8f0'}`,
+    background: tab === t.key ? (t.danger ? '#fef2f2' : ACCENT_LIGHT) : '#fff', cursor: 'pointer',
+    fontSize: '0.82rem', fontWeight: 700, color: tab === t.key ? (t.danger ? '#dc2626' : ACCENT) : '#64748b',
     whiteSpace: 'nowrap', transition: 'all 0.15s',
   });
   const inp = { border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '0.65rem 0.875rem', fontSize: '0.875rem', color: '#0f172a', outline: 'none', background: '#fafafa', width: '100%', boxSizing: 'border-box' };
@@ -3566,7 +3605,7 @@ function MedPatSettings({ profile }) {
   if (loading) return <div className="mp-page"><p style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>Loading…</p></div>;
 
   return (
-    <div className="mp-page">
+    <div className={`mp-page${therapy ? ' mp-settings-therapy' : ''}`}>
       <div className="mp-page-header"><h1>My Profile</h1><p>Manage your account, security, and preferences</p></div>
 
       {/* Tab bar */}
@@ -3577,6 +3616,27 @@ function MedPatSettings({ profile }) {
       {savedMsg && <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: '#15803d', fontWeight: 600 }}>✓ {savedMsg}</div>}
 
       {/* ═══ PROFILE ═══ */}
+      {tab === 'therapy' && (
+        <div style={{ ...card, maxWidth: 720 }}>
+          <h3 style={{ margin: '0 0 0.4rem', fontSize: '1rem', fontWeight: 700 }}>Your therapy details</h3>
+          <p style={{ margin: '0 0 0.875rem', fontSize: '0.82rem', color: '#64748b' }}>From the questionnaire you completed when you joined. Ask your therapist to update anything that has changed.</p>
+          {[
+            ['therapyType', 'Therapy type'], ['sessionFrequency', 'Session frequency'], ['sessionStructure', 'Session structure'],
+            ['communicationPreference', 'Communication preference'], ['reasonsForTherapy', 'Reasons for therapy'], ['therapyGoals', 'Therapy goals'],
+            ['phq', 'PHQ-9 score'], ['anxiety', 'Anxiety level'], ['depression', 'Depression level'],
+            ['physicalHealth', 'Physical health'], ['sleep', 'Sleep quality'], ['exercise', 'Exercise'],
+          ].map(([k, label]) => {
+            const v = therapyIntake[k];
+            const text = Array.isArray(v) ? v.join(', ') : (v === 0 || v ? String(v) : 'Not specified');
+            return (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.875rem' }}>
+                <span style={{ color: '#64748b' }}>{label}</span><span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right' }}>{text}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {tab === 'profile' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
           <div style={card}>
@@ -3629,41 +3689,43 @@ function MedPatSettings({ profile }) {
               {saving ? 'Saving…' : 'Save Profile'}
             </button>
           </div>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700 }}>Health Information</h3>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label style={lbl}>Blood Type</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: 4 }}>
-                {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => (
-                  <button key={bt} type="button" onClick={() => setForm(f => ({ ...f, bloodType: bt }))}
-                    style={{ padding: '0.3rem 0.75rem', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${form.bloodType === bt ? '#2563eb' : '#e2e8f0'}`, background: form.bloodType === bt ? '#eff6ff' : '#fff', color: form.bloodType === bt ? '#2563eb' : '#64748b' }}>
-                    {bt}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label style={lbl}>Known Allergies</label>
-              <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={form.allergies} onChange={e => setForm(f => ({ ...f, allergies: e.target.value }))} placeholder="e.g. Penicillin, Peanuts…" />
-            </div>
-            {!showPwdForm ? (
-              <button className="mp-btn mp-btn-outline" onClick={() => setShowPwdForm(true)}>🔑 Change Password</button>
-            ) : (
-              <form onSubmit={handleChangePassword} style={{ marginTop: '0.75rem' }}>
-                <p style={{ fontWeight: 700, fontSize: '0.875rem', margin: '0 0 0.75rem' }}>Change Password</p>
-                {[['Current Password', 'current'], ['New Password', 'next'], ['Confirm New Password', 'confirm']].map(([label, key]) => (
-                  <div key={key} style={{ marginBottom: '0.6rem' }}>
-                    <label style={lbl}>{label}</label>
-                    <input style={inp} type="password" value={pwdForm[key]} onChange={e => setPwdForm(p => ({ ...p, [key]: e.target.value }))} placeholder="••••••••" />
-                  </div>
-                ))}
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                  <button className="mp-btn mp-btn-primary mp-btn-sm" type="submit" disabled={changingPwd}>{changingPwd ? 'Changing…' : 'Update Password'}</button>
-                  <button className="mp-btn mp-btn-outline mp-btn-sm" type="button" onClick={() => setShowPwdForm(false)}>Cancel</button>
+          {!therapy && (
+            <div style={card}>
+              <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700 }}>Health Information</h3>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={lbl}>Blood Type</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: 4 }}>
+                  {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => (
+                    <button key={bt} type="button" onClick={() => setForm(f => ({ ...f, bloodType: bt }))}
+                      style={{ padding: '0.3rem 0.75rem', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${form.bloodType === bt ? ACCENT : '#e2e8f0'}`, background: form.bloodType === bt ? ACCENT_LIGHT : '#fff', color: form.bloodType === bt ? ACCENT : '#64748b' }}>
+                      {bt}
+                    </button>
+                  ))}
                 </div>
-              </form>
-            )}
-          </div>
+              </div>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={lbl}>Known Allergies</label>
+                <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={form.allergies} onChange={e => setForm(f => ({ ...f, allergies: e.target.value }))} placeholder="e.g. Penicillin, Peanuts…" />
+              </div>
+              {!showPwdForm ? (
+                <button className="mp-btn mp-btn-outline" onClick={() => setShowPwdForm(true)}>🔑 Change Password</button>
+              ) : (
+                <form onSubmit={handleChangePassword} style={{ marginTop: '0.75rem' }}>
+                  <p style={{ fontWeight: 700, fontSize: '0.875rem', margin: '0 0 0.75rem' }}>Change Password</p>
+                  {[['Current Password', 'current'], ['New Password', 'next'], ['Confirm New Password', 'confirm']].map(([label, key]) => (
+                    <div key={key} style={{ marginBottom: '0.6rem' }}>
+                      <label style={lbl}>{label}</label>
+                      <input style={inp} type="password" value={pwdForm[key]} onChange={e => setPwdForm(p => ({ ...p, [key]: e.target.value }))} placeholder="••••••••" />
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                    <button className="mp-btn mp-btn-primary mp-btn-sm" type="submit" disabled={changingPwd}>{changingPwd ? 'Changing…' : 'Update Password'}</button>
+                    <button className="mp-btn mp-btn-outline mp-btn-sm" type="button" onClick={() => setShowPwdForm(false)}>Cancel</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -3672,8 +3734,9 @@ function MedPatSettings({ profile }) {
         <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={card}>
             <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Authentication</h3>
-            {rowItem('📱', 'Two-Factor Authentication (2FA)', 'Receive a code on your phone when signing in', <Toggle on={security.twoFAEnabled} onChange={() => toggleSecurity('twoFAEnabled')} color="#2563eb" />)}
-            {rowItem('🔏', 'Biometric Login', 'Face ID / Fingerprint on supported devices', <Toggle on={security.biometricEnabled} onChange={() => toggleSecurity('biometricEnabled')} color="#7c3aed" />)}
+            {/* Real two-step sign-in (/api/v1/auth/2fa). The old toggle only saved a
+                profile flag; the biometric toggle meant nothing in a browser. */}
+            <TwoStepSignIn />
             <button className="mp-btn mp-btn-outline" style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#d97706', borderColor: '#fde68a' }} onClick={() => { if (window.confirm('Sign out from all devices?')) { signOut(auth).then(() => window.location.href = '/'); } }}>
               🚪 Sign Out All Devices
             </button>
@@ -3681,13 +3744,13 @@ function MedPatSettings({ profile }) {
 
           <div style={card}>
             <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 700 }}>Data Sharing Permissions</h3>
-            <p style={{ margin: '0 0 0.875rem', fontSize: '0.82rem', color: '#64748b' }}>Control what your doctor can see. Turning a category off hides it from your doctor's view immediately.</p>
+            <p style={{ margin: '0 0 0.875rem', fontSize: '0.82rem', color: '#64748b' }}>{`Control what your ${who} can see. Turning a category off hides it from your ${who}'s view immediately.`}</p>
             {[
               ['📋', 'Health Records', 'records', '#059669'],
               ['💊', 'Prescriptions', 'prescriptions', '#7c3aed'],
-              ['📅', 'Appointments', 'appointments', '#2563eb'],
+              ['📅', 'Appointments', 'appointments', ACCENT],
               ['🔬', 'Lab Results', 'labResults', '#d97706'],
-            ].map(([icon, label, key, color]) => rowItem(icon, label, privacy.dataSharing[key] ? 'Visible to your doctor' : 'Hidden from your doctor', <Toggle on={privacy.dataSharing[key]} onChange={() => toggleDataSharing(key)} color={color} />))}
+            ].map(([icon, label, key, color]) => rowItem(icon, label, privacy.dataSharing[key] ? `Visible to your ${who}` : `Hidden from your ${who}`, <Toggle on={privacy.dataSharing[key]} onChange={() => toggleDataSharing(key)} color={color} />))}
           </div>
 
           <div style={card}>
@@ -3703,7 +3766,7 @@ function MedPatSettings({ profile }) {
               </button>
             ) : (
               <form onSubmit={handleDeleteAccount} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: '#991b1b' }}>This is permanent. Type <strong>DELETE</strong> and enter your password.</p>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#991b1b' }}>Your account is closed straight away and you are signed out everywhere. Health records are kept for the period the law requires (currently 7 years), then permanently deleted. This cannot be undone. Type <strong>DELETE</strong> and enter your password.</p>
                 <div><label style={lbl}>Type DELETE</label><input style={inp} value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DELETE" /></div>
                 <div><label style={lbl}>Password</label><input style={inp} type="password" value={deletePwd} onChange={e => setDeletePwd(e.target.value)} placeholder="Your current password" /></div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -3720,44 +3783,57 @@ function MedPatSettings({ profile }) {
       {tab === 'emergency' && (
         <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '0.875rem', fontSize: '0.82rem', color: '#92400e' }}>
-            ⚠️ This information is shared with emergency responders and your doctor when emergency access is enabled.
+            {therapy
+              ? '⚠️ If you are in danger or thinking of harming yourself, call 112 now. Keep an emergency contact here so your therapist can reach someone if you are at risk.'
+              : '⚠️ This information is shared with emergency responders and your care team when emergency access is enabled.'}
           </div>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Emergency Medical Notes</h3>
-            <p style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', color: '#64748b' }}>Critical conditions that doctors must know immediately (e.g., Asthmatic, Epileptic, Diabetic).</p>
-            <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={emergency.medicalNotes} onChange={e => setEmergency(em => ({ ...em, medicalNotes: e.target.value }))} placeholder="e.g., Asthmatic — uses Ventolin. Epileptic — seizure protocol applies. Allergic to Penicillin." />
-          </div>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Critical Status</h3>
-            {rowItem('❤️', 'Organ Donor', 'Registered as an organ donor', <Toggle on={emergency.organDonor} onChange={() => setEmergency(em => ({ ...em, organDonor: !em.organDonor }))} color="#dc2626" />)}
-            {rowItem('🛡️', 'Emergency Doctor Access', 'Allow any doctor to view your profile in life-threatening emergencies', <Toggle on={emergency.emergencyAccess} onChange={() => setEmergency(em => ({ ...em, emergencyAccess: !em.emergencyAccess }))} color="#16a34a" />)}
-          </div>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Preferred Hospital</h3>
-            <input style={inp} value={emergency.preferredHospital} onChange={e => setEmergency(em => ({ ...em, preferredHospital: e.target.value }))} placeholder="e.g., St. Mary's General Hospital, Chicago, IL" />
-          </div>
+          <EmergencyContactsEditor accent={ACCENT} />
+          {!therapy && (
+            <div style={card}>
+              <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Emergency Medical Notes</h3>
+              <p style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', color: '#64748b' }}>Critical conditions that doctors must know immediately (e.g., Asthmatic, Epileptic, Diabetic).</p>
+              <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={emergency.medicalNotes} onChange={e => setEmergency(em => ({ ...em, medicalNotes: e.target.value }))} placeholder="e.g., Asthmatic — uses Ventolin. Epileptic — seizure protocol applies. Allergic to Penicillin." />
+            </div>
+          )}
+          {!therapy && (
+            <div style={card}>
+              <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Critical Status</h3>
+              {rowItem('❤️', 'Organ Donor', 'Registered as an organ donor', <Toggle on={emergency.organDonor} onChange={() => setEmergency(em => ({ ...em, organDonor: !em.organDonor }))} color="#dc2626" />)}
+              {rowItem('🛡️', 'Emergency Doctor Access', 'Allow any doctor to view your profile in life-threatening emergencies', <Toggle on={emergency.emergencyAccess} onChange={() => setEmergency(em => ({ ...em, emergencyAccess: !em.emergencyAccess }))} color="#16a34a" />)}
+            </div>
+          )}
+          {!therapy && (
+            <div style={card}>
+              <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Preferred Hospital</h3>
+              <input style={inp} value={emergency.preferredHospital} onChange={e => setEmergency(em => ({ ...em, preferredHospital: e.target.value }))} placeholder="e.g., St. Mary's General Hospital, Chicago, IL" />
+            </div>
+          )}
+{!therapy && (
           <button className="mp-btn mp-btn-primary" onClick={saveEmergency} disabled={savingEmergency} style={{ maxWidth: 300 }}>
             {savingEmergency ? 'Saving…' : '✓ Save Emergency Info'}
           </button>
+          )}
         </div>
       )}
 
       {/* ═══ BILLING ═══ */}
       {tab === 'billing' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Insurance on File</h3>
-            {insuranceInfo ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.875rem' }}>
-                {[['Provider', 'provider'], ['Plan', 'planType'], ['Policy #', 'policyNumber'], ['Member ID', 'memberId'], ['Expires', 'expiryDate'], ['Deductible', 'deductible'], ['Co-pay', 'copay']].map(([label, key]) => insuranceInfo[key] ? (
-                  <p key={key} style={{ margin: 0, fontSize: '0.875rem', color: '#334155' }}><strong>{label}:</strong> {insuranceInfo[key]}</p>
-                ) : null)}
-              </div>
-            ) : <p style={{ color: '#94a3b8', fontSize: '0.875rem', margin: '0 0 0.875rem' }}>No insurance on file yet.</p>}
-            <a href="/dashboard/insurance" className="mp-btn mp-btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
-              🛡️ {insuranceInfo ? 'Update Insurance' : 'Add Insurance'}
-            </a>
-          </div>
+          {!therapy && (
+            <div style={card}>
+              <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Insurance on File</h3>
+              {insuranceInfo ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.875rem' }}>
+                  {[['Provider', 'provider'], ['Plan', 'planType'], ['Policy #', 'policyNumber'], ['Member ID', 'memberId'], ['Expires', 'expiryDate'], ['Deductible', 'deductible'], ['Co-pay', 'copay']].map(([label, key]) => insuranceInfo[key] ? (
+                    <p key={key} style={{ margin: 0, fontSize: '0.875rem', color: '#334155' }}><strong>{label}:</strong> {insuranceInfo[key]}</p>
+                  ) : null)}
+                </div>
+              ) : <p style={{ color: '#94a3b8', fontSize: '0.875rem', margin: '0 0 0.875rem' }}>No insurance on file yet.</p>}
+              {!therapy && <a href="/dashboard/insurance" className="mp-btn mp-btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
+                🛡️ {insuranceInfo ? 'Update Insurance' : 'Add Insurance'}
+              </a>}
+            </div>
+          )}
           <div style={card}>
             <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Billing History</h3>
             {billingHistory.length === 0 ? (
@@ -3779,52 +3855,9 @@ function MedPatSettings({ profile }) {
       )}
 
       {/* ═══ LEGAL ═══ */}
-      {tab === 'legal' && (
-        <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '0.875rem', fontSize: '0.82rem', color: '#1e40af' }}>
-            ℹ️ All consent changes are logged with a timestamp for HIPAA/GDPR compliance.
-          </div>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Consent & Agreements</h3>
-            {[
-              { key: 'termsAccepted',     label: 'Terms & Conditions',              desc: 'I have read and agree to the NessaHub Terms of Service' },
-              { key: 'privacyAccepted',   label: 'Privacy Policy',                  desc: 'I agree to the NessaHub Privacy Policy regarding data handling' },
-              { key: 'hipaaAccepted',     label: 'HIPAA / GDPR Acknowledgment',     desc: 'I acknowledge my rights under HIPAA/GDPR for health data protection' },
-              { key: 'dataSharingConsent',label: 'Doctor–Patient Data Sharing',     desc: 'I consent to sharing my health data with my assigned doctor(s)' },
-            ].map(({ key, label, desc }) => (
-              <div key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.875rem', padding: '0.75rem 0', borderBottom: '1px solid #f8fafc', cursor: 'pointer' }} onClick={() => setLegal(l => ({ ...l, [key]: !l[key] }))}>
-                <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${legal[key] ? '#2563eb' : '#cbd5e1'}`, background: legal[key] ? '#2563eb' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                  {legal[key] && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, lineHeight: 1 }}>✓</span>}
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{label}</p>
-                  <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#64748b' }}>{desc}</p>
-                </div>
-              </div>
-            ))}
-            <button className="mp-btn mp-btn-primary" onClick={saveLegal} disabled={savingLegal} style={{ marginTop: '0.875rem' }}>
-              {savingLegal ? 'Saving…' : '✓ Save Legal Preferences'}
-            </button>
-          </div>
-          <div style={card}>
-            <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Legal Documents</h3>
-            {[['Terms & Conditions', '📄'], ['Privacy Policy', '🔒'], ['HIPAA Notice of Privacy Practices', '⚕️'], ['GDPR Data Rights Information', '🇪🇺']].map(([label, icon]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 0', borderBottom: '1px solid #f8fafc' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{icon} {label}</span>
-                <button className="mp-btn mp-btn-outline mp-btn-sm" onClick={() => alert(`${label} will open in a new tab. Document managed by NessaHub Legal.`)}>View</button>
-              </div>
-            ))}
-          </div>
-          {consentLogs.length > 0 && (
-            <div style={card}>
-              <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700 }}>Consent Audit Log</h3>
-              {consentLogs.slice(-5).reverse().map((log, i) => (
-                <p key={i} style={{ margin: '0 0 0.35rem', fontSize: '0.75rem', color: '#64748b' }}>⏱ {log.action} — {new Date(log.timestamp).toLocaleString()}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Read-only record of what was agreed, grouped by where (consent ledger).
+          The tickable checkboxes here showed defaults and could be unticked. */}
+      {tab === 'legal' && <ConsentHistory />}
 
       {/* ═══ DISCHARGE ═══ */}
       {tab === 'discharge' && (
@@ -4080,7 +4113,8 @@ const RX_STATUS_META = {
 
 const DEFAULT_TRANSFER_APPROVAL_TTL_HOURS = 6;
 
-function MedPatEPharmacy({ profile }) {
+// Also mounted on the client dashboard for psychiatry clients (ClientDashboard.js).
+export function MedPatEPharmacy({ profile }) {
   const [tab, setTab] = useState('prescriptions'); // 'prescriptions' | 'myPharmacies' | 'pharmacies'
   const [prescriptions, setPrescriptions] = useState([]);
   const [loadingRx, setLoadingRx] = useState(true);
@@ -4098,25 +4132,15 @@ function MedPatEPharmacy({ profile }) {
     // Real-time prescription updates
     const q = query(collection(db, 'doctorPrescriptions'), where('patientId', '==', profile.id));
     const unsub = onSnapshot(q, async snap => {
-      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const expiries = [];
-      rows.forEach((rx) => {
+      // Overdue transfer requests are expired by the server (TransferExpiryJob).
+      // Show them as expired straight away rather than offering an approval the
+      // server would refuse — but never write: a patient cannot PATCH a prescription.
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).map((rx) => {
         const meds = Array.isArray(rx.medications) ? rx.medications : [];
-        if (meds.some(isTransferRequestExpired)) {
-          const nextMeds = meds.map(m => (isTransferRequestExpired(m) ? expirePendingTransferRequest(m) : m));
-          expiries.push(
-            updateDoc(doc(db, 'doctorPrescriptions', rx.id), {
-              medications: nextMeds,
-              pharmacyStatus: deriveRxStockStatus(nextMeds),
-              updatedAt: serverTimestamp(),
-            }).catch(() => {})
-          );
-        }
+        if (!meds.some(isTransferRequestExpired)) return rx;
+        const nextMeds = meds.map(m => (isTransferRequestExpired(m) ? expirePendingTransferRequest(m) : m));
+        return { ...rx, medications: nextMeds, pharmacyStatus: deriveRxStockStatus(nextMeds) };
       });
-      if (expiries.length) {
-        await Promise.all(expiries);
-        return;
-      }
       const list = rows
         .filter(r => r.pharmacyId) // only routed prescriptions
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -4479,7 +4503,8 @@ function MedPatEPharmacy({ profile }) {
 }
 
 // ─── Health Timeline ──────────────────────────────────────────────────────────
-function MedPatTimeline({ profile }) {
+// Also mounted on the client dashboard for psychiatry clients (ClientDashboard.js).
+export function MedPatTimeline({ profile }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -4623,14 +4648,19 @@ function MedPatTimeline({ profile }) {
 // ─── Diagnostic Orders ────────────────────────────────────────────────────────
 function MedPatDiagnostics({ profile }) {
   const [orders, setOrders] = useState([]);
+  // Results the ordering doctor has SHARED, keyed by order id. The server only
+  // returns shared results to a patient; unshared ones never reach this screen.
+  const [sharedByOrder, setSharedByOrder] = useState({});
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewing, setViewing] = useState(null);
 
   const statusMetaFor = (raw) => {
     const n = normalizeDiagnosticOrderStatus(raw);
-    if (n === 'COMPLETED') return { bg: '#dcfce7', color: '#14532d', label: 'Completed — Results are with your doctor' };
+    if (n === 'COMPLETED') return { bg: '#dcfce7', color: '#14532d', label: 'Completed — your doctor is reviewing the result' };
     if (n === 'IN_PROGRESS') return { bg: '#dbeafe', color: '#1e40af', label: 'Test in progress' };
+    if (n === 'SAMPLE_COLLECTED') return { bg: '#e0f2fe', color: '#075985', label: 'Sample taken — the lab is working on it' };
+    if (n === 'SCHEDULED') return { bg: '#ede9fe', color: '#5b21b6', label: 'Scan booked — see the time below' };
     if (n === 'REJECTED') return { bg: '#fee2e2', color: '#991b1b', label: 'Could not complete — contact your doctor' };
     return { bg: '#fef3c7', color: '#92400e', label: 'Pending — Visit the center' };
   };
@@ -4639,10 +4669,18 @@ function MedPatDiagnostics({ profile }) {
     if (!profile?.id) return;
     (async () => {
       try {
-        const snap = await getDocs(query(collection(db, 'diagnosticOrders'), where('patientId', '==', profile.id)));
+        const [snap, resSnap] = await Promise.all([
+          getDocs(query(collection(db, 'diagnosticOrders'), where('patientId', '==', profile.id))),
+          getDocs(query(collection(db, 'diagnosticResults'), where('patientId', '==', profile.id))).catch(() => null),
+        ]);
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         setOrders(list);
+        const byOrder = {};
+        (resSnap ? resSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [])
+          .filter(r => r.releasedToPatient && r.orderId)
+          .forEach(r => { if (!byOrder[r.orderId]) byOrder[r.orderId] = r; });
+        setSharedByOrder(byOrder);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
@@ -4730,8 +4768,13 @@ function MedPatDiagnostics({ profile }) {
                         {isLab ? 'Lab Test' : 'Scan Order'}
                       </span>
                       <span style={{ background: smt.bg, color: smt.color, borderRadius: 20, padding: '0.15rem 0.55rem', fontSize: '0.7rem', fontWeight: 700 }}>
-                        {norm === 'COMPLETED' ? 'Completed' : norm === 'IN_PROGRESS' ? 'In progress' : norm === 'REJECTED' ? 'Cancelled' : 'Pending'}
+                        {norm === 'COMPLETED' ? 'Completed' : norm === 'IN_PROGRESS' ? 'In progress' : norm === 'SAMPLE_COLLECTED' ? 'Sample taken' : norm === 'SCHEDULED' ? 'Booked' : norm === 'REJECTED' ? 'Cancelled' : 'Pending'}
                       </span>
+                      {sharedByOrder[order.id] && (
+                        <span style={{ background: '#dbeafe', color: '#1e40af', borderRadius: 20, padding: '0.15rem 0.55rem', fontSize: '0.7rem', fontWeight: 700 }}>
+                          📄 Result shared by your doctor
+                        </span>
+                      )}
                     </div>
                     <p style={{ margin: '0 0 0.2rem', fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{order.testType}</p>
                     <p style={{ margin: '0 0 0.1rem', fontSize: '0.8rem', color: '#64748b' }}>📍 {order.centerName}</p>
@@ -4784,6 +4827,7 @@ function MedPatDiagnostics({ profile }) {
                     ['Order Ref', viewing.orderId],
                     ['Center', viewing.centerName],
                     ['Date Ordered', fmtFull(viewing.createdAt)],
+                    ['Appointment', viewing.scheduledAt ? (typeof viewing.scheduledAt.toDate === 'function' ? viewing.scheduledAt.toDate() : new Date(viewing.scheduledAt.seconds ? viewing.scheduledAt.seconds * 1000 : viewing.scheduledAt)).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null],
                   ].map(([label, val]) => val ? (
                     <div key={label} style={{ background: '#f8fafc', borderRadius: 10, padding: '0.75rem' }}>
                       <p style={{ margin: '0 0 0.2rem', fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{label}</p>
@@ -4803,7 +4847,7 @@ function MedPatDiagnostics({ profile }) {
                 )}
 
                 {/* National ID reminder */}
-                {['PENDING', 'IN_PROGRESS'].includes(vnorm) && (
+                {['PENDING', 'IN_PROGRESS', 'SCHEDULED'].includes(vnorm) && (
                   <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
                     <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🪪</span>
                     <div>
@@ -4814,14 +4858,40 @@ function MedPatDiagnostics({ profile }) {
                     </div>
                   </div>
                 )}
-                {vnorm === 'COMPLETED' && (
-                  <div style={{ background: '#ecfdf5', border: '1.5px solid #86efac', borderRadius: 12, padding: '1rem' }}>
-                    <p style={{ margin: '0 0 0.35rem', fontWeight: 800, color: '#166534', fontSize: '0.875rem' }}>Results are with your doctor</p>
-                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803d', lineHeight: 1.5 }}>
-                      The facility has completed your order. Your doctor receives the results — book a follow-up or message them if you have questions.
-                    </p>
-                  </div>
-                )}
+                {(() => {
+                  const res = sharedByOrder[viewing.id];
+                  if (res) {
+                    const file = res.reportUrl || res.fileUrl;
+                    const box = { background: '#f8fafc', borderRadius: 10, padding: '1rem', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', color: '#0f172a', lineHeight: 1.6, whiteSpace: 'pre-wrap' };
+                    const label = { margin: '0 0 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' };
+                    return (
+                      <>
+                        {res.doctorNote && (
+                          <div>
+                            <p style={{ ...label, color: '#1e6bb8' }}>Note from Dr. {viewing.doctorName}</p>
+                            <div style={{ ...box, background: '#eff6ff', borderColor: '#bfdbfe' }}>{res.doctorNote}</div>
+                          </div>
+                        )}
+                        {res.findings && (<div><p style={label}>Findings</p><div style={box}>{res.findings}</div></div>)}
+                        {res.conclusion && (<div><p style={label}>Conclusion</p><div style={box}>{res.conclusion}</div></div>)}
+                        {file && (
+                          <a href={file} target="_blank" rel="noopener noreferrer" className="mp-btn mp-btn-primary"
+                            style={{ alignSelf: 'flex-start', textDecoration: 'none', fontSize: '0.85rem' }}>
+                            📄 Open report
+                          </a>
+                        )}
+                      </>
+                    );
+                  }
+                  return vnorm === 'COMPLETED' ? (
+                    <div style={{ background: '#ecfdf5', border: '1.5px solid #86efac', borderRadius: 12, padding: '1rem' }}>
+                      <p style={{ margin: '0 0 0.35rem', fontWeight: 800, color: '#166534', fontSize: '0.875rem' }}>Your doctor is reviewing the result</p>
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#15803d', lineHeight: 1.5 }}>
+                        The facility has completed your test and sent the result to your doctor. You will be notified here and by email once your doctor shares it with you.
+                      </p>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
           </div>
@@ -4910,6 +4980,8 @@ export default function MedicalPatientDashboard({ profile }) {
 
       <main className="mp-main">
         <ForcedPasswordChangeOverlay profile={profile} firestoreCollection="auth" />
+        {/* Until their phone is verified (only while SMS is set up). */}
+        <PhoneVerifyBanner />
         <Routes>
           <Route path="/"              element={<MedPatHome          profile={profile} />} />
           <Route path="/appointments"  element={<MedPatAppointments  profile={profile} />} />

@@ -670,15 +670,22 @@
 }
 
 /* All three cards fill the row height rather than each floating at its own. */
+/* `height: 100%` did not stretch inside the flex row; align-self does. The
+   content of each card is centred so short cards don't float at the top. */
 .mp-top-strip > .mp-your-doctor-card,
-.mp-top-strip > .mp-weather-card {
-  height: 100%;
+.mp-top-strip > .nh-loc-card,
+.mp-top-strip > .wx-card {
+  align-self: stretch;
   margin-bottom: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-height: 132px;
 }
+.mp-top-strip > .wx-card.wx-compact { flex-direction: row; align-items: center; gap: 0.9rem; padding: 1rem 1.2rem; border-radius: 18px; }
+.mp-top-strip > .wx-card.wx-compact .wx-icon svg { width: 44px; height: 44px; }
+.mp-top-strip > .wx-card.wx-compact .wx-compact-temp { font-size: 2rem; }
 
 /* ── Home grid ────────────────────────────────────────────────── */
 .mp-home-grid {
@@ -1881,3 +1888,10 @@
   .mp-hero-card.is-button, .mp-hero-primary { transition: none; }
   .mp-hero-card.is-button:hover, .mp-hero-primary:hover { transform: none; }
 }
+
+
+/* Therapy clients use the patient settings screen with the therapy violet. */
+.mp-settings-therapy { --nh-accent: #5046bd; }
+.mp-settings-therapy .mp-btn-primary { background: #5046bd; border-color: #5046bd; }
+.mp-settings-therapy .mp-btn-primary:hover { background: #3f3796; border-color: #3f3796; }
+.mp-settings-therapy .mp-btn-outline { color: #5046bd; border-color: #c7c3f0; }

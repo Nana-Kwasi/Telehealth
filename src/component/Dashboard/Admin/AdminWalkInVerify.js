@@ -11,7 +11,7 @@ const DRUG_STATUS_META = {
 };
 
 const RX_STATUS_META = {
-  sent:                { label: 'Sent',               bg: '#eff6ff', color: '#1d4ed8' },
+  sent:                { label: 'Sent',               bg: '#e9f3ec', color: '#2f5e40' },
   accepted:            { label: 'Accepted',           bg: '#fff7ed', color: '#d97706' },
   partially_fulfilled: { label: 'Partially Fulfilled',bg: '#fffbeb', color: '#d97706' },
   ready:               { label: 'Ready for Pickup',   bg: '#f0fdf4', color: '#16a34a' },
@@ -90,7 +90,7 @@ export default function AdminWalkInVerify() {
 
         {error && (
           <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: '0.65rem 0.875rem', color: '#be123c', fontSize: '0.875rem', marginBottom: '1rem' }}>
-            🚨 {error}
+            {error}
           </div>
         )}
 
@@ -156,7 +156,7 @@ export default function AdminWalkInVerify() {
                     </div>
                     {med.alternativeSuggested && (
                       <div style={{ fontSize: '0.78rem', color: '#7c3aed', marginTop: 4 }}>
-                        🔁 Alternative: <b>{med.alternativeSuggested}</b>
+                        Alternative: <b>{med.alternativeSuggested}</b>
                         {med.drugStatus === 'approved_replacement' ? ' (Doctor approved)' : ' (Awaiting approval)'}
                       </div>
                     )}

@@ -8,6 +8,10 @@ import {
 import { logAction, A } from '../../../utils/auditLogger';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
+import { api } from '../../../services/apiClient';
+/** Collections whose `name` is the person's own name (not an organisation's). */
+const PERSON_COLLECTIONS = ['auth', 'clients', 'doctors', 'therapists', 'homeCareNurses'];
+
 const EDITABLE_FIELDS = {
   auth:        ['name', 'email', 'phone', 'nationalId', 'ghanaCard', 'dateOfBirth', 'gender', 'address', 'bloodGroup'],
   // Therapy client. These come from the intake questionnaire, which the backend
@@ -36,7 +40,7 @@ const COL_LABELS = {
 };
 
 const COL_COLORS = {
-  auth: { bg: 'linear-gradient(135deg, #1e3a5f, #0f172a)', accent: '#60a5fa' },
+  auth: { bg: 'linear-gradient(135deg, #17406b, #0f172a)', accent: '#7fb3e6' },
   clients: { bg: 'linear-gradient(135deg, #3b0764, #1e1b4b)', accent: '#a78bfa' },
   doctors: { bg: 'linear-gradient(135deg, #14532d, #0f172a)', accent: '#4ade80' },
   therapists: { bg: 'linear-gradient(135deg, #312e81, #1e1b4b)', accent: '#818cf8' },
@@ -346,6 +350,23 @@ export default function AdminUserDetail() {
         if (user.type === 'Administrator') payload.type = null;
       }
       await updateDoc(doc(db, col, userId), payload);
+      // Name, email and phone belong to the LOGIN ACCOUNT (users table). The
+      // profile write above never reached it, so an edited email reverted on
+      // refresh and the person kept signing in with the old one.
+      const account = {};
+      const changed = (a, b) => a !== undefined && String(a ?? '').trim() !== String(b ?? '').trim();
+      if (changed(editForm.email, user.email)) account.email = String(editForm.email).trim();
+      if (changed(editForm.phone, user.phone)) account.phone = String(editForm.phone ?? '').trim();
+      const personName = editForm.name ?? editForm.fullName;
+      if (PERSON_COLLECTIONS.includes(col) && changed(personName, user.name ?? user.fullName)) {
+        account.fullName = String(personName).trim();
+      }
+      if (Object.keys(account).length) {
+        // The row id here can be a PROFILE id (client profiles have their own);
+        // the account id is authUid / clientId / userId depending on the record.
+        const accountId = user.authUid || user.clientId || user.userId || userId;
+        await api(`/api/v1/admin/users/${accountId}`, { method: 'PATCH', body: account });
+      }
       if (col === 'clients' && payload.status !== undefined && user.authUid) {
         await updateDoc(doc(db, 'auth', user.authUid), {
           status: payload.status,
@@ -565,7 +586,7 @@ export default function AdminUserDetail() {
   if (loading) return (
     <div className="admin-page">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, gap: '0.75rem', color: '#94a3b8' }}>
-        <div style={{ width: 24, height: 24, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ width: 24, height: 24, border: '3px solid #e2e8f0', borderTopColor: '#3f7a55', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         Loading profile…
       </div>
     </div>
@@ -676,11 +697,11 @@ export default function AdminUserDetail() {
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1.25rem', paddingTop: '1rem', borderTop: `1px solid ${colStyle.accent}20` }}>
           <button onClick={() => { setActiveTab('edit'); }}
             style={{ padding: '0.45rem 1rem', borderRadius: 8, border: `1px solid ${colStyle.accent}50`, background: `${colStyle.accent}15`, color: colStyle.accent, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-            ✏️ Edit Profile
+            Edit Profile
           </button>
           <button type="button" onClick={() => setPwModal({ open: true, branch: null, generatedPassword: null })}
             style={{ padding: '0.45rem 1rem', borderRadius: 8, border: '1px solid #fcd34d50', background: '#fcd34d15', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-            🔑 Reset Password
+            Reset Password
           </button>
           {col === 'pharmacies' && (
             <button
@@ -689,9 +710,9 @@ export default function AdminUserDetail() {
               style={{
                 padding: '0.45rem 1rem',
                 borderRadius: 8,
-                border: `1px solid ${user?.mfaRequired ? '#f8717150' : '#60a5fa60'}`,
-                background: user?.mfaRequired ? '#fff1f215' : '#dbeafe20',
-                color: user?.mfaRequired ? '#fca5a5' : '#93c5fd',
+                border: `1px solid ${user?.mfaRequired ? '#f8717150' : '#6fae8460'}`,
+                background: user?.mfaRequired ? '#fff1f215' : '#dcefe220',
+                color: user?.mfaRequired ? '#fca5a5' : '#a7d3b4',
                 fontSize: '0.8rem',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -703,13 +724,13 @@ export default function AdminUserDetail() {
           {!accountLive && status !== 'inactive' && status !== 'rejected' && (
             <button disabled={saving} onClick={() => changeStatus('active')}
               style={{ padding: '0.45rem 1rem', borderRadius: 8, border: '1px solid #4ade8040', background: '#4ade8015', color: '#4ade80', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-              ✓ Activate
+              Activate
             </button>
           )}
           {accountLive && (
             <button disabled={saving} onClick={() => changeStatus('suspended')}
               style={{ padding: '0.45rem 1rem', borderRadius: 8, border: '1px solid #f8717150', background: '#f8717115', color: '#f87171', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-              ⛔ Suspend
+              Suspend
             </button>
           )}
           {status !== 'inactive' && (
@@ -760,9 +781,7 @@ export default function AdminUserDetail() {
           </SectionCard>
 
           <SectionCard title="Account & Platform" icon="⚙️">
-            <InfoRow label="Firebase UID"  value={user.uid || userId} mono />
-            <InfoRow label="Firestore ID"  value={userId} mono />
-            <InfoRow label="Collection"    value={col} />
+            <InfoRow label="Account ID"    value={user.uid || userId} mono />
             <InfoRow label="Role / Type"   value={col === 'therapists' ? therapistRoleLabel(user.role) : (user.role || roleType)} />
             <InfoRow label="Status"        value={status} />
             <InfoRow label="Username"      value={user.username} />
@@ -912,7 +931,7 @@ export default function AdminUserDetail() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {loadingRelated ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 180, gap: '0.75rem', color: '#94a3b8' }}>
-              <div style={{ width: 24, height: 24, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ width: 24, height: 24, border: '3px solid #e2e8f0', borderTopColor: '#3f7a55', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               Loading activity…
             </div>
           ) : (
@@ -996,7 +1015,7 @@ export default function AdminUserDetail() {
                 </SectionCard>
               )}
 
-              <button className="btn btn-ghost btn-sm" onClick={() => { setRelatedLoaded(false); loadRelated(); }}>↻ Reload</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setRelatedLoaded(false); loadRelated(); }}>Reload</button>
             </>
           )}
         </div>

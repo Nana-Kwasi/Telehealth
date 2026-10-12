@@ -39,11 +39,13 @@ import {
   Moon,
   Sun,
   Trash2,
-  Camera
+  Camera,
+  FileText,
 } from 'lucide-react';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
+import ConsentHistory from '../../Common/ConsentHistory';
 export default function ClientSettings() {
   const [clientData, setClientData] = useState(null);
   const [authData, setAuthData] = useState(null);
@@ -449,6 +451,13 @@ export default function ClientSettings() {
           >
             <Shield size={20} />
             Privacy
+          </button>
+          <button
+            className={`settings-nav-item ${activeSection === 'consents' ? 'active' : ''}`}
+            onClick={() => setActiveSection('consents')}
+          >
+            <FileText size={20} />
+            Consents
           </button>
           <button
             className={`settings-nav-item settings-nav-danger ${activeSection === 'account' ? 'active' : ''}`}
@@ -963,6 +972,16 @@ export default function ClientSettings() {
           )}
 
           {/* Privacy Section */}
+          {activeSection === 'consents' && (
+            <div className="settings-section">
+              <div className="settings-section-header">
+                <h2>Consents &amp; agreements</h2>
+                <p>What you agreed to, when, and where</p>
+              </div>
+              <ConsentHistory />
+            </div>
+          )}
+
           {activeSection === 'privacy' && (
             <div className="settings-section">
               <div className="settings-section-header">
@@ -1014,7 +1033,7 @@ export default function ClientSettings() {
             <div className="settings-section">
               <div className="settings-section-header">
                 <h2>Account</h2>
-                <p>Manage or permanently delete your account</p>
+                <p>Close your account</p>
               </div>
 
               {!showDeleteConfirm ? (
@@ -1023,7 +1042,7 @@ export default function ClientSettings() {
                     <AlertTriangle size={22} color="#dc2626" />
                     <div>
                       <h4>Delete Account</h4>
-                      <p>This permanently deletes your account and all associated data. This action cannot be undone.</p>
+                      <p>Your account is closed straight away and you are signed out everywhere. Health records must be kept for the period the law requires (currently 7 years); after that they are permanently deleted. This cannot be undone.</p>
                     </div>
                   </div>
                   <button className="settings-btn-danger" onClick={() => setShowDeleteConfirm(true)}>

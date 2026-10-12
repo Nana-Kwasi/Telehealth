@@ -308,7 +308,7 @@ export default function AdminHomeCareManage() {
                   </p>
                 </div>
                 <p className="ahcm-nurse-rating">
-                  ★ {(n.ratingAvg || 0).toFixed(1)} <span style={{ fontWeight: 500, color: '#64748b' }}>({n.ratingCount || 0})</span>
+                  {(n.ratingAvg || 0).toFixed(1)} <span style={{ fontWeight: 500, color: '#64748b' }}>({n.ratingCount || 0})</span>
                 </p>
               </div>
 

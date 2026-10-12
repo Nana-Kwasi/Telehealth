@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { HeartPulse, Pill, CheckCircle2, MessageSquare, Clock, CalendarDays, Bell, Plus, X, Check } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import './CareCentre.css';
 
 /**
  * Medication reminders and follow-up check-ins, for the person receiving care.
@@ -13,7 +15,8 @@ import { api } from '../../services/apiClient';
  *  2. Nothing here offers advice about a missed dose. What to do next is a
  *     prescribing decision, and the screen says so rather than guessing.
  */
-export default function CareCentre({ userId }) {
+export default function CareCentre({ userId, variant = 'medical' }) {
+  const variantClass = variant === 'therapy' ? 'cc-therapy' : 'cc-medical';
   const [reminders, setReminders] = useState([]);
   const [doses, setDoses]         = useState([]);
   const [followups, setFollowups] = useState([]);
@@ -121,27 +124,47 @@ export default function CareCentre({ userId }) {
     catch (e) { setError(e.message || 'Could not stop that reminder.'); }
   };
 
-  if (loading) return <div style={{ padding: '2rem', color: '#64748b' }}>Loading…</div>;
+  const activeReminders = reminders.filter((r) => r.active);
+  const pendingDoses = doses.filter((d) => d.status === 'pending');
+  const todays = doses.filter((d) => sameDay(d.due_at));
+  const takenToday = todays.filter((d) => d.status === 'taken').length;
+  const timesOf = (r) => (Array.isArray(r.times_of_day) ? r.times_of_day
+    : String(r.times_of_day || '').replace(/[{}]/g, '').split(',')).filter(Boolean);
+
+  if (loading) {
+    return (
+      <div className={`cc-root ${variantClass}`}>
+        <div className="cc-hero cc-skeleton" />
+        <div className="cc-card cc-skeleton" style={{ height: 120 }} />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: '1.5rem', maxWidth: 820 }}>
-      <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.35rem' }}>My care</h1>
-      <p style={{ margin: '0 0 1.25rem', color: '#64748b', fontSize: '0.9rem' }}>
-        Medication reminders and check-ins from your care team.
-      </p>
+    <div className={`cc-root ${variantClass}`}>
+      {/* ── Header: what today holds, at a glance ── */}
+      <header className="cc-hero">
+        <div className="cc-hero-text">
+          <span className="cc-hero-icon"><HeartPulse size={22} /></span>
+          <div>
+            <h1>My Care</h1>
+            <p>Medication reminders and check-ins from your care team.</p>
+          </div>
+        </div>
+        <div className="cc-stats">
+          <div className="cc-stat"><Pill size={16} /><strong>{activeReminders.length}</strong><span>Active reminders</span></div>
+          <div className="cc-stat"><CheckCircle2 size={16} /><strong>{takenToday}/{todays.length}</strong><span>Doses taken today</span></div>
+          <div className="cc-stat"><MessageSquare size={16} /><strong>{followups.length}</strong><span>Check-ins waiting</span></div>
+        </div>
+      </header>
 
-      {urgent ? (
-        <div style={{ background: '#fff7ed', border: '2px solid #fdba74', borderRadius: 12,
-                      padding: '1rem', marginBottom: '1rem', whiteSpace: 'pre-wrap',
-                      color: '#7c2d12', fontSize: '0.9rem', lineHeight: 1.6 }}>{urgent}</div>
-      ) : null}
+      {urgent ? <div className="cc-urgent">{urgent}</div> : null}
       {error   ? <Banner tone="error">{error}</Banner> : null}
       {message ? <Banner tone="ok">{message}</Banner> : null}
 
       {/* ── Check-ins first: someone is waiting on these ── */}
       {followups.length ? (
-        <section style={{ marginBottom: '1.75rem' }}>
-          <h2 style={h2}>From your care team</h2>
+        <Section icon={MessageSquare} title="From your care team" count={followups.length}>
           {followups.map((f) => {
             const a = answers[f.id] || {};
             if (f.kind === 'weekly_checkin') {
@@ -152,105 +175,96 @@ export default function CareCentre({ userId }) {
               );
             }
             return (
-              <div key={f.id} style={{ ...card, borderLeft: '3px solid #1d4ed8', marginBottom: '0.75rem' }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.6rem' }}>
-                  {f.prompt}
-                </div>
-                <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
-                  {[0,1,2,3,4,5,6,7,8,9,10].map((n) => (
-                    <button key={n}
-                      onClick={() => setAnswers({ ...answers, [f.id]: { ...a, severity: n } })}
-                      title={`${n} out of 10`}
-                      style={{
-                        width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: '0.8rem',
-                        border: a.severity === n ? '2px solid #1d4ed8' : '1px solid #cbd5e1',
-                        background: a.severity === n ? '#dbeafe' : '#fff',
-                        color: a.severity === n ? '#1e40af' : '#475569', fontWeight: 600,
-                      }}>{n}</button>
+              <div key={f.id} className="cc-item cc-item-accent">
+                <div className="cc-item-title">{f.prompt}</div>
+                <div className="cc-scale">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                    <button key={n} type="button" title={`${n} out of 10`}
+                      className={a.severity === n ? 'on' : ''}
+                      onClick={() => setAnswers({ ...answers, [f.id]: { ...a, severity: n } })}>{n}</button>
                   ))}
                 </div>
-                <textarea rows={2} placeholder="Anything you'd like to add? (optional)"
+                <textarea rows={2} placeholder="Anything you'd like to add? (optional)" className="cc-input"
                   value={a.response || ''}
-                  onChange={(e) => setAnswers({ ...answers, [f.id]: { ...a, response: e.target.value } })}
-                  style={input} />
-                <button onClick={() => answerFollowUp(f.id)} style={{ ...primary, marginTop: '0.6rem' }}>
+                  onChange={(e) => setAnswers({ ...answers, [f.id]: { ...a, response: e.target.value } })} />
+                <button type="button" className="cc-btn cc-btn-primary" onClick={() => answerFollowUp(f.id)}>
                   Send to my care team
                 </button>
               </div>
             );
           })}
-        </section>
+        </Section>
+      ) : null}
+
+      {/* ── Doses awaiting an answer ── */}
+      {pendingDoses.length ? (
+        <Section icon={Clock} title="Did you take these?" count={pendingDoses.length}>
+          {pendingDoses.map((d) => (
+            <div key={d.id} className="cc-item cc-row">
+              <span className="cc-time">{new Date(d.due_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <div className="cc-grow">
+                <div className="cc-item-title">{d.medication} <span className="cc-muted">{d.dosage}</span></div>
+                <div className="cc-sub">Due {new Date(d.due_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+              </div>
+              <div className="cc-actions">
+                <button type="button" className="cc-btn cc-btn-primary" onClick={() => recordDose(d.id, 'taken')}><Check size={15} /> Taken</button>
+                {/* Equal weight, on purpose. */}
+                <button type="button" className="cc-btn" onClick={() => recordDose(d.id, 'missed')}>Missed</button>
+                <button type="button" className="cc-btn" onClick={() => recordDose(d.id, 'skipped')}>Skipped</button>
+              </div>
+            </div>
+          ))}
+        </Section>
       ) : null}
 
       {/* ── Follow-ups your clinician planned ── */}
       {plans.length ? (
-        <section style={{ marginBottom: '1.75rem' }}>
-          <h2 style={h2}>Upcoming follow-ups</h2>
-          {plans.map((p) => (
-            <div key={p.id} style={{ ...card, marginBottom: '0.6rem', display: 'flex',
-                                     justifyContent: 'space-between', alignItems: 'center',
-                                     gap: '1rem', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>
-                  {new Date(`${p.due_on}T00:00:00`).toLocaleDateString(undefined,
-                    { weekday: 'short', day: 'numeric', month: 'short' })}
-                  {p.clinician_name ? ` · ${p.clinician_name}` : ''}
-                </div>
-                {p.reason ? <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{p.reason}</div> : null}
-              </div>
-              {p.attending === null || p.attending === undefined ? (
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <button onClick={() => setAttendance(p.id, true)} style={primary}>I'll be there</button>
-                  <button onClick={() => setAttendance(p.id, false)} style={ghost}>I can't make it</button>
-                </div>
-              ) : (
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569' }}>
-                  {p.attending ? 'Confirmed' : "You said you can't make it"}
+        <Section icon={CalendarDays} title="Upcoming follow-ups" count={plans.length}>
+          {plans.map((p) => {
+            const d = new Date(`${p.due_on}T00:00:00`);
+            return (
+              <div key={p.id} className="cc-item cc-row">
+                <span className="cc-date">
+                  <em>{d.toLocaleDateString(undefined, { month: 'short' })}</em>
+                  <strong>{d.getDate()}</strong>
                 </span>
-              )}
-            </div>
-          ))}
-        </section>
-      ) : null}
-
-      {/* ── Doses awaiting an answer ── */}
-      {doses.filter((d) => d.status === 'pending').length ? (
-        <section style={{ marginBottom: '1.75rem' }}>
-          <h2 style={h2}>Did you take these?</h2>
-          {doses.filter((d) => d.status === 'pending').map((d) => (
-            <div key={d.id} style={{ ...card, marginBottom: '0.6rem', display: 'flex',
-                                     justifyContent: 'space-between', alignItems: 'center',
-                                     gap: '1rem', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{d.medication} {d.dosage}</div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                  Due {new Date(d.due_at).toLocaleString()}
+                <div className="cc-grow">
+                  <div className="cc-item-title">
+                    {d.toLocaleDateString(undefined, { weekday: 'long' })}{p.clinician_name ? ` · ${p.clinician_name}` : ''}
+                  </div>
+                  {p.reason ? <div className="cc-sub">{p.reason}</div> : null}
                 </div>
+                {p.attending === null || p.attending === undefined ? (
+                  <div className="cc-actions">
+                    <button type="button" className="cc-btn cc-btn-primary" onClick={() => setAttendance(p.id, true)}>I'll be there</button>
+                    <button type="button" className="cc-btn" onClick={() => setAttendance(p.id, false)}>I can't make it</button>
+                  </div>
+                ) : (
+                  <span className={`cc-tag ${p.attending ? 'ok' : ''}`}>
+                    {p.attending ? 'Confirmed' : "You can't make it"}
+                  </span>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                <button onClick={() => recordDose(d.id, 'taken')} style={primary}>Taken</button>
-                {/* Equal weight, on purpose. */}
-                <button onClick={() => recordDose(d.id, 'missed')} style={ghost}>Missed</button>
-                <button onClick={() => recordDose(d.id, 'skipped')} style={ghost}>Skipped</button>
-              </div>
-            </div>
-          ))}
-        </section>
+            );
+          })}
+        </Section>
       ) : null}
 
       {/* ── Reminders ── */}
-      <section>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={h2}>Medication reminders</h2>
-          <button onClick={() => { setAdding(!adding); setError(''); }} style={ghost}>
-            {adding ? 'Cancel' : '+ Add'}
+      <Section
+        icon={Bell}
+        title="Medication reminders"
+        count={activeReminders.length}
+        action={(
+          <button type="button" className={`cc-btn ${adding ? '' : 'cc-btn-primary'}`} onClick={() => { setAdding(!adding); setError(''); }}>
+            {adding ? 'Cancel' : <><Plus size={15} /> Add reminder</>}
           </button>
-        </div>
-
+        )}
+      >
         {adding ? (
-          <div style={{ ...card, marginBottom: '0.75rem' }}>
-            <label style={label}>Which medication?</label>
-            <select style={input} value={form.prescriptionId}
+          <div className="cc-item cc-form">
+            <label className="cc-label">Which medication?</label>
+            <select className="cc-input" value={form.prescriptionId}
               onChange={(e) => setForm({ ...form, prescriptionId: e.target.value })}>
               <option value="">Choose from your prescriptions…</option>
               {scripts.map((s) => (
@@ -258,47 +272,86 @@ export default function CareCentre({ userId }) {
               ))}
             </select>
             {scripts.length === 0 ? (
-              <div style={{ fontSize: '0.78rem', color: '#9a3412', marginTop: '0.4rem' }}>
+              <p className="cc-warn">
                 You have no prescriptions on record. Reminders are created from a prescription so
                 they always match what you were actually prescribed.
-              </div>
+              </p>
             ) : null}
 
-            <label style={{ ...label, marginTop: '0.9rem' }}>What times of day?</label>
-            {form.times.map((t, i) => (
-              <input key={i} type="time" value={t} style={{ ...input, marginBottom: '0.4rem' }}
-                onChange={(e) => {
-                  const times = [...form.times]; times[i] = e.target.value;
-                  setForm({ ...form, times });
-                }} />
-            ))}
-            <button style={ghost} onClick={() => setForm({ ...form, times: [...form.times, '20:00'] })}>
-              + Another time
-            </button>
-            <div>
-              <button onClick={createReminder} style={{ ...primary, marginTop: '0.8rem' }}>
-                Set reminder
+            <label className="cc-label">What times of day?</label>
+            <div className="cc-times">
+              {form.times.map((t, i) => (
+                <span key={i} className="cc-time-input">
+                  <Clock size={14} />
+                  <input type="time" value={t}
+                    onChange={(e) => {
+                      const times = [...form.times]; times[i] = e.target.value;
+                      setForm({ ...form, times });
+                    }} />
+                  {form.times.length > 1 ? (
+                    <button type="button" aria-label="Remove this time"
+                      onClick={() => setForm({ ...form, times: form.times.filter((_, j) => j !== i) })}><X size={13} /></button>
+                  ) : null}
+                </span>
+              ))}
+              <button type="button" className="cc-btn cc-btn-soft" onClick={() => setForm({ ...form, times: [...form.times, '20:00'] })}>
+                <Plus size={14} /> Another time
               </button>
             </div>
+            <button type="button" className="cc-btn cc-btn-primary cc-btn-wide" onClick={createReminder}>
+              <Bell size={15} /> Set reminder
+            </button>
+            <p className="cc-sub">You'll get each reminder in the app and by email.</p>
           </div>
         ) : null}
 
-        {reminders.filter((r) => r.active).length === 0 ? (
-          <div style={{ ...card, color: '#64748b' }}>No reminders set.</div>
-        ) : reminders.filter((r) => r.active).map((r) => (
-          <div key={r.id} style={{ ...card, marginBottom: '0.6rem', display: 'flex',
-                                   justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>{r.medication} {r.dosage}</div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                {String(r.times_of_day).replace(/[{}]/g, '').split(',').join(' · ')}
-              </div>
-            </div>
-            <button onClick={() => stopReminder(r.id)} style={ghost}>Stop</button>
+        {activeReminders.length === 0 && !adding ? (
+          <div className="cc-empty">
+            <span><Pill size={26} /></span>
+            <strong>No reminders yet</strong>
+            <p>Set one from your prescriptions and we'll remind you at the times you choose.</p>
           </div>
-        ))}
-      </section>
+        ) : (
+          <div className="cc-grid">
+            {activeReminders.map((r) => (
+              <div key={r.id} className="cc-item cc-reminder">
+                <div className="cc-row">
+                  <span className="cc-pill-icon"><Pill size={18} /></span>
+                  <div className="cc-grow">
+                    <div className="cc-item-title">{r.medication}</div>
+                    {r.dosage ? <div className="cc-sub">{r.dosage}</div> : null}
+                  </div>
+                </div>
+                <div className="cc-chips">
+                  {timesOf(r).map((t) => <span key={t} className="cc-chip"><Clock size={12} /> {t}</span>)}
+                </div>
+                <button type="button" className="cc-stop" onClick={() => stopReminder(r.id)}>Stop reminder</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
     </div>
+  );
+}
+
+function sameDay(iso) {
+  const d = new Date(iso);
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+}
+
+function Section({ icon: Icon, title, count, action, children }) {
+  return (
+    <section className="cc-section">
+      <div className="cc-section-head">
+        <span className="cc-section-icon"><Icon size={17} /></span>
+        <h2>{title}</h2>
+        {count ? <span className="cc-count">{count}</span> : null}
+        {action ? <div className="cc-section-action">{action}</div> : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -312,77 +365,49 @@ const WEEKLY_FIELDS = [
 
 function WeeklyCheckIn({ prompt, a, set, send }) {
   return (
-    <div style={{ ...card, borderLeft: '3px solid #7c3aed', marginBottom: '0.75rem' }}>
-      <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.2rem' }}>{prompt}</div>
-      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.8rem' }}>
+    <div className="cc-item cc-item-accent">
+      <div className="cc-item-title">{prompt}</div>
+      <p className="cc-sub" style={{ margin: '0.15rem 0 0.9rem' }}>
         Your weekly check-in. Answer what you like — every question is optional.
-      </div>
+      </p>
       {WEEKLY_FIELDS.map((w) => (
-        <div key={w.key} style={{ marginBottom: '0.7rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.3rem' }}>
+        <div key={w.key} className="cc-weekly-row">
+          <div className="cc-weekly-label">
             <strong>{w.label}</strong>
-            <span style={{ color: '#64748b' }}>0 {w.low} · 10 {w.high}</span>
+            <span>0 {w.low} · 10 {w.high}</span>
           </div>
-          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-            {[0,1,2,3,4,5,6,7,8,9,10].map((n) => (
-              <button key={n} onClick={() => set({ [w.key]: n })} title={`${n} out of 10`}
-                style={{
-                  width: 30, height: 30, borderRadius: 8, cursor: 'pointer', fontSize: '0.78rem',
-                  border: a[w.key] === n ? '2px solid #7c3aed' : '1px solid #cbd5e1',
-                  background: a[w.key] === n ? '#ede9fe' : '#fff',
-                  color: a[w.key] === n ? '#5b21b6' : '#475569', fontWeight: 600,
-                }}>{n}</button>
+          <div className="cc-scale">
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+              <button key={n} type="button" title={`${n} out of 10`} className={a[w.key] === n ? 'on' : ''}
+                onClick={() => set({ [w.key]: n })}>{n}</button>
             ))}
           </div>
         </div>
       ))}
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
+      <div className="cc-weekly-extra">
         <div>
-          <label style={label}>Sleep (hours a night)</label>
-          <input type="number" min="0" max="24" step="0.5" style={{ ...input, width: 110 }}
+          <label className="cc-label">Sleep (hours a night)</label>
+          <input type="number" min="0" max="24" step="0.5" className="cc-input" style={{ width: 120 }}
             value={a.sleepHours ?? ''} onChange={(e) => set({ sleepHours: e.target.value })} />
         </div>
         <div>
-          <label style={label}>Medication this week</label>
-          <div style={{ display: 'flex', gap: '0.3rem' }}>
+          <label className="cc-label">Medication this week</label>
+          <div className="cc-actions">
             {[['yes', 'Taken'], ['no', 'Missed some'], ['na', 'Not on any']].map(([v, t]) => (
-              <button key={v} onClick={() => set({ medication: v })}
-                style={{ ...ghost, padding: '0.45rem 0.75rem',
-                         ...(a.medication === v ? { borderColor: '#7c3aed', background: '#ede9fe', color: '#5b21b6' } : null) }}>
-                {t}
-              </button>
+              <button key={v} type="button" className={`cc-btn ${a.medication === v ? 'cc-btn-on' : ''}`}
+                onClick={() => set({ medication: v })}>{t}</button>
             ))}
           </div>
         </div>
       </div>
-      <label style={label}>Anything important happen this week?</label>
-      <textarea rows={2} style={input} placeholder="Optional"
+      <label className="cc-label">Anything important happen this week?</label>
+      <textarea rows={2} className="cc-input" placeholder="Optional"
         value={a.events || ''} onChange={(e) => set({ events: e.target.value })} />
-      <button onClick={send} style={{ ...primary, marginTop: '0.7rem', background: '#6d28d9' }}>
-        Send to my therapist
-      </button>
+      <button type="button" className="cc-btn cc-btn-primary" onClick={send}>Send to my therapist</button>
     </div>
   );
 }
 
 function Banner({ tone, children }) {
-  const ok = tone === 'ok';
-  return (
-    <div style={{
-      background: ok ? '#f0fdf4' : '#fef2f2',
-      border: `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`,
-      color: ok ? '#166534' : '#991b1b',
-      padding: '0.75rem 1rem', borderRadius: 8, marginBottom: '1rem', fontSize: '0.88rem',
-    }}>{children}</div>
-  );
+  return <div className={`cc-banner ${tone === 'ok' ? 'ok' : 'err'}`}>{children}</div>;
 }
-
-const card    = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem' };
-const h2      = { fontSize: '1rem', margin: '0 0 0.7rem' };
-const label   = { display: 'block', fontWeight: 600, fontSize: '0.82rem', marginBottom: '0.3rem' };
-const input   = { width: '100%', padding: '0.55rem 0.7rem', border: '1px solid #cbd5e1',
-                  borderRadius: 8, fontSize: '0.87rem', boxSizing: 'border-box', fontFamily: 'inherit' };
-const primary = { background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '0.5rem 1.1rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' };
-const ghost   = { background: '#fff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 8,
-                  padding: '0.5rem 1rem', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' };

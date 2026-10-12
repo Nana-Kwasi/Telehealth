@@ -140,8 +140,8 @@ export default function AdminLabScanBranches() {
 
       {/* Type toggle */}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <button className={`btn ${centerType === 'lab' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCenterType('lab')}>🧪 Laboratories</button>
-        <button className={`btn ${centerType === 'scan' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCenterType('scan')}>🩻 Scan Centers</button>
+        <button className={`btn ${centerType === 'lab' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCenterType('lab')}>Laboratories</button>
+        <button className={`btn ${centerType === 'scan' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCenterType('scan')}>Scan Centers</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', alignItems: 'start' }}>
@@ -157,8 +157,8 @@ export default function AdminLabScanBranches() {
                   <button
                     style={{
                       width: '100%', textAlign: 'left', padding: '0.75rem', borderRadius: 8,
-                      backgroundColor: selectedCenter?.id === c.id ? '#eff6ff' : 'transparent',
-                      border: selectedCenter?.id === c.id ? '1.5px solid #3b82f6' : '1px solid transparent',
+                      backgroundColor: selectedCenter?.id === c.id ? '#e9f3ec' : 'transparent',
+                      border: selectedCenter?.id === c.id ? '1.5px solid #3f7a55' : '1px solid transparent',
                       cursor: 'pointer', fontWeight: selectedCenter?.id === c.id ? 700 : 400,
                       color: '#0f172a', fontSize: '0.875rem',
                     }}
@@ -230,7 +230,7 @@ export default function AdminLabScanBranches() {
               {showForm && !credentials && (
                 <div className="admin-table-card" style={{ padding: '1.25rem' }}>
                   <h4 style={{ margin: '0 0 1rem', fontWeight: 700 }}>Add New Branch</h4>
-                  {error && <div className="admin-alert admin-alert-danger" style={{ marginBottom: '0.75rem' }}>🚨 {error}</div>}
+                  {error && <div className="admin-alert admin-alert-danger" style={{ marginBottom: '0.75rem' }}>{error}</div>}
                   <form onSubmit={handleAddBranch}>
                     <div className="admin-form-grid">
                       <div className="admin-field" style={{ gridColumn: '1 / -1' }}>
@@ -259,7 +259,7 @@ export default function AdminLabScanBranches() {
                       </div>
                     </div>
                     <div className="admin-alert admin-alert-info" style={{ margin: '0.75rem 0' }}>
-                      📍 Latitude/longitude enables proximity-based sorting when doctors select centers. Use Google Maps to get exact coordinates.
+                      Latitude/longitude enables proximity-based sorting when doctors select centers. Use Google Maps to get exact coordinates.
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                       <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
@@ -273,7 +273,7 @@ export default function AdminLabScanBranches() {
 
               {credentials && (
                 <div className="admin-table-card" style={{ padding: '1.25rem' }}>
-                  <h4 style={{ margin: '0 0 0.5rem', color: '#16a34a', fontWeight: 800 }}>✅ Branch Created: {credentials.branchName}</h4>
+                  <h4 style={{ margin: '0 0 0.5rem', color: '#16a34a', fontWeight: 800 }}>Branch Created: {credentials.branchName}</h4>
                   <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '0.75rem' }}>Share these credentials with the branch staff.</p>
                   <div className="credential-box">
                     <div className="credential-row"><span className="credential-label">Email</span><span className="credential-value">{credentials.email}</span></div>
@@ -281,7 +281,7 @@ export default function AdminLabScanBranches() {
                     <div className="credential-row"><span className="credential-label">Temp Password</span><span className="credential-value">{credentials.tempPassword}</span></div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                    <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(`Username: ${credentials.username}\nPassword: ${credentials.tempPassword}\nEmail: ${credentials.email}`).catch(() => {})}>📋 Copy</button>
+                    <button className="btn btn-ghost" onClick={() => navigator.clipboard.writeText(`Username: ${credentials.username}\nPassword: ${credentials.tempPassword}\nEmail: ${credentials.email}`).catch(() => {})}>Copy</button>
                     <button className="btn btn-primary" onClick={() => { setCredentials(null); setShowForm(false); }}>Done</button>
                   </div>
                 </div>

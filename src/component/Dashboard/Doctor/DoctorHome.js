@@ -24,6 +24,7 @@ import { collection, query, where, getDocs, doc, getDoc, setDoc } from '../../..
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import { dedupePatientPharmacies, hasPatientPharmacy } from '../../../utils/patientPharmacyDedupe';
 
+import FaqSection from '../../Common/FaqSection';
 const TODAY = new Date().toISOString().split('T')[0];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -1091,6 +1092,9 @@ export default function DoctorHome({ profile }) {
           </div>
         </div>
       )}
+
+      {/* Shared FAQ (backend /api/v1/faq) — same answers as the website and the app. */}
+      <FaqSection compact audience="clinician" title="Questions & answers" />
     </div>
   );
 }

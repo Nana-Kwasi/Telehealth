@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ShieldCheck, Receipt } from 'lucide-react';
 import { api } from '../../../services/apiClient';
 
 /**
@@ -55,12 +56,19 @@ export default function AdminInsuranceVerification() {
           <h1 className="admin-page-title">Insurance & Claims</h1>
           <p className="admin-page-sub">Verify submitted cover and record what happens to each claim.</p>
         </div>
-        <button className="btn btn-primary" onClick={load}>↻ Refresh</button>
+        <button className="btn btn-primary" onClick={load}>Refresh</button>
       </div>
       {msg ? <p style={S.msg}>{msg}</p> : null}
 
-      <h2 style={S.h2}>Insurance to verify ({queue.insurance.length})</h2>
-      {queue.insurance.length === 0 ? <p style={S.muted}>Nothing waiting.</p> : queue.insurance.map((i) => (
+      <div className="admin-table-card">
+      <div className="admin-table-header">
+        <h2 className="admin-table-title">Insurance to verify</h2>
+        <span className="badge badge-gray">{queue.insurance.length} waiting</span>
+      </div>
+      <div style={S.body}>
+      {queue.insurance.length === 0 ? (
+        <div className="admin-empty"><ShieldCheck size={30} /><h3>Nothing to verify</h3><p>Insurance cards patients submit will appear here for checking.</p></div>
+      ) : queue.insurance.map((i) => (
         <div key={i.id} style={S.card}>
           <div style={S.top}>
             <strong>{i.patient}</strong>
@@ -68,7 +76,7 @@ export default function AdminInsuranceVerification() {
           </div>
           <div style={S.muted}>Member: {i.member_name} · Valid until: {i.valid_to || 'not given'}
             {i.card_file_url ? <> · <a href={i.card_file_url} target="_blank" rel="noreferrer">card</a></> : null}</div>
-          {flags(i.missing_json).map((f) => <div key={f} style={S.flag}>⚠ {f}</div>)}
+          {flags(i.missing_json).map((f) => <div key={f} style={S.flag}>{f}</div>)}
           <input style={S.input} placeholder="Reason (required to reject)" value={reasons[i.id] || ''}
             onChange={(e) => setReasons({ ...reasons, [i.id]: e.target.value })} />
           <div style={S.actions}>
@@ -77,9 +85,18 @@ export default function AdminInsuranceVerification() {
           </div>
         </div>
       ))}
+      </div>
+      </div>
 
-      <h2 style={S.h2}>Claims ({queue.claims.length})</h2>
-      {queue.claims.length === 0 ? <p style={S.muted}>No open claims.</p> : queue.claims.map((c) => (
+      <div className="admin-table-card">
+      <div className="admin-table-header">
+        <h2 className="admin-table-title">Claims</h2>
+        <span className="badge badge-gray">{queue.claims.length} open</span>
+      </div>
+      <div style={S.body}>
+      {queue.claims.length === 0 ? (
+        <div className="admin-empty"><Receipt size={30} /><h3>No open claims</h3><p>Claims move through draft, submitted, approved and paid here.</p></div>
+      ) : queue.claims.map((c) => (
         <div key={c.id} style={S.card}>
           <div style={S.top}>
             <strong>{c.patient}</strong>
@@ -87,7 +104,7 @@ export default function AdminInsuranceVerification() {
           </div>
           <div style={S.muted}>{c.provider ? `${c.provider} · ${c.policy_number}` : 'No insurance attached'}</div>
           <div style={S.muted}>Codes: {list(c.codes_json).map((x) => `${x.code} ${x.description}`).join('; ') || 'none approved'}</div>
-          {list(c.missing_json).map((m) => <div key={m} style={S.flag}>⚠ {m}</div>)}
+          {list(c.missing_json).map((m) => <div key={m} style={S.flag}>{m}</div>)}
           <input style={S.input} placeholder="Note to the patient (required to reject)" value={reasons[c.id] || ''}
             onChange={(e) => setReasons({ ...reasons, [c.id]: e.target.value })} />
           <div style={S.actions}>
@@ -99,13 +116,16 @@ export default function AdminInsuranceVerification() {
           </div>
         </div>
       ))}
+      </div>
+      </div>
     </div>
   );
 }
 
 const S = {
+  body: { padding: '1rem 1.25rem' },
   h2: { fontSize: '1rem', margin: '1.4rem 0 0.6rem' },
-  card: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.9rem 1rem', marginBottom: '0.7rem' },
+  card: { background: '#fbfcfd', border: '1px solid #e3e8ef', borderRadius: 14, padding: '0.9rem 1rem', marginBottom: '0.7rem' },
   top: { display: 'flex', justifyContent: 'space-between', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.9rem' },
   muted: { fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem' },
   flag: { fontSize: '0.82rem', color: '#9a3412', marginTop: '0.25rem' },

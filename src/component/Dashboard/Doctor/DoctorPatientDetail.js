@@ -16,6 +16,7 @@ import {
   doc, setDoc, getDoc, serverTimestamp,
 } from '../../../services/firestoreShim';
 import { hasPatientPharmacy, patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
+import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -374,18 +375,33 @@ export default function DoctorPatientDetail({ profile }) {
   const sendPrescriptionToPharmacy = async (pharmacy, pharmacyIdx) => {
     const latestRx = prescriptions[0];
     if (!latestRx) { alert('No prescriptions found. Please issue a prescription first.'); return; }
+    // Only a NessaHub branch can receive a prescription. A manually typed pharmacy
+    // has no account to route to; writing just `pharmacyStatus: 'sent'` used to mark
+    // the prescription sent while no pharmacy ever saw it.
+    if (!pharmacy.branchId) {
+      alert(`${pharmacy.name} is not on NessaHub, so the prescription cannot be sent to it. Share it with the pharmacy directly, or pick a NessaHub branch.`);
+      return;
+    }
+    if (isRxDelivered(latestRx)) {
+      alert('The latest prescription has already been delivered and cannot be re-sent.');
+      return;
+    }
+    const routedElsewhere = latestRx.branchId && latestRx.branchId !== pharmacy.branchId;
+    if (routedElsewhere && !window.confirm(
+      `The latest prescription is already with ${latestRx.branchName || latestRx.pharmacyName || 'another pharmacy'}. Move it to ${pharmacy.branchName || pharmacy.name}?`
+    )) return;
     const key = pharmacyIdx;
     setSendingToPharmacy(key);
     try {
       await updateDoc(doc(db, 'doctorPrescriptions', latestRx.id), {
-        pharmacy: { name: pharmacy.name, address: pharmacy.address || '', phone: pharmacy.phone || '' },
+        ...(pharmacy.pharmacyId ? { pharmacyId: pharmacy.pharmacyId } : {}),
+        branchId: pharmacy.branchId,
         pharmacyStatus: 'sent',
-        sentAt: serverTimestamp(),
       });
       setSentPharmacies(prev => ({ ...prev, [key]: true }));
     } catch (err) {
       console.error('Error sending prescription:', err);
-      alert('Could not send prescription. Please try again.');
+      alert(err?.message || 'Could not send prescription. Please try again.');
     } finally {
       setSendingToPharmacy(null);
     }
@@ -951,11 +967,15 @@ export default function DoctorPatientDetail({ profile }) {
                           <button
                             className="doctor-btn doctor-btn-primary doctor-btn-sm"
                             style={{ whiteSpace: 'nowrap' }}
-                            disabled={isSending || prescriptions.length === 0}
+                            disabled={isSending || prescriptions.length === 0 || !ph.branchId}
                             onClick={() => sendPrescriptionToPharmacy(ph, idx)}
-                            title={prescriptions.length === 0 ? 'No prescriptions to send' : `Send latest prescription to ${ph.name}`}
+                            title={
+                              !ph.branchId ? `${ph.name} is not on NessaHub — prescriptions can only be sent to NessaHub branches`
+                                : prescriptions.length === 0 ? 'No prescriptions to send'
+                                : `Send latest prescription to ${ph.name}`
+                            }
                           >
-                            {isSending ? 'Sending…' : '📤 Send Rx'}
+                            {isSending ? 'Sending…' : !ph.branchId ? 'Not on NessaHub' : '📤 Send Rx'}
                           </button>
                         )}
                         {prescriptions.length > 0 && (

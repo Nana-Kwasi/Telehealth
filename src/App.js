@@ -16,6 +16,7 @@ import ClientDashboard from './component/Dashboard/Client/ClientDashboard';
 import MedicalPatientDashboard from './component/Dashboard/MedicalPatient/MedicalPatientDashboard';
 import TherapistDashboard from './component/Dashboard/Therapist/TherapistDashboard';
 import DoctorDashboard from './component/Dashboard/Doctor/DoctorDashboard';
+import RxLinkPage from './component/Common/RxLinkPage';
 import AdminDashboard from './component/Dashboard/Admin/AdminDashboard';
 import PharmacyDashboard from './component/Dashboard/Pharmacy/PharmacyDashboard';
 import BranchDashboard from './component/Dashboard/Pharmacy/BranchDashboard';
@@ -69,6 +70,10 @@ import MedPsychPsychiatrists from './component/MedPsych/MedPsychPsychiatrists';
 import MedPsychBooking from './component/MedPsych/MedPsychBooking';
 import NotificationCenter from './component/Common/NotificationCenter';
 
+import PolicyConsentGate, { linkPolicyConsentToAccount } from './component/Common/PolicyConsentGate';
+import PublicHelp from './component/Common/PublicHelp';
+import ResetPassword from './component/Auth/ResetPassword';
+import { recordPendingConsents } from './utils/pendingConsents';
 function LoadingScreen() {
   return (
     <div style={{
@@ -149,6 +154,13 @@ export default function App() {
   // Re-detect the user's current location whenever an authenticated session is
   // established (i.e. on every app open / login). Best-effort and non-blocking —
   // a denied permission keeps the last known location.
+  // Attach this browser's first-visit policy acceptance to the account once signed in.
+  useEffect(() => {
+    if (!session.role || session.role === 'guest') return;
+    linkPolicyConsentToAccount();
+    recordPendingConsents();
+  }, [session.role]);
+
   useEffect(() => {
     if (!session.role || session.role === 'guest') return;
     // Not inside a call: the phone app opens the call page in a web view, where
@@ -253,7 +265,11 @@ export default function App() {
 
   return (
     <div>
+      {/* First-visit acceptance of the policies (recorded; the app asks on its first screen too). */}
+      <PolicyConsentGate />
       {inCall ? null : <Navbar session={session} />}
+      {/* Help (Ask Ness + FAQ) on every public page until someone signs in or signs up. */}
+      {!session?.role && !inCall ? <PublicHelp /> : null}
       {/* Rendered once for any signed-in user rather than per dashboard: every
           module writes notifications, but only the therapist shell had a bell.
           Fixed-position so it does not depend on each dashboard's own header. */}
@@ -296,6 +312,8 @@ export default function App() {
           <Route path="/questionnaire" element={<Questionnaire />} />
           <Route path="/payment"       element={<Payment />} />
           <Route path="/match-therapist" element={<MatchTherapist />} />
+          {/* Prescription QR link: no details shown; pharmacies verify from their dashboard. */}
+          <Route path="/rx/:token"     element={<RxLinkPage />} />
           <Route path="/terms"         element={<Terms />} />
           <Route path="/privacy"       element={<Privacy />} />
           <Route path="/about"         element={<AboutPage />} />
@@ -329,6 +347,7 @@ export default function App() {
 
           {/* ── Auth (redirect if already logged in) ── */}
           <Route path="/login"  element={<PublicRoute session={session}><Login  /></PublicRoute>} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<PublicRoute session={session}><SignUp /></PublicRoute>} />
 
           {/* ── Video (accessible without sidebar) ── */}

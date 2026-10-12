@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, Clock, FileText, Pill, FlaskConical, CalendarDays, Activity } from 'lucide-react';
 import { api } from '../../services/apiClient';
+import './RecordExplorer.css';
 
 /**
  * Search a record, and read it in order.
@@ -12,12 +13,19 @@ import { api } from '../../services/apiClient';
  * narration fails the entries still render, and when nothing matches the screen
  * says so rather than showing a reassuring paragraph about an empty record.
  */
+const SUGGESTED = ['blood pressure', 'my last prescription', 'lab results', 'allergies'];
+const FILTERS = [
+  ['all', 'All'], ['note', 'Notes'], ['prescription', 'Prescriptions'],
+  ['result', 'Results'], ['appointment', 'Appointments'],
+];
+
 export default function RecordExplorer({ subjectId = null, title = 'Records' }) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
-  const [timeline, setTimeline] = useState(null);
+  const [timeline, setTimeline] = useState(undefined); // undefined = loading, null = unavailable
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [kind, setKind] = useState('all');
 
   const loadTimeline = useCallback(async () => {
     try {
@@ -31,14 +39,16 @@ export default function RecordExplorer({ subjectId = null, title = 'Records' }) 
 
   useEffect(() => { loadTimeline(); }, [loadTimeline]);
 
-  const search = async (e) => {
+  const search = async (e, text) => {
     e?.preventDefault?.();
-    if (!query.trim()) return;
+    const q = (text ?? query).trim();
+    if (!q) return;
+    if (text) setQuery(text);
     setBusy(true); setError(''); setResult(null);
     try {
       const res = await api('/api/v1/ai/records/search', {
         method: 'POST',
-        body: { subjectId, query },
+        body: { subjectId, query: q },
       });
       if (!res?.ok) { setError(res?.message || 'That search could not be run.'); return; }
       setResult(res);
@@ -49,66 +59,146 @@ export default function RecordExplorer({ subjectId = null, title = 'Records' }) 
     }
   };
 
-  const showing = result ? result.entries : null;
+  // Counts per kind, for the header and the filter chips.
+  const counts = useMemo(() => {
+    const c = { all: 0 };
+    (timeline?.days || []).forEach((d) => d.items.forEach((e) => {
+      c.all += 1;
+      c[e.kind] = (c[e.kind] || 0) + 1;
+    }));
+    return c;
+  }, [timeline]);
+
+  const days = useMemo(() => (timeline?.days || [])
+    .map((d) => ({ ...d, items: kind === 'all' ? d.items : d.items.filter((e) => e.kind === kind) }))
+    .filter((d) => d.items.length), [timeline, kind]);
 
   return (
-    <div style={S.page}>
-      <header style={S.head}>
-        <span style={S.icon}><Clock size={20} /></span>
-        <div>
-          <h1 style={S.h1}>{title}</h1>
-          <p style={S.lead}>
-            Everything on file, in order. Search it in your own words — the
-            answer comes from the record, never from the assistant's memory.
-          </p>
+    <div className="rx-page">
+      <header className="rx-hero">
+        <div className="rx-hero-top">
+          <span className="rx-hero-icon"><Clock size={22} /></span>
+          <div>
+            <h1>{title}</h1>
+            <p>
+              Everything on file, in order. Search it in your own words — the answer comes
+              from the record, never from the assistant's memory.
+            </p>
+          </div>
         </div>
+        {timeline ? (
+          <div className="rx-stats">
+            {[['note', 'Notes'], ['prescription', 'Prescriptions'], ['result', 'Results'], ['appointment', 'Appointments']].map(([k, label]) => {
+              const Icon = ICONS[k];
+              return (
+                <div key={k} className="rx-stat">
+                  <Icon size={16} />
+                  <strong>{counts[k] || 0}</strong>
+                  <span>{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </header>
 
-      <form style={S.searchRow} onSubmit={search}>
-        <Search size={16} style={{ color: '#565c6e', flexShrink: 0 }} />
+      <form className="rx-search" onSubmit={search}>
+        <Search size={18} className="rx-search-icon" />
         <input
-          style={S.search}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g. everything about blood pressure"
+          placeholder="Search your record, e.g. everything about blood pressure"
+          aria-label="Search your record"
         />
-        <button type="submit" style={{ ...S.go, ...(busy || !query.trim() ? S.off : null) }}
-          disabled={busy || !query.trim()}>
+        <button type="submit" disabled={busy || !query.trim()}>
           {busy ? 'Searching…' : 'Search'}
         </button>
       </form>
+      {!result ? (
+        <div className="rx-suggest">
+          <span>Try:</span>
+          {SUGGESTED.map((t) => (
+            <button key={t} type="button" onClick={() => search(null, t)} disabled={busy}>{t}</button>
+          ))}
+        </div>
+      ) : null}
 
-      {error ? <p style={S.error}>{error}</p> : null}
+      {error ? <p className="rx-error">{error}</p> : null}
 
       {result ? (
-        <section style={S.card}>
-          <h2 style={S.h2}>
-            {result.matched ? `${result.matched} entr${result.matched === 1 ? 'y' : 'ies'} for “${result.query}”` : `Nothing for “${result.query}”`}
-          </h2>
-          {result.summary ? <p style={S.summary}>{result.summary}</p> : null}
-          {(showing || []).map((e, i) => <Row key={i} entry={e} />)}
-          {result.matched ? (
-            <button type="button" style={S.clear} onClick={() => { setResult(null); setQuery(''); }}>
+        <section className="rx-card">
+          <div className="rx-card-head">
+            <h2>
+              {result.matched ? `${result.matched} entr${result.matched === 1 ? 'y' : 'ies'} for “${result.query}”` : `Nothing for “${result.query}”`}
+            </h2>
+            <button type="button" className="rx-clear" onClick={() => { setResult(null); setQuery(''); }}>
               Back to the full timeline
             </button>
-          ) : null}
+          </div>
+          {result.summary ? <p className="rx-summary">{result.summary}</p> : null}
+          <div className="rx-entries">
+            {(result.entries || []).map((e, i) => <Row key={i} entry={e} />)}
+          </div>
+        </section>
+      ) : null}
+
+      {!result && timeline === undefined ? (
+        <section className="rx-card">
+          {[0, 1, 2].map((i) => <div key={i} className="rx-skeleton" />)}
+        </section>
+      ) : null}
+
+      {!result && timeline === null ? (
+        <section className="rx-card rx-empty">
+          <span><FileText size={26} /></span>
+          <strong>Your record could not be loaded</strong>
+          <p>Please try again in a moment.</p>
         </section>
       ) : null}
 
       {!result && timeline ? (
         timeline.total === 0 ? (
-          <section style={S.card}><p style={S.empty}>Nothing on file yet.</p></section>
+          <section className="rx-card rx-empty">
+            <span><FileText size={26} /></span>
+            <strong>Nothing on file yet</strong>
+            <p>Notes, prescriptions, results and appointments will appear here as your care goes on.</p>
+          </section>
         ) : (
-          <section style={S.card}>
-            <h2 style={S.h2}>Timeline · {timeline.total} entries</h2>
-            {timeline.days.map((d) => (
-              <div key={d.date} style={S.day}>
-                <div style={S.dayLabel}>{fmtDay(d.date)}</div>
-                <div style={S.dayItems}>
-                  {d.items.map((e, i) => <Row key={i} entry={e} />)}
-                </div>
+          <section className="rx-card">
+            <div className="rx-card-head">
+              <h2>Timeline <span className="rx-count">{timeline.total}</span></h2>
+              <div className="rx-filters" role="tablist" aria-label="Filter by type">
+                {FILTERS.map(([k, label]) => (
+                  <button key={k} type="button" role="tab" aria-selected={kind === k}
+                    className={kind === k ? 'on' : ''} onClick={() => setKind(k)}
+                    disabled={k !== 'all' && !counts[k]}>
+                    {label}{counts[k] ? <em>{counts[k]}</em> : null}
+                  </button>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="rx-timeline">
+              {days.map((d) => {
+                const dt = new Date(d.date);
+                const valid = !Number.isNaN(dt.getTime());
+                return (
+                  <div key={d.date} className="rx-day">
+                    <div className="rx-day-date" title={fmtDay(d.date)}>
+                      {valid ? (
+                        <>
+                          <em>{dt.toLocaleDateString(undefined, { month: 'short' })}</em>
+                          <strong>{dt.getDate()}</strong>
+                          <small>{dt.getFullYear()}</small>
+                        </>
+                      ) : <small>{d.date}</small>}
+                    </div>
+                    <div className="rx-day-items">
+                      {d.items.map((e, i) => <Row key={i} entry={e} />)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )
       ) : null}
@@ -120,17 +210,20 @@ function Row({ entry }) {
   const Icon = ICONS[entry.kind] || Activity;
   const tone = KINDS[entry.kind] || KINDS.event;
   return (
-    <div style={S.row}>
-      <span style={{ ...S.rowIcon, background: tone.bg, color: tone.text }}>
-        <Icon size={13} />
+    <div className="rx-row">
+      <span className="rx-row-icon" style={{ background: tone.bg, color: tone.text }}>
+        <Icon size={15} />
       </span>
-      <span style={S.rowBody}>
-        <span style={S.rowTitle}>{entry.title}</span>
-        {entry.text ? <span style={S.rowText}>{entry.text}</span> : null}
+      <span className="rx-row-body">
+        <span className="rx-row-kind" style={{ color: tone.text }}>{LABELS[entry.kind] || 'Event'}</span>
+        <span className="rx-row-title">{entry.title}</span>
+        {entry.text ? <span className="rx-row-text">{entry.text}</span> : null}
       </span>
     </div>
   );
 }
+
+const LABELS = { note: 'Note', prescription: 'Prescription', result: 'Result', appointment: 'Appointment', event: 'Event' };
 
 const ICONS = {
   note: FileText, prescription: Pill, result: FlaskConical,
@@ -151,65 +244,3 @@ function fmtDay(iso) {
   return Number.isNaN(d.getTime()) ? iso :
     d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 }
-
-const S = {
-  page: { padding: '1.5rem', maxWidth: 820, margin: '0 auto' },
-  head: { display: 'flex', gap: '0.85rem', alignItems: 'flex-start', marginBottom: '1.1rem' },
-  icon: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: 44, height: 44, flexShrink: 0, borderRadius: 14,
-    background: '#eef2ff', color: '#2a3ea8',
-  },
-  h1: { margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#15173a' },
-  h2: { margin: '0 0 0.8rem', fontSize: '0.95rem', fontWeight: 800, color: '#15173a' },
-  lead: { margin: '0.2rem 0 0', fontSize: '0.87rem', lineHeight: 1.55, color: '#565c6e' },
-
-  searchRow: {
-    display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem',
-    background: '#ffffff', border: '1px solid #d8dce6', borderRadius: 12,
-    padding: '0.55rem 0.8rem',
-  },
-  search: {
-    flex: 1, border: 'none', outline: 'none', fontSize: '0.88rem',
-    fontFamily: 'inherit', color: '#2c3040', background: 'transparent',
-  },
-  go: {
-    padding: '0.45rem 0.9rem', borderRadius: 999, border: 'none',
-    background: '#2b5ce6', color: '#ffffff', fontSize: '0.8rem',
-    fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
-  },
-  off: { opacity: 0.5, cursor: 'not-allowed' },
-
-  card: {
-    background: '#ffffff', border: '1px solid #e4e7ee', borderRadius: 18,
-    padding: '1.1rem 1.2rem', marginBottom: '1rem',
-  },
-  summary: {
-    margin: '0 0 0.9rem', padding: '0.7rem 0.85rem', borderRadius: 12,
-    background: '#f7f8fa', fontSize: '0.87rem', lineHeight: 1.6, color: '#2c3040',
-  },
-
-  day: { display: 'flex', gap: '0.9rem', marginBottom: '0.9rem' },
-  dayLabel: {
-    flexShrink: 0, width: 120, fontSize: '0.76rem', fontWeight: 700,
-    color: '#565c6e', paddingTop: '0.35rem',
-  },
-  dayItems: { flex: 1, minWidth: 0, borderLeft: '2px solid #eef0f5', paddingLeft: '0.9rem' },
-
-  row: { display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '0.55rem' },
-  rowIcon: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: 26, height: 26, flexShrink: 0, borderRadius: 8,
-  },
-  rowBody: { display: 'flex', flexDirection: 'column', gap: '0.1rem', minWidth: 0 },
-  rowTitle: { fontSize: '0.85rem', fontWeight: 700, color: '#15173a' },
-  rowText: { fontSize: '0.8rem', lineHeight: 1.5, color: '#3d4257' },
-
-  clear: {
-    marginTop: '0.4rem', padding: '0.45rem 0.85rem', borderRadius: 999,
-    border: '1px solid #d8dce6', background: '#ffffff', fontSize: '0.78rem',
-    fontWeight: 650, color: '#2c3040', cursor: 'pointer', fontFamily: 'inherit',
-  },
-  error: { fontSize: '0.84rem', color: '#8f1d17', margin: '0 0 0.8rem' },
-  empty: { margin: 0, fontSize: '0.87rem', color: '#565c6e' },
-};

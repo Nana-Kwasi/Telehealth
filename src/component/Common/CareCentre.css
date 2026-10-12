@@ -1,0 +1,119 @@
+/* My Care (CareCentre.js). The accent follows the dashboard: therapy purple,
+   medical blue. */
+
+.cc-root { --cc-accent: #1e6bb8; --cc-accent-2: #155a9c; --cc-soft: #e8f1fb; --cc-line: #bfdbfe;
+  padding: 1.5rem; max-width: 960px; box-sizing: border-box; color: #0f172a; }
+.cc-root.cc-therapy { --cc-accent: #5046bd; --cc-accent-2: #3f37a0; --cc-soft: #eeedfb; --cc-line: #c9c5f2; }
+.cc-root *, .cc-root *::before, .cc-root *::after { box-sizing: border-box; }
+
+/* ── Header ── */
+.cc-hero {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: 1.35rem 1.5rem; margin-bottom: 1.25rem; border-radius: 20px; color: #fff;
+  background: linear-gradient(135deg, var(--cc-accent), var(--cc-accent-2));
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+.cc-hero-text { display: flex; align-items: center; gap: 0.85rem; }
+.cc-hero-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.18); }
+.cc-hero h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01em; }
+.cc-hero p { margin: 0.15rem 0 0; font-size: 0.9rem; opacity: 0.88; }
+.cc-stats { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.cc-stat {
+  display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 0.4rem; align-items: center;
+  padding: 0.55rem 0.85rem; border-radius: 14px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.22);
+  min-width: 118px;
+}
+.cc-stat svg { grid-row: 1 / span 2; opacity: 0.9; }
+.cc-stat strong { font-size: 1.15rem; line-height: 1.1; }
+.cc-stat span { font-size: 0.72rem; opacity: 0.85; }
+
+/* ── Sections ── */
+.cc-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 1.1rem 1.2rem; margin-bottom: 1.1rem; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04); }
+.cc-section-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.85rem; }
+.cc-section-head h2 { margin: 0; font-size: 1.02rem; font-weight: 800; }
+.cc-section-icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--cc-soft); color: var(--cc-accent); }
+.cc-count { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--cc-soft); color: var(--cc-accent); font-size: 0.75rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.cc-section-action { margin-left: auto; }
+
+.cc-item { border: 1px solid #edf0f5; border-radius: 14px; padding: 0.9rem 1rem; background: #fbfcfe; }
+.cc-item + .cc-item { margin-top: 0.65rem; }
+.cc-item-accent { border-left: 4px solid var(--cc-accent); background: #fff; }
+.cc-item-title { font-weight: 700; font-size: 0.95rem; }
+.cc-row { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
+.cc-grow { flex: 1; min-width: 160px; }
+.cc-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.1rem; }
+.cc-muted { color: #64748b; font-weight: 600; }
+.cc-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.cc-time { padding: 0.45rem 0.7rem; border-radius: 10px; background: var(--cc-soft); color: var(--cc-accent); font-weight: 800; font-size: 0.9rem; }
+.cc-date { width: 52px; text-align: center; border-radius: 12px; overflow: hidden; border: 1px solid var(--cc-line); background: #fff; flex-shrink: 0; }
+.cc-date em { display: block; font-style: normal; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; color: #fff; background: var(--cc-accent); padding: 2px 0; }
+.cc-date strong { display: block; font-size: 1.2rem; padding: 3px 0 4px; }
+.cc-tag { font-size: 0.8rem; font-weight: 700; padding: 0.3rem 0.7rem; border-radius: 999px; background: #f1f5f9; color: #475569; }
+.cc-tag.ok { background: #dcfce7; color: #15803d; }
+
+/* ── Buttons & inputs ── */
+.cc-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.5rem 0.95rem; border-radius: 10px;
+  border: 1px solid #d5dbe5; background: #fff; color: #334155; font-weight: 700; font-size: 0.84rem; cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cc-btn:hover { border-color: var(--cc-accent); }
+.cc-btn-primary { background: var(--cc-accent); border-color: var(--cc-accent); color: #fff; }
+.cc-btn-primary:hover { background: var(--cc-accent-2); }
+.cc-btn-soft { background: var(--cc-soft); border-color: transparent; color: var(--cc-accent); }
+.cc-btn-on { background: var(--cc-soft); border-color: var(--cc-accent); color: var(--cc-accent); }
+.cc-btn-wide { margin-top: 1rem; }
+.cc-label { display: block; font-weight: 700; font-size: 0.82rem; margin: 0.9rem 0 0.35rem; color: #334155; }
+.cc-form .cc-label:first-child { margin-top: 0; }
+.cc-input {
+  width: 100%; padding: 0.6rem 0.8rem; border: 1.5px solid #dbe2ea; border-radius: 10px; font-size: 0.88rem;
+  font-family: inherit; background: #fff; margin-bottom: 0.6rem;
+}
+.cc-input:focus { outline: none; border-color: var(--cc-accent); box-shadow: 0 0 0 3px var(--cc-soft); }
+.cc-warn { font-size: 0.8rem; color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; padding: 0.5rem 0.7rem; border-radius: 10px; margin: 0; }
+
+.cc-times { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.cc-time-input { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.5rem 0.3rem 0.7rem; border-radius: 10px; border: 1.5px solid var(--cc-line); background: #fff; color: var(--cc-accent); }
+.cc-time-input input { border: none; font: inherit; font-weight: 700; color: #0f172a; background: transparent; }
+.cc-time-input input:focus { outline: none; }
+.cc-time-input button { border: none; background: #f1f5f9; color: #64748b; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* ── Scales (check-ins) ── */
+.cc-scale { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 0.6rem 0; }
+.cc-scale button { width: 34px; height: 34px; border-radius: 10px; border: 1px solid #d5dbe5; background: #fff; color: #475569; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+.cc-scale button.on { background: var(--cc-accent); border-color: var(--cc-accent); color: #fff; }
+.cc-weekly-row { margin-bottom: 0.6rem; }
+.cc-weekly-label { display: flex; justify-content: space-between; font-size: 0.82rem; }
+.cc-weekly-label span { color: #64748b; }
+.cc-weekly-extra { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+
+/* ── Reminders ── */
+.cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
+.cc-grid .cc-item + .cc-item { margin-top: 0; }
+.cc-reminder { background: #fff; display: flex; flex-direction: column; gap: 0.75rem; }
+.cc-pill-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--cc-soft); color: var(--cc-accent); }
+.cc-chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.cc-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.6rem; border-radius: 999px; background: var(--cc-soft); color: var(--cc-accent); font-weight: 700; font-size: 0.8rem; }
+.cc-stop { align-self: flex-start; border: none; background: none; padding: 0; color: #b91c1c; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+.cc-stop:hover { text-decoration: underline; }
+
+.cc-empty { text-align: center; padding: 1.5rem 1rem; color: #64748b; }
+.cc-empty span { width: 54px; height: 54px; margin: 0 auto 0.6rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--cc-soft); color: var(--cc-accent); }
+.cc-empty strong { display: block; color: #0f172a; margin-bottom: 0.2rem; }
+.cc-empty p { margin: 0; font-size: 0.86rem; }
+
+/* ── Messages ── */
+.cc-banner { padding: 0.75rem 1rem; border-radius: 12px; margin-bottom: 1rem; font-size: 0.88rem; }
+.cc-banner.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+.cc-banner.err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.cc-urgent { background: #fff7ed; border: 2px solid #fdba74; border-radius: 14px; padding: 1rem; margin-bottom: 1rem; white-space: pre-wrap; color: #7c2d12; font-size: 0.9rem; line-height: 1.6; }
+
+.cc-skeleton { background: linear-gradient(90deg, #eef2f7, #f8fafc, #eef2f7); background-size: 200% 100%; animation: cc-shimmer 1.2s infinite; min-height: 96px; border: none; box-shadow: none; }
+@keyframes cc-shimmer { to { background-position: -200% 0; } }
+
+@media (max-width: 640px) {
+  .cc-root { padding: 1rem; }
+  .cc-hero { padding: 1.1rem; }
+  .cc-stat { min-width: 0; flex: 1; }
+}

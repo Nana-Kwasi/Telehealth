@@ -131,7 +131,7 @@ function Status({ s, by }) {
 }
 
 const S = {
-  page: { padding: '1.5rem', maxWidth: 1000 },
+  page: { padding: '1.5rem', maxWidth: 1200 },
   h1: { margin: 0, fontSize: '1.3rem', fontWeight: 800 },
   lead: { fontSize: '0.86rem', color: '#475569', lineHeight: 1.55 },
   bar: { display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', margin: '0.8rem 0' },

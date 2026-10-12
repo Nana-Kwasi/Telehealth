@@ -4,6 +4,7 @@ import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTime
 import { db } from '../../../services/firestoreShim';
 import { logPharmacyRxEvent, queuePatientRxNotification } from '../../../utils/pharmacyCollab';
 import RxFullDetails from './RxFullDetails';
+import RxHoldAndDispensePanel from './RxHoldAndDispensePanel';
 import {
   deriveRxStockStatus,
   branchCanMarkLinePickup,
@@ -493,6 +494,8 @@ export default function PrescriptionOps({ profile, mode = 'branch' }) {
       <h1 className="pharmacy-page-title" style={{ marginTop: '0.75rem' }}>Prescription Operations</h1>
       <p className="pharmacy-page-sub">{rx.patientName} · Ref {rx.prescriptionRef || '—'}</p>
       <RxFullDetails rx={rx} />
+      {/* Open-list hold timer and counted handover (shown only when they apply). */}
+      <RxHoldAndDispensePanel rx={rx} />
       {isFinalized && (
         <div style={{ marginBottom: '0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '0.75rem 0.9rem', color: '#166534', fontWeight: 700 }}>
           ✅ This prescription is delivered and marked done. Further status changes are locked.

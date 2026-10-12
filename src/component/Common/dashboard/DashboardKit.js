@@ -273,7 +273,7 @@ export function TopBar({
           <div className="nd-topbar-weather" aria-label="Current weather">
             <span className="nd-topbar-weather-icon" aria-hidden="true">{weather.icon || '☀️'}</span>
             <div className="nd-topbar-weather-text">
-              <strong>{weather.temp || weather.value || '29°C'}</strong>
+              <strong>{weather.temp || weather.value || '—'}</strong>
               <span>{weather.label || weather.text || 'Clear sky'}</span>
             </div>
           </div>

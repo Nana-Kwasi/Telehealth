@@ -7,7 +7,7 @@ const ACTION_PALETTE = {
   LOGIN_SUCCESS:           { color: '#16a34a', bg: '#f0fdf4', icon: '🔓' },
   LOGIN_FAILED:            { color: '#dc2626', bg: '#fff1f2', icon: '🚫' },
   LOGOUT:                  { color: '#94a3b8', bg: '#f8fafc', icon: '🔒' },
-  APPOINTMENT_BOOKED:      { color: '#2563eb', bg: '#eff6ff', icon: '📅' },
+  APPOINTMENT_BOOKED:      { color: '#3f7a55', bg: '#e9f3ec', icon: '📅' },
   APPOINTMENT_CANCELLED:   { color: '#dc2626', bg: '#fff1f2', icon: '❌' },
   APPOINTMENT_RESCHEDULED: { color: '#d97706', bg: '#fff7ed', icon: '🔄' },
   APPOINTMENT_COMPLETED:   { color: '#059669', bg: '#f0fdf4', icon: '✅' },
@@ -20,7 +20,7 @@ const ACTION_PALETTE = {
   LAB_ORDER_CREATED:       { color: '#065f46', bg: '#f0fdf4', icon: '🧪' },
   SCAN_ORDER_CREATED:      { color: '#6d28d9', bg: '#faf5ff', icon: '🩻' },
   REPORT_SUBMITTED:        { color: '#f59e0b', bg: '#fffbeb', icon: '📩' },
-  REPORT_RESPONDED:        { color: '#2563eb', bg: '#eff6ff', icon: '💬' },
+  REPORT_RESPONDED:        { color: '#3f7a55', bg: '#e9f3ec', icon: '💬' },
   ADMIN_USER_STATUS_CHANGED: { color: '#d97706', bg: '#fff7ed', icon: '⚙️' },
   ADMIN_USER_DELETED:      { color: '#b91c1c', bg: '#fff1f2', icon: '🗑️' },
   ADMIN_USER_EDITED:       { color: '#7c3aed', bg: '#faf5ff', icon: '✏️' },
@@ -32,12 +32,12 @@ const ACTION_PALETTE = {
   PHARMACY_CREATED:        { color: '#ea580c', bg: '#fff7ed', icon: '💊' },
   LAB_CREATED:             { color: '#065f46', bg: '#f0fdf4', icon: '🧪' },
   PASSWORD_RESET_SENT:     { color: '#d97706', bg: '#fff7ed', icon: '🔑' },
-  PROFILE_UPDATED:         { color: '#2563eb', bg: '#eff6ff', icon: '👤' },
+  PROFILE_UPDATED:         { color: '#3f7a55', bg: '#e9f3ec', icon: '👤' },
 };
 
 const DEFAULT_PALETTE = { color: '#64748b', bg: '#f8fafc', icon: '📋' };
 
-const PLATFORM_LABELS = { web: { label: 'Web', color: '#2563eb' }, mobile: { label: 'Mobile', color: '#7c3aed' } };
+const PLATFORM_LABELS = { web: { label: 'Web', color: '#3f7a55' }, mobile: { label: 'Mobile', color: '#7c3aed' } };
 
 const ACTION_GROUPS = {
   'Auth':          ['LOGIN_SUCCESS','LOGIN_FAILED','LOGOUT','PASSWORD_RESET_SENT'],
@@ -145,7 +145,7 @@ export default function AdminAuditLog() {
           <h1 className="admin-page-title">Audit Log</h1>
           <p className="admin-page-sub">Full activity trail — all users, all platforms</p>
         </div>
-        <button className="btn btn-primary" onClick={loadLogs}>↻ Refresh</button>
+        <button className="btn btn-primary" onClick={loadLogs}>Refresh</button>
       </div>
 
       {/* Stats */}
@@ -154,9 +154,9 @@ export default function AdminAuditLog() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.85rem', marginBottom: '1.5rem' }}>
         {[
-          { label: 'Total Events', val: stats.total, color: '#1d4ed8', bg: '#eff6ff' },
+          { label: 'Total Events', val: stats.total, color: '#2f5e40', bg: '#e9f3ec' },
           { label: 'Today',        val: stats.today, color: '#059669', bg: '#f0fdf4' },
-          { label: 'Web Events',   val: stats.web,   color: '#2563eb', bg: '#eff6ff' },
+          { label: 'Web Events',   val: stats.web,   color: '#3f7a55', bg: '#e9f3ec' },
           { label: 'Mobile Events',val: stats.mobile,color: '#7c3aed', bg: '#faf5ff' },
         ].map(s => (
           <div key={s.label} style={{ background: s.bg, borderRadius: 10, padding: '0.85rem 1rem', border: `1px solid ${s.color}20` }}>
@@ -195,7 +195,7 @@ export default function AdminAuditLog() {
       <div className="admin-table-card">
         {loading ? (
           <div className="admin-empty">
-            <div style={{ width: 28, height: 28, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginBottom: '0.5rem' }} />
+            <div style={{ width: 28, height: 28, border: '3px solid #e2e8f0', borderTopColor: '#3f7a55', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginBottom: '0.5rem' }} />
             <p>Loading audit log…</p>
           </div>
         ) : filtered.length === 0 ? (

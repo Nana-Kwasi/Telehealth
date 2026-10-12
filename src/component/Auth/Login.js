@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { signInWithEmailOrUsername } from './authService';
+import { signInWithEmailOrUsername, completeTwoFactorSignIn } from './authService';
 import { logAction, A } from '../../utils/auditLogger';
 import { ensureHomeCareIntent, homeCarePatientLandingPath } from '../../utils/homeCarePatientIntent';
 import { getStoredUserIntent, setUserIntent } from '../../utils/patientSessionIntent';
@@ -15,14 +15,12 @@ export default function Login() {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [challenge, setChallenge] = useState(null); // { challengeId, email } while a two-step code is awaited
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const { role, profile } = await signInWithEmailOrUsername(id, password);
+  // Where to go once signed in — shared by the password and two-step paths.
+  const afterSignIn = async ({ role, profile }) => {
       await logAction(A.LOGIN_SUCCESS, { role, identifier: id }, role);
       const returnTo = location.state?.returnTo;
       // Home-care intent must come from authoritative signals — the flow the user
@@ -63,9 +61,37 @@ export default function Login() {
       } else {
         navigate('/dashboard', { replace: true });
       }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const result = await signInWithEmailOrUsername(id, password);
+      if (result?.twoFactorRequired) {
+        setChallenge(result);
+        setCode('');
+        return;
+      }
+      await afterSignIn(result);
     } catch (err) {
       await logAction(A.LOGIN_FAILED, { error: err.message, identifier: id });
       setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await afterSignIn(await completeTwoFactorSignIn(challenge.challengeId, code));
+    } catch (err) {
+      await logAction(A.LOGIN_FAILED, { error: err.message, identifier: id, step: '2fa' });
+      setError(err.message || 'That code did not work. Check it and try again.');
     } finally {
       setLoading(false);
     }
@@ -123,6 +149,37 @@ export default function Login() {
             <h1 className="login-title">Welcome back</h1>
             <p className="login-subtitle">Sign in to your account to continue.</p>
 
+            {challenge ? (
+              <form onSubmit={submitCode}>
+                <p style={{ margin: '0 0 1rem', color: '#475569', lineHeight: 1.5 }}>
+                  Two-step sign-in is on. We sent a 6-digit code to <strong>{challenge.email}</strong>.
+                  Enter it below — it expires in a few minutes.
+                </p>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="login-code">Verification code</label>
+                  <input
+                    id="login-code"
+                    className="form-input"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    maxLength={8}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    autoFocus
+                    required
+                  />
+                </div>
+                {error && <div className="error-message">{error}</div>}
+                <button className="login-button" type="submit" disabled={loading || code.length < 4}>
+                  {loading ? 'Verifying…' : 'Verify and sign in'}
+                </button>
+                <button type="button" className="login-link" style={{ display: 'block', margin: '0.75rem auto 0', background: 'none', border: 'none', cursor: 'pointer' }}
+                  onClick={() => { setChallenge(null); setCode(''); setError(''); }}>
+                  Use a different account
+                </button>
+              </form>
+            ) : (
             <form onSubmit={submit}>
               <div className="form-group">
                 <label className="form-label" htmlFor="login-id">Email or Username</label>
@@ -155,7 +212,11 @@ export default function Login() {
               <button className="login-button" type="submit" disabled={loading}>
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>
+              <Link to="/reset-password" className="login-link" style={{ display: 'block', textAlign: 'center', marginTop: '0.75rem' }}>
+                Forgot password?
+              </Link>
             </form>
+            )}
 
             <div className="login-links">
               <Link to="/" className="login-link">New user? Start the questionnaire</Link>

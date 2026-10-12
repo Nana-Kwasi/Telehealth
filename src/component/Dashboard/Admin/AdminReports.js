@@ -2,6 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs } from '../../../services/firestoreShim';
 
+/**
+ * Milliseconds from any timestamp shape the API returns: a Firestore-style
+ * {seconds}, a number, or an ISO string. Reading only .seconds made every
+ * date from the REST API count as "never", so patients and registrations
+ * showed 0.
+ */
+function tsMs(v) {
+  if (!v) return 0;
+  if (typeof v === 'object' && v.seconds) return v.seconds * 1000;
+  if (typeof v === 'object' && typeof v.toMillis === 'function') return v.toMillis();
+  const n = typeof v === 'number' ? v : Date.parse(v);
+  return Number.isFinite(n) ? n : 0;
+}
+const createdMs = (row) => tsMs(row?.createdAt) || tsMs(row?.created_at) || tsMs(row?.joinedAt);
+
 export default function AdminReports() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +48,9 @@ export default function AdminReports() {
       const allScheduledCalls = therapyCalls.docs.map((d) => ({ id: d.id, ...d.data() }));
       const allHcBookings = hcBookings.docs.map((d) => ({ id: d.id, ...d.data() }));
       const allDiag  = diagOrders.docs.map(d => ({ id: d.id, ...d.data() }));
-      const allPats  = pats.docs.map(d => ({ id: d.id, ...d.data() }));
+      // People receiving care only — the list holds every account (doctors, admins…).
+      const allPats  = pats.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter((p) => ['patient', 'client'].includes(String(p.role || '').toLowerCase()));
 
       const bumpDoctorOrTherapyStatus = (apptStatus, rawStatus) => {
         const s = (rawStatus || 'upcoming').toLowerCase();
@@ -76,8 +93,9 @@ export default function AdminReports() {
 
       const patsByMonth = months.map(m =>
         allPats.filter(p => {
-          if (!p.createdAt?.seconds) return false;
-          const d = new Date(p.createdAt.seconds * 1000);
+          const ms = createdMs(p);
+          if (!ms) return false;
+          const d = new Date(ms);
           return d.getFullYear() === m.year && d.getMonth() === m.month;
         }).length
       );
@@ -121,7 +139,7 @@ export default function AdminReports() {
       setData({
         raw: { allRx, allAppts, allScheduledCalls, allHcBookings, allDiag, allPats },
         totals: {
-          patients: pats.size, doctors: docs.size, therapists: thers.size,
+          patients: allPats.length, doctors: docs.size, therapists: thers.size,
           pharmacies: pharmas.size, labs: labs.size, scans: scans.size,
           prescriptions: rxs.size,
           appointments: appts.size + therapyCalls.size + hcBookings.size,
@@ -163,13 +181,13 @@ export default function AdminReports() {
 
   const cutoffMs = period === 'all' ? 0 : Date.now() - ((period === '7d' ? 7 : period === '30d' ? 30 : 90) * 24 * 60 * 60 * 1000);
   const inWindow = (row, field = 'createdAt') => {
-    const ms = row?.[field]?.seconds ? row[field].seconds * 1000 : 0;
+    const ms = field === 'createdAt' ? createdMs(row) : tsMs(row?.[field]);
     if (!cutoffMs) return true;
     return ms >= cutoffMs;
   };
   const inWindowScheduledCall = (row) => {
-    let ms = row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
-    if (!ms && row?.scheduledTime?.seconds) ms = row.scheduledTime.seconds * 1000;
+    let ms = createdMs(row);
+    if (!ms) ms = tsMs(row?.scheduledTime);
     if (!cutoffMs) return true;
     return ms >= cutoffMs;
   };
@@ -183,7 +201,7 @@ export default function AdminReports() {
 
   const focusCards = {
     users: [
-      { label: 'Total Patients', val: cutoffMs ? fPats.length : data.totals.patients, icon: '👥', color: '#1d4ed8', bg: '#eff6ff' },
+      { label: 'Patients & clients', val: cutoffMs ? fPats.length : data.totals.patients, icon: '👥', color: '#2f5e40', bg: '#e9f3ec' },
       { label: 'Total Doctors', val: data.totals.doctors, icon: '🩺', color: '#16a34a', bg: '#f0fdf4' },
       { label: 'Total Therapists', val: data.totals.therapists, icon: '🧠', color: '#9333ea', bg: '#fdf4ff' },
       { label: 'Home Care Nurses', val: data.totals.homeCareNurses ?? 0, icon: '🏠', color: '#0d9488', bg: '#f0fdfa' },
@@ -221,7 +239,7 @@ export default function AdminReports() {
             <option value="activity">Activity</option>
             <option value="transactions">Transactions</option>
           </select>
-          <button className="btn btn-primary" onClick={loadData}>↻ Refresh</button>
+          <button className="btn btn-primary" onClick={loadData}>Refresh</button>
         </div>
       </div>
 
@@ -243,16 +261,16 @@ export default function AdminReports() {
         {/* Patient Growth Chart */}
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            📈 Patient Registrations — Last 6 Months
+            Patient Registrations — Last 6 Months
           </h3>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.6rem', height: 140 }}>
             {data.patsByMonth.map((count, i) => (
               <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8' }}>{count}</span>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#2f5e40' }}>{count}</span>
                 <div style={{
                   width: '100%', borderRadius: '4px 4px 0 0',
                   height: `${Math.max((count / maxBar) * 110, count > 0 ? 8 : 0)}px`,
-                  background: 'linear-gradient(to top, #2563eb, #93c5fd)',
+                  background: 'linear-gradient(to top, #3f7a55, #a7d3b4)',
                   transition: 'height 0.4s ease',
                 }} />
                 <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{data.months[i]}</span>
@@ -264,11 +282,11 @@ export default function AdminReports() {
         {/* Prescription status */}
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            💊 Prescription Status Breakdown
+            Prescription Status Breakdown
           </h3>
           {[
             { label: 'Active',    val: data.rxStatus.active,    color: '#16a34a' },
-            { label: 'Completed', val: data.rxStatus.completed, color: '#1d4ed8' },
+            { label: 'Completed', val: data.rxStatus.completed, color: '#2f5e40' },
             { label: 'Cancelled', val: data.rxStatus.cancelled, color: '#dc2626' },
             { label: 'Expired',   val: data.rxStatus.expired,   color: '#94a3b8' },
           ].map(row => {
@@ -292,7 +310,7 @@ export default function AdminReports() {
         {/* Appointment breakdown */}
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            📅 Appointment outcomes (doctor + therapy + home care)
+            Appointment outcomes (doctor + therapy + home care)
           </h3>
           <p style={{ margin: '0 0 0.75rem', fontSize: '0.72rem', color: '#64748b' }}>
             Doctor + therapy (scheduledCalls) statuses merged with home care bookings (active pipeline → Upcoming).
@@ -312,7 +330,7 @@ export default function AdminReports() {
 
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            🏠 Home care bookings (status)
+            Home care bookings (status)
           </h3>
           {[
             { label: 'Pending', val: data.hcBookingStatus.pending, color: '#d97706' },
@@ -334,7 +352,7 @@ export default function AdminReports() {
         {/* Diagnostic orders */}
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            🔬 Diagnostic Orders
+            Diagnostic Orders
           </h3>
           {[
             { label: 'Lab Orders',  val: data.diagByType.lab,  color: '#059669', icon: '🧪' },
@@ -355,7 +373,7 @@ export default function AdminReports() {
         {/* Top prescribing doctors */}
         <div className="admin-table-card" style={{ padding: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-            🏆 Top Prescribing Doctors
+            Top Prescribing Doctors
           </h3>
           {data.topDocs.length === 0 ? (
             <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>No prescription data yet.</p>
@@ -365,10 +383,10 @@ export default function AdminReports() {
               <div style={{ flex: 1 }}>
                 <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>Dr. {d.name}</p>
                 <div style={{ height: 4, background: '#f1f5f9', borderRadius: 4, marginTop: 4 }}>
-                  <div style={{ height: '100%', background: '#2563eb', borderRadius: 4, width: `${(d.count / (data.topDocs[0]?.count || 1)) * 100}%` }} />
+                  <div style={{ height: '100%', background: '#3f7a55', borderRadius: 4, width: `${(d.count / (data.topDocs[0]?.count || 1)) * 100}%` }} />
                 </div>
               </div>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#2563eb' }}>{d.count}</span>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#3f7a55' }}>{d.count}</span>
             </div>
           ))}
         </div>
@@ -376,10 +394,10 @@ export default function AdminReports() {
 
       {/* Pharmacy approval stats */}
       <div className="admin-table-card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
-        <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>💊 Pharmacy Network Status</h3>
+        <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Pharmacy Network Status</h3>
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
           {[
-            { label: 'Total', val: data.pharmStats.total, color: '#1d4ed8' },
+            { label: 'Total', val: data.pharmStats.total, color: '#2f5e40' },
             { label: 'Active', val: data.pharmStats.active, color: '#16a34a' },
             { label: 'Pending Approval', val: data.pharmStats.pending, color: '#d97706' },
             { label: 'Suspended', val: data.pharmStats.suspended, color: '#dc2626' },

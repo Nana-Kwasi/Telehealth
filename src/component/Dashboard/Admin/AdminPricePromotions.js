@@ -56,7 +56,7 @@ const PRESETS = [
     label: 'New Year',
     emoji: '🎉',
     apply: () => ({
-      name: 'New Year Offer', badgeLabel: 'New Year', badgeColour: '#1d4ed8',
+      name: 'New Year Offer', badgeLabel: 'New Year', badgeColour: '#2f5e40',
       discountType: 'percent', value: 15, maxDiscountAmount: 40,
       audience: 'everyone', ...januaryWindow(),
     }),
@@ -607,7 +607,7 @@ function Field({ label, hint, children }) {
 /* Colours are literals and measured against their own background — this screen
    renders inside the admin shell, which does not define the zencare tokens. */
 const S = {
-  page: { padding: '1.5rem', maxWidth: 1100, margin: '0 auto' },
+  page: { padding: '1.75rem 2rem 2.5rem' },
   loading: { padding: '2rem', color: '#545a6b' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem' },
   h1: { margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#0f1424' },
@@ -630,7 +630,7 @@ const S = {
 
   chips: { display: 'flex', gap: '0.45rem', flexWrap: 'wrap' },
   chip: { padding: '0.4rem 0.75rem', borderRadius: 999, border: '1.5px solid #d8dce6', background: '#fff', color: '#4a5163', fontSize: '0.8rem', fontWeight: 650, cursor: 'pointer' },
-  chipOn: { padding: '0.4rem 0.75rem', borderRadius: 999, border: '1.5px solid #1d4ed8', background: '#eff4ff', color: '#1a3ea8', fontSize: '0.8rem', fontWeight: 750, cursor: 'pointer' },
+  chipOn: { padding: '0.4rem 0.75rem', borderRadius: 999, border: '1.5px solid #2f5e40', background: '#eff4ff', color: '#1a3ea8', fontSize: '0.8rem', fontWeight: 750, cursor: 'pointer' },
 
   providerBox: { maxHeight: 190, overflowY: 'auto', border: '1.5px solid #d8dce6', borderRadius: 10, padding: '0.5rem' },
   providerRow: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.2rem', fontSize: '0.84rem', color: '#2b3142', cursor: 'pointer' },
@@ -649,8 +649,8 @@ const S = {
   empty: { fontSize: '0.85rem', color: '#6b7283', margin: 0 },
 
   actions: { display: 'flex', gap: '0.6rem', marginTop: '0.4rem' },
-  primary: { padding: '0.65rem 1.2rem', borderRadius: 10, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer' },
-  primaryOff: { padding: '0.65rem 1.2rem', borderRadius: 10, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: '0.88rem', fontWeight: 700, opacity: 0.4, cursor: 'not-allowed' },
+  primary: { padding: '0.65rem 1.2rem', borderRadius: 10, border: 'none', background: '#2f5e40', color: '#fff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer' },
+  primaryOff: { padding: '0.65rem 1.2rem', borderRadius: 10, border: 'none', background: '#2f5e40', color: '#fff', fontSize: '0.88rem', fontWeight: 700, opacity: 0.4, cursor: 'not-allowed' },
   ghost: { padding: '0.65rem 1.2rem', borderRadius: 10, border: '1.5px solid #d8dce6', background: '#fff', color: '#2b3142', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer' },
 
   table: { display: 'flex', flexDirection: 'column', gap: '0.6rem' },

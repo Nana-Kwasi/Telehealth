@@ -49,6 +49,9 @@ export function subscribeToTopic(topic, onEvent, onReconnect) {
           signal: controller.signal,
         },
       );
+      // Refused (403) or malformed (400): the server's topic policy will not change
+      // its answer on retry, so stop instead of reconnecting forever.
+      if (res.status === 403 || res.status === 400) { stopped = true; return; }
       if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
 
       // Connected. Reset the backoff and let the caller resync anything that

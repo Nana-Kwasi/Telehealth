@@ -161,7 +161,7 @@ export default function AdminCreatePharmacy() {
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
             <button className="btn btn-ghost" onClick={() => copyToClipboard(
               `Username: ${credentials.username}\nPassword: ${credentials.tempPassword}\nEmail: ${credentials.email}`
-            )}>📋 Copy All</button>
+            )}>Copy All</button>
             <button className="btn btn-primary" onClick={() => setCredentials(null)}>+ Create Another</button>
           </div>
         </div>
@@ -169,7 +169,7 @@ export default function AdminCreatePharmacy() {
         <form onSubmit={handleSubmit}>
           {error && (
             <div className="admin-alert admin-alert-danger" style={{ marginBottom: '1rem' }}>
-              🚨 {error}
+              {error}
             </div>
           )}
 
@@ -259,7 +259,7 @@ export default function AdminCreatePharmacy() {
           </div>
           {!isEnabled(form.country, 'pharmacyOnboarding') && (
             <div className="admin-alert admin-alert-warning" style={{ marginBottom: '1.25rem' }}>
-              ⚠️ Pharmacy onboarding is currently disabled for {form.country}. Enable it in System Config → Country Feature Flags.
+              Pharmacy onboarding is currently disabled for {form.country}. Enable it in System Config → Country Feature Flags.
             </div>
           )}
 

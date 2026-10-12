@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PrescriptionAssistant from '../../Common/PrescriptionAssistant';
+import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDown } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
@@ -91,6 +92,8 @@ function generatePrescriptionRef() {
 const EMPTY_MED = {
   name: '', strength: '', drugForm: 'Tablet', dosage: '', frequency: 'Once per Day',
   direction: 'Scheduled', duration: '', specialInstructions: '',
+  // How much to supply (e.g. 30 tablets). Lets pharmacies record partial dispensing.
+  quantity: '', quantityUnit: '',
   prn: { indication: '', maxPerDay: '', interval: '' },
   refill: { allowed: false, count: '0', expiryDate: '' },
   schedule: [],
@@ -135,11 +138,14 @@ export default function DoctorPrescriptions({ profile }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Set when this form is approving a patient's prescription request.
+  const [requestId, setRequestId] = useState(null);
 
   const [form, setForm] = useState({
     patientId: '', patientName: '',
     pharmacyId: '', pharmacyName: '',
     branchId: '', branchName: '',
+    openToAll: false,
     diagnosis: '', instructions: '',
     followUpDate: '', status: 'active',
     medications: [{ ...EMPTY_MED }],
@@ -183,12 +189,16 @@ export default function DoctorPrescriptions({ profile }) {
       pharmacyName: '',
       branchId: '',
       branchName: '',
+      openToAll: false,
       diagnosis: '',
       instructions: '',
       followUpDate: '',
       status: 'active',
-      medications: [{ ...EMPTY_MED }],
+      // From an approved prescription request: the medicines the patient named.
+      // Dose, frequency and quantity are left for the prescriber to fill in.
+      medications: st.presetMedications?.length ? st.presetMedications.map(m => ({ ...EMPTY_MED, ...m })) : [{ ...EMPTY_MED }],
     });
+    setRequestId(st.requestId || null);
     setWarnings([]);
     setShowForm(true);
 
@@ -320,7 +330,8 @@ export default function DoctorPrescriptions({ profile }) {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ patientId: '', patientName: '', pharmacyId: '', pharmacyName: '', branchId: '', branchName: '', diagnosis: '', instructions: '', followUpDate: '', status: 'active', medications: [{ ...EMPTY_MED }] });
+    setRequestId(null);
+    setForm({ patientId: '', patientName: '', pharmacyId: '', pharmacyName: '', branchId: '', branchName: '', openToAll: false, diagnosis: '', instructions: '', followUpDate: '', status: 'active', medications: [{ ...EMPTY_MED }] });
     setWarnings([]); setPatientAllergies([]);
     setShowForm(true);
   };
@@ -339,6 +350,7 @@ export default function DoctorPrescriptions({ profile }) {
       pharmacyName: rx.pharmacyName || '',
       branchId: rx.branchId || '',
       branchName: rx.branchName || '',
+      openToAll: !!rx.openToAll,
       diagnosis: rx.diagnosis || '',
       instructions: rx.instructions || '',
       followUpDate: rx.followUpDate || '',
@@ -368,11 +380,11 @@ export default function DoctorPrescriptions({ profile }) {
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (ack) => {
     if (!form.patientId) { alert('Please select a patient.'); return; }
     if (!form.diagnosis.trim()) { alert('Diagnosis is required.'); return; }
     if (!form.medications[0]?.name?.trim()) { alert('At least one medication name is required.'); return; }
-    if (form.pharmacyId && !form.branchId) { alert('Select a pharmacy branch before routing this prescription.'); return; }
+    if (!form.openToAll && form.pharmacyId && !form.branchId) { alert('Select a pharmacy branch before routing this prescription.'); return; }
 
     if (warnings.length > 0) {
       const ok = window.confirm('Safety Warnings:\n\n' + warnings.join('\n\n') + '\n\nDo you want to proceed?');
@@ -384,10 +396,12 @@ export default function DoctorPrescriptions({ profile }) {
       const prescriptionRef = editing?.prescriptionRef || generatePrescriptionRef();
       const payload = {
         patientId: form.patientId, patientName: form.patientName,
-        pharmacyId: form.pharmacyId || null,
-        pharmacyName: form.pharmacyName || null,
-        branchId: form.branchId || null,
-        branchName: form.branchName || null,
+        // Open to all pharmacies: no branch until one takes it.
+        openToAll: !!form.openToAll,
+        pharmacyId: form.openToAll ? null : (form.pharmacyId || null),
+        pharmacyName: form.openToAll ? null : (form.pharmacyName || null),
+        branchId: form.openToAll ? null : (form.branchId || null),
+        branchName: form.openToAll ? null : (form.branchName || null),
         prescriptionRef,
         diagnosis: form.diagnosis.trim(), instructions: form.instructions.trim(),
         followUpDate: form.followUpDate, status: form.status || 'active',
@@ -399,6 +413,8 @@ export default function DoctorPrescriptions({ profile }) {
           prn: m.direction === 'As Needed (PRN)' ? { indication: m.prn?.indication || '', maxPerDay: m.prn?.maxPerDay || '', interval: m.prn?.interval || '' } : null,
           refill: m.refill?.allowed ? { allowed: true, count: parseInt(m.refill.count) || 0, expiryDate: m.refill.expiryDate || '' } : { allowed: false },
           schedule: m.schedule || [],
+          quantity: Number(m.quantity) > 0 ? Number(m.quantity) : null,
+          quantityUnit: m.quantityUnit?.trim() || '',
           drugStatus: m.drugStatus || 'pending',
           ...(m.drugForm === 'Syrup' && { volumeUnit: m.volumeUnit || 'ml', shakeWell: m.shakeWell || false }),
           ...(m.drugForm === 'Injection' && { route: m.route || '', injectionSite: m.injectionSite?.trim() || '' }),
@@ -416,8 +432,10 @@ export default function DoctorPrescriptions({ profile }) {
         const newRef = await addDoc(collection(db, 'doctorPrescriptions'), {
           ...payload, doctorId: profile.id, doctorName: profile.name || '',
           date: new Date().toISOString().split('T')[0],
-          pharmacyStatus: form.pharmacyId ? 'sent' : null,
+          pharmacyStatus: form.openToAll ? 'open' : (form.pharmacyId ? 'sent' : null),
           createdAt: serverTimestamp(),
+          // Approving a request: the server links it and enforces the formulary check.
+          ...(requestId ? { requestId, safetyAcknowledged: ack === true } : {}),
         });
         // Write timeline event
         addDoc(collection(db, 'patientTimeline'), {
@@ -434,7 +452,20 @@ export default function DoctorPrescriptions({ profile }) {
       setShowForm(false);
       setEditing(null);
       setWarnings([]);
-    } catch (err) { console.error('Error saving prescription:', err); alert('Could not save prescription.'); }
+      if (requestId && !editing) {
+        setRequestId(null);
+        alert('Request approved. The prescription has been issued and the patient notified.');
+        navigate('/dashboard/prescription-requests');
+      }
+    } catch (err) {
+      // The formulary found something the prescriber must acknowledge first.
+      if (requestId && String(err?.message || '').startsWith('Safety check:')) {
+        if (window.confirm(`${err.message}\n\nIssue the prescription anyway?`)) { setSaving(false); return handleSave(true); }
+      } else {
+        console.error('Error saving prescription:', err);
+        alert(err?.message || 'Could not save prescription.');
+      }
+    }
     finally { setSaving(false); }
   };
 
@@ -710,7 +741,35 @@ export default function DoctorPrescriptions({ profile }) {
 
           {/* ── E-PHARMACY BRANCH (labels branch-only; parent id stored for routing) ── */}
           <div style={{ background: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 10, padding: '1rem', marginBottom: '1rem' }}>
-            <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', fontWeight: 700, color: '#0369a1' }}>💊 E-Pharmacy branch</p>
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', fontWeight: 700, color: '#0369a1' }}>💊 E-Pharmacy</p>
+            {/* Specific pharmacy (default) or open to every onboarded NessaHub pharmacy.
+                Locked once a pharmacy has taken an open prescription. */}
+            {(() => {
+              const locked = !!editing?.claimedAt;
+              const opt = (value, label) => (
+                <button type="button" disabled={locked}
+                  onClick={() => setForm(p => ({ ...p, openToAll: value, ...(value ? { pharmacyId: '', pharmacyName: '', branchId: '', branchName: '' } : {}) }))}
+                  style={{ flex: 1, padding: '0.5rem', borderRadius: 8, cursor: locked ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.8rem',
+                    border: form.openToAll === value ? '2px solid #0369a1' : '1.5px solid #bae6fd',
+                    background: form.openToAll === value ? '#e0f2fe' : '#fff', color: form.openToAll === value ? '#0c4a6e' : '#64748b' }}>
+                  {label}
+                </button>
+              );
+              return (
+                <>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    {opt(false, 'Specific pharmacy')}
+                    {opt(true, 'Open to all NessaHub pharmacies')}
+                  </div>
+                  {locked && (
+                    <p style={{ margin: '0 0 0.6rem', fontSize: '0.75rem', color: '#92400e' }}>
+                      Taken by {editing.branchName || editing.pharmacyName || 'a pharmacy'} — this can no longer be changed.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+            {!form.openToAll && (
             <div>
               <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a', display: 'block', marginBottom: 4 }}>Branch</label>
               <div onClick={() => { if (!loadingBranchDirectory) { setShowBranchDirectoryPicker(v => !v); setShowPatientPicker(false); } }}
@@ -746,7 +805,13 @@ export default function DoctorPrescriptions({ profile }) {
                 </div>
               )}
             </div>
-            {form.pharmacyId && (
+            )}
+            {form.openToAll && (
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#0369a1' }}>
+                Every approved NessaHub pharmacy will see this prescription. The first one to take it prepares it; if it does not confirm in time, it is offered to the others again.
+              </p>
+            )}
+            {!form.openToAll && form.pharmacyId && (
               <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#0369a1' }}>
                 A unique prescription reference code will be auto-generated and shown to the patient for pickup verification.
               </p>
@@ -827,6 +892,13 @@ export default function DoctorPrescriptions({ profile }) {
                         </optgroup>
                       ))}
                     </select>
+                    <label style={{ fontSize: '0.75rem', marginTop: 6, display: 'block' }}>Quantity to supply</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input className="doctor-form-input" type="number" min="0" placeholder="e.g. 30" value={med.quantity || ''}
+                        onChange={e => updateMed(i, 'quantity', e.target.value)} />
+                      <input className="doctor-form-input" placeholder="tablets" value={med.quantityUnit || ''}
+                        onChange={e => updateMed(i, 'quantityUnit', e.target.value)} />
+                    </div>
                   </div>
                   {/* Refill */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -1067,7 +1139,9 @@ export default function DoctorPrescriptions({ profile }) {
                         <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0c4a6e', background: '#f0f9ff', padding: '2px 6px', borderRadius: 6, display: 'inline-block', marginBottom: 2 }}>{rx.prescriptionRef}</div>
                       )}
                       {rx.branchName && <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{rx.branchName}</div>}
-                      {!rx.prescriptionRef && !rx.branchName && <span style={{ color: '#94a3b8' }}>—</span>}
+                      {rx.openToAll && !rx.branchName && !rx.pharmacyId && <div style={{ color: '#0369a1', fontSize: '0.75rem', fontWeight: 600 }}>Open to all pharmacies</div>}
+                      {rx.lifecycleStatus === 'CANCELLED' && <div style={{ color: '#be123c', fontSize: '0.72rem', fontWeight: 700 }}>Cancelled</div>}
+                      {!rx.prescriptionRef && !rx.branchName && !rx.openToAll && <span style={{ color: '#94a3b8' }}>—</span>}
                     </td>
                     <td>
                       {pm ? (
@@ -1374,6 +1448,11 @@ export default function DoctorPrescriptions({ profile }) {
               </div>
             ))}
             {viewingRx.instructions ? <p style={{ margin: '0.6rem 0 0', color: '#374151', fontSize: '0.85rem' }}><b>Instructions:</b> {viewingRx.instructions}</p> : null}
+            </div>
+
+            {/* QR / collection code, dispensing so far, new code, cancel. */}
+            <div style={{ padding: '0 1.25rem 1rem' }}>
+              <PrescriptionCodeCard prescription={viewingRx} canManage onChanged={() => setViewingRx(null)} />
             </div>
 
             {/* Footer actions */}

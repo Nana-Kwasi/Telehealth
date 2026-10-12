@@ -10,6 +10,7 @@ import PharmacyBranches from './PharmacyBranches';
 import PharmacyBranchDetail from './PharmacyBranchDetail';
 import PharmacyPrescriptions from './PharmacyPrescriptions';
 import PrescriptionOps from './PrescriptionOps';
+import OpenPrescriptions from './OpenPrescriptions';
 import PharmacyReports from './PharmacyReports';
 import PharmacySettings from './PharmacySettings';
 import FormularyManager from '../../Common/FormularyManager';
@@ -20,6 +21,7 @@ const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
   { path: '/dashboard/branches',     label: 'Manage Branches', icon: '🏪' },
   { path: '/dashboard/prescriptions',label: 'Prescriptions', icon: '💊' },
+  { path: '/dashboard/open-prescriptions', label: 'Open Prescriptions', icon: '📬' },
   { path: '/dashboard/reports',      label: 'Reports',       icon: '📈' },
   { path: '/dashboard/formulary',    label: 'Formulary',     icon: '📚' },
   { path: '/dashboard/report-issue', label: 'Report Issue',  icon: '📩' },
@@ -162,6 +164,7 @@ export default function PharmacyDashboard({ profile }) {
           <Route path="/branches"      element={<PharmacyBranches      profile={profile} />} />
           <Route path="/prescriptions/:rxId" element={<PrescriptionOps profile={profile} mode="parent" />} />
           <Route path="/prescriptions" element={<PharmacyPrescriptions profile={profile} />} />
+          <Route path="/open-prescriptions" element={<OpenPrescriptions />} />
           <Route path="/reports"       element={<PharmacyReports       profile={profile} />} />
           <Route path="/formulary"     element={<FormularyManager />} />
           <Route path="/report-issue"  element={<GlobalReportForm profile={profile} reporterType="pharmacy_parent" />} />

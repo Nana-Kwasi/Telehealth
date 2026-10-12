@@ -154,9 +154,9 @@ export default function AdminAppointments() {
   const SKIP_RAW = ['_source', '_patientDisplay', '_doctorDisplay'];
 
   const typeBadge = (appt) => {
-    if (appt._source === 'therapy') return { cls: 'badge-purple', label: '🧠 Therapy' };
-    if (appt._source === 'homecare') return { cls: 'badge-green', label: '🏠 Home care' };
-    return { cls: 'badge-blue', label: '🩺 Doctor' };
+    if (appt._source === 'therapy') return { cls: 'badge-purple', label: 'Therapy' };
+    if (appt._source === 'homecare') return { cls: 'badge-green', label: 'Home care' };
+    return { cls: 'badge-blue', label: 'Doctor' };
   };
 
   return (
@@ -166,13 +166,13 @@ export default function AdminAppointments() {
           <h1 className="admin-page-title">Appointment Monitor</h1>
           <p className="admin-page-sub">Doctor appointments, therapy sessions, and home care bookings</p>
         </div>
-        <button className="btn btn-primary" onClick={loadData}>↻ Refresh</button>
+        <button className="btn btn-primary" onClick={loadData}>Refresh</button>
       </div>
 
       {/* Stats */}
       <div className="admin-stats-grid" style={{ marginBottom: '1.5rem' }}>
         {[
-          { label: 'Total',          val: stats.total,     color: '#1d4ed8', bg: '#eff6ff', icon: '📅' },
+          { label: 'Total',          val: stats.total,     color: '#2f5e40', bg: '#e9f3ec', icon: '📅' },
           { label: 'Doctor Appts',   val: stats.doctor,    color: '#059669', bg: '#f0fdf4', icon: '🩺' },
           { label: 'Therapy Sessions', val: stats.therapy, color: '#7c3aed', bg: '#faf5ff', icon: '🧠' },
           { label: 'Home care',      val: stats.homecare,  color: '#0d9488', bg: '#f0fdfa', icon: '🏠' },
@@ -203,9 +203,9 @@ export default function AdminAppointments() {
             <button key={val} onClick={() => setSourceFilter(val)}
               style={{
                 padding: '0.45rem 0.8rem', borderRadius: 8, border: '1.5px solid',
-                borderColor: sourceFilter === val ? '#2563eb' : '#e2e8f0',
-                background: sourceFilter === val ? '#eff6ff' : '#fff',
-                color: sourceFilter === val ? '#2563eb' : '#64748b',
+                borderColor: sourceFilter === val ? '#3f7a55' : '#e2e8f0',
+                background: sourceFilter === val ? '#e9f3ec' : '#fff',
+                color: sourceFilter === val ? '#3f7a55' : '#64748b',
                 fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
               }}>
               {label}
@@ -345,7 +345,7 @@ export default function AdminAppointments() {
             ) : null}
             <details style={{ marginBottom: '1rem' }}>
               <summary style={{ cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, color: '#64748b', marginBottom: '0.5rem' }}>
-                📋 Show all raw fields
+                Show all raw fields
               </summary>
               <div style={{ background: '#f8fafc', borderRadius: 8, padding: '0.85rem', marginTop: '0.5rem' }}>
                 {Object.entries(selected)
@@ -418,7 +418,7 @@ export default function AdminAppointments() {
             {/* ALL raw fields */}
             <details style={{ marginBottom: '1rem' }}>
               <summary style={{ cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, color: '#64748b', marginBottom: '0.5rem' }}>
-                📋 Show All Raw Fields
+                Show All Raw Fields
               </summary>
               <div style={{ background: '#f8fafc', borderRadius: 8, padding: '0.85rem', marginTop: '0.5rem' }}>
                 {Object.entries(selected)

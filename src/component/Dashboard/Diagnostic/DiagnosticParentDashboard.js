@@ -8,9 +8,14 @@ import { auth, db } from '../../../services/firestoreShim';
 import GlobalReportForm from '../Common/GlobalReportForm';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
-import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import { formatDashboardLocationLine } from '../../Common/LocationSummaryCard';
+import DiagOverview, { useDiagDashboard, Kpi, TrendChart, Pipeline } from './DiagOverview';
+import { fmtHours, money } from './diagUi';
+import DiagWorklist, { DiagOrderDetail } from './DiagWorklist';
+import DiagCatalog from './DiagCatalog';
+import { DiagReports, DiagResultsLog } from './DiagReports';
+import DiagSettings from './DiagSettings';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI',
@@ -39,94 +44,6 @@ function makePassword() {
   let pw = '';
   for (let i = 0; i < 12; i += 1) pw += chars[Math.floor(Math.random() * chars.length)];
   return pw;
-}
-
-function ParentOverview({ type, profile }) {
-  const [stats, setStats] = useState({ branches: 0, active: 0, suspended: 0, orders: 0, completed: 0, rejected: 0, inProgress: 0 });
-  const [recentEvents, setRecentEvents] = useState([]);
-  const branchCollection = type === 'lab' ? 'labBranches' : 'scanBranches';
-  const parentIdField = type === 'lab' ? 'labId' : 'scanId';
-  const orderType = type === 'lab' ? 'lab' : 'scan';
-
-  useEffect(() => {
-    (async () => {
-      const [branchesSnap, ordersSnap, eventsSnap] = await Promise.all([
-        getDocs(query(collection(db, branchCollection), where(parentIdField, '==', profile?.id || ''))),
-        getDocs(query(collection(db, 'diagnosticOrders'), where('centerType', '==', orderType))),
-        getDocs(query(collection(db, 'diagnosticBranchEvents'), where('centerType', '==', orderType))),
-      ]);
-      const branches = branchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const branchIds = new Set(branches.map(b => b.id));
-      const orders = ordersSnap.docs.map(d => d.data()).filter((o) => branchIds.has(o.branchId || ''));
-      const events = eventsSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(e => branchIds.has(e.branchId || ''))
-        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setStats({
-        branches: branches.length,
-        active: branches.filter(b => (b.status || 'active') === 'active').length,
-        suspended: branches.filter(b => (b.status || '') === 'suspended').length,
-        orders: orders.length,
-        // Status casing is not consistent across writers: the web branch dashboard
-        // writes 'COMPLETED', the API defaults and every mobile screen write
-        // 'completed'. Comparing to the uppercase literal counted only the web-set
-        // ones, so these tiles read 0 while the orders table plainly showed
-        // completed work. Normalise before comparing.
-        completed: orders.filter(o => String(o.status || '').toUpperCase() === 'COMPLETED').length,
-        rejected: orders.filter(o => String(o.status || '').toUpperCase() === 'REJECTED').length,
-        inProgress: orders.filter(o => ['IN_PROGRESS', 'PROCESSING'].includes(String(o.status || '').toUpperCase())).length,
-      });
-      setRecentEvents(events.slice(0, 8));
-    })();
-  }, [branchCollection, orderType, parentIdField, profile?.id]);
-
-  return (
-    <div className="pharmacy-page">
-      <h1 className="pharmacy-page-title">{type === 'lab' ? 'Lab Parent Overview' : 'Scan Parent Overview'}</h1>
-      <p className="pharmacy-page-sub">Manage your network and monitor branch operations.</p>
-      <LocationSummaryCard
-        profile={profile}
-        title={type === 'lab' ? 'Lab / HQ location' : 'Scan center location'}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px, 1fr))', gap: 12 }}>
-        {[
-          ['Branches', stats.branches, '#1d4ed8'],
-          ['Active', stats.active, '#16a34a'],
-          ['Suspended', stats.suspended, '#dc2626'],
-          ['Orders', stats.orders, '#7c3aed'],
-          ['In Progress', stats.inProgress, '#2563eb'],
-          ['Completed', stats.completed, '#15803d'],
-          ['Rejected', stats.rejected, '#be123c'],
-          ['Completion Rate', stats.orders ? `${Math.round((stats.completed / stats.orders) * 100)}%` : '0%', '#0f766e'],
-        ].map(([label, val, color]) => (
-          <div key={label} style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', padding: '0.9rem' }}>
-            <div style={{ color: '#64748b', fontSize: '0.78rem', fontWeight: 700 }}>{label}</div>
-            <div style={{ color, fontSize: '1.45rem', fontWeight: 800 }}>{val}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: 12, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem' }}>
-        <h3 style={{ marginTop: 0, fontSize: '0.88rem' }}>Recent Branch Activity</h3>
-        {recentEvents.length === 0 ? (
-          <p style={{ color: '#94a3b8' }}>No recent branch events.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {recentEvents.map(e => (
-              <div key={e.id} style={{ border: '1px solid #f1f5f9', borderRadius: 8, padding: '0.55rem 0.65rem', background: '#f8fafc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <b style={{ fontSize: '0.78rem', color: '#0f172a' }}>{e.action || 'EVENT'}</b>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{e.createdAt?.seconds ? new Date(e.createdAt.seconds * 1000).toLocaleString() : '—'}</span>
-                </div>
-                <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                  {e.branchName || 'Branch'} · {e.patientName || 'Patient'} · {(e.fromStatus || '—')} → {(e.toStatus || '—')}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function ParentBranches({ type, profile }) {
@@ -356,6 +273,30 @@ function ParentBranches({ type, profile }) {
   );
 }
 
+function BranchPerformance({ branchId, type }) {
+  const navigate = useNavigate();
+  const { data } = useDiagDashboard(30, branchId);
+  if (!data) return null;
+  const t = data.totals || {};
+  return (
+    <div className={`dx ${type === 'scan' ? 'dx--scan' : ''}`} style={{ margin: '1rem 0' }}>
+      <div className="dx-today">
+        <Kpi label="Open queue" value={t.open ?? 0} color="#f59e0b" sub={t.urgentOpen ? `${t.urgentOpen} urgent` : undefined} />
+        <Kpi label="Overdue" value={t.overdue ?? 0} color="#dc2626" />
+        <Kpi label="Completed (30d)" value={t.completedInRange ?? 0} color="#22c55e" />
+        <Kpi label="Avg turnaround" value={fmtHours(data.tat?.avgHours)} color="#8b5cf6" sub={`${data.tat?.withinTargetPct ?? 0}% within target`} />
+        <Kpi label="Revenue (30d)" value={money(data.revenue?.completedValue)} color="#0f766e" />
+        <Kpi label="Rejection rate" value={`${data.rejectionRatePct ?? 0}%`} color="#be123c" />
+      </div>
+      <div className="dx-grid">
+        <section className="dx-card dx-span-12"><div className="dx-card-head"><h2 className="dx-card-title">Queue at this branch</h2></div>
+          <Pipeline stages={data.stages} type={type} onPick={(s) => navigate('/dashboard/orders', { state: { tab: s } })} /></section>
+        <section className="dx-card dx-span-12"><div className="dx-card-head"><h2 className="dx-card-title">Last 30 days</h2></div><TrendChart series={data.series} /></section>
+      </div>
+    </div>
+  );
+}
+
 function branchDocToEditForm(b) {
   if (!b) return null;
   const lat = b.latitude ?? b.location?.latitude;
@@ -529,6 +470,8 @@ function ParentBranchDetail({ type, profile }) {
         </span>
       </div>
 
+      {!editOpen && <BranchPerformance branchId={branch.id} type={type} />}
+
       {!editOpen ? (
         <div className="diagnostic-detail-grid">
           <div className="diagnostic-settings-card">
@@ -609,52 +552,6 @@ function ParentBranchDetail({ type, profile }) {
   );
 }
 
-function ParentSettings({ type, profile }) {
-  const [msg, setMsg] = useState('');
-  const title = type === 'lab' ? 'Lab Settings' : 'Scan Center Settings';
-  const displayName = type === 'lab' ? (profile?.labName || profile?.name || '—') : (profile?.centerName || profile?.name || '—');
-
-  const sendResetToSelf = async () => {
-    if (!profile?.email) {
-      setMsg('No email on file.');
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, profile.email);
-      setMsg('Password reset email sent.');
-    } catch {
-      setMsg('Could not send reset email.');
-    }
-  };
-
-  return (
-    <div className="pharmacy-page">
-      <h1 className="pharmacy-page-title">{title}</h1>
-      <p className="pharmacy-page-sub">Account profile and safe actions you can perform as {type === 'lab' ? 'lab parent' : 'scan parent'}.</p>
-
-      <div className="diagnostic-detail-grid">
-        <div className="diagnostic-settings-card">
-          <h3 style={{ marginTop: 0 }}>Organization</h3>
-          <p style={{ margin: '0.35rem 0' }}><strong>Name</strong><br />{displayName}</p>
-          <p style={{ margin: '0.35rem 0' }}><strong>Email</strong><br />{profile?.email || '—'}</p>
-          <p style={{ margin: '0.35rem 0' }}><strong>Username</strong><br />{profile?.username || '—'}</p>
-          <p style={{ margin: '0.35rem 0' }}><strong>Account status</strong><br />{profile?.status || 'active'}</p>
-        </div>
-        <div className="diagnostic-settings-card">
-          <h3 style={{ marginTop: 0 }}>Password</h3>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 0 }}>Send a reset link to your login email (same as pharmacy parent flow).</p>
-          <button type="button" className="btn btn-primary" onClick={sendResetToSelf}>Email password reset</button>
-        </div>
-        <div className="diagnostic-settings-card">
-          <h3 style={{ marginTop: 0 }}>Branches</h3>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 0 }}>Add branches, open a branch row for full tools, or use Reports from navigation where available.</p>
-        </div>
-      </div>
-      {msg ? <p style={{ marginTop: 14, color: '#0369a1', fontSize: '0.88rem' }}>{msg}</p> : null}
-    </div>
-  );
-}
-
 export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -662,10 +559,14 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
 
   const nav = useMemo(() => ([
     { path: '/dashboard', label: 'Overview', icon: '📊' },
+    { path: '/dashboard/orders', label: 'All Orders', icon: '📋' },
+    { path: '/dashboard/results', label: 'Results', icon: type === 'lab' ? '🧪' : '🩻' },
     { path: '/dashboard/branches', label: 'Branches', icon: '🏪' },
+    { path: '/dashboard/catalog', label: type === 'lab' ? 'Test Catalog' : 'Scan Catalog', icon: '🏷️' },
+    { path: '/dashboard/reports', label: 'Reports', icon: '📈' },
     { path: '/dashboard/report-issue', label: 'Report Issue', icon: '📩' },
     { path: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
-  ]), []);
+  ]), [type]);
 
   const isActive = (path) => (path === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(path));
   const logout = async () => { try { await signOut(auth); navigate('/'); } catch (_) {} };
@@ -713,11 +614,16 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
           firestoreCollection={type === 'lab' ? 'labs' : 'scanCenters'}
         />
         <Routes>
-          <Route path="/" element={<ParentOverview type={type} profile={profile} />} />
+          <Route path="/" element={<DiagOverview type={type} profile={profile} mode="parent" />} />
+          <Route path="/orders/:orderId" element={<DiagOrderDetail type={type} />} />
+          <Route path="/orders" element={<DiagWorklist type={type} profile={profile} mode="parent" />} />
+          <Route path="/results" element={<DiagResultsLog type={type} />} />
+          <Route path="/catalog" element={<DiagCatalog type={type} mode="parent" />} />
+          <Route path="/reports" element={<DiagReports type={type} mode="parent" />} />
           <Route path="/branches/:branchId" element={<ParentBranchDetail type={type} profile={profile} />} />
           <Route path="/branches" element={<ParentBranches type={type} profile={profile} />} />
           <Route path="/report-issue" element={<GlobalReportForm profile={profile} reporterType={type} />} />
-          <Route path="/settings" element={<ParentSettings type={type} profile={profile} />} />
+          <Route path="/settings" element={<DiagSettings type={type} profile={profile} mode="parent" />} />
         </Routes>
       </main>
     </div>

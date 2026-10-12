@@ -67,7 +67,20 @@ export function clearSession() {
 
 // ── Token refresh ─────────────────────────────────────────────────────────────
 
-async function attemptTokenRefresh() {
+// One refresh at a time. When the access token expired, a dashboard firing
+// several requests at once made each of them refresh with the SAME refresh
+// token; the backend rightly treats a reused token as theft and revoked the
+// whole session — "Session expired" and screens that loaded forever.
+let refreshInFlight = null;
+
+function attemptTokenRefresh() {
+  if (!refreshInFlight) {
+    refreshInFlight = doTokenRefresh().finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
+async function doTokenRefresh() {
   const refreshToken = getStoredRefreshToken();
   if (!refreshToken) return null;
   try {

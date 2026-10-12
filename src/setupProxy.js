@@ -13,6 +13,9 @@ module.exports = function setupProxy(app) {
   app.use('/api', createProxyMiddleware({
     target: process.env.NESSA_BACKEND_URL || 'http://localhost:8085',
     changeOrigin: true,
+    // Forward the visitor's address, so per-IP limits (the public help
+    // assistant) count each person rather than this proxy.
+    xfwd: true,
     // The page and /api share one origin here, so CORS does not apply — but the
     // browser still sends Origin on POSTs, and the backend's CORS filter answers
     // a tunnel origin with 403 "Invalid CORS request" (it broke joining calls).
