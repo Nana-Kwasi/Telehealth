@@ -59,7 +59,7 @@ function CheckIn({ facility }) {
   }, []);
   const search = async () => { try { setFound(await api(`${F}/patients?q=${encodeURIComponent(q)}`)); } catch (e) { alert(e?.message); } };
   const cardsOf = (p) => { try { return JSON.parse(p?.cardsJson || '[]') || []; } catch { return []; } };
-  const pick = (p) => { setPatient(p); const v = cardsOf(p).find(c => c.status === 'VERIFIED'); setForm(f => ({ ...f, cardId: v?.cardId || '' })); };
+  const pick = (p) => { setPatient(p); const v = cardsOf(p).find(c => c.status === 'VERIFIED' && !c.consentWithdrawn); setForm(f => ({ ...f, cardId: v?.cardId || '' })); };
   const createWalkIn = async () => {
     try { const p = await api(`${F}/patients`, { method: 'POST', body: walkIn }); setWalkIn(null); pick({ id: p.id, name: p.name, phone: p.phoneE164, cardsJson: '[]' }); } catch (e) { alert(e?.message); }
   };
@@ -76,13 +76,14 @@ function CheckIn({ facility }) {
       <div className="dx-split">
         <div className="dx-card">
           <div style={{ display: 'flex', gap: 8 }}>
-            <input className="dx-input" style={{ flex: 1 }} placeholder="Phone, insurance card number or name" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && search()} />
+            <input className="dx-input" style={{ flex: 1 }} placeholder="Full phone number, exact card number, or name of a returning patient" value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && search()} />
             <button type="button" className="dx-btn dx-btn--primary" onClick={search}>Find</button>
             <button type="button" className="dx-btn" onClick={() => setWalkIn({ fullName: '', phone: '', dateOfBirth: '' })}>+ New patient</button>
           </div>
+          <p className="dx-card-hint" style={{ margin: '8px 0 0' }}>Names only find patients who have visited you before. For anyone else, use their full phone number or exact insurance card number.</p>
           <ul className="dx-list" style={{ marginTop: 10 }}>{found.map(p => (
             <li key={p.id} className="dx-row" onClick={() => pick(p)} style={patient?.id === p.id ? { borderColor: '#1d4ed8', background: '#eff6ff' } : undefined}>
-              <div className="dx-row-main"><div className="dx-row-title">{p.name}</div><div className="dx-row-meta">{p.phoneE164 || p.phone || ''}{p.phoneVerified ? ' · ✓ phone verified' : ''} · {cardsOf(p).map(c => `${c.insurerName} (${c.status.toLowerCase()})`).join(', ') || 'no insurance on file'}</div></div>
+              <div className="dx-row-main"><div className="dx-row-title">{p.name}</div><div className="dx-row-meta">{p.phone || ''}{p.phoneVerified ? ' · ✓ phone verified' : ''} · {cardsOf(p).map(c => `${c.insurerName} (${c.status.toLowerCase()})`).join(', ') || 'no insurance on file'}</div></div>
             </li>))}{q && !found.length && <Empty>Search to find the patient, or add them.</Empty>}</ul>
         </div>
         <div className="dx-card">
@@ -92,7 +93,10 @@ function CheckIn({ facility }) {
               <div className="dx-field"><label>Pays with</label>
                 <select className="dx-select" value={form.cardId || (form.insurerId ? 'NEW' : '')} onChange={e => setForm({ ...form, cardId: e.target.value === 'NEW' || e.target.value === '' ? '' : e.target.value, insurerId: e.target.value === 'NEW' ? (insurers[0]?.id || '') : '' })}>
                   <option value="">Self-pay</option>
-                  {cardsOf(patient).filter(c => c.status === 'VERIFIED').map(c => <option key={c.cardId} value={c.cardId}>{c.insurerName} · {c.planName || ''} · {c.memberNo}</option>)}
+                  {cardsOf(patient).filter(c => c.status === 'VERIFIED').map(c => (
+                    <option key={c.cardId} value={c.cardId} disabled={c.consentWithdrawn}>
+                      {c.insurerName} · {c.planName || ''} · {c.memberNo}{c.consentWithdrawn ? ' · sharing withdrawn by the member' : c.consentGiven === false ? " · needs the member's code" : ''}
+                    </option>))}
                   <option value="NEW">Insurance card (enter number)</option>
                 </select></div>
               {!form.cardId && form.insurerId && (

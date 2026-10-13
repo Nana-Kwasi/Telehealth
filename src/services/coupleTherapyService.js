@@ -615,9 +615,10 @@ export async function confirmCoupleTherapist(coupleId, accept = true) {
   return data;
 }
 
-export async function markCouplePaymentComplete(coupleId, plan) {
+/** Marks the couple paid — the server checks the Paystack reference before it does. */
+export async function markCouplePaymentComplete(coupleId, plan, paymentReference) {
   const fn = httpsCallable(functions, 'markCouplePaymentComplete');
-  const { data } = await fn({ coupleId, plan });
+  const { data } = await fn({ coupleId, plan, paymentReference });
   return data;
 }
 

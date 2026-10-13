@@ -53,6 +53,7 @@ const NAV = [
   { path: '/dashboard/insurers',          label: 'Insurers & Claims',     icon: ShieldCheck,     section: 'PLATFORM' },
   // ONBOARDING
   { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: Building2,       section: 'ONBOARDING' },
+  { path: '/dashboard/insurers?onboard=1', label: 'Onboard Insurer',     icon: ShieldCheck,     section: 'ONBOARDING' },
   { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: Stethoscope,     section: 'ONBOARDING' },
   { path: '/dashboard/onboard-therapist', label: 'Onboard Therapist',     icon: Brain,           section: 'ONBOARDING' },
   { path: '/dashboard/onboard-homecare-nurse', label: 'Onboard Home-Care Nurse', icon: Home,     section: 'ONBOARDING' },

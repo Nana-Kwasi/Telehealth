@@ -4,6 +4,7 @@ import { api } from '../../../services/apiClient';
 import '../Diagnostic/diagnostics.css';
 import { OnboardInsurerModal, InsurerStaffModal, AdminFacilities, AdminVerifications, AdminNetworkFraud, AdminAllPreauth } from './AdminOnboarding';
 import Paged from '../../Common/Paged';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * Super admin → Insurance. Insurers connected through adapters, the provider
@@ -97,7 +98,7 @@ function Overview({ insurers }) {
   );
 }
 
-function Insurers({ insurers, reload }) {
+function Insurers({ insurers, reload, openOnboard = 0 }) {
   const [adapters, setAdapters] = useState([]);
   const [edit, setEdit] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -106,6 +107,8 @@ function Insurers({ insurers, reload }) {
   const [creds, setCreds] = useState(null);
   const [staffOf, setStaffOf] = useState(null);
   useEffect(() => { api(`${API}/adapters`).then(a => setAdapters(Array.isArray(a) ? a : [])).catch(() => {}); }, []);
+  // Opened from the page header or the "Onboard Insurer" menu item.
+  useEffect(() => { if (openOnboard) setOnboard(true); }, [openOnboard]);
   const save = async () => {
     setBusy(true); setMsg('');
     const creds = {}; (edit.credentialsText || '').split('\n').forEach(l => { const i = l.indexOf('='); if (i > 0) creds[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
@@ -282,7 +285,17 @@ function Network({ insurers }) {
 }
 
 export default function AdminInsurance() {
-  const [tab, setTab] = useState('overview');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const fromMenu = new URLSearchParams(location.search).get('onboard') === '1';
+  const [tab, setTab] = useState(fromMenu ? 'insurers' : 'overview');
+  const [openOnboard, setOpenOnboard] = useState(fromMenu ? 1 : 0);
+  const startOnboard = () => { setTab('insurers'); setOpenOnboard((n) => n + 1); };
+  useEffect(() => {
+    if (!fromMenu) return;
+    startOnboard();
+    navigate('/dashboard/insurers', { replace: true });   // so a refresh does not reopen the form
+  }, [fromMenu]); // eslint-disable-line react-hooks/exhaustive-deps
   const [insurers, setInsurers] = useState([]);
   const loadInsurers = useCallback(() => { api(`${API}/insurers`).then(r => setInsurers(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
   useEffect(() => { loadInsurers(); }, [loadInsurers]);
@@ -290,13 +303,16 @@ export default function AdminInsurance() {
     ['insurers', 'Insurers'], ['facilities', 'Facilities'], ['licences', 'Licence checks']];
   return (
     <div className="admin-page dx" style={{ padding: '1.5rem' }}>
-      <div className="dx-hero"><div><h1>Insurance</h1><p>Insurers connected by API, members' cards, the provider network, checks at the counter and claims with proof.</p></div></div>
+      <div className="dx-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div><h1>Insurance</h1><p>Insurers connected by API, members' cards, the provider network, checks at the counter and claims with proof.</p></div>
+        <button type="button" className="dx-btn dx-btn--primary" onClick={startOnboard}>+ Onboard insurer</button>
+      </div>
       <div className="dx-tabs">{TABS.map(([k, l]) => <button key={k} type="button" className={`dx-tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>)}</div>
       {tab === 'overview' && <Overview insurers={insurers} />}
       {tab === 'claims' && <Claims insurers={insurers} />}
       {tab === 'checks' && <Checks insurers={insurers} />}
       {tab === 'network' && <Network insurers={insurers} />}
-      {tab === 'insurers' && <Insurers insurers={insurers} reload={loadInsurers} />}
+      {tab === 'insurers' && <Insurers insurers={insurers} reload={loadInsurers} openOnboard={openOnboard} />}
       {tab === 'preauth' && <AdminAllPreauth />}
       {tab === 'fraud' && <AdminNetworkFraud />}
       {tab === 'facilities' && <AdminFacilities />}

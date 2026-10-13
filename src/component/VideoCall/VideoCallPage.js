@@ -350,7 +350,11 @@ const VideoCallPage = () => {
         participantDiv = document.createElement('div');
         participantDiv.id = `participant-${participant.sid}`;
         participantDiv.className = 'remote-participant';
-        participantDiv.innerHTML = `<div class="video-label">${participantLabel(participant.identity)}</div>`;
+        // The label is a person's own name: always text, never markup.
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = participantLabel(participant.identity);
+        participantDiv.appendChild(label);
         
         // Add to remote videos container
         const remoteContainer = document.querySelector('.remote-videos');

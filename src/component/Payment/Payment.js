@@ -7,6 +7,7 @@ import { quotePrice } from '../../services/pricing';
 import { auth } from '../../services/firestoreShim';
 import { api, getStoredUserId } from '../../services/apiClient';
 import { COUPLE_STORAGE_KEYS } from '../../utils/coupleTherapyConfig';
+import { payForBooking } from '../../services/paystack';
 import {
   loadCouple,
   isPaymentAllowed,
@@ -106,7 +107,16 @@ export default function Payment() {
     if (isCouple) {
       const coupleId = coupleIdParam || localStorage.getItem(COUPLE_STORAGE_KEYS.coupleId);
       try {
-        await markCouplePaymentComplete(coupleId, plan);
+        // Take the payment first; the server only unlocks the couple after it
+        // verifies this exact Paystack reference for the plan's price.
+        const paid = await payForBooking({
+          email: auth.currentUser?.email,
+          amount: prices[plan],
+          purpose: 'couple_therapy',
+          metadata: { coupleId, plan },
+        });
+        if (!paid.ok) { alert(paid.reason || 'The payment did not go through.'); return; }
+        await markCouplePaymentComplete(coupleId, plan, paid.reference);
         navigate('/match-therapist', { state: { coupleId, therapyType: 'couples' }, replace: true });
       } catch (err) {
         alert(err.message || 'Could not record payment.');

@@ -3086,6 +3086,10 @@ const CALLABLE_DYNAMIC = {
       partnerKey: _partnerKeyLetter(p.partnerKey),
       clientId: p.clientId,
       name: p.name,
+      // Partner B proves the invitation with its token (kept from the invite link).
+      inviteToken: p.inviteToken
+        || (typeof localStorage !== 'undefined' && localStorage.getItem('th.coupleInviteToken'))
+        || undefined,
     },
     transform: _coupleShape,
   }),
@@ -3158,7 +3162,7 @@ const CALLABLE_DYNAMIC = {
   }),
   markCouplePaymentComplete: (p = {}) => ({
     path: `/api/v1/couples/${p.coupleId || _requireCoupleId()}/payment-complete`,
-    body: { paymentPlan: p.plan || p.paymentPlan || null },
+    body: { paymentPlan: p.plan || p.paymentPlan || null, paymentReference: p.paymentReference || p.reference || null },
     transform: _coupleShape,
   }),
   // Admin one-time password reset → POST /api/v1/admin/users/{id}/temporary-password.
