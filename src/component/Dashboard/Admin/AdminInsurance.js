@@ -284,11 +284,49 @@ function Network({ insurers }) {
   );
 }
 
+/** Providers insurers invited who still need a NessaHub account. Onboarding is the super admin's job. */
+const ONBOARD_PATH = { PHARMACY: '/dashboard/create-pharmacy', LAB: '/dashboard/create-lab-scan', SCAN: '/dashboard/create-lab-scan', DOCTOR: '/dashboard/onboard-doctor' };
+
+function Invitations({ onFacility }) {
+  const navigate = useNavigate();
+  const [rows, setRows] = useState(null);
+  const [status, setStatus] = useState('INVITED');
+  useEffect(() => { api(`${API}/admin/network-invites`).then(r => setRows(Array.isArray(r) ? r : [])).catch(() => setRows([])); }, []);
+  const shown = (rows || []).filter(r => !status || r.status === status);
+  const waiting = (rows || []).filter(r => r.status === 'INVITED').length;
+  const onboard = (r) => {
+    const path = ONBOARD_PATH[r.providerType];
+    if (path) navigate(path); else onFacility();   // clinics, hospitals, dental, optical, physio are facilities
+  };
+  return (
+    <>
+      <p className="dx-card-hint" style={{ margin: '0 0 10px' }}>Insurers invite providers they already work with. Create the provider's account and check their licence; the provider then enters the insurer's provider code under Settings → Insurance and moves to "joined".</p>
+      <div className="dx-tabs">{[['INVITED', `To onboard (${waiting})`], ['JOINED', 'Joined'], ['', 'All']].map(([k, l]) => <button key={k || 'all'} type="button" className={`dx-tab ${status === k ? 'on' : ''}`} onClick={() => setStatus(k)}>{l}</button>)}</div>
+      <div className="dx-card"><div className="dx-table-wrap"><table className="dx-table">
+        <thead><tr><th>Provider</th><th>Type</th><th>Contact</th><th>Invited by</th><th>Provider code</th><th>When</th><th>Status</th><th /></tr></thead>
+        <tbody>{rows === null ? <tr><td colSpan={8}><p className="dx-card-hint">Loading…</p></td></tr> : shown.length ? <Paged items={shown} table>{(shown) => shown.map(r => (
+          <tr key={r.id}>
+            <td><b>{r.providerName}</b></td><td>{r.providerType}</td>
+            <td className="dx-card-hint">{[r.email, r.phone].filter(Boolean).join(' · ') || '—'}</td>
+            <td>{r.insurerName}<div className="dx-card-hint">{r.invitedBy || ''}</div></td>
+            <td style={{ fontFamily: 'monospace' }}>{r.providerCode || '—'}</td>
+            <td className="dx-card-hint">{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</td>
+            <td><span className="dx-pill" style={r.status === 'JOINED' ? { background: '#dcfce7', color: '#166534' } : { background: '#fef3c7', color: '#92400e' }}>{r.status === 'JOINED' ? 'joined' : 'to onboard'}</span></td>
+            <td>{r.status === 'INVITED' && <button type="button" className="dx-btn dx-btn--sm dx-btn--primary" onClick={() => onboard(r)}>Onboard</button>}</td>
+          </tr>))}</Paged> : <tr><td colSpan={8}><p className="dx-card-hint">Nothing here.</p></td></tr>}</tbody>
+      </table></div></div>
+    </>
+  );
+}
+
 export default function AdminInsurance() {
   const location = useLocation();
   const navigate = useNavigate();
   const fromMenu = new URLSearchParams(location.search).get('onboard') === '1';
-  const [tab, setTab] = useState(fromMenu ? 'insurers' : 'overview');
+  const askedTab = new URLSearchParams(location.search).get('tab');
+  const [tab, setTab] = useState(fromMenu ? 'insurers' : askedTab === 'invites' ? 'invites' : 'overview');
+  // Opened from an "insurer invited a provider" email or notification while already on this page.
+  useEffect(() => { if (askedTab === 'invites') setTab('invites'); }, [askedTab]);
   const [openOnboard, setOpenOnboard] = useState(fromMenu ? 1 : 0);
   const startOnboard = () => { setTab('insurers'); setOpenOnboard((n) => n + 1); };
   useEffect(() => {
@@ -300,7 +338,7 @@ export default function AdminInsurance() {
   const loadInsurers = useCallback(() => { api(`${API}/insurers`).then(r => setInsurers(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
   useEffect(() => { loadInsurers(); }, [loadInsurers]);
   const TABS = [['overview', 'Overview'], ['claims', 'Claims'], ['preauth', 'Pre-auth'], ['fraud', 'Fraud (network)'], ['checks', 'Counter checks'], ['network', 'Provider network'],
-    ['insurers', 'Insurers'], ['facilities', 'Facilities'], ['licences', 'Licence checks']];
+    ['insurers', 'Insurers'], ['invites', 'Provider invitations'], ['facilities', 'Facilities'], ['licences', 'Licence checks']];
   return (
     <div className="admin-page dx" style={{ padding: '1.5rem' }}>
       <div className="dx-hero" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
@@ -315,6 +353,7 @@ export default function AdminInsurance() {
       {tab === 'insurers' && <Insurers insurers={insurers} reload={loadInsurers} openOnboard={openOnboard} />}
       {tab === 'preauth' && <AdminAllPreauth />}
       {tab === 'fraud' && <AdminNetworkFraud />}
+      {tab === 'invites' && <Invitations onFacility={() => setTab('facilities')} />}
       {tab === 'facilities' && <AdminFacilities />}
       {tab === 'licences' && <AdminVerifications />}
     </div>

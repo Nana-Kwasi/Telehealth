@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { INS, money, when, Kpi, Modal, Page, Empty, useLoad, get, post, patch, downloadCsv } from './insurerUi';
 import Paged from '../../Common/Paged';
+import { PlanPicker } from './InsurerPeople';
 
 const canDo = (me, roles) => me?.staffRole === 'ADMIN' || roles.includes(me?.staffRole);
 const COLORS = ['#1d4ed8', '#0f766e', '#7c3aed', '#f59e0b', '#dc2626', '#0ea5e9', '#16a34a', '#64748b'];
@@ -20,15 +21,15 @@ export function InsFinance({ me }) {
     try { const r = await post(`${INS}/finance/runs`, { providerOwnerIds: chosen.length ? chosen : null }); setSel({}); pay.reload(); runs.reload(); setOpen(r.id); } catch (e) { alert(e?.message); }
   };
   return (
-    <Page title="Finance" sub="Approved claims owed to providers. Group them into a payment run, pay through your bank, then mark it paid — providers get remittance advice automatically."
+    <Page title="Payment files" sub="Approved NessaHub claims owed to providers. Create a payment file, pay it from your own finance system or bank as usual, then record the payment reference here — providers get remittance advice automatically. NessaHub never holds or moves money."
       actions={<>
         <button type="button" className="dx-btn" onClick={() => downloadCsv(`${INS}/export/claims.csv?status=APPROVED`, 'approved-claims.csv').catch(e => alert(e.message))}>⬇ Approved claims CSV</button>
-        {can && (pay.data || []).length > 0 && <button type="button" className="dx-btn dx-btn--primary" onClick={create}>Create payment run{chosen.length ? ` (${chosen.length})` : ' (all)'}</button>}
+        {can && (pay.data || []).length > 0 && <button type="button" className="dx-btn dx-btn--primary" onClick={create}>Create payment file{chosen.length ? ` (${chosen.length})` : ' (all)'}</button>}
       </>}>
       <div className="dx-today">
         <Kpi label="Owed to providers" value={money(total)} color="#0f766e" sub={`${(pay.data || []).length} providers`} />
-        <Kpi label="Draft runs" value={(runs.data || []).filter(r => r.status === 'DRAFT').length} color="#f59e0b" />
-        <Kpi label="Paid (all time)" value={money((runs.data || []).filter(r => r.status === 'PAID').reduce((s, r) => s + Number(r.totalAmount), 0))} color="#16a34a" />
+        <Kpi label="Files awaiting payment" value={(runs.data || []).filter(r => r.status === 'DRAFT').length} color="#f59e0b" />
+        <Kpi label="Recorded as paid (all time)" value={money((runs.data || []).filter(r => r.status === 'PAID').reduce((s, r) => s + Number(r.totalAmount), 0))} color="#16a34a" />
       </div>
       <div className="dx-grid">
         <section className="dx-card dx-span-6">
@@ -39,11 +40,11 @@ export function InsFinance({ me }) {
               : <tr><td colSpan={5}><Empty>Nothing owed right now.</Empty></td></tr>}</tbody></table>
         </section>
         <section className="dx-card dx-span-6">
-          <div className="dx-card-head"><h2 className="dx-card-title">Payment runs</h2></div>
-          <table className="dx-table"><thead><tr><th>Run</th><th>Providers</th><th>Claims</th><th>Total</th><th>Status</th></tr></thead>
+          <div className="dx-card-head"><h2 className="dx-card-title">Payment files</h2></div>
+          <table className="dx-table"><thead><tr><th>File</th><th>Providers</th><th>Claims</th><th>Total</th><th>Status</th></tr></thead>
             <tbody>{(runs.data || []).length ? runs.data.map(r => <tr key={r.id} className="dx-click" onClick={() => setOpen(r.id)}><td style={{ fontFamily: 'monospace', fontWeight: 700 }}>{r.ref}</td><td>{r.providerCount}</td><td>{r.claimCount}</td><td>{money(r.totalAmount)}</td>
-              <td><span className="dx-pill" style={r.status === 'PAID' ? { background: '#dcfce7', color: '#166534' } : { background: '#fef3c7', color: '#92400e' }}>{r.status.toLowerCase()}</span>{r.paymentReference ? <div className="dx-card-hint">{r.paymentReference}</div> : null}</td></tr>)
-              : <tr><td colSpan={5}><Empty>No runs yet.</Empty></td></tr>}</tbody></table>
+              <td><span className="dx-pill" style={r.status === 'PAID' ? { background: '#dcfce7', color: '#166534' } : { background: '#fef3c7', color: '#92400e' }}>{r.status === 'PAID' ? 'paid' : 'awaiting payment'}</span>{r.paymentReference ? <div className="dx-card-hint">{r.paymentReference}</div> : null}</td></tr>)
+              : <tr><td colSpan={5}><Empty>No payment files yet.</Empty></td></tr>}</tbody></table>
         </section>
       </div>
       {open && <RunDrawer id={open} can={can} onClose={() => setOpen(null)} onChanged={() => { runs.reload(); pay.reload(); }} />}
@@ -55,12 +56,12 @@ function RunDrawer({ id, can, onClose, onChanged }) {
   const { data: r, reload } = useLoad(() => get(`${INS}/finance/runs/${id}`), [id]);
   const [ref, setRef] = useState('');
   const paid = async () => { try { await post(`${INS}/finance/runs/${id}/paid`, { paymentReference: ref }); await reload(); onChanged(); } catch (e) { alert(e?.message); } };
-  if (!r) return <Modal title="Payment run" onClose={onClose}><Empty>Loading…</Empty></Modal>;
+  if (!r) return <Modal title="Payment file" onClose={onClose}><Empty>Loading…</Empty></Modal>;
   return (
-    <Modal title={`Payment run ${r.ref}`} sub={`${r.status.toLowerCase()} · ${money(r.totalAmount)} · ${r.claimCount} claims`} onClose={onClose}
+    <Modal title={`Payment file ${r.ref}`} sub={`${r.status === 'PAID' ? 'paid' : 'awaiting payment'} · ${money(r.totalAmount)} · ${r.claimCount} claims`} onClose={onClose}
       footer={<>
-        <button type="button" className="dx-btn" style={{ marginRight: 'auto' }} onClick={() => downloadCsv(`${INS}/export/claims.csv?runId=${id}`, `${r.ref}.csv`).catch(e => alert(e.message))}>⬇ Remittance CSV</button>
-        {can && r.status === 'DRAFT' && <><input className="dx-input" placeholder="Bank / payment reference" value={ref} onChange={e => setRef(e.target.value)} /><button type="button" className="dx-btn dx-btn--primary" disabled={!ref.trim()} onClick={paid}>Mark paid & notify providers</button></>}
+        <button type="button" className="dx-btn" style={{ marginRight: 'auto' }} onClick={() => downloadCsv(`${INS}/export/claims.csv?runId=${id}`, `${r.ref}.csv`).catch(e => alert(e.message))}>⬇ Download payment file (CSV)</button>
+        {can && r.status === 'DRAFT' && <><input className="dx-input" placeholder="Reference of the payment you made" value={ref} onChange={e => setRef(e.target.value)} /><button type="button" className="dx-btn dx-btn--primary" disabled={!ref.trim()} onClick={paid}>Record payment & notify providers</button></>}
       </>}>
       <table className="dx-table"><thead><tr><th>Provider</th><th>Code</th><th>Claims</th><th>Amount</th></tr></thead>
         <tbody>{(r.providers || []).map(p => <tr key={p.ownerId}><td><b>{p.providerName}</b></td><td>{p.providerCode}</td><td>{p.claims}</td><td>{money(p.amount)}</td></tr>)}</tbody></table>
@@ -207,7 +208,8 @@ export function InsStaff({ me }) {
   );
 }
 
-export function InsSettings({ me }) {
+export function InsSettings({ me, onChanged }) {
+  const [newPlan, setNewPlan] = useState('');
   const { data, setData } = useLoad(() => get(`${INS}/settings`), []);
   const [msg, setMsg] = useState('');
   const isAdmin = me?.staffRole === 'ADMIN';
@@ -215,8 +217,12 @@ export function InsSettings({ me }) {
   const save = async () => {
     try {
       setData(await patch(`${INS}/settings`, { claimsMode: data.claimsMode, autoApproveLimit: data.autoApproveLimit === '' || data.autoApproveLimit == null ? 0 : Number(data.autoApproveLimit),
-        preauthSlaHours: Number(data.preauthSlaHours), confirmationRequired: !!data.confirmationRequired, supportPhone: data.supportPhone, supportEmail: data.supportEmail, requireTwoFactor: !!data.requireTwoFactor }));
+        preauthSlaHours: Number(data.preauthSlaHours), confirmationRequired: !!data.confirmationRequired, supportPhone: data.supportPhone, supportEmail: data.supportEmail, requireTwoFactor: !!data.requireTwoFactor,
+        plans: data.plans || [],
+        preauth: { enabled: !!data.preauthEnabled, plans: data.preauthPlans || '', minAmount: data.preauthMinAmount === '' || data.preauthMinAmount == null ? 0 : Number(data.preauthMinAmount),
+          route: data.preauthRoute || 'NESSAHUB', email: data.preauthEmail || '', emergencyNoticeHours: Number(data.emergencyNoticeHours) || 48 } }));
       setMsg('Saved.'); setTimeout(() => setMsg(''), 2500);
+      if (onChanged) onChanged();
     } catch (e) { alert(e?.message); }
   };
   return (
@@ -227,12 +233,51 @@ export function InsSettings({ me }) {
             <option value="NESSAHUB">On this dashboard (your team reviews here)</option><option value="API">In our own system (NessaHub sends them through the adapter)</option></select></div>
         <div className="dx-two">
           <div className="dx-field"><label>Auto-approve clean claims up to (GHS, 0 = off)</label><input className="dx-input" type="number" disabled={!isAdmin} value={data.autoApproveLimit ?? ''} onChange={e => setData({ ...data, autoApproveLimit: e.target.value })} /></div>
-          <div className="dx-field"><label>Pre-authorisation deadline (hours)</label><input className="dx-input" type="number" disabled={!isAdmin} value={data.preauthSlaHours} onChange={e => setData({ ...data, preauthSlaHours: e.target.value })} /></div>
           <div className="dx-field"><label>Support phone (shown to members)</label><input className="dx-input" disabled={!isAdmin} value={data.supportPhone || ''} onChange={e => setData({ ...data, supportPhone: e.target.value })} /></div>
           <div className="dx-field"><label>Support email</label><input className="dx-input" disabled={!isAdmin} value={data.supportEmail || ''} onChange={e => setData({ ...data, supportEmail: e.target.value })} /></div>
         </div>
         <label style={{ display: 'flex', gap: 8, fontSize: '0.86rem' }}><input type="checkbox" disabled={!isAdmin} checked={!!data.confirmationRequired} onChange={e => setData({ ...data, confirmationRequired: e.target.checked })} /> Require the member to confirm they received each service (recommended — stops phantom billing)</label>
         <label style={{ display: 'flex', gap: 8, fontSize: '0.86rem' }}><input type="checkbox" disabled={!isAdmin} checked={!!data.requireTwoFactor} onChange={e => setData({ ...data, requireTwoFactor: e.target.checked })} /> Two-step sign-in for all staff: a code is emailed at every login (recommended — your staff see members' health and claims data)</label>
+      </div>
+
+      <div className="dx-card" style={{ display: 'grid', gap: 12, maxWidth: 760, marginTop: 16 }}>
+        <div><h2 className="dx-card-title">Your plans</h2>
+          <p className="dx-card-hint" style={{ margin: 0 }}>The plans on your members' cards. Use them to say which medicines, services and providers each plan covers; the counter then decides instantly, the way your providers already do.</p></div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {(data.plans || []).map((p, i) => (
+            <span key={p.code} className="dx-pill" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', background: '#e0f2fe', color: '#075985' }}>
+              <b>{p.code}</b>{isAdmin ? <input className="dx-input" style={{ width: 120, padding: '0.1rem 0.3rem' }} value={p.name || ''} onChange={e => setData({ ...data, plans: data.plans.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })} /> : p.name}
+              {isAdmin && <button type="button" className="dx-btn dx-btn--sm" aria-label={`Remove ${p.code}`} onClick={() => setData({ ...data, plans: data.plans.filter((_, j) => j !== i) })}>✕</button>}
+            </span>))}
+          {!(data.plans || []).length && <span className="dx-card-hint">No plans yet. Plans also appear here as members' cards are verified.</span>}
+        </div>
+        {isAdmin && <div style={{ display: 'flex', gap: 8 }}>
+          <input className="dx-input" style={{ maxWidth: 220 }} placeholder="Plan code, e.g. GOLD" value={newPlan} onChange={e => setNewPlan(e.target.value)} />
+          <button type="button" className="dx-btn" onClick={() => { const c = newPlan.trim().toUpperCase(); if (!c || (data.plans || []).some(p => p.code === c)) return; setData({ ...data, plans: [...(data.plans || []), { code: c, name: newPlan.trim() }] }); setNewPlan(''); }}>+ Add plan</button>
+        </div>}
+      </div>
+
+      <div className="dx-card" style={{ display: 'grid', gap: 12, maxWidth: 760, marginTop: 16 }}>
+        <div><h2 className="dx-card-title">Pre-approval</h2>
+          <p className="dx-card-hint" style={{ margin: 0 }}>Off by default: your plan rules decide at the counter and nobody waits. Turn it on only for the few cases you want to see first.</p></div>
+        <label style={{ display: 'flex', gap: 8, fontSize: '0.86rem' }}><input type="checkbox" disabled={!isAdmin} checked={!!data.preauthEnabled} onChange={e => setData({ ...data, preauthEnabled: e.target.checked })} /> Ask for pre-approval on some items</label>
+        {data.preauthEnabled && <>
+          <PlanPicker plans={data.plans} value={data.preauthPlans} onChange={(preauthPlans) => isAdmin && setData({ ...data, preauthPlans })} label="Only for members on these plans" allText="Every plan" />
+          <div className="dx-two">
+            <div className="dx-field"><label>Also when one item costs at least (GHS, blank = no amount rule)</label><input className="dx-input" type="number" disabled={!isAdmin} value={data.preauthMinAmount ?? ''} onChange={e => setData({ ...data, preauthMinAmount: e.target.value })} /></div>
+            <div className="dx-field"><label>Decide within (hours)</label><input className="dx-input" type="number" disabled={!isAdmin} value={data.preauthSlaHours} onChange={e => setData({ ...data, preauthSlaHours: e.target.value })} /></div>
+          </div>
+          <p className="dx-card-hint" style={{ margin: 0 }}>Items you mark "Needs pre-approval" in your price lists are included. Trusted providers (Provider network) never wait.</p>
+          <div className="dx-field"><label>Send requests to</label>
+            <select className="dx-select" disabled={!isAdmin} value={data.preauthRoute || 'NESSAHUB'} onChange={e => setData({ ...data, preauthRoute: e.target.value })}>
+              <option value="EMAIL">Our pre-approval email desk (we decide as we do today)</option>
+              <option value="API" disabled={!data.canRouteToSystem}>Our own system, through the connection{data.canRouteToSystem ? '' : ' (not available on your connection yet)'}</option>
+              <option value="NESSAHUB">This dashboard (for insurers without a desk)</option>
+            </select></div>
+          {data.preauthRoute === 'EMAIL' && <div className="dx-field"><label>Pre-approval desk email</label><input className="dx-input" type="email" disabled={!isAdmin} value={data.preauthEmail || ''} onChange={e => setData({ ...data, preauthEmail: e.target.value })} /></div>}
+        </>}
+        <div className="dx-field" style={{ maxWidth: 360 }}><label>Emergencies: review afterwards within (hours)</label><input className="dx-input" type="number" disabled={!isAdmin} value={data.emergencyNoticeHours ?? 48} onChange={e => setData({ ...data, emergencyNoticeHours: e.target.value })} /></div>
+        <p className="dx-card-hint" style={{ margin: 0 }}>Emergencies are never blocked: the provider treats first and you review the case within this time.</p>
         {isAdmin && <div><button type="button" className="dx-btn dx-btn--primary" onClick={save}>Save settings</button> {msg && <span className="dx-card-hint">{msg}</span>}</div>}
       </div>
     </Page>

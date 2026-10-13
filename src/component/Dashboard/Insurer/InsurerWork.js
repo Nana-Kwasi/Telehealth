@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import {
   INS, money, when, CLAIM, PREAUTH, SEVERITY, FLAG_LABEL, flagsOf, Pill, Kpi, Modal, Page, Empty, useLoad, get, post, patch,
@@ -83,8 +83,10 @@ function ClaimDrawer({ id, me, onClose, onChanged }) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [ai, setAi] = useState('');
-  const canDecide = ['ADMIN', 'CLAIMS_OFFICER', 'MEDICAL_REVIEWER'].includes(me?.staffRole);
-  const canPay = ['ADMIN', 'FINANCE'].includes(me?.staffRole);
+  // Insurers who decide in their own system see claims read-only here.
+  const ownSystem = me?.claimsMode === 'API';
+  const canDecide = !ownSystem && ['ADMIN', 'CLAIMS_OFFICER', 'MEDICAL_REVIEWER'].includes(me?.staffRole);
+  const canPay = !ownSystem && ['ADMIN', 'FINANCE'].includes(me?.staffRole);
   const decide = async (decision) => {
     if ((decision === 'REJECT' || decision === 'QUERY') && !reason.trim()) { alert('Add a reason first.'); return; }
     setBusy(true);
@@ -136,23 +138,28 @@ export function InsClaims({ me, initialStatus }) {
   const { data, reload } = useLoad(() => get(`${INS}/claims${status ? `?status=${status}` : ''}`), [status]);
   const rows = (data || []).filter(r => !q || [r.claimRef, r.patientName, r.providerName, r.providerCode].some(v => String(v || '').toLowerCase().includes(q.toLowerCase())));
   const chosen = Object.keys(sel).filter(k => sel[k]);
+  const ownSystem = me?.claimsMode === 'API';
+  const selectable = status === 'SUBMITTED' && !ownSystem;
   const bulk = async () => {
     try { const r = await post(`${INS}/claims/bulk-approve`, { ids: chosen }); alert(`Approved ${r.approved}${r.skipped.length ? ` · skipped ${r.skipped.join(', ')} (flagged or not ready)` : ''}`); setSel({}); reload(); }
     catch (e) { alert(e?.message); }
   };
   return (
-    <Page title="Claims" sub="Every claim arrives with proof and the member’s confirmation. Clean ones can be approved in bulk."
-      actions={chosen.length > 0 && <button type="button" className="dx-btn dx-btn--primary" onClick={bulk}>Approve {chosen.length} selected</button>}>
+    <Page title="Claims" sub={ownSystem
+        ? 'Claims from NessaHub providers, sent to your claims system with their proof and the member’s confirmation. Your system decides; the status shown here comes from it.'
+        : 'Every claim arrives with proof and the member’s confirmation. Clean ones can be approved in bulk.'}
+      actions={selectable && chosen.length > 0 && <button type="button" className="dx-btn dx-btn--primary" onClick={bulk}>Approve {chosen.length} selected</button>}>
+      {ownSystem && <div className="dx-alert" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e3a8a' }}><div><strong>Decided in your own system</strong><p>Approve, reject and pay claims in your claims system as usual. This page is for following them and seeing the evidence.</p></div></div>}
       <div className="dx-tabs">
         {[['SUBMITTED', 'To review'], ['FLAGGED', 'Flagged'], ['QUERIED', 'Queried'], ['AWAITING_PATIENT', 'Awaiting member'], ['APPROVED', 'Approved'], ['PAID', 'Paid'], ['REJECTED', 'Rejected'], ['', 'All']].map(([k, l]) => (
           <button key={k || 'all'} type="button" className={`dx-tab ${status === k ? 'on' : ''}`} onClick={() => { setStatus(k); setSel({}); }}>{l}</button>))}
         <input className="dx-input" style={{ marginLeft: 'auto', minWidth: 240 }} placeholder="Search ref, member, provider" value={q} onChange={e => setQ(e.target.value)} />
       </div>
       <div className="dx-card"><div className="dx-table-wrap"><table className="dx-table">
-        <thead><tr>{status === 'SUBMITTED' && <th />}<th>Ref</th><th>Date</th><th>Member</th><th>Provider</th><th>Service</th><th>You pay</th><th>Member</th><th>Status</th><th>Flags</th></tr></thead>
+        <thead><tr>{selectable && <th />}<th>Ref</th><th>Date</th><th>Member</th><th>Provider</th><th>Service</th><th>You pay</th><th>Member</th><th>Status</th><th>Flags</th></tr></thead>
         <tbody>{rows.length ? <Paged items={rows} table>{(rows) => rows.map(r => (
           <tr key={r.id} className="dx-click" onClick={() => setOpen(r.id)}>
-            {status === 'SUBMITTED' && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={!!sel[r.id]} onChange={e => setSel(s => ({ ...s, [r.id]: e.target.checked }))} /></td>}
+            {selectable && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={!!sel[r.id]} onChange={e => setSel(s => ({ ...s, [r.id]: e.target.checked }))} /></td>}
             <td style={{ fontFamily: 'monospace', fontWeight: 700 }}>{r.claimRef}</td><td className="dx-card-hint">{when(r.createdAt)}</td><td>{r.patientName || '—'}</td>
             <td>{r.providerName}<div className="dx-card-hint">{r.providerCode}</div></td><td>{r.serviceType}</td><td><b>{money(r.insurerAmount)}</b></td>
             <td className="dx-card-hint">{r.patientConfirmation === 'YES' ? '✓' : r.patientConfirmation === 'NO' ? '✗ denied' : r.patientConfirmation === 'NO_REPLY' ? 'no reply' : r.patientConfirmation === 'NOT_REQUIRED' ? '—' : '…'}</td>
@@ -233,6 +240,17 @@ export function InsPreauth({ me }) {
   const [open, setOpen] = useState(null);
   const { data, reload } = useLoad(() => get(`${INS}/preauth${status ? `?status=${status}` : ''}`), [status]);
   useEffect(() => { const t = setInterval(reload, 60000); return () => clearInterval(t); }, [reload]);
+  // Opened from the pre-approval email: go straight to that request.
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get('ref');
+  useEffect(() => {
+    if (!wanted) return;
+    get(`${INS}/preauth`).then(all => {
+      const hit = (all || []).find(r => r.ref === wanted);
+      if (hit) setOpen(hit.id);
+      setParams({}, { replace: true });
+    }).catch(() => {});
+  }, [wanted]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Page title="Pre-authorisation desk" sub="Requests from providers before expensive or restricted care. Oldest deadline first.">
       <div className="dx-tabs">{[['PENDING', 'Pending'], ['QUERIED', 'Queried'], ['APPROVED', 'Approved'], ['PARTIAL', 'Partly approved'], ['REJECTED', 'Rejected'], ['USED', 'Used'], ['', 'All']].map(([k, l]) => (

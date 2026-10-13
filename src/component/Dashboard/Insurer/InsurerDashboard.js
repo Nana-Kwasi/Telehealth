@@ -14,8 +14,8 @@ import Paged from '../../Common/Paged';
 /** The insurer's dashboard on NessaHub. Insurer staff are created by the NessaHub super admin or their own insurer admin. */
 const NAV = [
   ['WORK', [['/dashboard', 'Overview', '📊'], ['/dashboard/claims', 'Claims', '🧾'], ['/dashboard/preauth', 'Pre-authorisation', '✅'], ['/dashboard/fraud', 'Fraud & audit', '🛡️']]],
-  ['PEOPLE', [['/dashboard/members', 'Members', '👥'], ['/dashboard/network', 'Provider network', '🏥'], ['/dashboard/price-lists', 'Price lists', '🏷️'], ['/dashboard/care', 'Care management', '💙']]],
-  ['MONEY', [['/dashboard/finance', 'Finance', '💳'], ['/dashboard/reports', 'Reports', '📈']]],
+  ['PEOPLE', [['/dashboard/members', 'Members on NessaHub', '👥'], ['/dashboard/network', 'Provider network', '🏥'], ['/dashboard/price-lists', 'Price lists', '🏷️'], ['/dashboard/care', 'Care management', '💙']]],
+  ['MONEY', [['/dashboard/finance', 'Payment files', '💳'], ['/dashboard/reports', 'Reports', '📈']]],
   ['SETUP', [['/dashboard/notices', 'Notices', '📣'], ['/dashboard/integration', 'Integration', '🔌'], ['/dashboard/staff', 'Staff & roles', '🧑‍💼'], ['/dashboard/audit', 'Audit log', '📜'], ['/dashboard/settings', 'Settings', '⚙️']]],
 ];
 
@@ -48,7 +48,7 @@ export default function InsurerDashboard({ profile }) {
           </div>
         </div>
         <nav className="pharmacy-nav">
-          {NAV.map(([section, items]) => (
+          {NAV.map(([section, all]) => [section, all.filter(([path]) => !(me?.claimsMode === 'API' && path === '/dashboard/finance') && !(me && !me.preauthEnabled && path === '/dashboard/preauth'))]).map(([section, items]) => (
             <div key={section} className="pharmacy-nav-section"><h3>{section}</h3>
               <ul className="pharmacy-nav-list"><Paged items={items}>{(items) => items.map(([path, label, icon]) => (
                 <li key={path}><button type="button" className={`pharmacy-nav-item ${isActive(path) ? 'active' : ''}`} onClick={() => navigate(path)}>
@@ -77,7 +77,7 @@ export default function InsurerDashboard({ profile }) {
           <Route path="/integration" element={<InsIntegration me={me} />} />
           <Route path="/staff" element={<InsStaff me={me} />} />
           <Route path="/audit" element={<InsAudit me={me} />} />
-          <Route path="/settings" element={<InsSettings me={me} />} />
+          <Route path="/settings" element={<InsSettings me={me} onChanged={() => get(`${INS}/me`).then(setMe).catch(() => {})} />} />
         </Routes>
       </main>
     </div>

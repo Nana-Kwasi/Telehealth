@@ -3,6 +3,29 @@ import { INS, money, when, day, CLAIM, PREAUTH, SEVERITY, Pill, Kpi, Modal, Page
 import Paged from '../../Common/Paged';
 
 const canDo = (me, roles) => me?.staffRole === 'ADMIN' || roles.includes(me?.staffRole);
+/** "GOLD,SILVER" → ['GOLD','SILVER']; blank = every plan. */
+export const planList = (csv) => String(csv || '').split(/[,;|]/).map(s => s.trim().toUpperCase()).filter(Boolean);
+export const plansLabel = (csv, plans) => {
+  const l = planList(csv);
+  if (!l.length) return 'All plans';
+  const name = (c) => (plans || []).find(p => p.code === c)?.name || c;
+  return l.map(name).join(', ');
+};
+
+/** Tick the plans something applies to. Nothing ticked = every plan. */
+export function PlanPicker({ plans, value, onChange, label = 'Covered on plans', allText = 'All plans' }) {
+  const on = planList(value);
+  const toggle = (c) => onChange((on.includes(c) ? on.filter(x => x !== c) : [...on, c]).join(','));
+  return (
+    <div className="dx-field"><label>{label}</label>
+      {(plans || []).length ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {plans.map(p => <button key={p.code} type="button" className={`dx-btn dx-btn--sm ${on.includes(p.code) ? 'dx-btn--primary' : ''}`} onClick={() => toggle(p.code)}>{p.name || p.code}</button>)}
+        <span className="dx-card-hint" style={{ alignSelf: 'center' }}>{on.length ? '' : allText}</span>
+      </div> : <span className="dx-card-hint">Add your plans (Gold, Silver, Bronze…) in Settings first. Until then it applies to every plan.</span>}
+    </div>
+  );
+}
+
 const risk = (n) => <span className="dx-pill" style={n >= 60 ? { background: '#dc2626', color: '#fff' } : n >= 30 ? { background: '#fef3c7', color: '#92400e' } : { background: '#dcfce7', color: '#166534' }}>{n}</span>;
 
 // ── Members ──────────────────────────────────────────────────────────────────
@@ -14,7 +37,7 @@ export function InsMembers() {
   const members = useLoad(() => get(`${INS}/members?${new URLSearchParams({ ...(q ? { q } : {}), ...(group ? { group } : {}) })}`), [q, group]);
   const groups = useLoad(() => get(`${INS}/groups`), []);
   return (
-    <Page title="Members" sub="Your members who have linked their card on NessaHub (verified with your system).">
+    <Page title="Members on NessaHub" sub="Your members who use NessaHub and their activity here. Your membership system stays the record for enrolment, premiums and dependants.">
       <div className="dx-today">
         {(groups.data || []).slice(0, 6).map(g => <Kpi key={g.groupName} label={g.groupName} value={g.members} color="#1d4ed8" sub={`${money(g.spendYtd)} this year · ${g.claims30d} claims/30d`} onClick={() => setGroup(g.groupName === 'Individual' ? '' : g.groupName)} />)}
       </div>
@@ -68,7 +91,8 @@ export function InsNetwork({ me }) {
     try { await patch(`${INS}/network/${r.id}`, { networkStatus: 'SUSPENDED', reason }); net.reload(); } catch (e) { alert(e?.message); }
   };
   const reinstate = async (r) => { try { await patch(`${INS}/network/${r.id}`, { networkStatus: 'ACTIVE' }); net.reload(); } catch (e) { alert(e?.message); } };
-  const tier = async (r, t) => { try { await patch(`${INS}/network/${r.id}`, { tier: t }); net.reload(); } catch (e) { alert(e?.message); } };
+  const [access, setAccess] = useState(null);
+  const saveAccess = async () => { try { await patch(`${INS}/network/${access.id}`, { plans: access.plans || '', trusted: !!access.trusted }); setAccess(null); net.reload(); } catch (e) { alert(e?.message); } };
   const sendInvite = async () => { try { await post(`${INS}/network/invites`, invite); setInvite(null); inv.reload(); } catch (e) { alert(e?.message); } };
   const rows = (net.data || []).filter(r => !q || `${r.providerName} ${r.providerCode} ${r.city || ''}`.toLowerCase().includes(q.toLowerCase()));
   return (
@@ -81,15 +105,16 @@ export function InsNetwork({ me }) {
       </div>
       {tab === 'providers' ? (
         <div className="dx-card"><div className="dx-table-wrap"><table className="dx-table">
-          <thead><tr><th>Provider</th><th>Type</th><th>Code</th><th>Tier</th><th>Claims 30d</th><th>Value 30d</th><th>Blocked 30d</th><th>Denied by members</th><th>Risk</th><th>Network</th>{can && <th />}</tr></thead>
+          <thead><tr><th>Provider</th><th>Type</th><th>Code</th><th>Plans accepted</th>{me?.preauthEnabled && <th>Trusted</th>}<th>Claims 30d</th><th>Value 30d</th><th>Blocked 30d</th><th>Denied by members</th><th>Risk</th><th>Network</th>{can && <th />}</tr></thead>
           <tbody>{rows.length ? <Paged items={rows} table>{(rows) => rows.map(r => (
             <tr key={r.id}><td><b>{r.providerName || '—'}</b><div className="dx-card-hint">{r.city || ''} · {String(r.ownerKind).toLowerCase()}</div></td><td>{r.providerType}</td><td style={{ fontFamily: 'monospace' }}>{r.providerCode}</td>
-              <td>{can ? <select className="dx-select" style={{ padding: '0.2rem 0.4rem', fontSize: '0.76rem' }} value={r.tier || ''} onChange={e => tier(r, e.target.value)}><option value="">—</option><option>GOLD</option><option>SILVER</option><option>BRONZE</option></select> : (r.tier || '—')}</td>
+              <td>{can ? <button type="button" className="dx-btn dx-btn--sm" onClick={() => setAccess({ id: r.id, name: r.providerName, plans: r.plans || '', trusted: !!r.trusted })}>{plansLabel(r.plans, me?.plans)}</button> : plansLabel(r.plans, me?.plans)}</td>
+              {me?.preauthEnabled && <td>{r.trusted ? <span className="dx-pill" style={{ background: '#dcfce7', color: '#166534' }}>trusted</span> : '—'}</td>}
               <td>{r.claims30d}</td><td>{money(r.amount30d)}</td><td>{r.blocked30d}</td><td style={{ color: r.denied ? '#b91c1c' : undefined, fontWeight: r.denied ? 800 : 400 }}>{r.denied}</td><td>{risk(r.riskScore)}</td>
               <td><span className="dx-pill" style={r.networkStatus === 'ACTIVE' && r.status === 'VERIFIED' ? { background: '#dcfce7', color: '#166534' } : { background: '#fee2e2', color: '#991b1b' }}>{r.status !== 'VERIFIED' ? r.status.toLowerCase() : r.networkStatus.toLowerCase()}</span>
                 {r.networkReason ? <div className="dx-card-hint">{r.networkReason}</div> : null}</td>
               {can && <td>{r.networkStatus === 'ACTIVE' ? <button type="button" className="dx-btn dx-btn--sm dx-btn--danger" onClick={() => suspend(r)}>Suspend</button> : <button type="button" className="dx-btn dx-btn--sm" onClick={() => reinstate(r)}>Reinstate</button>}</td>}
-            </tr>))}</Paged> : <tr><td colSpan={11}><Empty>No providers yet. Invite the providers you already work with.</Empty></td></tr>}</tbody>
+            </tr>))}</Paged> : <tr><td colSpan={12}><Empty>No providers yet. Invite the providers you already work with.</Empty></td></tr>}</tbody>
         </table></div></div>
       ) : (
         <div className="dx-card"><div className="dx-table-wrap"><table className="dx-table">
@@ -99,8 +124,15 @@ export function InsNetwork({ me }) {
             : <tr><td colSpan={6}><Empty>No invitations yet.</Empty></td></tr>}</tbody>
         </table></div></div>
       )}
+      {access && (
+        <Modal title={`${access.name || 'Provider'}: plans and trust`} sub="Which of your members' plans can be used here. The counter blocks any other plan at once, with the reason." onClose={() => setAccess(null)} width={560}
+          footer={<><button type="button" className="dx-btn" onClick={() => setAccess(null)}>Cancel</button><button type="button" className="dx-btn dx-btn--primary" onClick={saveAccess}>Save</button></>}>
+          <PlanPicker plans={me?.plans} value={access.plans} onChange={(plans) => setAccess({ ...access, plans })} label="Plans accepted at this provider" />
+          {me?.preauthEnabled && <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem', marginTop: 10 }}><input type="checkbox" checked={access.trusted} onChange={e => setAccess({ ...access, trusted: e.target.checked })} /> Trusted provider: never needs pre-approval (you still see every claim)</label>}
+        </Modal>
+      )}
       {invite && (
-        <Modal title="Invite a provider" sub="They get an SMS to register on NessaHub and enter your provider code." onClose={() => setInvite(null)} width={620}
+        <Modal title="Invite a provider" sub="NessaHub is told to set up their account and check their licence; the provider gets an email and SMS explaining the next steps. Once set up, they enter your provider code and appear under Providers." onClose={() => setInvite(null)} width={620}
           footer={<><button type="button" className="dx-btn" onClick={() => setInvite(null)}>Cancel</button><button type="button" className="dx-btn dx-btn--primary" onClick={sendInvite}>Send invitation</button></>}>
           <div className="dx-two">
             <div className="dx-field"><label>Provider name</label><input className="dx-input" value={invite.providerName} onChange={e => setInvite({ ...invite, providerName: e.target.value })} /></div>
@@ -127,17 +159,39 @@ export function InsPriceLists({ me }) {
   const [edit, setEdit] = useState(null);
   const [svc, setSvc] = useState(null);
   const [csv, setCsv] = useState(null);
-  const can = canDo(me, ['MEDICAL_REVIEWER', 'NETWORK_MANAGER']);
+  const [svcCsv, setSvcCsv] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const allowed = canDo(me, ['MEDICAL_REVIEWER', 'NETWORK_MANAGER']);
+  // Insurers with their own system keep the price list there: NessaHub copies it
+  // (sync or file import) and does not let it be edited by hand here.
+  const ownSystem = me?.claimsMode === 'API';
+  const can = allowed && !ownSystem;
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const r = await post(`${INS}/price-lists/sync`);
+      alert(`Copied from your system: ${r.medicines} medicines, ${r.services} services${r.errors.length ? `\n${r.errors.slice(0, 5).join('\n')}` : ''}`);
+      drugs.reload(); services.reload();
+    } catch (e) { alert(e?.message); } finally { setSyncing(false); }
+  };
+  const importSvc = async () => { try { const r = await post(`${INS}/tariffs/import`, { csv: svcCsv }); alert(`Saved ${r.saved}${r.errors.length ? `\n${r.errors.slice(0, 5).join('\n')}` : ''}`); setSvcCsv(null); services.reload(); } catch (e) { alert(e?.message); } };
   const saveDrug = async () => { try { drugs.setData(await put(`${INS}/formulary`, { ...edit, tariffPrice: edit.tariffPrice === '' ? null : Number(edit.tariffPrice), maxQtyPerMonth: edit.maxQtyPerMonth === '' || edit.maxQtyPerMonth == null ? null : Number(edit.maxQtyPerMonth) })); setEdit(null); } catch (e) { alert(e?.message); } };
   const saveSvc = async () => { try { services.setData(await put(`${INS}/tariffs`, { ...svc, tariffPrice: Number(svc.tariffPrice) })); setSvc(null); } catch (e) { alert(e?.message); } };
   const importCsv = async () => { try { const r = await post(`${INS}/formulary/import`, { csv }); alert(`Added ${r.added}, updated ${r.updated}${r.errors.length ? `\n${r.errors.slice(0, 5).join('\n')}` : ''}`); setCsv(null); drugs.reload(); } catch (e) { alert(e?.message); } };
   const shown = (drugs.data || []).filter(d => !q || `${d.drugName} ${d.genericName || ''}`.toLowerCase().includes(q.toLowerCase()));
   return (
-    <Page title="Price lists" sub="Your medicine list and service tariffs. Enforced at every counter: excluded items blocked, restricted ones need your approval, nothing paid above tariff."
-      actions={can && (tab === 'drugs'
-        ? <><button type="button" className="dx-btn" onClick={() => setCsv('drug_name,generic_name,strength,form,tariff_price,tier,requires_preauth,max_qty_per_month\n')}>⬆ Import CSV</button>
-          <button type="button" className="dx-btn dx-btn--primary" onClick={() => setEdit({ drugName: '', genericName: '', strength: '', form: '', tariffPrice: '', tier: 'COVERED', requiresPreauth: false, maxQtyPerMonth: '', active: true })}>+ Medicine</button></>
-        : <button type="button" className="dx-btn dx-btn--primary" onClick={() => setSvc({ serviceType: 'CONSULT', code: '', description: '', tariffPrice: '', requiresPreauth: false, active: true })}>+ Service</button>)}>
+    <Page title="Price lists" sub={ownSystem
+        ? 'A copy of the medicine list and tariffs from your own system, used to check cover at every counter. Update it in your system, then sync or import here.'
+        : 'Your medicine list and service tariffs. Enforced at every counter: excluded items blocked, restricted ones need your approval, nothing paid above tariff.'}
+      actions={allowed && <>
+        {me?.canSyncPriceList && <button type="button" className="dx-btn" disabled={syncing} onClick={sync}>{syncing ? 'Syncing…' : '⟳ Sync from your system'}</button>}
+        {tab === 'drugs'
+          ? <button type="button" className="dx-btn" onClick={() => setCsv('drug_name,generic_name,strength,form,tariff_price,tier,requires_preauth,max_qty_per_month,plans\n')}>⬆ Import CSV</button>
+          : <button type="button" className="dx-btn" onClick={() => setSvcCsv('service_type,code,description,tariff_price,requires_preauth,plans\n')}>⬆ Import CSV</button>}
+        {can && (tab === 'drugs'
+          ? <button type="button" className="dx-btn dx-btn--primary" onClick={() => setEdit({ drugName: '', genericName: '', strength: '', form: '', tariffPrice: '', tier: 'COVERED', requiresPreauth: false, maxQtyPerMonth: '', active: true })}>+ Medicine</button>
+          : <button type="button" className="dx-btn dx-btn--primary" onClick={() => setSvc({ serviceType: 'CONSULT', code: '', description: '', tariffPrice: '', requiresPreauth: false, active: true })}>+ Service</button>)}
+      </>}>
       <div className="dx-tabs">
         <button type="button" className={`dx-tab ${tab === 'drugs' ? 'on' : ''}`} onClick={() => setTab('drugs')}>Medicines<b>{(drugs.data || []).length}</b></button>
         <button type="button" className={`dx-tab ${tab === 'services' ? 'on' : ''}`} onClick={() => setTab('services')}>Services<b>{(services.data || []).length}</b></button>
@@ -145,18 +199,18 @@ export function InsPriceLists({ me }) {
       </div>
       {tab === 'drugs' ? (
         <div className="dx-card"><div className="dx-table-wrap"><table className="dx-table">
-          <thead><tr><th>Medicine</th><th>Generic</th><th>Strength</th><th>Tariff / unit</th><th>Tier</th><th>Pre-approval</th><th>Max / month</th><th>Active</th></tr></thead>
+          <thead><tr><th>Medicine</th><th>Generic</th><th>Strength</th><th>Tariff / unit</th><th>Tier</th><th>Plans</th>{me?.preauthEnabled && <th>Pre-approval</th>}<th>Max / month</th><th>Active</th></tr></thead>
           <tbody>{shown.length ? <Paged items={shown} table>{(shown) => shown.map(d => (
             <tr key={d.id} className={can ? 'dx-click' : ''} onClick={() => can && setEdit({ ...d, tariffPrice: d.tariffPrice ?? '', maxQtyPerMonth: d.maxQtyPerMonth ?? '' })}>
               <td><b>{d.drugName}</b><div className="dx-card-hint">{d.form || ''}</div></td><td>{d.genericName || <span className="dx-card-hint">unmapped</span>}</td><td>{d.strength || '—'}</td><td>{d.tariffPrice != null ? money(d.tariffPrice) : '—'}</td>
-              <td><Pill map={TIER} k={d.tier} /></td><td>{d.requiresPreauth ? 'Yes' : '—'}</td><td>{d.maxQtyPerMonth != null ? Number(d.maxQtyPerMonth) : '—'}</td><td>{d.active ? '✓' : '—'}</td></tr>
-          ))}</Paged> : <tr><td colSpan={8}><Empty>No medicines yet. Import your list as CSV.</Empty></td></tr>}</tbody>
+              <td><Pill map={TIER} k={d.tier} /></td><td className="dx-card-hint">{plansLabel(d.plans, me?.plans)}</td>{me?.preauthEnabled && <td>{d.requiresPreauth ? 'Yes' : '—'}</td>}<td>{d.maxQtyPerMonth != null ? Number(d.maxQtyPerMonth) : '—'}</td><td>{d.active ? '✓' : '—'}</td></tr>
+          ))}</Paged> : <tr><td colSpan={9}><Empty>No medicines yet. Import your list as CSV.</Empty></td></tr>}</tbody>
         </table></div></div>
       ) : (
         <div className="dx-card"><div className="dx-table-wrap"><table className="dx-table">
-          <thead><tr><th>Type</th><th>Code</th><th>Service</th><th>Tariff</th><th>Pre-approval</th><th>Active</th></tr></thead>
+          <thead><tr><th>Type</th><th>Code</th><th>Service</th><th>Tariff</th><th>Plans</th>{me?.preauthEnabled && <th>Pre-approval</th>}<th>Active</th></tr></thead>
           <tbody>{(services.data || []).length ? services.data.map(s => (
-            <tr key={s.id} className={can ? 'dx-click' : ''} onClick={() => can && setSvc({ ...s })}><td>{s.serviceType}</td><td style={{ fontFamily: 'monospace' }}>{s.code}</td><td><b>{s.description}</b></td><td>{money(s.tariffPrice)}</td><td>{s.requiresPreauth ? 'Yes' : '—'}</td><td>{s.active ? '✓' : '—'}</td></tr>
+            <tr key={s.id} className={can ? 'dx-click' : ''} onClick={() => can && setSvc({ ...s })}><td>{s.serviceType}</td><td style={{ fontFamily: 'monospace' }}>{s.code}</td><td><b>{s.description}</b></td><td>{money(s.tariffPrice)}</td><td className="dx-card-hint">{plansLabel(s.plans, me?.plans)}</td>{me?.preauthEnabled && <td>{s.requiresPreauth ? 'Yes' : '—'}</td>}<td>{s.active ? '✓' : '—'}</td></tr>
           )) : <tr><td colSpan={6}><Empty>No service tariffs yet (consultations, dental, optical, physio, admissions, lab, scans).</Empty></td></tr>}</tbody>
         </table></div></div>
       )}
@@ -171,9 +225,10 @@ export function InsPriceLists({ me }) {
             <div className="dx-field"><label>Tariff per unit (GHS)</label><input className="dx-input" type="number" step="0.01" value={edit.tariffPrice} onChange={e => setEdit({ ...edit, tariffPrice: e.target.value })} /></div>
             <div className="dx-field"><label>Tier</label><select className="dx-select" value={edit.tier} onChange={e => setEdit({ ...edit, tier: e.target.value })}>{Object.keys(TIER).map(t => <option key={t}>{t}</option>)}</select></div>
             <div className="dx-field"><label>Max quantity per month</label><input className="dx-input" type="number" value={edit.maxQtyPerMonth} onChange={e => setEdit({ ...edit, maxQtyPerMonth: e.target.value })} /></div>
-            <div className="dx-field"><label>&nbsp;</label><label style={{ display: 'flex', gap: 6, fontSize: '0.84rem' }}><input type="checkbox" checked={!!edit.requiresPreauth} onChange={e => setEdit({ ...edit, requiresPreauth: e.target.checked })} /> Needs pre-approval</label>
+            <div className="dx-field"><label>&nbsp;</label>{me?.preauthEnabled && <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem' }}><input type="checkbox" checked={!!edit.requiresPreauth} onChange={e => setEdit({ ...edit, requiresPreauth: e.target.checked })} /> Needs pre-approval</label>}
               <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem' }}><input type="checkbox" checked={edit.active !== false} onChange={e => setEdit({ ...edit, active: e.target.checked })} /> Active</label></div>
           </div>
+          <PlanPicker plans={me?.plans} value={edit.plans} onChange={(plans) => setEdit({ ...edit, plans })} />
         </Modal>
       )}
       {svc && (
@@ -184,9 +239,18 @@ export function InsPriceLists({ me }) {
             <div className="dx-field"><label>Code</label><input className="dx-input" value={svc.code} onChange={e => setSvc({ ...svc, code: e.target.value })} placeholder="Must match the provider's service code" /></div>
             <div className="dx-field"><label>Description</label><input className="dx-input" value={svc.description} onChange={e => setSvc({ ...svc, description: e.target.value })} /></div>
             <div className="dx-field"><label>Tariff (GHS)</label><input className="dx-input" type="number" step="0.01" value={svc.tariffPrice} onChange={e => setSvc({ ...svc, tariffPrice: e.target.value })} /></div>
-            <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem' }}><input type="checkbox" checked={!!svc.requiresPreauth} onChange={e => setSvc({ ...svc, requiresPreauth: e.target.checked })} /> Needs pre-approval</label>
+            {me?.preauthEnabled && <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem' }}><input type="checkbox" checked={!!svc.requiresPreauth} onChange={e => setSvc({ ...svc, requiresPreauth: e.target.checked })} /> Needs pre-approval</label>}
             <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem' }}><input type="checkbox" checked={svc.active !== false} onChange={e => setSvc({ ...svc, active: e.target.checked })} /> Active</label>
           </div>
+          <PlanPicker plans={me?.plans} value={svc.plans} onChange={(plans) => setSvc({ ...svc, plans })} />
+        </Modal>
+      )}
+      {svcCsv !== null && (
+        <Modal title="Import service tariffs (CSV)" sub="Paste rows or choose a file. Same type + code updates the existing tariff." onClose={() => setSvcCsv(null)} width={760}
+          footer={<><button type="button" className="dx-btn" onClick={() => setSvcCsv(null)}>Cancel</button><button type="button" className="dx-btn dx-btn--primary" onClick={importSvc}>Import</button></>}>
+          <input type="file" accept=".csv,text/csv" onChange={async e => { const f = e.target.files?.[0]; if (f) setSvcCsv(await f.text()); }} />
+          <textarea rows={12} value={svcCsv} onChange={e => setSvcCsv(e.target.value)} style={{ fontFamily: 'monospace', width: '100%', boxSizing: 'border-box' }} />
+          <p className="dx-card-hint" style={{ margin: 0 }}>service_type: CONSULT / DENTAL / OPTICAL / PHYSIO / HOSPITAL / LAB / SCAN · requires_preauth: yes/no</p>
         </Modal>
       )}
       {csv !== null && (

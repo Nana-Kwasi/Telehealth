@@ -51,7 +51,7 @@ function CheckIn({ facility }) {
   const [walkIn, setWalkIn] = useState(null);
   const [insurers, setInsurers] = useState([]);
   const [staff, setStaff] = useState([]);
-  const [form, setForm] = useState({ cardId: '', insurerId: '', memberNo: '', visitType: (VISIT_TYPES[facility?.type] || ['OUTPATIENT'])[0], complaint: '', attendingId: '' });
+  const [form, setForm] = useState({ cardId: '', insurerId: '', memberNo: '', visitType: (VISIT_TYPES[facility?.type] || ['OUTPATIENT'])[0], complaint: '', attendingId: '', emergency: false });
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     api('/api/v1/insurance/insurers').then(setInsurers).catch(() => {});
@@ -67,7 +67,7 @@ function CheckIn({ facility }) {
     setBusy(true);
     try {
       const v = await api(`${F}/visits`, { method: 'POST', body: { patientId: patient.id, cardId: form.cardId || null, insurerId: form.cardId ? null : form.insurerId || null,
-        insurerMemberNo: form.cardId ? null : form.memberNo || null, visitType: form.visitType, complaint: form.complaint, attendingId: form.attendingId || null } });
+        insurerMemberNo: form.cardId ? null : form.memberNo || null, visitType: form.visitType, complaint: form.complaint, attendingId: form.attendingId || null, emergency: form.emergency } });
       navigate(`/dashboard/visits/${v.id}`, { state: { otp: v } });
     } catch (e) { alert(e?.message); } finally { setBusy(false); }
   };
@@ -109,6 +109,7 @@ function CheckIn({ facility }) {
                 <div className="dx-field"><label>Seen by</label><select className="dx-select" value={form.attendingId} onChange={e => setForm({ ...form, attendingId: e.target.value })}><option value="">—</option>{staff.map(s => <option key={s.userId} value={s.userId}>{s.name} ({s.staffRole.toLowerCase()})</option>)}</select></div>
               </div>
               <div className="dx-field"><label>Reason for visit</label><input className="dx-input" value={form.complaint} onChange={e => setForm({ ...form, complaint: e.target.value })} /></div>
+              <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem', alignItems: 'center' }}><input type="checkbox" checked={form.emergency} onChange={e => setForm({ ...form, emergency: e.target.checked })} /> Emergency: treat now, the insurer reviews afterwards</label>
               <button type="button" className="dx-btn dx-btn--primary" disabled={busy} onClick={go}>{busy ? 'Checking with insurer…' : 'Check in'}</button>
             </div>
           )}
@@ -273,13 +274,16 @@ function VisitWorkspace() {
             <div className="dx-kpi-value" style={{ fontSize: '1.4rem' }}>{money((v.items || []).reduce((s, i) => s + Number(i.amount), 0))}</div>
             {insured ? (<>
               <p className="dx-card-hint">{v.insurerName} · member {v.memberVerified ? '✓ confirmed' : 'not yet confirmed'}</p>
+              {v.emergency && <p className="dx-card-hint" style={{ color: '#b45309' }}>Emergency: nothing waits for pre-approval. The insurer reviews it afterwards.</p>}
+              {!locked && <label style={{ display: 'flex', gap: 6, fontSize: '0.84rem', alignItems: 'center' }}><input type="checkbox" checked={!!v.emergency} disabled={busy}
+                onChange={e => { setCover(null); call(() => api(`${F}/visits/${visitId}`, { method: 'PATCH', body: { ...draft, emergency: e.target.checked } })); }} /> Emergency</label>}
               {cover && <div style={{ borderRadius: 10, padding: '0.6rem 0.75rem', margin: '8px 0', background: ['COVERED', 'PARTIAL'].includes(cover.outcome) ? '#f0fdf4' : '#fef2f2', border: '1px solid #e2e8f0', fontSize: '0.84rem' }}>
                 <b>{cover.outcome === 'COVERED' ? 'Covered' : cover.outcome === 'PARTIAL' ? 'Partly covered' : 'Not covered'}</b>{cover.reason ? ` — ${cover.reason}` : ''}
                 <div>Insurer pays <b>{money(cover.coveredTotal)}</b> · patient pays <b>{money(cover.patientTotal)}</b></div>
                 {(cover.lines || []).filter(l => l.reason).map(l => <div key={l.medIndex} className="dx-card-hint">⚠ {l.name}: {l.reason}</div>)}</div>}
               {!locked && <div style={{ display: 'grid', gap: 6 }}>
                 <button type="button" className="dx-btn" disabled={busy || !(v.items || []).length} onClick={checkCover}>Check cover</button>
-                <button type="button" className="dx-btn" onClick={() => setPreauth(true)}>Ask insurer for approval</button>
+                {v.preauthEnabled && !v.emergency && <button type="button" className="dx-btn" onClick={() => setPreauth(true)}>Ask insurer for approval</button>}
                 <button type="button" className="dx-btn dx-btn--primary" disabled={busy || !(v.items || []).length} onClick={complete}>Complete & bill insurer</button>
               </div>}
             </>) : !locked && <button type="button" className="dx-btn dx-btn--primary" disabled={busy || !(v.items || []).length} onClick={complete}>Complete visit</button>}

@@ -111,8 +111,10 @@ function PublicRoute({ children, session }) {
 
 // Requires authentication — sends unauthenticated users to login
 function PrivateRoute({ children, session }) {
+  const location = useLocation();
   if (session.loading) return <LoadingScreen />;
-  if (!session.role) return <Navigate to="/login" replace />;
+  // Keep where they were going (e.g. a link in an email) so sign-in takes them there.
+  if (!session.role) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search }} />;
   return children;
 }
 
