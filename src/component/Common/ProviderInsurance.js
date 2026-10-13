@@ -197,6 +197,8 @@ export function LicencePanel() {
   const [form, setForm] = useState(null);
   const save = async () => { try { await api(`${I}/licence`, { method: 'POST', body: form }); setForm(null); reload(); } catch (e) { alert(e?.message); } };
   const st = data?.status || 'NOT_SUBMITTED';
+  // Only for clinicians who bill insurers (or who already sent a licence).
+  if (!data || (!data.servesInsuredMembers && st === 'NOT_SUBMITTED')) return null;
   const tone = st === 'VERIFIED' ? ['#f0fdf4', '#86efac', '#166534'] : st === 'REJECTED' ? ['#fef2f2', '#fecaca', '#991b1b'] : ['#fffbeb', '#fde68a', '#92400e'];
   return (
     <div style={{ background: tone[0], border: `1.5px solid ${tone[1]}`, borderRadius: 12, padding: '0.85rem 1rem', marginBottom: '1rem', color: tone[2] }}>

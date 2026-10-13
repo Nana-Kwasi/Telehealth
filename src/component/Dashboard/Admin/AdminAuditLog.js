@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, query, orderBy, limit } from '../../../services/firestoreShim';
-import useSystemConfig, { cfg } from '../../../hooks/useSystemConfig';
 import Paged from '../../Common/Paged';
 
 const ACTION_PALETTE = {
@@ -82,7 +81,6 @@ function PlatformBadge({ platform }) {
 }
 
 export default function AdminAuditLog() {
-  const sysConfig = useSystemConfig();
   const [logs, setLogs]           = useState([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
@@ -106,12 +104,8 @@ export default function AdminAuditLog() {
   };
 
   const groupActions = groupFilter ? (ACTION_GROUPS[groupFilter] || []) : null;
-  const retentionDays = Math.max(1, Number(cfg(sysConfig, 'dataRetention', 'auditLogRetentionDays', 365)) || 365);
-  const retentionCutoff = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
 
   const filtered = logs.filter(l => {
-    const ms = l.timestamp?.seconds ? l.timestamp.seconds * 1000 : 0;
-    if (ms && ms < retentionCutoff) return false;
     if (platformFilter && l.platform !== platformFilter) return false;
     if (groupActions && !groupActions.includes(l.action)) return false;
     if (actionFilter && l.action !== actionFilter) return false;
@@ -150,9 +144,6 @@ export default function AdminAuditLog() {
       </div>
 
       {/* Stats */}
-      <div className="admin-alert admin-alert-info" style={{ marginBottom: '1rem' }}>
-        Data retention policy applied: showing audit events from the last {retentionDays} day{retentionDays > 1 ? 's' : ''}.
-      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.85rem', marginBottom: '1.5rem' }}>
         {[
           { label: 'Total Events', val: stats.total, color: '#2f5e40', bg: '#e9f3ec' },

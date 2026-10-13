@@ -4,6 +4,7 @@ import { clientRoutes, therapistRoutes, secondOpinionRoutes } from './routes';
 import './DashboardShell.css';
 import { avatarUrlOf, initialsOf } from '../../utils/profileImage';
 
+import BrandLogo from '../Common/BrandLogo';
 export default function DashboardShell({ role, profile }) {
   // A second-opinion client gets the narrow nav: one case, one consultation,
   // no programme. The tier comes from the profile rather than the role, since
@@ -19,7 +20,7 @@ export default function DashboardShell({ role, profile }) {
     <div className="dashboard-container">
       <aside className="dashboard-sidebar">
         <div className="sidebar-header">
-          <div className="sidebar-logo">NessaHub</div>
+          <BrandLogo tone="light" />
           <div className="sidebar-user">
             {/* Reads every field name a saved picture might arrive under
                 (avatarUrl / photoURL / profilePhotoUrl), ignores stale blob: urls

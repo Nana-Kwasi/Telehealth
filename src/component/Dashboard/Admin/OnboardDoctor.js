@@ -72,7 +72,7 @@ export default function OnboardDoctor({ profile }) {
 
     try {
       // Create Firebase Auth account using secondary app — admin stays signed in
-      const userCred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password);
+      const userCred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password, form.name.trim());
       const uid = userCred.user.uid;
 
       // Upload profile image if provided

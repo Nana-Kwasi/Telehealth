@@ -20,6 +20,7 @@ import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsura
 import RoleAssistant from '../../Common/RoleAssistant';
 import Paged from '../../Common/Paged';
 
+import BrandLogo from '../../Common/BrandLogo';
 const firebaseConfig = {
   apiKey: 'AIzaSyDHQSUvAww2Z0MMnNJcLyfiEDRgZB_aSpI',
   authDomain: 'teleehealth.firebaseapp.com',
@@ -580,11 +581,7 @@ export default function DiagnosticParentDashboard({ profile, type = 'lab' }) {
     <div className="pharmacy-dashboard">
       <aside className="pharmacy-sidebar">
         <div className="pharmacy-sidebar-header">
-          <div className="pharmacy-logo">
-            <span>{type === 'lab' ? '🧪' : '🩻'}</span>
-            <h2>NessaHub</h2>
-            <span className="pharmacy-logo-badge">{title}</span>
-          </div>
+          <BrandLogo tone="dark" badge={title} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.name || profile?.labName || profile?.centerName || 'D')[0].toUpperCase()}</div>
             <div>

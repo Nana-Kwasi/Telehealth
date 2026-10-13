@@ -13,7 +13,6 @@ import {
 } from '../../../services/firestoreShim';
 import { logAction, A } from '../../../utils/auditLogger';
 import { VisitTranscriptChip } from '../../Common/PatientTranscripts';
-import { getConfigOnce } from '../../../hooks/useSystemConfig';
 import Paged from '../../Common/Paged';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -167,19 +166,6 @@ export default function DoctorAppointments({ profile }) {
     if (!sForm.time) { setSError('Please enter a time.'); return; }
     setSSaving(true); setSError('');
     try {
-      // Enforce system config limit
-      const cfg = await getConfigOnce();
-      const maxPerDay = cfg?.appointments?.maxApptPerDoctorPerDay ?? 20;
-      const todaySnap = await getDocs(
-        query(collection(db, 'doctorAppointments'),
-          where('doctorId', '==', profile.id),
-          where('date', '==', scheduleDay))
-      );
-      if (todaySnap.size >= maxPerDay) {
-        setSError(`Appointment limit reached for this day (max ${maxPerDay} per day).`);
-        return;
-      }
-
       const newAppt = {
         doctorId: profile.id,
         doctorName: profile.name,

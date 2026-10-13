@@ -11,6 +11,7 @@ import '../Pharmacy/PharmacyDashboard.css';
 import RoleAssistant from '../../Common/RoleAssistant';
 import Paged from '../../Common/Paged';
 
+import BrandLogo from '../../Common/BrandLogo';
 /** The insurer's dashboard on NessaHub. Insurer staff are created by the NessaHub super admin or their own insurer admin. */
 const NAV = [
   ['WORK', [['/dashboard', 'Overview', '📊'], ['/dashboard/claims', 'Claims', '🧾'], ['/dashboard/preauth', 'Pre-authorisation', '✅'], ['/dashboard/fraud', 'Fraud & audit', '🛡️']]],
@@ -41,7 +42,7 @@ export default function InsurerDashboard({ profile }) {
     <div className="pharmacy-dashboard">
       <aside className="pharmacy-sidebar">
         <div className="pharmacy-sidebar-header">
-          <div className="pharmacy-logo"><span>🛡️</span><h2>NessaHub</h2><span className="pharmacy-logo-badge">Insurer</span></div>
+          <BrandLogo tone="dark" badge="Insurer" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(me?.insurerName || profile?.insurerName || 'I')[0].toUpperCase()}</div>
             <div><p className="pharmacy-user-name">{me?.insurerName || profile?.insurerName || 'Insurer'}</p><p className="pharmacy-user-role">{profile?.fullName || ''} · {(me?.staffRole || '').replace('_', ' ').toLowerCase()}</p></div>

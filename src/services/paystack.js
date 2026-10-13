@@ -1,4 +1,4 @@
-import { api } from './apiClient';
+import { api, hasActiveSession } from './apiClient';
 
 /**
  * Take a payment for a booking, and only resolve once it is CONFIRMED.
@@ -57,11 +57,24 @@ export async function payForBooking({ email, amount, purpose, metadata }) {
   try {
     init = await api('/api/v1/payments/initialize', {
       method: 'POST',
-      authenticated: false,
+      // Signed in: the server can then apply the free first consultation to this person.
+      authenticated: hasActiveSession(),
       body: { email, amount: Number(amount), purpose, metadata: metadata || {} },
     });
   } catch (e) {
     return { ok: false, reason: e?.message || 'Could not start the payment.' };
+  }
+
+  // Free first consultation (System Config → Payments): nothing to pay, no checkout.
+  if (init?.free && init?.reference) {
+    await recordPromotionRedemption(init.reference, metadata);
+    return { ok: true, reference: init.reference, amount: 0, free: true, currency: init.currency || 'GHS', message: init.message };
+  }
+
+  // Tax is added on top of the price by the server; tell the person before the checkout opens.
+  if (Number(init?.taxAmount) > 0 && typeof window !== 'undefined'
+    && !window.confirm(`Total to pay: GHS ${Number(init.amount).toFixed(2)} (GHS ${Number(init.baseAmount).toFixed(2)} + GHS ${Number(init.taxAmount).toFixed(2)} tax). Continue to payment?`)) {
+    return { ok: false, reason: 'Payment cancelled.' };
   }
 
   if (!init?.authorizationUrl || !init?.reference) {

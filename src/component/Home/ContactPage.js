@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import PublicPageShell from './PublicPageShell';
+import useSystemConfig, { cfg } from '../../hooks/useSystemConfig';
 
-const SUPPORT_EMAIL = 'support@nessahub.com';
+const DEFAULT_SUPPORT_EMAIL = 'support@nessahub.com';
 
 export default function ContactPage() {
   const [name, setName] = useState('');
+  // Set by the super admin in System Config → General.
+  const sysConfig = useSystemConfig();
+  const SUPPORT_EMAIL = cfg(sysConfig, 'general', 'supportEmail', DEFAULT_SUPPORT_EMAIL) || DEFAULT_SUPPORT_EMAIL;
+  const SUPPORT_PHONE = cfg(sysConfig, 'general', 'supportPhone', '');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -35,6 +40,7 @@ export default function ContactPage() {
           <p><strong>Email:</strong>{' '}
             <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
           </p>
+          {SUPPORT_PHONE && <p><strong>Phone:</strong>{' '}<a href={`tel:${SUPPORT_PHONE.replace(/\s+/g, '')}`}>{SUPPORT_PHONE}</a></p>}
           <p><strong>Privacy:</strong>{' '}
             <a href="mailto:privacy@nessahub.com">privacy@nessahub.com</a>
           </p>

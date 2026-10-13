@@ -54,7 +54,8 @@ export default function ForcedPasswordChangeOverlay({ profile, firestoreCollecti
       if (err.code === 'auth/requires-recent-login') {
         setPwError('Please log out, sign in with your temporary password once more, then try again.');
       } else {
-        setPwError('Failed to update password. Please try again.');
+        // The server says why (e.g. super admins need 12 characters).
+        setPwError(err?.message && !/^Request failed/.test(err.message) ? err.message : 'Failed to update password. Please try again.');
       }
       console.error('ForcedPasswordChangeOverlay:', err);
     } finally {

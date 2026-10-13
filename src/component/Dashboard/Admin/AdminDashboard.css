@@ -381,3 +381,26 @@ body:has(.admin-dashboard) .nh-notif-floating { top: 8px !important; right: 18px
 .admin-page-header > .admin-page-title { flex: 1 1 auto; }
 .admin-page-header > .admin-page-title + .admin-page-sub { order: 3; flex-basis: 100%; max-width: none; margin-top: -0.85rem; }
 .admin-empty svg { color: var(--a-brand); opacity: 0.8; }
+
+/* ── System Config & Settings ── */
+.sc-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.sc-nav { padding: 0.5rem; position: sticky; top: 1rem; }
+.sc-nav-item {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.65rem 0.85rem; border: none; border-radius: 10px;
+  background: transparent; color: var(--a-muted); font: inherit; font-size: 0.85rem; font-weight: 600; text-align: left; cursor: pointer;
+}
+.sc-nav-item:hover { background: #f3f6f4; color: var(--a-ink); }
+.sc-nav-item.active { background: var(--a-brand-soft); color: var(--a-brand-2); font-weight: 800; }
+.st-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.st-meter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; max-width: 260px; }
+.st-meter span { height: 5px; border-radius: 3px; background: #e2e8f0; }
+.st-meter span.on.s1 { background: #dc2626; }
+.st-meter span.on.s2 { background: #f59e0b; }
+.st-meter span.on.s3 { background: #16a34a; }
+.st-meter span.on.s4 { background: #15803d; }
+@media (max-width: 1100px) { .st-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .sc-layout { grid-template-columns: 1fr; }
+  .sc-nav { position: static; display: flex; gap: 4px; overflow-x: auto; }
+  .sc-nav-item { width: auto; white-space: nowrap; }
+}

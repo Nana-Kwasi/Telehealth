@@ -19,6 +19,7 @@ import GlobalReportForm from '../Common/GlobalReportForm';
 import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import RoleAssistant from '../../Common/RoleAssistant';
 
+import BrandLogo from '../../Common/BrandLogo';
 const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
   { path: '/dashboard/branches',     label: 'Manage Branches', icon: '🏪' },
@@ -78,11 +79,7 @@ export default function PharmacyDashboard({ profile }) {
     <div className="pharmacy-dashboard">
       <aside className="pharmacy-sidebar">
         <div className="pharmacy-sidebar-header">
-          <div className="pharmacy-logo">
-            <span>💊</span>
-            <h2>NessaHub</h2>
-            <span className="pharmacy-logo-badge">Pharmacy</span>
-          </div>
+          <BrandLogo tone="dark" badge="Pharmacy" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.pharmacyName || 'P')[0].toUpperCase()}</div>
             <div>

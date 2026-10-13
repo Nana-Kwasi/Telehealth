@@ -8,7 +8,7 @@ import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import {
   LayoutDashboard, Users, BadgeCheck, CalendarDays, Pill, Building2, Stethoscope, Brain, Home, HeartHandshake,
   FlaskConical, BarChart3, FileDown, Inbox, ShieldCheck, BookOpen, Radar, ScrollText, Bell, Mail, Megaphone, Tag,
-  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity } from 'lucide-react';
+  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity, UserCog, SlidersHorizontal } from 'lucide-react';
 import { api } from '../../../services/apiClient';
 import AdminGlobalSearch from './AdminGlobalSearch';
 import './AdminDashboard.css';
@@ -20,6 +20,8 @@ import AdminPrescriptionMonitor from './AdminPrescriptionMonitor';
 import AdminSmsFollowUp from './AdminSmsFollowUp';
 import AdminInsurance from './AdminInsurance';
 import AdminSystemConfig      from './AdminSystemConfig';
+import AdminTeam              from './AdminTeam';
+import AdminSettings          from './AdminSettings';
 import OnboardDoctor          from './OnboardDoctor';
 import OnboardTherapist       from './OnboardTherapist';
 import AdminOnboardHomeCareNurse from './AdminOnboardHomeCareNurse';
@@ -42,6 +44,8 @@ import AdminActivityMonitor   from './AdminActivityMonitor';
 import AdminApprovals         from './AdminApprovals';
 import AdminUserDetail        from './AdminUserDetail';
 
+import useSystemConfig, { cfg } from '../../../hooks/useSystemConfig';
+import BrandLogo from '../../Common/BrandLogo';
 const NAV = [
   // PLATFORM
   { path: '/dashboard',                   label: 'Overview',              icon: LayoutDashboard, section: 'PLATFORM' },
@@ -75,7 +79,9 @@ const NAV = [
   { path: '/dashboard/price-promotions',  label: 'Price Promotions',      icon: Tag,             section: 'ENGAGEMENT' },
   // SYSTEM
   { path: '/dashboard/ai-knowledge',      label: 'AI Knowledge Base',     icon: Sparkles,        section: 'SYSTEM' },
-  { path: '/dashboard/system-config',     label: 'System Config',         icon: Settings,        section: 'SYSTEM' },
+  { path: '/dashboard/super-admins',      label: 'Super admins',          icon: UserCog,         section: 'SYSTEM' },
+  { path: '/dashboard/system-config',     label: 'System Config',         icon: SlidersHorizontal, section: 'SYSTEM' },
+  { path: '/dashboard/settings',          label: 'Settings',              icon: Settings,        section: 'SYSTEM' },
 ];
 
 export default function AdminDashboard({ profile }) {
@@ -84,6 +90,7 @@ export default function AdminDashboard({ profile }) {
   const [forcedPwCollection, setForcedPwCollection] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
   const [counts, setCounts] = useState({});
+  const sysVersion = cfg(useSystemConfig(), 'general', 'platformVersion', '');
 
   // Queue sizes beside the menu items that have work waiting.
   useEffect(() => {
@@ -126,11 +133,7 @@ export default function AdminDashboard({ profile }) {
       <div className="admin-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
       <aside className="admin-sidebar" aria-label="Admin menu">
         <div className="admin-sidebar-header">
-          <div className="admin-logo">
-            <span className="admin-logo-mark">N</span>
-            <h2>NessaHub</h2>
-            <span className="admin-logo-badge">Admin</span>
-          </div>
+          <BrandLogo tone="dark" badge="Super admin" />
           <div className="admin-user-info">
             <div className="admin-avatar">{(profile?.name || profile?.fullName)?.[0]?.toUpperCase() || 'A'}</div>
             <div>
@@ -166,6 +169,7 @@ export default function AdminDashboard({ profile }) {
         </nav>
 
         <div className="admin-sidebar-footer">
+          {sysVersion && <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', marginBottom: 8, paddingLeft: 4 }}>Version {sysVersion}</div>}
           <button className="admin-logout-btn" onClick={handleLogout}>
             <LogOut size={16} /> <span>Log out</span>
           </button>
@@ -221,6 +225,8 @@ export default function AdminDashboard({ profile }) {
           <Route path="/activity"            element={<AdminActivityMonitor />} />
           <Route path="/audit-log"           element={<AdminAuditLog />} />
           <Route path="/system-config"       element={<AdminSystemConfig />} />
+          <Route path="/super-admins"        element={<AdminTeam />} />
+          <Route path="/settings"            element={<AdminSettings />} />
         </Routes>
       </main>
     </div>

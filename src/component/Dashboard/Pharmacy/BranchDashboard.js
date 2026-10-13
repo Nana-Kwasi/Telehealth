@@ -19,6 +19,7 @@ import { deriveRxStockStatus } from '../../../utils/pharmacyRxStatus';
 import './PharmacyDashboard.css';
 import Paged from '../../Common/Paged';
 
+import BrandLogo from '../../Common/BrandLogo';
 function branchRxEventLabel(action) {
   const m = {
     DRUG_STATUS_UPDATED: 'Drug status updated',
@@ -739,11 +740,7 @@ export default function BranchDashboard({ profile }) {
     <div className="pharmacy-dashboard">
       <aside className="pharmacy-sidebar">
         <div className="pharmacy-sidebar-header">
-          <div className="pharmacy-logo">
-            <span>🏪</span>
-            <h2>NessaHub</h2>
-            <span className="pharmacy-logo-badge">Branch</span>
-          </div>
+          <BrandLogo tone="dark" badge="Pharmacy branch" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.branchName || 'B')[0].toUpperCase()}</div>
             <div>

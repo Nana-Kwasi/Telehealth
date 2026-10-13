@@ -44,6 +44,7 @@ import { api, getStoredUserId } from '../../../services/apiClient';
 import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
 import InsuranceCards from '../../Common/InsuranceCards';
 import ClaimConfirmations from '../../Common/ClaimConfirmations';
+import BrandLogo from '../../Common/BrandLogo';
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -149,9 +150,7 @@ export default function ClientDashboard({ profile }) {
       {/* Sidebar */}
       <aside className="client-sidebar">
         <div className="sidebar-header">
-          <div className="logo">
-            <h2>NessaHub</h2>
-          </div>
+          <BrandLogo tone="dark" badge="Therapy" />
           <div className="user-info">
             <div className="user-avatar" onClick={() => document.getElementById('profile-image-input').click()}>
               {profile?.photoURL ? (

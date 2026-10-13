@@ -75,6 +75,7 @@ import NotificationCenter from './component/Common/NotificationCenter';
 import PolicyConsentGate, { linkPolicyConsentToAccount } from './component/Common/PolicyConsentGate';
 import PublicHelp from './component/Common/PublicHelp';
 import ResetPassword from './component/Auth/ResetPassword';
+import VerifyEmail, { VerifyEmailGate } from './component/Auth/VerifyEmail';
 import { recordPendingConsents } from './utils/pendingConsents';
 function LoadingScreen() {
   return (
@@ -230,6 +231,25 @@ export default function App() {
 
   if (session.loading) return <LoadingScreen />;
 
+  // Browser tab carries the platform name set in System Config → General.
+  // (Plain assignment, not an effect: this runs after the early returns above.)
+  if (typeof document !== 'undefined') {
+    const name = cfg(sysConfig, 'general', 'platformName', 'NessaHub');
+    if (name && !document.title.startsWith(name)) document.title = name;
+  }
+
+  // Confirm-your-email (System Config → Sign-in security): a new self sign-up
+  // confirms before using NessaHub. The server refuses their requests until then.
+  if (session.role && session.role !== 'admin' && session.profile?.emailVerified === false
+    && cfg(sysConfig, 'security', 'requireEmailVerification', false)
+    && !window.location.pathname.startsWith('/verify-email')) {
+    return (
+      <VerifyEmailGate email={session.profile?.email}
+        onConfirmed={() => setSession((s) => ({ ...s, profile: { ...s.profile, emailVerified: true } }))}
+        onSignOut={() => performLogout().catch(() => {})} />
+    );
+  }
+
   // Maintenance mode — block non-admins
   const maintenanceMode = cfg(sysConfig, 'general', 'maintenanceMode', false);
   if (maintenanceMode && session.role && session.role !== 'admin') {
@@ -238,7 +258,8 @@ export default function App() {
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔧</div>
         <h1 style={{ color: '#fff', fontSize: '1.5rem', fontWeight: 800, margin: '0 0 0.5rem' }}>Platform Under Maintenance</h1>
         <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.95rem', margin: '0 0 1.5rem', maxWidth: 400 }}>
-          NessaHub is currently undergoing scheduled maintenance. Please check back shortly.
+          {cfg(sysConfig, 'general', 'maintenanceMessage', 'NessaHub is undergoing scheduled maintenance. Please check back shortly.')}
+          {cfg(sysConfig, 'general', 'supportEmail', '') && <span style={{ display: 'block', marginTop: '0.75rem', fontSize: '0.85rem' }}>Need help? {cfg(sysConfig, 'general', 'supportEmail', '')}{cfg(sysConfig, 'general', 'supportPhone', '') ? ` · ${cfg(sysConfig, 'general', 'supportPhone', '')}` : ''}</span>}
         </p>
         <button style={{ padding: '0.6rem 1.5rem', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
           onClick={() => performLogout().catch(() => {})}>
@@ -354,6 +375,7 @@ export default function App() {
           {/* ── Auth (redirect if already logged in) ── */}
           <Route path="/login"  element={<PublicRoute session={session}><Login  /></PublicRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/signup" element={<PublicRoute session={session}><SignUp /></PublicRoute>} />
 
           {/* ── Video (accessible without sidebar) ── */}

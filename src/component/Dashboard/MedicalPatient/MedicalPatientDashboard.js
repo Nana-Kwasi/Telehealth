@@ -58,6 +58,7 @@ import ConsentHistory from '../../Common/ConsentHistory';
 import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import EmergencyContactsEditor from '../../Common/EmergencyContactsEditor';
 import { RxCoverChip } from '../../Common/RxInsuranceCard';
+import BrandLogo from '../../Common/BrandLogo';
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -4948,11 +4949,7 @@ export default function MedicalPatientDashboard({ profile }) {
     <div className="mp-dashboard">
       <aside className="mp-sidebar">
         <div className="mp-sidebar-header">
-          <div className="mp-logo">
-            <Activity size={22} />
-            <span className="mp-logo-name">NessaHub</span>
-            <span className="mp-logo-badge">Medical</span>
-          </div>
+          <BrandLogo tone="dark" badge="Patient" />
           <div className="mp-user-card">
             <div className="mp-user-avatar">{getInitials(profile?.name)}</div>
             <div className="mp-user-info">

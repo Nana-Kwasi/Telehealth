@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "teleehealth"
+    "default": "nessahub-47d89",
+    "nessahub": "nessahub-47d89",
+    "teleehealth": "teleehealth"
   }
 }

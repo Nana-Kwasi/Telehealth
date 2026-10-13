@@ -5,7 +5,6 @@ import {
   Inbox,
   User,
   LogOut,
-  HeartPulse,
   Shield,
   ClipboardList,
 } from 'lucide-react';
@@ -23,6 +22,7 @@ import NursePhotoPicker from './NursePhotoPicker';
 import NurseNotificationsBell from './NurseNotificationsBell';
 import './HomeCareNurseDashboard.css';
 
+import BrandLogo from '../../Common/BrandLogo';
 const NAV = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/dashboard/bookings', icon: Inbox, label: 'Bookings', countKeys: ['pending', 'emergency', 'ongoing'] },
@@ -60,11 +60,7 @@ function NurseDashboardShell({ profile }) {
     <div className="hcn-dashboard">
       <aside className="hcn-sidebar">
         <div className="hcn-sidebar-header">
-          <div className="hcn-logo">
-            <HeartPulse size={24} />
-            <h2>NessaHub</h2>
-            <span className="hcn-logo-badge">Home Care</span>
-          </div>
+          <BrandLogo tone="dark" badge="Home care" />
           <div className="hcn-user-card">
             <NursePhotoPicker nurse={nurse} size={44} />
             <div className="hcn-user-info">

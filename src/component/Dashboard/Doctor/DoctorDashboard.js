@@ -44,6 +44,7 @@ import NotificationCentre from '../../Common/NotificationCentre';
 import AiClinicalAssistant from '../../Common/AiClinicalAssistant';
 import ClinicianFollowUps from '../../Common/ClinicianFollowUps';
 
+import BrandLogo from '../../Common/BrandLogo';
 export default function DoctorDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -104,11 +105,7 @@ export default function DoctorDashboard({ profile }) {
     <div className="doctor-dashboard">
       <aside className="doctor-sidebar">
         <div className="sidebar-header">
-          <div className="doctor-logo">
-            <Activity size={24} />
-            <h2>NessaHub</h2>
-            <span className="logo-badge">Medical</span>
-          </div>
+          <BrandLogo tone="dark" badge="Doctor" />
           <div className="user-info">
             <div className="doctor-avatar">
               {livePhotoURL ? (

@@ -14,6 +14,7 @@ import DiagSettings from './DiagSettings';
 import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsurance';
 import RoleAssistant from '../../Common/RoleAssistant';
 
+import BrandLogo from '../../Common/BrandLogo';
 export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -49,11 +50,7 @@ export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
     <div className="pharmacy-dashboard">
       <aside className="pharmacy-sidebar">
         <div className="pharmacy-sidebar-header">
-          <div className="pharmacy-logo">
-            <span>{type === 'lab' ? '🧪' : '🩻'}</span>
-            <h2>NessaHub</h2>
-            <span className="pharmacy-logo-badge">{type === 'lab' ? 'Lab Branch' : 'Scan Branch'}</span>
-          </div>
+          <BrandLogo tone="dark" badge={type === 'lab' ? 'Lab branch' : 'Scan branch'} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.branchName || 'B')[0].toUpperCase()}</div>
             <div>

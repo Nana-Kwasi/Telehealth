@@ -47,6 +47,7 @@ import NotificationCentre from '../../Common/NotificationCentre';
 import AiClinicalAssistant from '../../Common/AiClinicalAssistant';
 import ClinicianFollowUps from '../../Common/ClinicianFollowUps';
 
+import BrandLogo from '../../Common/BrandLogo';
 export default function TherapistDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -163,11 +164,7 @@ export default function TherapistDashboard({ profile }) {
       <aside className="therapist-sidebar">
         <div className="sidebar-header">
           {/* Logo */}
-          <div className="logo">
-            <Activity size={22} color="#818cf8" />
-            <h2>NessaHub</h2>
-            <span className="logo-badge">Therapy</span>
-          </div>
+          <BrandLogo tone="dark" badge="Therapist" />
 
           {/* User Card */}
           <div className="user-info">

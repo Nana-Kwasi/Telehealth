@@ -110,7 +110,9 @@ export async function createUserWithEmailAndPassword(authArg, email, password, d
   const regRole = typeof role === 'string' && role.trim() ? role.trim().toUpperCase() : 'CLIENT';
   const data = await api('/api/v1/auth/register', {
     method: 'POST',
-    authenticated: false,
+    // Admin onboarding (secondary app) sends the admin's sign-in, so it still works
+    // while public sign-ups are paused in System Config.
+    authenticated: !!(authArg && authArg._secondary),
     // Phone is captured on the signup forms; without sending it here the users
     // row had none and the admin user-detail screen showed an empty Phone for
     // every account.

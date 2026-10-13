@@ -11,6 +11,7 @@ import '../Pharmacy/PharmacyDashboard.css';
 import RoleAssistant from '../../Common/RoleAssistant';
 import Paged from '../../Common/Paged';
 
+import BrandLogo from '../../Common/BrandLogo';
 /**
  * Facility dashboard — clinic, hospital, dental, optical, physio. The insurance
  * side of a physical visit: check the member in (card checked live + SMS code to
@@ -382,7 +383,7 @@ export default function FacilityDashboard({ profile }) {
     <div className="pharmacy-dashboard">
       <aside className="pharmacy-sidebar">
         <div className="pharmacy-sidebar-header">
-          <div className="pharmacy-logo"><span>{TYPE_ICON[facility?.type] || '🏥'}</span><h2>NessaHub</h2><span className="pharmacy-logo-badge">{facility?.type ? facility.type.charAt(0) + facility.type.slice(1).toLowerCase() : 'Facility'}</span></div>
+          <BrandLogo tone="dark" badge={facility?.type ? facility.type.charAt(0) + facility.type.slice(1).toLowerCase() : 'Facility'} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(facility?.name || profile?.facilityName || 'F')[0].toUpperCase()}</div>
             <div><p className="pharmacy-user-name">{facility?.name || profile?.facilityName || 'Facility'}</p><p className="pharmacy-user-role">{profile?.fullName || ''} · {(facility?.staffRole || '').toLowerCase().replace('_', ' ')}</p></div>

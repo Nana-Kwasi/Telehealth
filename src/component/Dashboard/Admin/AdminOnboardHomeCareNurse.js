@@ -64,7 +64,7 @@ export default function AdminOnboardHomeCareNurse() {
     setSuccessMsg('');
     try {
       const tempPassword = generatePassword();
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), tempPassword);
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), tempPassword, form.fullName.trim());
       const uid = cred.user.uid;
 
       await setDoc(doc(db, 'homeCareNurses', uid), {

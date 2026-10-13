@@ -1,0 +1,55 @@
+.nh-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0 4px;
+  margin-bottom: 1.1rem;
+}
+
+.nh-brand-logo {
+  display: block;
+  height: 38px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.nh-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.nh-brand-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.22);
+}
+
+.nh-brand--dark .nh-brand-badge {
+  color: #ccfbf1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.nh-brand--light .nh-brand-badge {
+  color: #0f766e;
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+}

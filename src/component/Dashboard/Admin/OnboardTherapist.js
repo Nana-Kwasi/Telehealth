@@ -203,7 +203,7 @@ export default function OnboardTherapist() {
     try {
       // Secondary Auth app so the onboarding admin stays signed in
       const secAuth = getTherapistCreatorAuth();
-      const cred = await createUserWithEmailAndPassword(secAuth, form.email.trim(), tempPassword);
+      const cred = await createUserWithEmailAndPassword(secAuth, form.email.trim(), tempPassword, (form.name || '').trim());
       const uid = cred.user.uid;
       await fbSignOut(secAuth);
       

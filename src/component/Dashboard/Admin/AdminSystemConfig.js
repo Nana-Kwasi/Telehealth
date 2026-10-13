@@ -1,413 +1,258 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../../../services/firestoreShim';
-import { doc, getDoc, setDoc, serverTimestamp } from '../../../services/firestoreShim';
-import { SUPPORTED_COUNTRIES, getFlags } from '../../../utils/featureFlags';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { api } from '../../../services/apiClient';
 
-const FEATURE_META = {
-  pharmacyOnboarding:  { label: 'Pharmacy Onboarding',    desc: 'Allow pharmacies to be onboarded in this country' },
-  prescriptionRouting: { label: 'Prescription Routing',   desc: 'Route prescriptions to pharmacies automatically' },
-  pharmacyFulfillment: { label: 'Pharmacy Fulfillment',   desc: 'Enable full pharmacy fulfillment workflow' },
-  labOrdering:         { label: 'Lab Ordering',           desc: 'Allow doctors to order lab tests' },
-  scanOrdering:        { label: 'Scan / Imaging Orders',  desc: 'Allow doctors to order scan/imaging tests' },
-  videoConsultation:   { label: 'Video Consultation',     desc: 'Enable video call appointments' },
-  therapistBooking:    { label: 'Therapist Booking',      desc: 'Allow clients to book therapists directly' },
-  walkInVerify:        { label: 'Walk-in Verification',   desc: 'Enable walk-in prescription verification at pharmacies' },
-};
+/**
+ * Platform settings. Only settings the backend enforces are here, so each one
+ * applies on web and mobile alike. The list, limits and wording come from the
+ * server (/settings/schema), so this screen can never offer a setting that does
+ * nothing.
+ */
+const CFG = '/api/v1/admin/system-config';
 
-const CONFIG_SECTIONS = [
-  { key: 'general',       label: 'General Platform',    icon: '🏥' },
-  { key: 'appointments',  label: 'Appointments',        icon: '📅' },
-  { key: 'prescriptions', label: 'Prescriptions',       icon: '💊' },
-  { key: 'notifications', label: 'Notifications',       icon: '🔔' },
-  { key: 'security',      label: 'Security & Access',   icon: '🔐' },
-  { key: 'payments',      label: 'Payments & Currency', icon: '💳' },
-  { key: 'dataRetention', label: 'Data & Retention',    icon: '🗄' },
-  { key: 'flags',         label: 'Country Feature Flags', icon: '🌍' },
+const SECTIONS = [
+  { key: 'general', label: 'General', icon: '🌐', sub: 'Name, support contacts, maintenance and sign-ups.' },
+  { key: 'appointments', label: 'Appointments', icon: '📅', sub: 'Limits and rules for every booking, web and mobile.' },
+  { key: 'prescriptions', label: 'Prescriptions', icon: '💊', sub: 'NessaRx rules for prescribers, patients and pharmacies.' },
+  { key: 'notifications', label: 'Notifications', icon: '🔔', sub: 'Email, SMS and phone alerts. Security messages always send.' },
+  { key: 'security', label: 'Sign-in security', icon: '🔐', sub: 'How people sign in, for every app.' },
+  { key: 'payments', label: 'Payments', icon: '💳', sub: 'Tax, NessaHub\'s share and the free first consultation.' },
+  { key: 'dataRetention', label: 'Data & retention', icon: '🗄', sub: 'How long records are kept. Medical records: never under 7 years.' },
+  { key: 'features', label: 'Features', icon: '🧩', sub: 'Switch whole features on or off for everyone.' },
 ];
 
-const DEFAULT_SETTINGS = {
-  general: {
-    platformName:         { label: 'Platform Name', type: 'text',   value: 'NessaHub Telehealth', desc: 'Name shown across the platform' },
-    supportEmail:         { label: 'Support Email', type: 'email',  value: 'support@nessahub.com', desc: 'Email displayed to users for help' },
-    supportPhone:         { label: 'Support Phone', type: 'text',   value: '', desc: 'Support phone number' },
-    maintenanceMode:      { label: 'Maintenance Mode', type: 'toggle', value: false, desc: 'Puts platform in read-only mode, blocking new bookings' },
-    newRegistrationsOpen: { label: 'Open Registrations', type: 'toggle', value: true, desc: 'Allow new patient/client registrations' },
-    platformVersion:      { label: 'Platform Version', type: 'text', value: '2.0', desc: 'Displayed in footers and system info' },
-  },
-  appointments: {
-    maxApptPerDoctorPerDay:   { label: 'Max Appts per Doctor/Day', type: 'number', value: 20, desc: 'Maximum appointments a doctor can have per day' },
-    maxApptPerTherapistPerDay:{ label: 'Max Sessions per Therapist/Day', type: 'number', value: 10, desc: 'Maximum sessions a therapist can have per day' },
-    apptBufferMinutes:        { label: 'Appointment Buffer (mins)', type: 'number', value: 15, desc: 'Gap between consecutive appointments' },
-    allowRescheduling:        { label: 'Allow Rescheduling', type: 'toggle', value: true, desc: 'Allow patients to reschedule appointments' },
-    cancelCutoffHours:        { label: 'Cancel Cutoff (hours)', type: 'number', value: 2, desc: 'Minimum hours before appointment to allow cancellation' },
-    defaultSessionDuration:   { label: 'Default Session (mins)', type: 'number', value: 30, desc: 'Default duration for doctor appointments' },
-    videoCallProvider:        { label: 'Video Call Provider', type: 'select', value: 'twilio', options: ['twilio', 'daily.co', 'agora'], desc: 'Video call integration used' },
-  },
-  prescriptions: {
-    maxMedsPerPrescription:   { label: 'Max Medications per Rx', type: 'number', value: 10, desc: 'Maximum drugs on a single prescription' },
-    prescriptionValidityDays: { label: 'Prescription Validity (days)', type: 'number', value: 30, desc: 'Days a prescription remains valid' },
-    requireDiagnosis:         { label: 'Require Diagnosis', type: 'toggle', value: true, desc: 'Force doctors to enter a diagnosis before prescribing' },
-    autoFlagDrugInteractions: { label: 'Auto-Flag Drug Interactions', type: 'toggle', value: true, desc: 'Automatically detect and flag dangerous drug combinations' },
-    allowRefills:             { label: 'Allow Refills', type: 'toggle', value: true, desc: 'Allow pharmacies to process prescription refills' },
-    maxRefillCount:           { label: 'Max Refill Count', type: 'number', value: 3, desc: 'Maximum times a prescription can be refilled' },
-    openRxHoldHours:          { label: 'Open Rx Hold (hours)', type: 'number', value: 24, desc: 'How long a pharmacy may hold an "open to all" prescription without an update before it is offered to other pharmacies again' },
-  },
-  notifications: {
-    emailNotifications:   { label: 'Email Notifications', type: 'toggle', value: true, desc: 'Send email alerts for appointments, prescriptions, results' },
-    smsNotifications:     { label: 'SMS Notifications', type: 'toggle', value: false, desc: 'Send SMS alerts (requires SMS gateway config)' },
-    pushNotifications:    { label: 'Push Notifications', type: 'toggle', value: true, desc: 'Send in-app push notifications on mobile and web' },
-    apptReminderHours:    { label: 'Appointment Reminder (hours before)', type: 'number', value: 24, desc: 'When to send appointment reminder notifications' },
-    adminAlertOnEmergency:{ label: 'Alert Admin on Emergency Reports', type: 'toggle', value: true, desc: 'Notify admin email when an emergency report is submitted' },
-    adminEmail:           { label: 'Admin Alert Email', type: 'email', value: '', desc: 'Email address for admin emergency alerts' },
-  },
-  security: {
-    sessionTimeoutMinutes:    { label: 'Session Timeout (minutes)', type: 'number', value: 60, min: 1, max: 35791, desc: 'Auto-logout after inactivity (1–35791 minutes / ~24.8 days max)' },
-    requireEmailVerification: { label: 'Require Email Verification', type: 'toggle', value: true, desc: 'Users must verify email before accessing platform' },
-    twoFactorAuth:            { label: 'Two-Factor Authentication', type: 'toggle', value: false, desc: 'Require 2FA for all admin logins' },
-    maxLoginAttempts:         { label: 'Max Failed Login Attempts', type: 'number', value: 5, desc: 'Lock account after this many failed logins' },
-    lockoutDurationMinutes:   { label: 'Lockout Duration (minutes)', type: 'number', value: 30, desc: 'How long accounts remain locked after too many failures' },
-    adminIpWhitelist:         { label: 'Admin IP Whitelist', type: 'text', value: '', desc: 'Comma-separated IPs allowed for admin login (blank = all)' },
-  },
-  payments: {
-    defaultCurrency:    { label: 'Default Currency', type: 'select', value: 'GHS', options: ['GHS', 'USD', 'EUR', 'NGN', 'KES', 'ZAR'], desc: 'Default currency for all transactions' },
-    paymentProvider:    { label: 'Payment Provider', type: 'select', value: 'paystack', options: ['paystack', 'flutterwave', 'stripe', 'momo'], desc: 'Payment gateway integration' },
-    platformFeePercent: { label: 'Platform Fee (%)', type: 'number', value: 5, desc: 'Percentage the platform takes from each consultation' },
-    taxPercent:         { label: 'Tax Rate (%)', type: 'number', value: 0, desc: 'VAT or sales tax applied to consultations' },
-    allowFreeTrial:     { label: 'Free Trial Period', type: 'toggle', value: true, desc: 'Allow new patients one free consultation' },
-    freeTrialDays:      { label: 'Free Trial Duration (days)', type: 'number', value: 7, desc: 'How long the free trial lasts' },
-  },
-  dataRetention: {
-    patientRecordRetentionYears:    { label: 'Patient Records Retention (years)', type: 'number', value: 10, desc: 'How long to keep patient medical records' },
-    prescriptionRetentionYears:     { label: 'Prescription Retention (years)', type: 'number', value: 7, desc: 'How long to keep prescription data' },
-    appointmentRetentionYears:      { label: 'Appointment Retention (years)', type: 'number', value: 5, desc: 'How long to keep appointment history' },
-    auditLogRetentionDays:          { label: 'Audit Log Retention (days)', type: 'number', value: 365, desc: 'How long to keep system audit logs' },
-    deleteInactiveAccountsDays:     { label: 'Delete Inactive Accounts (days)', type: 'number', value: 730, desc: 'Auto-delete accounts inactive for this long (0 = never)' },
-    backupFrequency:                { label: 'Backup Frequency', type: 'select', value: 'daily', options: ['hourly', 'daily', 'weekly'], desc: 'How often to backup platform data' },
-  },
-};
+const when = (v) => (v ? new Date(v).toLocaleString() : '');
+
+function diff(beforeJson, afterJson, schema) {
+  let before = {};
+  let after = {};
+  try { before = JSON.parse(beforeJson || '{}'); } catch { /* ignore */ }
+  try { after = JSON.parse(afterJson || '{}'); } catch { /* ignore */ }
+  const label = (k) => schema.find((f) => f.key === k)?.label || k;
+  const show = (v) => (v === true ? 'on' : v === false ? 'off' : String(v));
+  return Object.keys(after)
+    .filter((k) => schema.some((f) => f.key === k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]))
+    .map((k) => `${label(k)}: ${before[k] === undefined ? '—' : show(before[k])} → ${show(after[k])}`);
+}
 
 export default function AdminSystemConfig() {
-  const [overrides, setOverrides]     = useState({});
-  const [settings, setSettings]       = useState(() => {
-    const s = {};
-    Object.entries(DEFAULT_SETTINGS).forEach(([sec, fields]) => {
-      s[sec] = {};
-      Object.entries(fields).forEach(([key, cfg]) => { s[sec][key] = cfg.value; });
-    });
-    return s;
-  });
-  const [saving, setSaving]           = useState(false);
-  const [saved, setSaved]             = useState('');
-  const [activeSection, setActiveSection] = useState('general');
-  const [activeCountry, setActiveCountry] = useState('GH');
+  const [schema, setSchema] = useState([]);
+  const [facts, setFacts] = useState({});
+  const [money, setMoney] = useState(null);
+  const [saved, setSaved] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [active, setActive] = useState('general');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => { loadConfig(); }, []);
-
-  const loadConfig = async () => {
+  const load = useCallback(async () => {
     try {
-      const [flagSnap, settingsSnap] = await Promise.all([
-        getDoc(doc(db, 'systemConfig', 'featureFlags')),
-        getDoc(doc(db, 'systemConfig', 'settings')),
+      const [s, v, h] = await Promise.all([
+        api(`${CFG}/settings/schema`),
+        api(`${CFG}/settings`),
+        api(`${CFG}/settings/history?limit=20`).catch(() => []),
       ]);
-      if (flagSnap.exists()) setOverrides(flagSnap.data().overrides || {});
-      if (settingsSnap.exists()) {
-        const saved = settingsSnap.data();
-        setSettings(prev => {
-          const merged = { ...prev };
-          Object.entries(saved).forEach(([sec, fields]) => {
-            if (merged[sec]) merged[sec] = { ...merged[sec], ...fields };
-          });
-          return merged;
-        });
-      }
-    } catch (e) { console.error('SystemConfig load error:', e); }
+      setSchema(s?.fields || []);
+      setFacts(s?.facts || {});
+      setSaved(v || {});
+      setDraft(JSON.parse(JSON.stringify(v || {})));
+      setHistory(h || []);
+      setLoadError('');
+    } catch (e) {
+      setLoadError(e?.message || 'Could not load the settings');
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (active === 'payments' && !money) api(`${CFG}/payments-summary?days=30`).then(setMoney).catch(() => setMoney({}));
+  }, [active, money]);
+
+  const fields = useMemo(() => schema.filter((f) => f.section === active), [schema, active]);
+  const changed = useMemo(() => {
+    if (!draft || !saved) return {};
+    const out = {};
+    fields.forEach((f) => {
+      if (JSON.stringify(draft[active]?.[f.key]) !== JSON.stringify(saved[active]?.[f.key])) out[f.key] = draft[active]?.[f.key];
+    });
+    return out;
+  }, [draft, saved, fields, active]);
+  const dirty = Object.keys(changed).length > 0;
+
+  const set = (key, value) => {
+    setMsg(null);
+    setDraft((d) => ({ ...d, [active]: { ...(d?.[active] || {}), [key]: value } }));
   };
 
-  const getEffectiveFlag = (country, feature) => {
-    const override = overrides?.[country]?.[feature];
-    if (override !== undefined) return override;
-    return getFlags(country)[feature] || false;
-  };
-
-  const toggleFlag = (country, feature, val) => {
-    setOverrides(prev => ({ ...prev, [country]: { ...(prev[country] || {}), [feature]: val } }));
-    setSaved('');
-  };
-
-  const updateSetting = (section, key, val) => {
-    setSettings(prev => ({ ...prev, [section]: { ...prev[section], [key]: val } }));
-    setSaved('');
-  };
-
-  const saveSection = async (section) => {
-    setSaving(true);
+  const save = async () => {
+    // Maintenance locks everyone else out: say so before it happens.
+    if (active === 'general' && changed.maintenanceMode === true
+      && !window.confirm('Turn on maintenance mode? Everyone except super admins will be paused on web and mobile until you turn it off.')) return;
+    if (active === 'security' && changed.adminIpWhitelist
+      && !window.confirm('Only the listed networks will be able to use the admin dashboard, including for you. Continue?')) return;
+    if (active === 'dataRetention' && Object.keys(changed).length
+      && !window.confirm('Records older than these limits are permanently erased by the nightly clean-up. Continue?')) return;
+    if (active === 'features' && Object.values(changed).some((v) => v === false)
+      && !window.confirm('Switching a feature off stops it for everyone, on web and mobile, straight away. Continue?')) return;
+    if (active === 'security' && changed.adminsRequireTwoStep === false
+      && !window.confirm('Turn off two-step sign-in for super admins? A stolen password alone would then open the admin dashboard.')) return;
+    setBusy(true);
+    setMsg(null);
     try {
-      if (section === 'flags') {
-        await setDoc(doc(db, 'systemConfig', 'featureFlags'), { overrides, updatedAt: serverTimestamp() }, { merge: true });
-      } else {
-        await setDoc(doc(db, 'systemConfig', 'settings'), {
-          [section]: settings[section],
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
-      }
-      setSaved(section);
-      setTimeout(() => setSaved(''), 3000);
-    } catch { alert('Failed to save. Try again.'); }
-    finally { setSaving(false); }
+      const r = await api(`${CFG}/settings/${active}`, { method: 'PATCH', body: changed });
+      const next = { ...saved, [active]: r?.[active] || { ...saved[active], ...changed } };
+      setSaved(next);
+      setDraft(JSON.parse(JSON.stringify(next)));
+      setMsg({ ok: true, text: 'Saved. It applies across NessaHub now.' });
+      api(`${CFG}/settings/history?limit=20`).then(setHistory).catch(() => {});
+    } catch (e) {
+      setMsg({ ok: false, text: e?.message || 'Could not save' });
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const renderField = (section, key, cfg) => {
-    const val = settings[section]?.[key] ?? cfg.value;
-    if (cfg.type === 'toggle') {
-      return (
-        <div key={key} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '0.85rem 0', borderBottom: '1px solid #f1f5f9', gap: '1rem' }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>{cfg.label}</p>
-            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>{cfg.desc}</p>
-          </div>
-          <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, flexShrink: 0 }}>
-            <input type="checkbox" checked={!!val} onChange={e => updateSetting(section, key, e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-            <span style={{
-              position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-              background: val ? '#3f7a55' : '#cbd5e1', borderRadius: 24, transition: '0.2s',
-            }}>
-              <span style={{
-                position: 'absolute', height: 18, width: 18, left: val ? 23 : 3, bottom: 3,
-                background: '#fff', borderRadius: '50%', transition: '0.2s',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-              }} />
-            </span>
-          </label>
-        </div>
-      );
-    }
-    if (cfg.type === 'select') {
-      return (
-        <div key={key} style={{ padding: '0.85rem 0', borderBottom: '1px solid #f1f5f9' }}>
-          <p style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>{cfg.label}</p>
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: '#64748b' }}>{cfg.desc}</p>
-          <select value={val} onChange={e => updateSetting(section, key, e.target.value)}
-            style={{ padding: '0.5rem 0.75rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.85rem', background: '#fff', minWidth: 180 }}>
-            {(cfg.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-      );
-    }
+  const reset = () => { setDraft(JSON.parse(JSON.stringify(saved))); setMsg(null); };
+
+  if (loadError) {
     return (
-      <div key={key} style={{ padding: '0.85rem 0', borderBottom: '1px solid #f1f5f9' }}>
-        <p style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>{cfg.label}</p>
-        <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: '#64748b' }}>{cfg.desc}</p>
-        <input
-          type={cfg.type || 'text'}
-          value={val}
-          min={cfg.type === 'number' && cfg.min !== undefined ? cfg.min : undefined}
-          max={cfg.type === 'number' && cfg.max !== undefined ? cfg.max : undefined}
-          onChange={e => updateSetting(section, key, cfg.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
-          onBlur={e => {
-            if (cfg.type !== 'number' || e.target.value === '') return;
-            let n = Number(e.target.value);
-            if (Number.isNaN(n)) n = cfg.min !== undefined ? cfg.min : 0;
-            if (cfg.min !== undefined) n = Math.max(cfg.min, n);
-            if (cfg.max !== undefined) n = Math.min(cfg.max, n);
-            if (n !== val) updateSetting(section, key, n);
-          }}
-          style={{ padding: '0.5rem 0.75rem', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: '0.85rem', minWidth: 240, boxSizing: 'border-box' }} />
+      <div className="admin-page">
+        <div className="admin-alert admin-alert-danger">{loadError} <button type="button" className="btn btn-ghost btn-sm" onClick={load}>Try again</button></div>
       </div>
     );
-  };
+  }
+  if (!draft) return <div className="admin-page"><div className="admin-empty"><p>Loading settings…</p></div></div>;
+
+  const section = SECTIONS.find((s) => s.key === active);
+  const maintenanceOn = !!saved?.general?.maintenanceMode;
+  const signupsClosed = saved?.general?.newRegistrationsOpen === false;
 
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1 className="admin-page-title">System Configuration</h1>
-          <p className="admin-page-sub">Platform-wide settings, feature flags, security, payments, and data policies</p>
+          <h1 className="admin-page-title">System Config</h1>
+          <p className="admin-page-sub">Platform-wide rules. Each one is enforced by the server, so it applies on web and mobile alike.</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '1.5rem' }}>
-        {/* Section sidebar */}
-        <div className="admin-table-card" style={{ padding: '0.5rem', height: 'fit-content', position: 'sticky', top: '1rem' }}>
-          {CONFIG_SECTIONS.map(s => (
-            <button key={s.key} onClick={() => setActiveSection(s.key)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.6rem', width: '100%',
-                padding: '0.6rem 0.85rem', border: 'none', borderRadius: 8, cursor: 'pointer',
-                background: activeSection === s.key ? '#e9f3ec' : 'transparent',
-                color: activeSection === s.key ? '#3f7a55' : '#475569',
-                fontWeight: activeSection === s.key ? 700 : 500, fontSize: '0.82rem',
-                marginBottom: '2px', textAlign: 'left',
-              }}>
-              <span>{s.icon}</span> {s.label.replace(/^[^ ]+ /, '')}
+      {maintenanceOn && <div className="admin-alert admin-alert-warn"><b>Maintenance mode is on.</b> Only super admins can use NessaHub right now.</div>}
+      {signupsClosed && <div className="admin-alert admin-alert-info"><b>Sign-ups are paused.</b> New patients and clients cannot create accounts. Onboarding by admins still works.</div>}
+
+      <div className="sc-layout">
+        <nav className="admin-table-card sc-nav" aria-label="Settings sections">
+          {SECTIONS.map((s) => (
+            <button key={s.key} type="button" className={`sc-nav-item ${active === s.key ? 'active' : ''}`}
+              onClick={() => { if (dirty && !window.confirm('Leave without saving your changes?')) return; reset(); setActive(s.key); }}>
+              <span aria-hidden="true">{s.icon}</span> {s.label}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Section content */}
         <div>
-          {activeSection !== 'flags' && (() => {
-            const section = DEFAULT_SETTINGS[activeSection];
-            if (!section) return null;
-            const sectionCfg = CONFIG_SECTIONS.find(s => s.key === activeSection);
-            return (
-              <div className="admin-table-card" style={{ padding: '1.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{sectionCfg?.label}</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {saved === activeSection && <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 600 }}>Saved</span>}
-                    <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveSection(activeSection)}>
-                      {saving ? 'Saving…' : '💾 Save Section'}
-                    </button>
-                  </div>
-                </div>
-                {Object.entries(section).map(([key, cfg]) => renderField(activeSection, key, cfg))}
+          <section className="admin-table-card">
+            <div className="admin-table-header">
+              <div>
+                <p className="admin-table-title">{section.label}</p>
+                <p className="admin-page-sub" style={{ margin: '2px 0 0' }}>{section.sub}</p>
               </div>
-            );
-          })()}
-
-          {activeSection === 'flags' && (
-            <div>
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Country Feature Flags</h3>
-                  <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#64748b' }}>Enable or disable platform features per country. Changes sync across web and mobile instantly.</p>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  {saved === 'flags' && <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 700 }}>All changes saved</span>}
-                  <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveSection('flags')}>
-                    {saving ? 'Saving…' : '💾 Save All Flags'}
-                  </button>
-                </div>
+              <div className="admin-table-actions">
+                {dirty && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={reset}>Discard</button>}
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy || !dirty} onClick={save}>{busy ? 'Saving…' : 'Save changes'}</button>
               </div>
-
-              {/* Country cards grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                {SUPPORTED_COUNTRIES.map(c => {
-                  const activeCount  = Object.keys(FEATURE_META).filter(k => getEffectiveFlag(c.code, k)).length;
-                  const totalCount   = Object.keys(FEATURE_META).length;
-                  const isSelected   = activeCountry === c.code;
+            </div>
+            <div style={{ padding: '0.25rem 1.25rem 1rem' }}>
+              {msg && <div className={`admin-alert ${msg.ok ? 'admin-alert-success' : 'admin-alert-danger'}`} style={{ marginTop: '0.75rem' }}>{msg.text}</div>}
+              {fields.map((f) => {
+                const v = draft[active]?.[f.key];
+                if (active === 'general' && f.key === 'maintenanceMessage' && !draft.general?.maintenanceMode) return null;
+                if (f.type === 'toggle') {
                   return (
-                    <div key={c.code}
-                      onClick={() => setActiveCountry(isSelected ? '' : c.code)}
-                      style={{
-                        background: '#fff', borderRadius: 14,
-                        border: `2px solid ${isSelected ? '#3f7a55' : '#e2e8f0'}`,
-                        boxShadow: isSelected ? '0 0 0 4px #dcefe2' : '0 1px 4px rgba(0,0,0,0.04)',
-                        cursor: 'pointer', overflow: 'hidden', transition: 'all 0.15s',
-                      }}>
-                      {/* Country header */}
-                      <div style={{ padding: '0.9rem 1.1rem', background: isSelected ? '#e9f3ec' : '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                          <img src={`https://flagcdn.com/24x18/${c.code.toLowerCase()}.png`}
-                            alt={c.code} style={{ height: 18, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}
-                            onError={e => { e.target.style.display = 'none'; }} />
-                          <div>
-                            <div style={{ fontWeight: 800, fontSize: '0.88rem', color: isSelected ? '#2f5e40' : '#0f172a' }}>{c.label}</div>
-                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600 }}>{c.code}</div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 900, color: activeCount === totalCount ? '#16a34a' : activeCount === 0 ? '#dc2626' : '#d97706' }}>
-                            {activeCount}/{totalCount}
-                          </div>
-                          <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>features on</div>
-                        </div>
+                    <div key={f.key} className="toggle-row">
+                      <div className="toggle-info"><span className="toggle-label">{f.label}</span><span className="toggle-desc">{f.help}</span></div>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={!!v} onChange={(e) => set(f.key, e.target.checked)} aria-label={f.label} />
+                        <span className="toggle-slider" />
+                      </label>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={f.key} className="toggle-row" style={{ alignItems: f.type === 'text' ? 'flex-start' : 'center' }}>
+                    <div className="toggle-info" style={{ flex: 1 }}><span className="toggle-label">{f.label}</span><span className="toggle-desc">{f.help}</span></div>
+                    {f.type === 'number' || f.type === 'decimal' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="number" value={v ?? ''} min={f.min ?? undefined} max={f.max ?? undefined} step={f.type === 'decimal' ? '0.1' : '1'} style={{ width: 110 }}
+                          onChange={(e) => set(f.key, e.target.value === '' ? '' : Number(e.target.value))} aria-label={f.label} />
+                        <span className="toggle-desc" style={{ whiteSpace: 'nowrap' }}>{f.min}–{f.max}</span>
                       </div>
+                    ) : (
+                      f.key === 'maintenanceMessage' || f.type === 'iplist' ? (
+                        <textarea value={v ?? ''} maxLength={f.max ?? undefined} rows={2} style={{ width: 'min(100%, 340px)' }}
+                          placeholder={f.type === 'iplist' ? 'e.g. 154.161.12.3, 41.66.0.0/16' : ''}
+                          onChange={(e) => set(f.key, e.target.value)} aria-label={f.label} />
+                      ) : (
+                        <input type={f.type === 'email' ? 'email' : 'text'} value={v ?? ''} maxLength={f.max ?? undefined} style={{ width: 'min(100%, 300px)' }}
+                          onChange={(e) => set(f.key, e.target.value)} aria-label={f.label} />
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
-                      {/* Progress bar */}
-                      <div style={{ height: 4, background: '#f1f5f9' }}>
-                        <div style={{ height: '100%', width: `${(activeCount / totalCount) * 100}%`, background: activeCount === totalCount ? '#16a34a' : activeCount === 0 ? '#e2e8f0' : '#3f7a55', transition: 'width 0.3s ease' }} />
+          {active === 'payments' && (
+            <section className="admin-table-card">
+              <div className="admin-table-header"><p className="admin-table-title">Last 30 days</p></div>
+              <div style={{ padding: '0.25rem 1.25rem 1rem' }}>
+                {!money ? <p className="toggle-desc">Loading…</p> : (<>
+                  <div className="admin-info-row"><span className="admin-info-label">Collected (including tax)</span><span className="admin-info-value">GHS {Number(money.collected || 0).toFixed(2)}</span></div>
+                  <div className="admin-info-row"><span className="admin-info-label">Tax collected</span><span className="admin-info-value">GHS {Number(money.tax || 0).toFixed(2)}</span></div>
+                  <div className="admin-info-row"><span className="admin-info-label">NessaHub share</span><span className="admin-info-value">GHS {Number(money.nessaShare || 0).toFixed(2)}</span></div>
+                  <div className="admin-info-row"><span className="admin-info-label">Owed to clinicians and providers</span><span className="admin-info-value">GHS {Number(money.owedToProviders || 0).toFixed(2)}</span></div>
+                  <div className="admin-info-row"><span className="admin-info-label">Free first consultations</span><span className="admin-info-value">{money.freeCount || 0} (worth GHS {Number(money.freeValue || 0).toFixed(2)})</span></div>
+                  {(money.byProvider || []).length > 0 && (
+                    <table className="admin-table" style={{ marginTop: '0.75rem' }}>
+                      <thead><tr><th>Provider</th><th>Payments</th><th>Owed</th><th>NessaHub share</th></tr></thead>
+                      <tbody>{money.byProvider.map((r) => <tr key={r.providerId || r.provider}><td>{r.provider}</td><td>{r.payments}</td><td>GHS {Number(r.owed || 0).toFixed(2)}</td><td>GHS {Number(r.nessaShare || 0).toFixed(2)}</td></tr>)}</tbody>
+                    </table>
+                  )}
+                </>)}
+              </div>
+            </section>
+          )}
+
+          {active === 'payments' && Object.keys(facts).length > 0 && (
+            <section className="admin-table-card">
+              <div className="admin-table-header"><div><p className="admin-table-title">Fixed by the services NessaHub uses</p>
+                <p className="admin-page-sub" style={{ margin: '2px 0 0' }}>Not switches: changing these needs a new provider account and integration.</p></div></div>
+              <div style={{ padding: '0.25rem 1.25rem 1rem' }}>
+                {Object.entries(facts).map(([k, v]) => <div key={k} className="admin-info-row"><span className="admin-info-label">{k}</span><span className="admin-info-value">{v}</span></div>)}
+              </div>
+            </section>
+          )}
+
+          <section className="admin-table-card">
+            <div className="admin-table-header"><p className="admin-table-title">Recent changes</p></div>
+            {history.length ? (
+              <div>
+                {history.map((h, i) => {
+                  const lines = diff(h.before, h.after, schema);
+                  if (!lines.length) return null;
+                  return (
+                    <div key={i} className="admin-info-row" style={{ padding: '0.7rem 1.25rem', alignItems: 'flex-start' }}>
+                      <div>
+                        {lines.map((l) => <div key={l} style={{ fontSize: '0.85rem', color: 'var(--a-ink)' }}>{l}</div>)}
                       </div>
-
-                      {/* Feature toggles (expanded when selected) */}
-                      {isSelected && (
-                        <div style={{ padding: '0.75rem 1.1rem' }}>
-                          {Object.entries(FEATURE_META).map(([key, meta]) => {
-                            const isOn = getEffectiveFlag(c.code, key);
-                            return (
-                              <div key={key} onClick={e => e.stopPropagation()}
-                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #f8fafc', gap: '0.75rem' }}>
-                                <div style={{ flex: 1 }}>
-                                  <p style={{ margin: '0 0 1px', fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{meta.label}</p>
-                                  <p style={{ margin: 0, fontSize: '0.7rem', color: '#94a3b8' }}>{meta.desc}</p>
-                                </div>
-                                <label style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, flexShrink: 0, cursor: 'pointer' }}>
-                                  <input type="checkbox" checked={isOn} onChange={e => toggleFlag(c.code, key, e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                                  <span style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: isOn ? '#3f7a55' : '#cbd5e1', borderRadius: 22, transition: '0.2s', cursor: 'pointer' }}>
-                                    <span style={{ position: 'absolute', height: 16, width: 16, left: isOn ? 21 : 3, bottom: 3, background: '#fff', borderRadius: '50%', transition: '0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                                  </span>
-                                </label>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Collapsed summary dots */}
-                      {!isSelected && (
-                        <div style={{ padding: '0.65rem 1.1rem', display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                          {Object.entries(FEATURE_META).map(([key, meta]) => {
-                            const isOn = getEffectiveFlag(c.code, key);
-                            return (
-                              <div key={key} title={`${meta.label}: ${isOn ? 'On' : 'Off'}`}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.15rem 0.45rem', borderRadius: 20, fontSize: '0.62rem', fontWeight: 600,
-                                  background: isOn ? '#f0fdf4' : '#fff1f2', color: isOn ? '#16a34a' : '#dc2626',
-                                  border: `1px solid ${isOn ? '#bbf7d0' : '#fecdd3'}` }}>
-                                {isOn ? '✓' : '✕'} {meta.label.split(' ')[0]}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <div className="admin-info-label" style={{ textAlign: 'right' }}>{h.changedBy || h.changedByEmail || 'Unknown'}<br />{when(h.changedAt)}</div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Reference summary table */}
-              <div className="admin-table-card">
-                <div className="admin-table-header">
-                  <p className="admin-table-title">Full Reference — All Countries × All Features</p>
-                </div>
-                <div style={{ overflowX: 'auto', padding: '0 0 0.5rem' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
-                    <thead>
-                      <tr style={{ background: '#f8fafc' }}>
-                        <th style={{ padding: '0.6rem 1rem', textAlign: 'left', fontWeight: 700, color: '#374151', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }}>Country</th>
-                        {Object.values(FEATURE_META).map(m => (
-                          <th key={m.label} style={{ padding: '0.6rem 0.5rem', fontWeight: 700, color: '#374151', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap', textAlign: 'center', maxWidth: 80 }}>
-                            {m.label.replace('Verification', 'Verify')}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {SUPPORTED_COUNTRIES.map((c, i) => (
-                        <tr key={c.code} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa', cursor: 'pointer' }} onClick={() => setActiveCountry(c.code)}>
-                          <td style={{ padding: '0.55rem 1rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', borderBottom: '1px solid #f1f5f9' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <img src={`https://flagcdn.com/20x15/${c.code.toLowerCase()}.png`} alt={c.code}
-                                style={{ height: 13, borderRadius: 1 }} onError={e => { e.target.style.display = 'none'; }} />
-                              {c.label}
-                            </div>
-                          </td>
-                          {Object.keys(FEATURE_META).map(key => {
-                            const isOn = getEffectiveFlag(c.code, key);
-                            return (
-                              <td key={key} style={{ textAlign: 'center', padding: '0.45rem 0.5rem', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ fontSize: '1rem', lineHeight: 1 }}>{isOn ? '✅' : '⬜'}</span>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+            ) : <div className="admin-empty" style={{ padding: '1.5rem' }}><p>No changes yet.</p></div>}
+          </section>
         </div>
       </div>
     </div>
