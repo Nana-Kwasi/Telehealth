@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { onAuthStateChanged } from '../../../services/authShim';
-import { db, auth } from '../../../services/firestoreShim';
+import { db } from '../../../services/firestoreShim';
+import useEmailVerified from '../../../hooks/useEmailVerified';
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import Paged from '../../Common/Paged';
@@ -134,9 +134,8 @@ export default function PharmacyOverview({ profile }) {
   const [branches, setBranches] = useState([]);
   const [rxList, setRxList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [emailVerified, setEmailVerified] = useState(!!auth.currentUser?.emailVerified);
-
-  useEffect(() => onAuthStateChanged(auth, (u) => setEmailVerified(!!u?.emailVerified)), []);
+  // null while loading: no banner until the server has answered.
+  const emailVerified = useEmailVerified() !== false;
 
   useEffect(() => {
     const load = async () => {

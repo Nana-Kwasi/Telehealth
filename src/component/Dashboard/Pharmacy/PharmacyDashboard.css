@@ -1763,3 +1763,47 @@
   color: #64748b;
   line-height: 1.45;
 }
+
+/* ── Provider side menu (pharmacy, lab, scan — parent and branch) ──────────────
+   Smoke-white glass, matching the mobile ProviderDrawer: the logo as designed,
+   a frosted account card, and frosted rows; the current screen is tinted. */
+.provider-sidebar {
+  --pv-accent: #0c4a6e;
+  --pv-soft: #e0f2fe;
+  width: 256px; min-width: 256px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  border-right: 1px solid #e2e8f0;
+}
+.provider-sidebar .pharmacy-sidebar-header { padding: 1.25rem 1rem 1rem; border-bottom: none; }
+.provider-sidebar .pharmacy-sidebar-header > div:last-child {
+  background: rgba(255,255,255,0.75); border: 1px solid rgba(226,232,240,0.9); border-radius: 14px;
+  padding: 0.7rem 0.75rem; box-shadow: 0 3px 10px rgba(15,23,42,0.05); backdrop-filter: blur(8px);
+}
+.provider-sidebar .pharmacy-avatar { background: var(--pv-accent); color: #fff; }
+.provider-sidebar .pharmacy-user-name { color: #0f172a; font-weight: 800; }
+.provider-sidebar .pharmacy-user-role { color: #64748b; font-weight: 700; }
+.provider-sidebar .nh-sidebar-location,
+.provider-sidebar .pharmacy-sidebar-header small { color: #94a3b8; }
+.provider-sidebar .pharmacy-nav { padding: 0.25rem 0.75rem 0.75rem; }
+.provider-sidebar .pharmacy-nav-section h3 { color: #94a3b8; padding: 0.5rem 0.4rem 0.5rem; letter-spacing: 1.2px; }
+.provider-sidebar .pharmacy-nav-list { display: grid; gap: 6px; }
+.provider-sidebar .pharmacy-nav-item {
+  position: relative; gap: 0.7rem; padding: 0.5rem 0.6rem; border-radius: 12px;
+  background: rgba(255,255,255,0.7); border: 1px solid rgba(226,232,240,0.9);
+  color: #334155; font-weight: 600; backdrop-filter: blur(6px);
+}
+.provider-sidebar .pharmacy-nav-item:hover { background: #fff; color: #0f172a; box-shadow: 0 2px 8px rgba(15,23,42,0.06); }
+.provider-sidebar .pharmacy-nav-item.active { background: var(--pv-soft); border-color: var(--pv-accent); color: var(--pv-accent); font-weight: 800; }
+.provider-sidebar .pharmacy-nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--pv-accent);
+}
+.provider-nav-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 9px; background: #f1f5f9; color: #475569;
+}
+.provider-sidebar .pharmacy-nav-item.active .provider-nav-icon { background: var(--pv-accent); color: #fff; }
+.provider-sidebar .pharmacy-sidebar-footer { border-top: 1px solid #e2e8f0; padding: 0.85rem 1rem 1rem; }
+.provider-sidebar .pharmacy-logout-btn {
+  justify-content: center; background: rgba(254,242,242,0.85); border: 1px solid #fecaca; color: #dc2626; border-radius: 12px; font-weight: 800;
+}
+.provider-sidebar .pharmacy-logout-btn:hover { background: #fee2e2; }

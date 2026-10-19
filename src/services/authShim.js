@@ -193,10 +193,11 @@ export async function fetchSignInMethodsForEmail(_authArg, email) {
 }
 
 // ── Email verification ────────────────────────────────────────────────────────
-// Email verification is managed server-side; this is a no-op that resolves so
-// component flows (e.g. "Resend verification") complete without error.
+// Email verification is managed server-side. This used to be a no-op that
+// reported "sent" without sending anything; it now asks the server to email a
+// fresh confirmation link to the signed-in account.
 export async function sendEmailVerification(_user) {
-  return { sent: true };
+  return api('/api/v1/auth/verify-email/resend', { method: 'POST' });
 }
 
 // ── Verify-before-update email ────────────────────────────────────────────────

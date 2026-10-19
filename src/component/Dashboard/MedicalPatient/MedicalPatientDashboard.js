@@ -38,7 +38,7 @@ import LocationSummaryCard from '../../Common/LocationSummaryCard';
 import TodaysMedsCard from '../../Common/TodaysMedsCard';
 import WeatherCard from '../../Common/WeatherCard';
 import { subscribeLocationUpdate, applyLocationPatch, publishLocationUpdate } from '../../../utils/locationBus';
-import { patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
+import { patientPharmacyKey, removePatientPharmacyByKey, hasPatientPharmacy, dedupePatientPharmacies, pharmacyEntryFromDirectory } from '../../../utils/patientPharmacyDedupe';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
 import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
 import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
@@ -4133,6 +4133,10 @@ export function MedPatEPharmacy({ profile }) {
   const [searchPh, setSearchPh] = useState('');
   const [selectedRx, setSelectedRx] = useState(null);
   const [transferActionKey, setTransferActionKey] = useState('');
+  // Browse → "Add to my pharmacies": which pharmacy is open, its branches, and the row being saved.
+  const [openPhId, setOpenPhId] = useState(null);
+  const [branchesByPh, setBranchesByPh] = useState({});
+  const [addingKey, setAddingKey] = useState(null);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -4211,12 +4215,60 @@ export function MedPatEPharmacy({ profile }) {
     try {
       const updated = removePatientPharmacyByKey(myPharmacies, ph);
       await setDoc(doc(db, 'patientProfiles', profile.id), { pharmacies: updated }, { merge: true });
+      setMyPharmacies(updated);
     } catch {
       alert('Could not remove pharmacy. Please try again.');
     } finally {
       setRemovingPhKey(null);
     }
   };
+
+  // "Add" on a directory pharmacy: one branch (or none) saves straight away;
+  // several branches open a list so the patient picks the one they use.
+  const toggleAddPharmacy = async (ph) => {
+    if (openPhId === ph.id) { setOpenPhId(null); return; }
+    let branches = branchesByPh[ph.id];
+    if (!branches) {
+      setAddingKey(`ph:${ph.id}`);
+      try {
+        const snap = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', ph.id), where('status', '==', 'active')));
+        branches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch { branches = []; }
+      setBranchesByPh(m => ({ ...m, [ph.id]: branches }));
+      setAddingKey(null);
+    }
+    if (branches.length <= 1) addPharmacy(ph, branches[0] || null);
+    else setOpenPhId(ph.id);
+  };
+
+  const addPharmacy = async (ph, br) => {
+    if (!profile?.id) return;
+    const entry = pharmacyEntryFromDirectory(ph, br);
+    setAddingKey(patientPharmacyKey(entry));
+    try {
+      // Re-read first so a pharmacy the doctor added meanwhile is not lost.
+      const snap = await getDoc(doc(db, 'patientProfiles', profile.id)).catch(() => null);
+      const current = dedupePatientPharmacies(snap?.exists?.() ? (snap.data().pharmacies || []) : myPharmacies);
+      if (hasPatientPharmacy(current, entry)) {
+        setMyPharmacies(current);
+        alert(`${entry.name} is already in your pharmacies.`);
+        return;
+      }
+      const updated = [...current, entry];
+      await setDoc(doc(db, 'patientProfiles', profile.id), { pharmacies: updated }, { merge: true });
+      setMyPharmacies(updated);
+      setOpenPhId(null);
+    } catch {
+      alert('Could not add this pharmacy. Please try again.');
+    } finally {
+      setAddingKey(null);
+    }
+  };
+
+  const isSaved = (ph, br) => hasPatientPharmacy(myPharmacies, pharmacyEntryFromDirectory(ph, br));
+  const savedCount = (ph) => myPharmacies.filter(m => m.pharmacyId && m.pharmacyId === ph.id).length;
+  const addBtnStyle = { background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, padding: '0.45rem 0.9rem', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 };
+  const addedPill = <span style={{ fontSize: '0.7rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 20, padding: '2px 8px', fontWeight: 700, whiteSpace: 'nowrap' }}>Added</span>;
 
   const resolveTransferRequest = async (rx, medIndex, approve) => {
     const meds = Array.isArray(rx?.medications) ? rx.medications : [];
@@ -4430,7 +4482,7 @@ export function MedPatEPharmacy({ profile }) {
               <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94a3b8' }}>
                 <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⭐</div>
                 <h3 style={{ margin: '0 0 0.35rem', color: '#64748b' }}>No saved pharmacies</h3>
-                <p style={{ margin: 0, fontSize: '0.875rem' }}>When you or your doctor add a pharmacy branch, it will appear here. Tap − to remove.</p>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>Add one from Browse Pharmacies, or your doctor can add one for you. Tap − to remove.</p>
               </div>
             </div>
           ) : (
@@ -4490,18 +4542,51 @@ export function MedPatEPharmacy({ profile }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {filteredPh.map(ph => (
-                <div key={ph.id} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>🏪</div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{ph.pharmacyName || ph.name}</p>
-                    {ph.country && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>🌍 {ph.country}</p>}
-                    {ph.address && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>📍 {ph.address}</p>}
-                    {ph.phone && <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>📞 {ph.phone}</p>}
+              {filteredPh.map(ph => {
+                const branches = branchesByPh[ph.id] || [];
+                const saved = savedCount(ph);
+                const singleSaved = branchesByPh[ph.id] && branches.length <= 1 && isSaved(ph, branches[0] || null);
+                return (
+                  <div key={ph.id} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                    <div style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>🏪</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{ph.pharmacyName || ph.name}</p>
+                        {ph.country && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>🌍 {ph.country}</p>}
+                        {ph.address && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>📍 {ph.address}</p>}
+                        {ph.phone && <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>📞 {ph.phone}</p>}
+                        {saved > 0 && <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#7c3aed', fontWeight: 600 }}>⭐ In your pharmacies{saved > 1 ? ` (${saved} branches)` : ''}</p>}
+                      </div>
+                      {singleSaved ? addedPill : (
+                        <button type="button" style={addBtnStyle} disabled={!!addingKey} onClick={() => toggleAddPharmacy(ph)}>
+                          {addingKey === `ph:${ph.id}` ? 'Loading…' : openPhId === ph.id ? 'Close' : <><Plus size={13} style={{ verticalAlign: '-2px' }} /> Add to my pharmacies</>}
+                        </button>
+                      )}
+                    </div>
+                    {openPhId === ph.id && (
+                      <div style={{ background: '#faf5ff', borderTop: '1px solid #e9d5ff', padding: '0.85rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8' }}>Choose the branch you use</p>
+                        {branches.map(br => {
+                          const key = patientPharmacyKey(pharmacyEntryFromDirectory(ph, br));
+                          return (
+                            <div key={br.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'white', border: '1px solid #ede9fe', borderRadius: 10, padding: '0.6rem 0.8rem' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>{br.branchName || 'Branch'}</p>
+                                {br.address && <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#64748b' }}>📍 {br.address}</p>}
+                              </div>
+                              {isSaved(ph, br) ? addedPill : (
+                                <button type="button" style={addBtnStyle} disabled={!!addingKey} onClick={() => addPharmacy(ph, br)}>
+                                  {addingKey === key ? 'Adding…' : 'Add'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <span style={{ fontSize: '0.7rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 20, padding: '2px 8px', fontWeight: 700, whiteSpace: 'nowrap' }}>Active</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

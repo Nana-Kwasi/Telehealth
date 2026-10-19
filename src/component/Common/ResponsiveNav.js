@@ -50,12 +50,18 @@ export default function ResponsiveNav() {
   }, [present]);
 
   if (!present) return null;
+  // Phones and tablets get a frosted top bar like the super admin's: the menu
+  // button on the left, the notification bell docked on the right (see
+  // NotificationMount). No logo here: the sidebar already carries it.
   return (
     <>
-      <button type="button" className="nh-nav-btn" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}>
-        <span className={`nh-burger ${open ? 'x' : ''}`} aria-hidden="true"><i /><i /><i /></span>
-      </button>
+      <div className="nh-mtop" role="banner">
+        <button type="button" className="nh-nav-btn" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}>
+          <span className={`nh-burger ${open ? 'x' : ''}`} aria-hidden="true"><i /><i /><i /></span>
+        </button>
+        <div className="nh-mtop-right" />
+      </div>
       <div className="nh-nav-scrim" onClick={close} aria-hidden="true" />
     </>
   );

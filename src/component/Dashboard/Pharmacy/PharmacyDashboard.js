@@ -20,6 +20,8 @@ import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import RoleAssistant from '../../Common/RoleAssistant';
 
 import BrandLogo from '../../Common/BrandLogo';
+import ProviderNavIcon from '../../Common/ProviderNavIcon';
+import { LogOut } from 'lucide-react';
 const NAV = [
   { path: '/dashboard',              label: 'Overview',      icon: '📊' },
   { path: '/dashboard/branches',     label: 'Manage Branches', icon: '🏪' },
@@ -77,15 +79,15 @@ export default function PharmacyDashboard({ profile }) {
 
   return (
     <div className="pharmacy-dashboard">
-      <aside className="pharmacy-sidebar">
+      <aside className="pharmacy-sidebar provider-sidebar">
         <div className="pharmacy-sidebar-header">
-          <BrandLogo tone="dark" badge="Pharmacy" />
+          <BrandLogo tone="light" badge="Pharmacy" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.pharmacyName || 'P')[0].toUpperCase()}</div>
             <div>
               <p className="pharmacy-user-name">{profile?.pharmacyName || 'Pharmacy'}</p>
               <p className="pharmacy-user-role">Parent Account</p>
-              <SidebarSavedLocation profile={profile} />
+              <SidebarSavedLocation profile={profile} tone="light" />
             </div>
           </div>
         </div>
@@ -98,7 +100,7 @@ export default function PharmacyDashboard({ profile }) {
                 <li key={item.path}>
                   <button className={`pharmacy-nav-item ${isActive(item.path) ? 'active' : ''}`}
                     onClick={() => navigate(item.path)}>
-                    <span>{item.icon}</span>
+                    <ProviderNavIcon label={item.label} />
                     <span>{item.label}</span>
                   </button>
                 </li>
@@ -108,7 +110,7 @@ export default function PharmacyDashboard({ profile }) {
         </nav>
 
         <div className="pharmacy-sidebar-footer">
-          <button className="pharmacy-logout-btn" onClick={handleLogout}>🚪 Logout</button>
+          <button className="pharmacy-logout-btn" onClick={handleLogout}><LogOut size={16} /> Log out</button>
         </div>
       </aside>
 

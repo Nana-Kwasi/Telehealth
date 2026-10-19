@@ -246,14 +246,18 @@ export function NotificationMount() {
   const [slot, setSlot] = useState(null);
   useEffect(() => {
     // Dashboards mount after the app shell and swap on navigation, so keep looking.
+    // On phones the dashboards' frosted top bar (ResponsiveNav) holds the bell;
+    // it is hidden on laptops, so only use it while it is actually showing.
     const find = () => {
-      const el = document.querySelector(BELL_SLOTS);
+      const phoneBar = document.querySelector('.nh-mtop-right');
+      const el = phoneBar && phoneBar.offsetParent !== null ? phoneBar : document.querySelector(BELL_SLOTS);
       setSlot((cur) => (cur === el ? cur : el));
     };
     find();
     const obs = new MutationObserver(find);
     obs.observe(document.body, { childList: true, subtree: true });
-    return () => obs.disconnect();
+    window.addEventListener('resize', find);
+    return () => { obs.disconnect(); window.removeEventListener('resize', find); };
   }, []);
   if (slot && slot.isConnected) {
     return createPortal(<div className="nh-notif-docked"><NotificationCenter /></div>, slot);

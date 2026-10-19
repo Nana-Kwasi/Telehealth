@@ -535,7 +535,7 @@ export default function DoctorPatientDetail({ profile }) {
             </div>
           </div>
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <div className="pd-actions" style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
             <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={() => { setActiveTab('notes'); setShowNoteForm(true); }}>
               <Plus size={14} /> Add Note
             </button>
@@ -580,7 +580,7 @@ export default function DoctorPatientDetail({ profile }) {
                 <UserCheck size={13} /> {changingStatus ? '…' : 'Reactivate'}
               </button>
             )}
-            <button className="doctor-btn doctor-btn-danger doctor-btn-sm" onClick={() => setShowDischarge(true)}>
+            <button className="doctor-btn doctor-btn-danger doctor-btn-sm pd-actions-wide" onClick={() => setShowDischarge(true)}>
               <AlertTriangle size={14} /> Discharge
             </button>
           </div>

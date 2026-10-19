@@ -2369,6 +2369,13 @@ export async function updateDoc(docRef, data) {
           country: data.country || null,
           city: data.city || null,
           address: data.address || (typeof data.location === 'string' ? data.location : null),
+          // Settings fields with no column (V98): kept in the organisation's
+          // settings blob. Previously dropped here, so Business saves lost them.
+          ...Object.fromEntries(['area', 'region', 'street', 'ghanaDigitalAddress', 'licenseNote', 'timezone']
+            .filter(k => typeof data[k] === 'string').map(k => [k, data[k]])),
+          ...(Number.isFinite(Number(data.latitude)) && data.latitude !== null && data.latitude !== '' ? { latitude: Number(data.latitude) } : {}),
+          ...(Number.isFinite(Number(data.longitude)) && data.longitude !== null && data.longitude !== '' ? { longitude: Number(data.longitude) } : {}),
+          ...(data.transferApprovalTtlHours != null ? { transferApprovalTtlHours: Number(data.transferApprovalTtlHours) } : {}),
         };
         // Admin onboarding upserts via the admin endpoint; an org editing its OWN
         // settings (pharmacy/lab/scan) uses the self-service PATCH (the admin

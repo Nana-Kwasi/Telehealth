@@ -339,7 +339,7 @@ export default function PharmacyBranchDetail({ profile }) {
             disabled={actioning}
             onClick={toggleBranchMfaRequired}
           >
-            {branch.mfaRequired ? 'MFA Required: ON' : 'MFA Required: OFF'}
+            {branch.mfaRequired ? 'Two-step sign-in: required' : 'Two-step sign-in: optional'}
           </button>
           <button
             type="button"

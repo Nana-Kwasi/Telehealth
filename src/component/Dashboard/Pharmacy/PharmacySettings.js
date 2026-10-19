@@ -22,6 +22,8 @@ import {
 import { SUPPORTED_COUNTRIES } from '../../../utils/featureFlags';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import InsuranceNetworks from '../../Common/InsuranceNetworks';
+import useEmailVerified from '../../../hooks/useEmailVerified';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 
 const SETTINGS_TABS = [
   { id: 'overview', label: 'Overview' },
@@ -96,6 +98,9 @@ export default function PharmacySettings({ profile }) {
   const [pwMsg, setPwMsg] = useState('');
   const [pwErr, setPwErr] = useState('');
   const [settingsTab, setSettingsTab] = useState('overview');
+  const [ttl, setTtl] = useState('6');
+  const [ttlMsg, setTtlMsg] = useState({ ok: '', err: '' });
+  const [ttlSaving, setTtlSaving] = useState(false);
 
   // The pharmacy org doc id = organization id, which equals the user id only for
   // self-registered pharmacies. Prefer the org id so admin-onboarded ones resolve.
@@ -133,6 +138,7 @@ export default function PharmacySettings({ profile }) {
         const detected = getSystemTimeZone();
         setSystemTimezone(detected);
         setStoredTimezone(d.timezone || null);
+        setTtl(String(d.transferApprovalTtlHours || 6));
         if (d.timezone !== detected) {
           try {
             await updateDoc(doc(db, 'pharmacies', orgId), {
@@ -262,6 +268,21 @@ export default function PharmacySettings({ profile }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [settingsTab, systemTimezone]);
+
+  const saveTtl = async () => {
+    const hours = Math.max(1, Math.min(72, parseInt(ttl, 10) || 6));
+    setTtl(String(hours));
+    setTtlSaving(true);
+    setTtlMsg({ ok: '', err: '' });
+    try {
+      await updateDoc(doc(db, 'pharmacies', orgId), { transferApprovalTtlHours: hours, updatedAt: serverTimestamp() });
+      setTtlMsg({ ok: `Patients now have ${hours} hour${hours === 1 ? '' : 's'} to approve a drug transfer.`, err: '' });
+    } catch {
+      setTtlMsg({ ok: '', err: 'Could not save the transfer window.' });
+    } finally {
+      setTtlSaving(false);
+    }
+  };
 
   const exportProfile = async () => {
     try {
@@ -397,7 +418,7 @@ export default function PharmacySettings({ profile }) {
     }
   };
 
-  const emailVerified = auth.currentUser?.emailVerified === true;
+  const emailVerified = useEmailVerified() !== false;
 
   if (loading) {
     return (
@@ -541,6 +562,24 @@ export default function PharmacySettings({ profile }) {
                 If you travel or change your computer&apos;s timezone, open this tab and tap refresh so reports stay aligned.
               </p>
             </section>
+
+            <div className="pharmacy-settings-rule pharmacy-settings-rule--inset" />
+
+            <section className="pharmacy-settings-section pharmacy-settings-section--flush">
+              <h2 className="pharmacy-settings-heading">Transfer approval window</h2>
+              <p className="pharmacy-settings-lead">When a medicine is moved to another branch, the patient must approve it. This is how long they have before the request expires (1–72 hours).</p>
+              {ttlMsg.err && <div className="pharmacy-settings-alert pharmacy-settings-alert--err">{ttlMsg.err}</div>}
+              {ttlMsg.ok && <div className="pharmacy-settings-alert pharmacy-settings-alert--ok">{ttlMsg.ok}</div>}
+              <div className="pharmacy-settings-actions pharmacy-settings-actions--prefs" style={{ alignItems: 'center', gap: 10 }}>
+                <label className="pharmacy-settings-field" style={{ maxWidth: 140, margin: 0 }}>
+                  <span>Hours</span>
+                  <input type="number" min={1} max={72} value={ttl} onChange={e => setTtl(e.target.value)} />
+                </label>
+                <button type="button" className="pharmacy-settings-btn pharmacy-settings-btn--primary" disabled={ttlSaving} onClick={saveTtl}>
+                  {ttlSaving ? 'Saving…' : 'Save window'}
+                </button>
+              </div>
+            </section>
           </div>
         )}
 
@@ -677,6 +716,12 @@ export default function PharmacySettings({ profile }) {
                   </button>
                 </div>
               </form>
+            </section>
+
+            <div className="pharmacy-settings-rule pharmacy-settings-rule--inset" />
+
+            <section className="pharmacy-settings-section pharmacy-settings-section--flush">
+              <TwoStepSignIn />
             </section>
 
             <div className="pharmacy-settings-rule pharmacy-settings-rule--inset" />

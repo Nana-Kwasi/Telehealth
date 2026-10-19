@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsurance';
 import InsuranceNetworks from '../../Common/InsuranceNetworks';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { signOut, updatePassword } from '../../../services/authShim';
 import { auth, db } from '../../../services/firestoreShim';
@@ -20,6 +21,8 @@ import './PharmacyDashboard.css';
 import Paged from '../../Common/Paged';
 
 import BrandLogo from '../../Common/BrandLogo';
+import ProviderNavIcon from '../../Common/ProviderNavIcon';
+import { LogOut } from 'lucide-react';
 function branchRxEventLabel(action) {
   const m = {
     DRUG_STATUS_UPDATED: 'Drug status updated',
@@ -590,23 +593,6 @@ function BranchSettings({ profile }) {
   const [msg, setMsg] = useState('');
   const [transferTtlHours, setTransferTtlHours] = useState(profile?.transferApprovalTtlHours || 6);
 
-  const toggleMfa = async () => {
-    setSaving(true);
-    setMsg('');
-    try {
-      const next = profile?.mfaRequired !== true;
-      await updateDoc(doc(db, 'pharmacyBranches', profile.id), {
-        mfaRequired: next,
-        updatedAt: serverTimestamp(),
-      });
-      setMsg(`MFA requirement ${next ? 'enabled' : 'disabled'}. Please re-login to refresh session state.`);
-    } catch {
-      setMsg('Could not update MFA requirement.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const saveTransferTtl = async () => {
     setSaving(true);
     setMsg('');
@@ -643,16 +629,7 @@ function BranchSettings({ profile }) {
 
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem' }}>
           <h3 style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>Security</h3>
-          <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: '#64748b' }}>
-            MFA can be required for this branch login. Password change is available on sign-in reset prompt.
-          </p>
-          <button
-            className="doctor-btn doctor-btn-sm doctor-btn-outline"
-            disabled={saving}
-            onClick={toggleMfa}
-          >
-            {saving ? 'Saving…' : `MFA Required: ${profile?.mfaRequired ? 'ON' : 'OFF'}`}
-          </button>
+          <TwoStepSignIn />
           {msg ? <p style={{ marginTop: 8, fontSize: '0.78rem', color: '#0369a1' }}>{msg}</p> : null}
         </div>
 
@@ -738,15 +715,15 @@ export default function BranchDashboard({ profile }) {
 
   return (
     <div className="pharmacy-dashboard">
-      <aside className="pharmacy-sidebar">
+      <aside className="pharmacy-sidebar provider-sidebar">
         <div className="pharmacy-sidebar-header">
-          <BrandLogo tone="dark" badge="Pharmacy branch" />
+          <BrandLogo tone="light" badge="Pharmacy branch" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.branchName || 'B')[0].toUpperCase()}</div>
             <div>
               <p className="pharmacy-user-name">{profile?.branchName || 'Branch'}</p>
               <p className="pharmacy-user-role">{profile?.pharmacyName || 'Pharmacy'}</p>
-              <SidebarSavedLocation profile={profile} />
+              <SidebarSavedLocation profile={profile} tone="light" />
             </div>
           </div>
         </div>
@@ -757,7 +734,7 @@ export default function BranchDashboard({ profile }) {
               {NAV.map(item => (
                 <li key={item.path}>
                   <button className={`pharmacy-nav-item ${isActive(item.path) ? 'active' : ''}`} onClick={() => navigate(item.path)}>
-                    <span>{item.icon}</span><span>{item.label}</span>
+                    <ProviderNavIcon label={item.label} /><span>{item.label}</span>
                   </button>
                 </li>
               ))}
@@ -765,7 +742,7 @@ export default function BranchDashboard({ profile }) {
           </div>
         </nav>
         <div className="pharmacy-sidebar-footer">
-          <button className="pharmacy-logout-btn" onClick={handleLogout}>🚪 Logout</button>
+          <button className="pharmacy-logout-btn" onClick={handleLogout}><LogOut size={16} /> Log out</button>
         </div>
       </aside>
 

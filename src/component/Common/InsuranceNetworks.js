@@ -56,19 +56,24 @@ export default function InsuranceNetworks({ accent = '#0f766e' }) {
       {msg.ok && <div className="pharmacy-settings-alert pharmacy-settings-alert--ok">{msg.ok}</div>}
       {msg.err && <div className="pharmacy-settings-alert pharmacy-settings-alert--err">{msg.err}</div>}
 
-      {insurers.length === 0 ? <p className="pharmacy-settings-muted">No insurers are connected to NessaHub yet.</p> : (
-        <form onSubmit={save} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', margin: '0.75rem 0 1rem' }}>
-          <label style={{ display: 'grid', gap: 4, fontSize: '0.78rem', fontWeight: 700 }}>Insurer
-            <select style={input} required value={form.insurerId} onChange={e => setForm({ ...form, insurerId: e.target.value })}>
-              <option value="">Choose…</option>{insurers.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </select>
-          </label>
-          <label style={{ display: 'grid', gap: 4, fontSize: '0.78rem', fontWeight: 700 }}>Your provider code
-            <input style={input} required value={form.providerCode} onChange={e => setForm({ ...form, providerCode: e.target.value })} placeholder="e.g. PH-0042" />
-          </label>
-          <button type="submit" disabled={busy} style={{ border: 'none', background: accent, color: '#fff', borderRadius: 10, padding: '0.55rem 1rem', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>{busy ? 'Checking…' : 'Add & verify'}</button>
-        </form>
-      )}
+      {insurers.length === 0 ? (
+        <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, padding: '0.85rem 1rem', margin: '0.75rem 0', fontSize: '0.84rem', color: '#475569', lineHeight: 1.55 }}>
+          <strong style={{ color: '#0f172a' }}>No insurance company has joined NessaHub yet.</strong><br />
+          As soon as one joins, it appears in the list below. Choose it, type the provider code that insurer gave you, and
+          press <em>Add &amp; verify</em>. Until then you can still serve patients who pay themselves.
+        </div>
+      ) : null}
+      <form onSubmit={save} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', margin: '0.75rem 0 1rem', opacity: insurers.length ? 1 : 0.55 }}>
+        <label style={{ display: 'grid', gap: 4, fontSize: '0.78rem', fontWeight: 700 }}>Insurer
+          <select style={input} required disabled={!insurers.length} value={form.insurerId} onChange={e => setForm({ ...form, insurerId: e.target.value })}>
+            <option value="">{insurers.length ? 'Choose…' : 'No insurers yet'}</option>{insurers.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </label>
+        <label style={{ display: 'grid', gap: 4, fontSize: '0.78rem', fontWeight: 700 }}>Your provider code
+          <input style={input} required disabled={!insurers.length} value={form.providerCode} onChange={e => setForm({ ...form, providerCode: e.target.value })} placeholder="e.g. PH-0042" />
+        </label>
+        <button type="submit" disabled={busy || !insurers.length} style={{ border: 'none', background: accent, color: '#fff', borderRadius: 10, padding: '0.55rem 1rem', fontWeight: 700, cursor: insurers.length ? 'pointer' : 'not-allowed', opacity: busy ? 0.6 : 1 }}>{busy ? 'Checking…' : 'Add & verify'}</button>
+      </form>
 
       <dl className="pharmacy-settings-kv">
         <Paged items={codes}>{(codes) => codes.map(c => {

@@ -35,12 +35,12 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
   useEffect(() => {
     if (sendMode !== 'clinician' || recipient) return undefined;
     const t = setTimeout(() => {
-      api(`/api/v1/care-plans/referrals/recipients?q=${encodeURIComponent(search.trim())}`)
+      api(`/api/v1/care-plans/referrals/recipients?q=${encodeURIComponent(search.trim())}&specialty=${encodeURIComponent(form.specialty.trim())}`)
         .then((d) => setMatches(Array.isArray(d) ? d : []))
         .catch(() => setMatches([]));
     }, 250);
     return () => clearTimeout(t);
-  }, [search, sendMode, recipient]);
+  }, [search, sendMode, recipient, form.specialty]);
 
   const loadHistory = async () => {
     const [rows, inbox] = await Promise.all([
@@ -236,22 +236,22 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
               recipient ? (
                 <div className="rf-picked">
                   <span className="rf-avatar">{(recipient.name || '?').charAt(0)}</span>
-                  <div><strong>{recipient.name}</strong><small>{recipient.role === 'DOCTOR' ? 'Doctor' : 'Therapist'}</small></div>
+                  <div><strong>{recipient.name}</strong><small>{roleLine(recipient)}</small></div>
                   <button type="button" onClick={() => { setRecipient(null); setSearch(''); }} aria-label="Change"><X size={15} /></button>
                 </div>
               ) : (
                 <>
-                  <input className="rf-input" placeholder="Search doctors and therapists by name…" value={search}
+                  <input className="rf-input" placeholder="Search by name or specialty…" value={search}
                     onChange={(e) => setSearch(e.target.value)} />
                   <div className="rf-matches">
                     <Paged items={matches}>{(matches) => matches.map((m) => (
                       <button key={m.id} type="button" onClick={() => setRecipient(m)}>
                         <span className="rf-avatar">{(m.name || '?').charAt(0)}</span>
                         <span>{m.name}</span>
-                        <small>{m.role === 'DOCTOR' ? 'Doctor' : 'Therapist'}</small>
+                        <small>{roleLine(m)}</small>
                       </button>
                     ))}</Paged>
-                    {matches.length === 0 ? <p className="rf-hint">No clinicians match that name.</p> : null}
+                    {matches.length === 0 ? <p className="rf-hint">No clinicians match that search.</p> : null}
                   </div>
                 </>
               )
@@ -335,6 +335,9 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
     </div>
   );
 }
+
+// "Doctor · Cardiology", or just the role when no specialty is on the profile.
+const roleLine = (c) => [c.role === 'DOCTOR' ? 'Doctor' : 'Therapist', c.specialty].filter(Boolean).join(' · ');
 
 const MEDICAL_SPECIALTIES = ['Cardiology', 'Dermatology', 'Endocrinology', 'Gastroenterology', 'Neurology', 'Orthopaedics', 'Psychiatry'];
 const THERAPY_SPECIALTIES = ['Psychiatry', 'Psychology', 'Couples therapy', 'Addiction services', 'Family therapy', 'GP / primary care'];

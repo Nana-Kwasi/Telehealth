@@ -15,6 +15,8 @@ import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsura
 import RoleAssistant from '../../Common/RoleAssistant';
 
 import BrandLogo from '../../Common/BrandLogo';
+import ProviderNavIcon from '../../Common/ProviderNavIcon';
+import { LogOut } from 'lucide-react';
 export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -48,9 +50,9 @@ export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
 
   return (
     <div className="pharmacy-dashboard">
-      <aside className="pharmacy-sidebar">
+      <aside className="pharmacy-sidebar provider-sidebar" style={type === 'lab' ? { '--pv-accent': '#065f46', '--pv-soft': '#d1fae5' } : { '--pv-accent': '#4c1d95', '--pv-soft': '#ede9fe' }}>
         <div className="pharmacy-sidebar-header">
-          <BrandLogo tone="dark" badge={type === 'lab' ? 'Lab branch' : 'Scan branch'} />
+          <BrandLogo tone="light" badge={type === 'lab' ? 'Lab branch' : 'Scan branch'} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="pharmacy-avatar">{(profile?.branchName || 'B')[0].toUpperCase()}</div>
             <div>
@@ -59,7 +61,7 @@ export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
                 <p className="pharmacy-user-role" style={{ fontWeight: 700, color: '#e0f2fe' }}>{parentOrgName}</p>
               ) : null}
               <p className="pharmacy-user-role">{type === 'lab' ? 'Lab' : 'Scan'} branch</p>
-              <SidebarSavedLocation profile={profile} />
+              <SidebarSavedLocation profile={profile} tone="light" />
             </div>
           </div>
         </div>
@@ -70,7 +72,7 @@ export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
               {nav.map(item => (
                 <li key={item.path}>
                   <button className={`pharmacy-nav-item ${isActive(item.path) ? 'active' : ''}`} onClick={() => navigate(item.path)}>
-                    <span>{item.icon}</span><span>{item.label}</span>
+                    <ProviderNavIcon label={item.label} /><span>{item.label}</span>
                   </button>
                 </li>
               ))}
@@ -78,7 +80,7 @@ export default function DiagnosticBranchDashboard({ profile, type = 'lab' }) {
           </div>
         </nav>
         <div className="pharmacy-sidebar-footer">
-          <button className="pharmacy-logout-btn" onClick={logout}>🚪 Logout</button>
+          <button className="pharmacy-logout-btn" onClick={logout}><LogOut size={16} /> Log out</button>
         </div>
       </aside>
       <main className="pharmacy-main">

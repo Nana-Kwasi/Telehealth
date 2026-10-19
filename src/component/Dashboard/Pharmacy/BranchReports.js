@@ -10,6 +10,14 @@ import {
   buildMetrics,
 } from '../../../utils/pharmacyReportMetrics';
 
+// Dates are chosen from the calendar, not typed: a click opens the picker and
+// keystrokes (other than Tab to move on) are ignored.
+const pickOnly = {
+  onClick: (e) => { try { e.currentTarget.showPicker?.(); } catch { /* older browsers open it themselves */ } },
+  onKeyDown: (e) => { if (e.key !== 'Tab') e.preventDefault(); },
+  style: { cursor: 'pointer', caretColor: 'transparent' },
+};
+
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -198,11 +206,11 @@ export default function BranchReports({ profile }) {
         <div className="pharmacy-reports-date-row">
           <label className="pharmacy-reports-date-field">
             <span>From</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            <input type="date" value={dateFrom} max={todayISO()} onChange={e => setDateFrom(e.target.value)} {...pickOnly} />
           </label>
           <label className="pharmacy-reports-date-field">
             <span>To</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <input type="date" value={dateTo} max={todayISO()} onChange={e => setDateTo(e.target.value)} {...pickOnly} />
           </label>
           <div className="pharmacy-reports-actions">
             <button type="button" className="pharmacy-reports-btn pharmacy-reports-btn--primary" onClick={handleGenerate}>
