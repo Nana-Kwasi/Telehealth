@@ -687,7 +687,18 @@
   mask-image: linear-gradient(to left, #000 72%, transparent 99%);
   pointer-events: none;
 }
-@media (max-width: 1080px) { .nd-hero-art { display: none; } }
+/* Narrower screens: the artwork used to be switched off here, so phones never
+   saw it. It now sits under the greeting and buttons, smaller, with its edges
+   faded into the card (the photo has no transparent background). */
+@media (max-width: 1080px) {
+  .nd-hero { flex-direction: column; align-items: stretch; }
+  .nd-hero-art {
+    display: block; align-self: center; width: 100%; max-width: 360px; height: auto; max-height: 230px;
+    object-fit: contain; margin: 0.25rem auto -0.4rem;
+    -webkit-mask-image: radial-gradient(ellipse 70% 72% at 50% 52%, #000 58%, transparent 100%);
+    mask-image: radial-gradient(ellipse 70% 72% at 50% 52%, #000 58%, transparent 100%);
+  }
+}
 
 /* The weather/time/availability widgets now live in the top search row. */
 .nd-hero-meta {

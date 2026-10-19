@@ -2916,3 +2916,14 @@
 /* The availability line under the therapist's name in the hero card. Its own
    row in the existing flex column; only needs to not sit flush against the name. */
 .ch-hero-therapist span > span { margin-top: 0.15rem; }
+
+/* Narrower screens: the hero artwork was display:none, so phones and tablets
+   never saw it. Shown under the hero content, cropped to a soft-edged band. */
+@media (max-width: 1180px) {
+  .ch-hero { flex-direction: column; }
+  .ch-hero-art {
+    display: block; align-self: stretch; width: 100%; max-width: none; height: 220px; max-height: 220px;
+    object-fit: cover; object-position: center 22%; border-radius: 16px; margin-top: 0.25rem;
+    -webkit-mask-image: none; mask-image: none;
+  }
+}
