@@ -70,11 +70,12 @@ import SecondOpinionIntake from './component/SecondOpinion/SecondOpinionIntake';
 import MedPsychSignUp from './component/MedPsych/MedPsychSignUp';
 import MedPsychPsychiatrists from './component/MedPsych/MedPsychPsychiatrists';
 import MedPsychBooking from './component/MedPsych/MedPsychBooking';
-import NotificationCenter from './component/Common/NotificationCenter';
+import { NotificationMount } from './component/Common/NotificationCenter';
 
 import PolicyConsentGate, { linkPolicyConsentToAccount } from './component/Common/PolicyConsentGate';
 import PublicHelp from './component/Common/PublicHelp';
 import ResetPassword from './component/Auth/ResetPassword';
+import ResponsiveNav from './component/Common/ResponsiveNav';
 import VerifyEmail, { VerifyEmailGate } from './component/Auth/VerifyEmail';
 import { recordPendingConsents } from './utils/pendingConsents';
 function LoadingScreen() {
@@ -301,9 +302,7 @@ export default function App() {
           module writes notifications, but only the therapist shell had a bell.
           Fixed-position so it does not depend on each dashboard's own header. */}
       {session?.role && !inCall ? (
-        <div className="nh-notif-floating">
-          <NotificationCenter />
-        </div>
+        <NotificationMount />
       ) : null}
       {/* Rings over any screen when a clinician calls. Not shown inside the
           call itself, and clinicians are never rung. */}
@@ -312,6 +311,8 @@ export default function App() {
         ? <IncomingCall /> : null}
       <div className={hideNavbar ? 'hcp-app-root' : 'container'}>
         <DashboardLocationGate role={session.role} profile={session.profile} activePath={location.pathname} />
+        {/* ☰ menu for dashboards on phones and tablets */}
+        <ResponsiveNav />
         <Routes>
           {/* ── Public ── */}
           <Route path="/"              element={<Home />} />

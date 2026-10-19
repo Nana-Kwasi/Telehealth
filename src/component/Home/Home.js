@@ -64,8 +64,10 @@ export default function Home() {
   const startCounselling = (type) => {
     setTypeModal(null);
 
-    // Teen and couples keep their existing journeys unchanged.
-    if (type === 'teen' || type === 'couples') {
+    // Talking therapy, every type: questionnaire → sign up → choose a therapist.
+    // Individual used to go to the paid psychiatrist sign-up (/medpsych), which
+    // shares its screens with Second Opinion and never offered a therapist.
+    if (type === 'teen' || type === 'couples' || type === 'individual') {
       startTherapy(type);
       return;
     }
@@ -146,7 +148,12 @@ export default function Home() {
         }}
       >
         <div className="home-container">
-
+          {/* Phones and tablets: the headline is painted into the artwork and gets
+              cropped off on a narrow screen, so it is repeated here as real text. */}
+          <div className="hero-mobile-copy">
+            <h1 className="hero-mobile-title">Care.<br /><span>Anywhere.</span><br />Always.</h1>
+            <p className="hero-mobile-sub">Telehealth for <span>therapy</span>, <span>medical care</span> and second opinions.</p>
+          </div>
         </div>
 
           {/* ── Module picker ──

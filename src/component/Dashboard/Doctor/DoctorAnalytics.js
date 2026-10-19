@@ -131,7 +131,7 @@ export default function DoctorAnalytics({ profile }) {
             <DollarSign size={24} />
           </div>
           <div>
-            <p className="doctor-stat-value">${stats.totalEarnings.toLocaleString()}</p>
+            <p className="doctor-stat-value">GHS {stats.totalEarnings.toLocaleString()}</p>
             <p className="doctor-stat-label">Total Earnings</p>
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function DoctorAnalytics({ profile }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', height: 180, padding: '0.5rem 0' }}>
               {stats.earningsByMonth.slice(-12).map((m, i) => (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 600 }}>${m.amount}</span>
+                  <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 600 }}>GHS {m.amount}</span>
                   <div style={{
                     width: '100%', maxWidth: 40, borderRadius: '4px 4px 0 0',
                     background: 'linear-gradient(180deg, #10b981, #059669)',

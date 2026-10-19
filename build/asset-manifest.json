@@ -1,24 +1,21 @@
 {
   "files": {
-    "main.css": "/static/css/main.7c4ee1e1.css",
-    "main.js": "/static/js/main.579ef7cc.js",
-    "static/js/239.021ed72c.chunk.js": "/static/js/239.021ed72c.chunk.js",
-    "static/js/213.a73fa5e0.chunk.js": "/static/js/213.a73fa5e0.chunk.js",
-    "static/js/455.fd1bc161.chunk.js": "/static/js/455.fd1bc161.chunk.js",
+    "main.css": "/static/css/main.296bd8d8.css",
+    "main.js": "/static/js/main.70c5a882.js",
+    "static/js/52.bed47b7a.chunk.js": "/static/js/52.bed47b7a.chunk.js",
+    "static/js/760.11e7da4b.chunk.js": "/static/js/760.11e7da4b.chunk.js",
+    "static/js/239.2cff9443.chunk.js": "/static/js/239.2cff9443.chunk.js",
     "static/media/main.png": "/static/media/main.d5297e50aa932d9b46e5.png",
     "static/media/zencare-emblem.png": "/static/media/zencare-emblem.f97998a0a75351fd4dee.png",
     "static/media/login.jpg": "/static/media/login.f9bb47a6fff2895988e8.jpg",
     "static/media/patient-hero.jpg": "/static/media/patient-hero.c293e2b6282f05eff67a.jpg",
     "static/media/clinician-hero.jpg": "/static/media/clinician-hero.efc1f8233866a454398f.jpg",
-    "index.html": "/index.html",
-    "main.7c4ee1e1.css.map": "/static/css/main.7c4ee1e1.css.map",
-    "main.579ef7cc.js.map": "/static/js/main.579ef7cc.js.map",
-    "239.021ed72c.chunk.js.map": "/static/js/239.021ed72c.chunk.js.map",
-    "213.a73fa5e0.chunk.js.map": "/static/js/213.a73fa5e0.chunk.js.map",
-    "455.fd1bc161.chunk.js.map": "/static/js/455.fd1bc161.chunk.js.map"
+    "static/media/nessahub-logo.png": "/static/media/nessahub-logo.1d04feeff72dd34298ac.png",
+    "static/media/nessahub-logo-white.png": "/static/media/nessahub-logo-white.56e89d91b32ab7a1c770.png",
+    "index.html": "/index.html"
   },
   "entrypoints": [
-    "static/css/main.7c4ee1e1.css",
-    "static/js/main.579ef7cc.js"
+    "static/css/main.296bd8d8.css",
+    "static/js/main.70c5a882.js"
   ]
 }

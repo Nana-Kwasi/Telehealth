@@ -14,6 +14,20 @@ import Paged from './Paged';
  * Recipients can turn wellness email off, so the reach line shows both numbers
  * rather than implying everyone will receive it.
  */
+// The server sends willingToReceive / optedOut. Reading a field it never sends
+// printed "undefined of 2", and the "rest switched off" clause showed even when
+// nobody had, so each case gets its own true sentence.
+function reachLine(reach, noun) {
+  const total = Number(reach.total) || 0;
+  const willing = Number(reach.willingToReceive ?? reach.optedIn ?? 0);
+  const off = Math.max(0, total - willing);
+  const one = noun.replace(/s$/, '');
+  if (total === 0) return `You have no ${noun} to send to yet.`;
+  if (willing === 0) return `None of your ${total} ${total === 1 ? one : noun} will receive this — all have wellness email switched off.`;
+  if (off === 0) return total === 1 ? `Your 1 ${one} will receive this.` : `All ${total} of your ${noun} will receive this.`;
+  return `${willing} of your ${total} ${noun} will receive this. ${off} ${off === 1 ? 'has' : 'have'} wellness email switched off.`;
+}
+
 export default function ProviderWellness({ audience = 'my_clients', peopleNoun = 'clients' }) {
   const [sent, setSent]       = useState([]);
   const [reach, setReach]     = useState(null);
@@ -117,9 +131,7 @@ export default function ProviderWellness({ audience = 'my_clients', peopleNoun =
           <div style={reach.total === 0 ? S.reachEmpty : S.reach}>
             <Users size={15} />
             <span>
-              {reach.total === 0
-                ? `You have no ${peopleNoun} to send to yet.`
-                : `${reach.optedIn} of ${reach.total} ${peopleNoun} will receive this — the rest have wellness email switched off.`}
+              {reachLine(reach, peopleNoun)}
             </span>
           </div>
         ) : null}

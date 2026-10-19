@@ -312,3 +312,11 @@
     display: none;
   }
 }
+
+/* The phone rule above hid .navbar-links / .navbar-services everywhere, including
+   inside the ☰ menu, which then showed only Log in and Get Started. */
+@media (max-width: 960px) {
+  .mobile-menu .navbar-links { display: flex !important; }
+  .mobile-menu .navbar-services { display: flex !important; }
+  .mobile-menu .navbar-link { padding: 12px 8px; font-size: 1rem; border-radius: 10px; }
+}

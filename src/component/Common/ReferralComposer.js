@@ -87,13 +87,22 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
         method: 'POST',
         body: { patientId: form.patientId || null, specialty: form.specialty, reason: form.reason },
       });
-      if (!res?.ok) { setError(res?.message || 'The referral could not be assembled.'); return; }
+      if (!res?.ok) { writeManually(res?.message); return; }
       setPacket(res.packet);
       setProposed(JSON.stringify(res.packet));
       setAuditId(res.aiAuditId || null);
     } catch (e) {
-      setError(e?.message || 'The referral could not be assembled.');
+      writeManually(e?.message);
     } finally { setBusy(''); }
+  };
+
+  // "Write it directly" needs somewhere to write: open an empty packet so the
+  // referral can still be checked, saved and sent without the assistant.
+  const writeManually = (why) => {
+    setError(`${why && !/write it directly/i.test(why) ? `${why} ` : ''}The packet could not be gathered automatically, so fill it in below and continue.`);
+    setPacket((p) => p || { clinicalSummary: '', relevantHistory: '', currentMedications: '', relevantResults: '' });
+    setProposed('');
+    setAuditId(null);
   };
 
   const save = async (submit) => {

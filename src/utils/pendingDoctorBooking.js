@@ -14,6 +14,7 @@
 // place, and the medical dashboard retries on mount.
 
 import { db, collection, addDoc, doc, setDoc, serverTimestamp } from '../services/firestoreShim';
+import { api } from '../services/apiClient';
 
 const KEY = 'th.pendingBooking';
 
@@ -72,7 +73,11 @@ export async function materializePendingBooking(booking, { userId, name, email }
     // someone who just logged in. It therefore records the appointment as
     // UNPAID rather than creating a free one silently, so the fee is still
     // owed and visible instead of quietly written off.
-    paymentStatus: 'unpaid',
+    // Paid before sign-up (new flow): carry the payment over. Older parked
+    // bookings without a reference stay recorded as unpaid.
+    paymentStatus: booking.paymentReference ? 'paid' : 'unpaid',
+    paymentReference: booking.paymentReference || null,
+    consultationFee: booking.consultationFee ?? null,
     doctorId: booking.doctorId,
     doctorName: booking.doctorName || 'Doctor',
     doctorSpecialization: booking.doctorSpecialization || '',
@@ -87,6 +92,10 @@ export async function materializePendingBooking(booking, { userId, name, email }
     sourceSlot: 'pre-signup',
       createdAt: serverTimestamp(),
     });
+    if (booking.paymentReference) {
+      // File the payment on the new account's billing history.
+      api('/api/v1/payments/record', { method: 'POST', body: { reference: booking.paymentReference, description: `Consultation with ${booking.doctorName || 'your doctor'}` } }).catch(() => {});
+    }
   } catch (err) {
     const msg = String(err?.message || '');
     const alreadyBooked = /already has an appointment|already booked|conflict/i.test(msg);

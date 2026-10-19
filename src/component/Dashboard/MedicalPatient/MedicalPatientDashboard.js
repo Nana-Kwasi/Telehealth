@@ -2622,7 +2622,7 @@ function MedPatBilling({ profile }) {
       <div className="mp-stats-grid-4" style={{ marginBottom: '1.5rem' }}>
         <div className="mp-stat-card mp-stat-blue">
           <div className="mp-stat-icon-wrap"><CreditCard size={20} /></div>
-          <div className="mp-stat-body"><p className="mp-stat-number">${totalBilled.toFixed(2)}</p><p className="mp-stat-label">Total Billed</p></div>
+          <div className="mp-stat-body"><p className="mp-stat-number">GHS {totalBilled.toFixed(2)}</p><p className="mp-stat-label">Total Billed</p></div>
         </div>
         <div className="mp-stat-card mp-stat-green">
           <div className="mp-stat-icon-wrap"><CheckCircle size={20} /></div>
@@ -2630,7 +2630,7 @@ function MedPatBilling({ profile }) {
         </div>
         <div className="mp-stat-card mp-stat-amber">
           <div className="mp-stat-icon-wrap"><AlertCircle size={20} /></div>
-          <div className="mp-stat-body"><p className="mp-stat-number">$0.00</p><p className="mp-stat-label">Outstanding</p></div>
+          <div className="mp-stat-body"><p className="mp-stat-number">GHS 0.00</p><p className="mp-stat-label">Outstanding</p></div>
         </div>
       </div>
 
@@ -2654,7 +2654,7 @@ function MedPatBilling({ profile }) {
                   <p style={{ margin: '0.1rem 0 0', fontSize: '0.78rem', color: '#64748b' }}>{fmtDate(a.date)} &bull; {a.consultationType || 'Video'}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>${a.consultationFee || '0.00'}</p>
+                  <p style={{ margin: 0, fontWeight: 700, color: '#0f172a' }}>GHS {a.consultationFee || '0.00'}</p>
                   <span style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#16a34a', padding: '0.1rem 0.45rem', borderRadius: 4, fontWeight: 600 }}>Paid</span>
                 </div>
               </div>
@@ -2731,9 +2731,9 @@ function MedPatInsurance({ profile }) {
         <div className="mp-card" style={{ marginBottom: '1.25rem' }}>
           <h3 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '0.95rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Coverage Details</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-            {field('Deductible', 'deductible', { placeholder: 'e.g., $1,500/yr' })}
-            {field('Co-pay', 'copay', { placeholder: 'e.g., $30/visit' })}
-            {field('Out-of-Pocket Max', 'outOfPocketMax', { placeholder: 'e.g., $5,000/yr' })}
+            {field('Deductible', 'deductible', { placeholder: 'e.g., GHS 1,500/yr' })}
+            {field('Co-pay', 'copay', { placeholder: 'e.g., GHS 30/visit' })}
+            {field('Out-of-Pocket Max', 'outOfPocketMax', { placeholder: 'e.g., GHS 5,000/yr' })}
           </div>
         </div>
         <div className="mp-card" style={{ marginBottom: '1.25rem' }}>
@@ -3851,7 +3851,7 @@ export function MedPatSettings({ profile, variant = 'medical' }) {
                   <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{b.description || 'Consultation'}</p>
                   <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>{b.date || '—'}</p>
                 </div>
-                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: b.status === 'paid' ? '#16a34a' : '#dc2626' }}>${b.amount || 0}</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: b.status === 'paid' ? '#16a34a' : '#dc2626' }}>GHS {b.amount || 0}</span>
               </div>
             ))}
             <a href="/dashboard/billing" className="mp-btn mp-btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none', marginTop: '0.75rem' }}>

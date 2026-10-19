@@ -1895,3 +1895,14 @@
 .mp-settings-therapy .mp-btn-primary { background: #5046bd; border-color: #5046bd; }
 .mp-settings-therapy .mp-btn-primary:hover { background: #3f3796; border-color: #3f3796; }
 .mp-settings-therapy .mp-btn-outline { color: #5046bd; border-color: #c7c3f0; }
+
+/* ── Phones: patient home cards ── */
+@media (max-width: 600px) {
+  .mp-stats-grid, .mp-stats-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+  .mp-quick-actions-grid, .mp-home-grid .mp-quick-actions-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 10px; }
+  .mp-health-overview-grid, .mp-rx-card-details, .mp-home-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media (max-width: 380px) {
+  .mp-stats-grid, .mp-stats-grid-4 { grid-template-columns: minmax(0, 1fr) !important; }
+  .mp-quick-actions-grid, .mp-home-grid .mp-quick-actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}

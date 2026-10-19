@@ -303,7 +303,7 @@ export default function OnboardDoctor({ profile }) {
               onChange={e => handleChange('licensingAuthority', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>Consultation Fee ($)</label>
+            <label>Consultation Fee (GHS)</label>
             <input className="doctor-form-input" type="number" min="0" value={form.consultationFee}
               onChange={e => handleChange('consultationFee', e.target.value)} />
           </div>

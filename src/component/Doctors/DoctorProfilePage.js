@@ -8,6 +8,7 @@ import {
 import './DoctorProfilePage.css';
 import { savePendingBooking } from '../../utils/pendingDoctorBooking';
 import { payForBooking } from '../../services/paystack';
+import { api } from '../../services/apiClient';
 import Paged from '../Common/Paged';
 
 function getInitials(name) {
@@ -48,6 +49,8 @@ export default function DoctorProfilePage({ session }) {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState('');
   const [reason, setReason] = useState('');
+  // Shown once Paystack confirms a visitor's payment, before sign-up.
+  const [paidNotice, setPaidNotice] = useState(null);
   const [bookingState, setBookingState] = useState({ status: null, error: '' });
 
   useEffect(() => { loadData(); }, [doctorId]);
@@ -129,9 +132,41 @@ export default function DoctorProfilePage({ session }) {
     return (avail.slots || []).filter(s => !(avail.booked || []).includes(s));
   };
 
+  // Slot still free? Asked before any payment, so nobody pays for a refused time.
+  const slotIsFree = async () => {
+    try {
+      await api('/api/v1/medical/appointments/check', { method: 'POST', authenticated: false,
+        body: { doctorId, scheduledAt: `${selectedDate}T${String(selectedSlot).slice(0, 5)}:00` } });
+      return true;
+    } catch (e) {
+      setBookingState({ status: 'error', error: e?.message || 'That time is not available. Please choose another.' });
+      return false;
+    }
+  };
+
   const handleBook = async () => {
-    // Auth check FIRST — redirect to signup immediately without requiring date/time
+    // New visitor: choose the time, PAY, then sign up. The booking used to be
+    // parked and created after sign-up with no payment at all.
     if (!session?.role) {
+      if (!selectedDate || !selectedSlot) {
+        setBookingState({ status: 'error', error: 'Please select a date and time slot.' });
+        return;
+      }
+      if (!(await slotIsFree())) return;
+      // Paystack needs an email to start a payment; a NessaHub booking address is
+      // used until the account exists, then the payment is filed on the account.
+      const email = `booking+${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}@nessahub.com`;
+      setBookingState({ status: 'loading', error: '' });
+      const paid = await payForBooking({
+        email,
+        amount: Number(doctor?.consultationFee ?? 0),
+        purpose: 'medical',
+        metadata: { doctorId, providerId: doctorId, serviceType: 'consultation' },
+      });
+      if (!paid.ok) {
+        setBookingState({ status: 'error', error: paid.reason || 'Payment was not completed.' });
+        return;
+      }
       savePendingBooking({
         doctorId,
         doctorName: doctor.name,
@@ -140,8 +175,13 @@ export default function DoctorProfilePage({ session }) {
         time: selectedSlot,
         consultationType: consultType,
         reason,
+        paymentReference: paid.reference || null,
+        consultationFee: paid.amount ?? Number(doctor?.consultationFee ?? 0),
       });
-      navigate('/signup');
+      setBookingState({ status: 'idle', error: '' });
+      // Confirmed with Paystack: say so, then go to sign-up.
+      setPaidNotice({ amount: paid.amount, reference: paid.reference });
+      setTimeout(() => navigate('/signup'), 2500);
       return;
     }
 
@@ -157,6 +197,7 @@ export default function DoctorProfilePage({ session }) {
       const clientId = session.profile.id;
       const clientName = session.profile.name || session.profile.displayName || 'Patient';
 
+      if (!(await slotIsFree())) return;
       // Booking a doctor from their public profile charged nothing at all.
       const fee = Number(doctor?.consultationFee ?? 0);
       const paid = await payForBooking({
@@ -354,7 +395,7 @@ export default function DoctorProfilePage({ session }) {
                     <div>
                       <div className="dp-detail-label">Consultation Fee</div>
                       <div className="dp-detail-value">
-                        {doctor.consultationFee ? `$${doctor.consultationFee} per session` : 'Free'}
+                        {doctor.consultationFee ? `GHS ${doctor.consultationFee} per session` : 'Free'}
                       </div>
                     </div>
                   </div>
@@ -425,7 +466,7 @@ export default function DoctorProfilePage({ session }) {
               <>
                 <h3 className="dp-booking-title">Book an Appointment</h3>
                 <p className="dp-booking-fee">
-                  {doctor.consultationFee ? `$${doctor.consultationFee} / session` : 'Free consultation'}
+                  {doctor.consultationFee ? `GHS ${doctor.consultationFee} / session` : 'Free consultation'}
                 </p>
 
                 {/* Consult Type */}
@@ -505,6 +546,13 @@ export default function DoctorProfilePage({ session }) {
                   />
                 </div>
 
+                {paidNotice && (
+                  <div role="status" style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#166534', borderRadius: 12, padding: '0.85rem 1rem', marginBottom: '0.75rem' }}>
+                    <b>Payment successful</b>, confirmed with Paystack: GHS {Number(paidNotice.amount || 0).toFixed(2)}
+                    {paidNotice.reference ? ` (ref ${paidNotice.reference})` : ''}. Taking you to sign up to confirm your appointment…
+                  </div>
+                )}
+
                 {bookingState.error && (
                   <div className="dp-booking-error">{bookingState.error}</div>
                 )}
@@ -514,8 +562,8 @@ export default function DoctorProfilePage({ session }) {
                   onClick={handleBook}
                   disabled={bookingState.status === 'loading'}
                 >
-                  {bookingState.status === 'loading' ? 'Booking…' :
-                   !session?.role ? '🔒 Sign up to Book' : 'Confirm Appointment'}
+                  {bookingState.status === 'loading' ? 'Please wait…' :
+                   !session?.role ? 'Pay and continue to sign up' : 'Pay and confirm appointment'}
                 </button>
 
                 {!session?.role && (

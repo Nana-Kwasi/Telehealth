@@ -269,7 +269,7 @@ export default function DoctorSettings({ profile }) {
                 onChange={e => setProfileForm(prev => ({ ...prev, experience: e.target.value }))} />
             </div>
             <div className="doctor-form-group">
-              <label>Consultation Fee ($)</label>
+              <label>Consultation Fee (GHS)</label>
               <input className="doctor-form-input" type="number" min="0" value={profileForm.consultationFee}
                 onChange={e => setProfileForm(prev => ({ ...prev, consultationFee: e.target.value }))} />
             </div>

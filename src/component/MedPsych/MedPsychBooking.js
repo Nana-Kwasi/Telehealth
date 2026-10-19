@@ -331,7 +331,7 @@ export default function MedPsychBooking() {
               <span>Length</span><strong>50 minutes</strong>
             </div>
             <div className="mp-summary-total">
-              <span>Total</span><span>${rate.toFixed(2)}</span>
+              <span>Total</span><span>GHS {rate.toFixed(2)}</span>
             </div>
 
             {error ? <p className="mp-error">{error}</p> : null}
@@ -343,7 +343,7 @@ export default function MedPsychBooking() {
               onClick={payAndBook}
               disabled={submitting || !time}
             >
-              {submitting ? 'Completing…' : `Pay $${rate.toFixed(0)} and book`}
+              {submitting ? 'Completing…' : `Pay GHS ${rate.toFixed(0)} and book`}
             </button>
 
             <p className="zc-meta mp-nodb-note">

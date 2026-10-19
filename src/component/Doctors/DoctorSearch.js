@@ -308,7 +308,7 @@ export default function DoctorSearch({ session }) {
                     {/* Right column */}
                     <div className="ds-card-right">
                       <div className="ds-card-fee">
-                        {doctor.consultationFee ? `$${doctor.consultationFee}` : 'Free'}
+                        {doctor.consultationFee ? `GHS ${doctor.consultationFee}` : 'Free'}
                       </div>
                       <div className="ds-card-fee-label">per session</div>
                       <button

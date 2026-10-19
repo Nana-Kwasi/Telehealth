@@ -212,7 +212,7 @@ export default function Payment() {
         ].map((p) => (
           <div key={p.key} className={`pricing-card ${plan === p.key ? 'featured' : ''}`} onClick={() => setPlan(p.key)}>
             <div className="pricing-name">{p.title}</div>
-            <div className="pricing-price">${p.price}</div>
+            <div className="pricing-price">GHS {p.price}</div>
             <div className="pricing-period">/week</div>
             <ul className="pricing-features">
               {p.features.map((f) => (

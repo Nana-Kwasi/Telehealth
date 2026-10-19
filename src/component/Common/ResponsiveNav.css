@@ -1,0 +1,95 @@
+/* Phone and tablet layout for every dashboard (see ResponsiveNav.js). Laptops are untouched. */
+.nh-nav-btn, .nh-nav-scrim { display: none; }
+
+@media (max-width: 900px) {
+  .nh-nav-btn {
+    display: flex; align-items: center; justify-content: center;
+    position: fixed; top: 12px; left: 12px; z-index: 1102;
+    width: 44px; height: 44px; border: none; border-radius: 12px; cursor: pointer;
+    background: #0f172a; color: #fff; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+  }
+  .nh-nav-btn:focus-visible { outline: 3px solid #14b8a6; outline-offset: 2px; }
+  .nh-burger { position: relative; width: 20px; height: 14px; display: block; }
+  .nh-burger i { position: absolute; left: 0; width: 20px; height: 2px; border-radius: 2px; background: currentColor; transition: transform 0.2s, opacity 0.2s, top 0.2s; }
+  .nh-burger i:nth-child(1) { top: 0; }
+  .nh-burger i:nth-child(2) { top: 6px; }
+  .nh-burger i:nth-child(3) { top: 12px; }
+  .nh-burger.x i:nth-child(1) { top: 6px; transform: rotate(45deg); }
+  .nh-burger.x i:nth-child(2) { opacity: 0; }
+  .nh-burger.x i:nth-child(3) { top: 6px; transform: rotate(-45deg); }
+
+  /* The page takes the full width; the sidebar no longer sits beside it. */
+  body.nh-has-dashboard .pharmacy-dashboard, body.nh-has-dashboard .doctor-dashboard, body.nh-has-dashboard .therapist-dashboard,
+  body.nh-has-dashboard .client-dashboard, body.nh-has-dashboard .mp-dashboard, body.nh-has-dashboard .hcn-dashboard,
+  body.nh-has-dashboard .dashboard-container { display: block !important; }
+
+  body.nh-has-dashboard .pharmacy-main, body.nh-has-dashboard .doctor-main, body.nh-has-dashboard .therapist-main,
+  body.nh-has-dashboard .client-main, body.nh-has-dashboard .mp-main, body.nh-has-dashboard .hcn-main,
+  body.nh-has-dashboard .dashboard-main {
+    margin-left: 0 !important; width: 100% !important; max-width: 100vw; min-width: 0 !important;
+    padding-top: 64px !important; box-sizing: border-box; overflow-x: auto;
+  }
+
+  /* The sidebar becomes a drawer. */
+  body.nh-has-dashboard .pharmacy-sidebar, body.nh-has-dashboard .doctor-sidebar, body.nh-has-dashboard .therapist-sidebar,
+  body.nh-has-dashboard .client-sidebar, body.nh-has-dashboard .mp-sidebar, body.nh-has-dashboard .hcn-sidebar,
+  body.nh-has-dashboard .dashboard-sidebar {
+    display: flex !important; flex-direction: column;
+    position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important;
+    height: 100vh !important; height: 100dvh !important; width: min(84vw, 300px) !important; min-width: 0 !important; max-width: none !important;
+    z-index: 1101; overflow-y: auto; transform: translateX(-105%); transition: transform 0.24s ease;
+    box-shadow: 8px 0 30px rgba(15, 23, 42, 0.3);
+  }
+  body.nh-nav-open .pharmacy-sidebar, body.nh-nav-open .doctor-sidebar, body.nh-nav-open .therapist-sidebar,
+  body.nh-nav-open .client-sidebar, body.nh-nav-open .mp-sidebar, body.nh-nav-open .hcn-sidebar,
+  body.nh-nav-open .dashboard-sidebar { transform: none; }
+  body.nh-nav-open .nh-nav-btn { left: calc(min(84vw, 300px) + 10px); background: #fff; color: #0f172a; }
+
+  .nh-nav-scrim { position: fixed; inset: 0; z-index: 1100; background: rgba(15, 23, 42, 0.45); }
+  body.nh-nav-open .nh-nav-scrim { display: block; }
+  body.nh-nav-open { overflow: hidden; }
+
+  /* Wide content scrolls sideways inside its card instead of breaking the page. */
+  body.nh-has-dashboard .dx-card, body.nh-has-dashboard .dx-table-wrap { overflow-x: auto; }
+  /* Any card holding a table: the table scrolls inside the card, so the last
+     columns (usually the action buttons) stay reachable instead of off-screen. */
+  body.nh-has-dashboard [class$="-card"]:has(table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  body.nh-has-dashboard img, body.nh-has-dashboard video { max-width: 100%; height: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.nh-has-dashboard [class$="-sidebar"], .nh-burger i { transition: none !important; }
+}
+
+/* Phones: side-by-side layouts written straight into the page (inline grids)
+   stack into one column, so cards never squeeze to unreadable widths. Seven-
+   column calendars keep their columns. */
+@media (max-width: 600px) {
+  body.nh-has-dashboard [class$="-main"] [style*="grid-template-columns"]:not([style*="repeat(7"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body.nh-has-dashboard [class$="-main"] [style*="display: flex"][style*="gap"] { flex-wrap: wrap; }
+}
+
+/* Phones: tables marked --stack become one card per row, with each cell
+   labelled, so actions sit under the row instead of off the right edge. */
+@media (max-width: 700px) {
+  body.nh-has-dashboard .doctor-table--stack thead { display: none; }
+  body.nh-has-dashboard .doctor-table--stack,
+  body.nh-has-dashboard .doctor-table--stack tbody { display: block; width: 100%; }
+  body.nh-has-dashboard .doctor-table--stack tr {
+    display: block; margin: 0 0 12px; padding: 10px 12px;
+    border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
+  }
+  body.nh-has-dashboard .doctor-table--stack td {
+    display: flex !important; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 6px 0 !important; border: 0 !important; max-width: none !important; text-align: right;
+  }
+  body.nh-has-dashboard .doctor-table--stack td::before {
+    content: attr(data-label); flex: none; text-align: left;
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8;
+  }
+  body.nh-has-dashboard .doctor-table--stack td.doctor-table-actions { display: block !important; padding-top: 10px !important; text-align: left; }
+  body.nh-has-dashboard .doctor-table--stack td.doctor-table-actions::before { display: block; margin-bottom: 8px; }
+  body.nh-has-dashboard .doctor-table--stack td.doctor-table-actions > * { display: flex; flex-wrap: wrap; gap: 8px; }
+}

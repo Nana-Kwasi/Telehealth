@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell, X, Calendar, MessageSquare, Pill, FileText, Heart,
@@ -231,4 +232,31 @@ export default function NotificationCenter() {
       )}
     </div>
   );
+}
+
+/**
+ * The app-wide bell. Pinned to the corner it sat on top of the dashboard header
+ * (over the admin search and its buttons). Where a dashboard header has a
+ * right-hand slot, the bell moves into it and lines up with the other items;
+ * screens without one keep the floating bell.
+ */
+const BELL_SLOTS = '.admin-topbar-right, .nd-topbar-right';
+
+export function NotificationMount() {
+  const [slot, setSlot] = useState(null);
+  useEffect(() => {
+    // Dashboards mount after the app shell and swap on navigation, so keep looking.
+    const find = () => {
+      const el = document.querySelector(BELL_SLOTS);
+      setSlot((cur) => (cur === el ? cur : el));
+    };
+    find();
+    const obs = new MutationObserver(find);
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, []);
+  if (slot && slot.isConnected) {
+    return createPortal(<div className="nh-notif-docked"><NotificationCenter /></div>, slot);
+  }
+  return <div className="nh-notif-floating"><NotificationCenter /></div>;
 }

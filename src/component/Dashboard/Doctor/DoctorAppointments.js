@@ -504,23 +504,23 @@ export default function DoctorAppointments({ profile }) {
                 <p>Appointments will appear here when patients book with you.</p>
               </div>
             ) : (
-              <table className="doctor-table">
+              <table className="doctor-table doctor-table--stack">
                 <thead><tr><th>Patient</th><th>Date</th><th>Time</th><th>Type</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                   <Paged items={filtered} table>{(filtered) => filtered.map(appt => (
                     <tr key={appt.id} style={{ cursor: 'pointer' }} onClick={() => setDetailAppt(appt)} title="View appointment details">
-                      <td style={{ fontWeight: 600 }}>{appt.clientName || 'Patient'}</td>
-                      <td>{appt.date || '—'}</td>
-                      <td>{appt.time || '—'}</td>
-                      <td style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <td data-label="Patient" style={{ fontWeight: 600 }}>{appt.clientName || 'Patient'}</td>
+                      <td data-label="Date">{appt.date || '—'}</td>
+                      <td data-label="Time">{appt.time || '—'}</td>
+                      <td data-label="Type" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         <ConsultIcon type={appt.consultationType} />
                         {(appt.consultationType || 'video').charAt(0).toUpperCase() + (appt.consultationType || 'video').slice(1)}
                       </td>
-                      <td style={{ maxWidth: 160, fontSize: '0.8rem', color: '#64748b', fontStyle: appt.reason ? 'italic' : 'normal' }}>
+                      <td data-label="Reason" style={{ maxWidth: 160, fontSize: '0.8rem', color: '#64748b', fontStyle: appt.reason ? 'italic' : 'normal' }}>
                         {appt.reason ? `"${appt.reason.slice(0, 50)}${appt.reason.length > 50 ? '…' : ''}"` : '—'}
                       </td>
-                      <td><StatusBadge status={appt.status} /></td>
-                      <td onClick={e => e.stopPropagation()}><ActionBtns appt={appt} /></td>
+                      <td data-label="Status"><StatusBadge status={appt.status} /></td>
+                      <td data-label="Actions" className="doctor-table-actions" onClick={e => e.stopPropagation()}><ActionBtns appt={appt} /></td>
                     </tr>
                   ))}</Paged>
                 </tbody>

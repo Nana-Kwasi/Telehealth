@@ -464,7 +464,7 @@ export default function DoctorHome({ profile }) {
   const monthlyData = buildMonthlyTrend();
   const pieData = buildStatusPie();
 
-  const fmtCurrency = (n) => n > 0 ? `$${n.toLocaleString()}` : '$0';
+  const fmtCurrency = (n) => n > 0 ? `GHS ${n.toLocaleString()}` : 'GHS 0';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const todayFmt = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });

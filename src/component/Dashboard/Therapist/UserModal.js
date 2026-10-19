@@ -468,7 +468,7 @@ export default function UserModal({ user, mode, onClose, isAdmin }) {
                       step="0.01"
                     />
                   ) : (
-                    <p className="user-form-value">${user.consultationFee || 0}</p>
+                    <p className="user-form-value">GHS {user.consultationFee || 0}</p>
                   )}
                 </div>
 

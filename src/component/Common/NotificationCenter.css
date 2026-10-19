@@ -189,3 +189,6 @@
 @media (max-width: 640px) {
   .nh-notif-floating { top: 66px; right: 12px; }
 }
+
+/* Docked inside a dashboard header's right-hand slot (see NotificationMount). */
+.nh-notif-docked { display: inline-flex; align-items: center; flex: none; margin-left: 0.5rem; }

@@ -23,7 +23,7 @@ export default function SignUp() {
 
   const [form, setForm] = useState({
     name: clientData?.name || clientData?.displayName || '',
-    email: clientData?.email || '',
+    email: location.state?.email || clientData?.email || '',
     // Collected on every signup so the admin user-detail screen has a phone for
     // each account, and so care staff can reach the person.
     phone: clientData?.phone || clientData?.phoneNumber || '',

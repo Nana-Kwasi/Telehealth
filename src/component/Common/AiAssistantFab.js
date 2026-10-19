@@ -164,7 +164,8 @@ const S = {
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
-    padding: '1.25rem',
+    padding: 'max(12px, min(1.25rem, 3vw))',
+    boxSizing: 'border-box',
     background: 'rgba(16, 22, 48, 0.32)',
     backdropFilter: 'blur(3px)',
     WebkitBackdropFilter: 'blur(3px)',
@@ -174,6 +175,10 @@ const S = {
     flexDirection: 'column',
     width: 'min(440px, 100%)',
     height: 'min(660px, 88vh)',
+    // Never taller than the space actually visible: on phones "vh" includes the
+    // browser's address bar, so the expanded panel pushed its own header (and the
+    // close button) off the top of the screen.
+    maxHeight: '100%',
     borderRadius: 20,
     overflow: 'hidden',
     background: '#ffffff',
@@ -181,7 +186,7 @@ const S = {
     boxShadow: '0 28px 80px rgba(16,22,48,0.34)',
   },
   // Room to read a long briefing without leaving the page behind.
-  panelExpanded: { width: 'min(920px, 100%)', height: '92vh' },
+  panelExpanded: { width: 'min(920px, 100%)', height: '100%' },
 
   header: {
     display: 'flex',

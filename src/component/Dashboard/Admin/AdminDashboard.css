@@ -120,10 +120,7 @@
 @media (max-width: 1300px) { .admin-date { display: none; } }
 @media (max-width: 760px) { .admin-crumbs { display: none; } }
 .admin-date { font-size: 0.8rem; color: var(--a-muted); font-weight: 600; white-space: nowrap; }
-/* The app-wide notification bell is fixed top-right; on admin it sits in the
-   top bar instead of over the page content. */
-body:has(.admin-dashboard) .nh-notif-floating { top: 8px !important; right: 18px !important; }
-.admin-topbar { padding-right: 78px; }
+/* The app-wide notification bell docks into .admin-topbar-right (NotificationMount). */
 .admin-scrim { display: none; }
 
 /* ── Page ── */
