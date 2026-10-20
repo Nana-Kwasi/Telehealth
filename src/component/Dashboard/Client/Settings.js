@@ -46,6 +46,7 @@ import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 
 import ConsentHistory from '../../Common/ConsentHistory';
+import PhoneForSms from '../../Common/PhoneForSms';
 export default function ClientSettings() {
   const [clientData, setClientData] = useState(null);
   const [authData, setAuthData] = useState(null);
@@ -790,6 +791,8 @@ export default function ClientSettings() {
                 <h2>Security</h2>
                 <p>Manage your password and account security</p>
               </div>
+              {/* Verify the number reminders and codes are texted to. */}
+              <div style={{ marginBottom: '1.25rem' }}><PhoneForSms /></div>
               
               <div className="settings-security">
                 <div className="settings-security-item">

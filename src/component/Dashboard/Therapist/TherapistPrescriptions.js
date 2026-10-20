@@ -3,7 +3,8 @@
 // track through exactly the doctor's flow: same form, pharmacy routing, safety
 // checks and approvals. Differences from the doctor copy are marked "Psychiatry:".
 // Keep fixes to the shared flow in step with Doctor/DoctorPrescriptions.js.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { parseCoords, attachDistance, formatDistanceKm } from '../../../utils/homeCareGeo';
 import RxAdvicePanel from '../../Common/RxAdvicePanel';
 import { RxInsurancePicker, RxEstimateCard, attachRxCard } from '../../Common/RxInsuranceCard';
 import '../Doctor/DoctorDashboard.css';
@@ -142,6 +143,10 @@ export default function TherapistPrescriptions({ profile }) {
   const [prescriptions, setPrescriptions] = useState([]);
   const [patients, setPatients] = useState([]);
   const [branchDirectory, setBranchDirectory] = useState([]);
+  // The chosen patient's saved pharmacies and location: the branch list shows
+  // only their pharmacies (nearest first) unless the prescriber asks for all.
+  const [patientPh, setPatientPh] = useState({ id: null, list: [], anchor: null });
+  const [showAllBranches, setShowAllBranches] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -278,6 +283,30 @@ export default function TherapistPrescriptions({ profile }) {
     } catch (err) { console.error('Error loading clients:', err); }
   };
 
+  useEffect(() => {
+    const pid = form?.patientId;
+    setShowAllBranches(false);
+    if (!pid) { setPatientPh({ id: null, list: [], anchor: null }); return undefined; }
+    let live = true;
+    getDoc(doc(db, 'patientProfiles', pid)).then((snap) => {
+      if (!live) return;
+      const pd = snap?.exists?.() ? snap.data() : {};
+      setPatientPh({ id: pid, list: Array.isArray(pd.pharmacies) ? pd.pharmacies : [], anchor: parseCoords(pd) });
+    }).catch(() => { if (live) setPatientPh({ id: pid, list: [], anchor: null }); });
+    return () => { live = false; };
+  }, [form?.patientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const branchOptions = useMemo(() => {
+    const saved = patientPh.list || [];
+    let rows = branchDirectory;
+    if (form?.patientId && !showAllBranches) {
+      rows = rows.filter(r => saved.some(sv => (sv.branchId && sv.branchId === r.branchId)
+        || (!sv.branchId && sv.pharmacyId && sv.pharmacyId === r.pharmacyId)));
+    }
+    return patientPh.anchor ? attachDistance(rows, patientPh.anchor) : rows;
+  }, [branchDirectory, patientPh, showAllBranches, form?.patientId]);
+  const patientFirstName = (form?.patientName || 'This patient').split(' ')[0];
+
   const loadBranchDirectory = async () => {
     setLoadingBranchDirectory(true);
     try {
@@ -300,6 +329,8 @@ export default function TherapistPrescriptions({ profile }) {
             pharmacyId: ph.id,
             pharmacyName: parentName,
             addressLine: [br.address, br.city].filter(Boolean).join(', '),
+            latitude: br.latitude ?? ph.latitude ?? null,
+            longitude: br.longitude ?? ph.longitude ?? null,
           });
         });
       }
@@ -797,10 +828,23 @@ export default function TherapistPrescriptions({ profile }) {
                     style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.85rem', color: '#64748b', borderBottom: '1px solid #f1f5f9', background: !form.branchId ? '#f0f9ff' : 'transparent' }}>
                     — None —
                   </div>
-                  {branchDirectory.length === 0 && !loadingBranchDirectory && (
-                    <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No active branches found.</div>
+                  {form.patientId ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '0.45rem 0.85rem', background: '#f0f9ff', fontSize: '0.78rem', color: '#0c4a6e' }}>
+                      <span>{showAllBranches ? 'Showing all pharmacies' : `Showing ${patientFirstName}'s pharmacies`}{patientPh.anchor ? ' · nearest first' : ''}</span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setShowAllBranches(v => !v); }}
+                        style={{ border: 0, background: 'none', color: '#1d4ed8', fontWeight: 800, cursor: 'pointer', fontSize: '0.78rem' }}>
+                        {showAllBranches ? `Only ${patientFirstName}'s` : 'Show all'}
+                      </button>
+                    </div>
+                  ) : null}
+                  {branchOptions.length === 0 && !loadingBranchDirectory && (
+                    <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#64748b' }}>
+                      {form.patientId && !showAllBranches
+                        ? `${patientFirstName} has not saved a pharmacy yet. Choose "Open to all pharmacies", or Show all.`
+                        : 'No active branches found.'}
+                    </div>
                   )}
-                  <Paged items={branchDirectory}>{(branchDirectory) => branchDirectory.map(row => (
+                  <Paged items={branchOptions}>{(branchOptions) => branchOptions.map(row => (
                     <div key={`${row.pharmacyId}-${row.branchId}`} onClick={() => {
                       setForm(p => ({
                         ...p,
@@ -813,7 +857,7 @@ export default function TherapistPrescriptions({ profile }) {
                     }}
                       style={{ padding: '0.5rem 0.85rem', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', borderBottom: '1px solid #f1f5f9', background: form.branchId === row.branchId ? '#eff6ff' : 'transparent' }}>
                       <div style={{ fontWeight: 600 }}>{row.branchName}</div>
-                      {row.addressLine && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.addressLine}</div>}
+                      {(row.addressLine || row.distanceKm != null) && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{[row.distanceKm != null ? formatDistanceKm(row.distanceKm) : null, row.addressLine].filter(Boolean).join(' · ')}</div>}
                     </div>
                   ))}</Paged>
                 </div>

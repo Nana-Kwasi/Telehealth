@@ -40,10 +40,12 @@ import WeatherCard from '../../Common/WeatherCard';
 import { subscribeLocationUpdate, applyLocationPatch, publishLocationUpdate } from '../../../utils/locationBus';
 import { patientPharmacyKey, removePatientPharmacyByKey, hasPatientPharmacy, dedupePatientPharmacies, pharmacyEntryFromDirectory } from '../../../utils/patientPharmacyDedupe';
 import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderStatus';
+import { parseCoords as parseGeo, attachDistance, formatDistanceKm as formatGeoDistance } from '../../../utils/homeCareGeo';
 import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
 import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
 import PrescriptionRequestPanel from '../../Common/PrescriptionRequestPanel';
 import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
+import PhoneForSms from '../../Common/PhoneForSms';
 import InsuranceCards from '../../Common/InsuranceCards';
 import ClaimConfirmations from '../../Common/ClaimConfirmations';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
@@ -3658,6 +3660,9 @@ export function MedPatSettings({ profile, variant = 'medical' }) {
               <label style={lbl}>Email (read-only)</label>
               <input style={{ ...inp, background: '#f8fafc', color: '#94a3b8' }} value={form.email} readOnly />
             </div>
+            {/* Verify the number texts go to (prescription codes, reminders). It
+                was only offered as a dashboard banner, never here in Settings. */}
+            <div style={{ margin: '0.25rem 0 1rem' }}><PhoneForSms /></div>
             <button
               type="button"
               className="mp-btn mp-btn-outline mp-btn-sm"
@@ -4133,9 +4138,7 @@ export function MedPatEPharmacy({ profile }) {
   const [searchPh, setSearchPh] = useState('');
   const [selectedRx, setSelectedRx] = useState(null);
   const [transferActionKey, setTransferActionKey] = useState('');
-  // Browse → "Add to my pharmacies": which pharmacy is open, its branches, and the row being saved.
-  const [openPhId, setOpenPhId] = useState(null);
-  const [branchesByPh, setBranchesByPh] = useState({});
+  // Browse → "Add": the row being saved.
   const [addingKey, setAddingKey] = useState(null);
 
   useEffect(() => {
@@ -4173,18 +4176,36 @@ export function MedPatEPharmacy({ profile }) {
   useEffect(() => {
     if (tab !== 'pharmacies') return;
     setLoadingPh(true);
-    getDocs(query(collection(db, 'pharmacies'), where('status', '==', 'active')))
-      .then(snap => setSystemPharmacies(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
-      .catch(console.error)
-      .finally(() => setLoadingPh(false));
-  }, [tab]);
+    // Every BRANCH is its own entry (patients go to a branch, not a head
+    // office), nearest to the patient first. A pharmacy with no branches yet is
+    // listed as itself.
+    (async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'pharmacies'), where('status', '==', 'active')));
+        const parents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const rows = [];
+        for (const ph of parents) {
+          const bs = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', ph.id), where('status', '==', 'active')))
+            .then(r => r.docs.map(d => ({ id: d.id, ...d.data() }))).catch(() => []);
+          if (bs.length) bs.forEach(br => rows.push({ key: `${ph.id}:${br.id}`, ph, br, latitude: br.latitude ?? ph.latitude, longitude: br.longitude ?? ph.longitude }));
+          else rows.push({ key: ph.id, ph, br: null, latitude: ph.latitude, longitude: ph.longitude });
+        }
+        const anchor = parseGeo(profile) || null;
+        setSystemPharmacies(anchor ? attachDistance(rows, anchor) : rows);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingPh(false);
+      }
+    })();
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredPh = systemPharmacies.filter(ph => {
+  const filteredPh = systemPharmacies.filter(row => {
     if (!searchPh.trim()) return true;
     const q = searchPh.toLowerCase();
-    return (ph.pharmacyName || ph.name || '').toLowerCase().includes(q) ||
-           (ph.country || '').toLowerCase().includes(q) ||
-           (ph.address || '').toLowerCase().includes(q);
+    const { ph, br } = row;
+    return [ph.pharmacyName, ph.name, br?.branchName, br?.address, br?.city, ph.address, ph.city, ph.country]
+      .some(v => String(v || '').toLowerCase().includes(q));
   });
 
   const isTransferRequestExpired = (med) => {
@@ -4223,24 +4244,6 @@ export function MedPatEPharmacy({ profile }) {
     }
   };
 
-  // "Add" on a directory pharmacy: one branch (or none) saves straight away;
-  // several branches open a list so the patient picks the one they use.
-  const toggleAddPharmacy = async (ph) => {
-    if (openPhId === ph.id) { setOpenPhId(null); return; }
-    let branches = branchesByPh[ph.id];
-    if (!branches) {
-      setAddingKey(`ph:${ph.id}`);
-      try {
-        const snap = await getDocs(query(collection(db, 'pharmacyBranches'), where('pharmacyId', '==', ph.id), where('status', '==', 'active')));
-        branches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      } catch { branches = []; }
-      setBranchesByPh(m => ({ ...m, [ph.id]: branches }));
-      setAddingKey(null);
-    }
-    if (branches.length <= 1) addPharmacy(ph, branches[0] || null);
-    else setOpenPhId(ph.id);
-  };
-
   const addPharmacy = async (ph, br) => {
     if (!profile?.id) return;
     const entry = pharmacyEntryFromDirectory(ph, br);
@@ -4257,7 +4260,6 @@ export function MedPatEPharmacy({ profile }) {
       const updated = [...current, entry];
       await setDoc(doc(db, 'patientProfiles', profile.id), { pharmacies: updated }, { merge: true });
       setMyPharmacies(updated);
-      setOpenPhId(null);
     } catch {
       alert('Could not add this pharmacy. Please try again.');
     } finally {
@@ -4266,7 +4268,6 @@ export function MedPatEPharmacy({ profile }) {
   };
 
   const isSaved = (ph, br) => hasPatientPharmacy(myPharmacies, pharmacyEntryFromDirectory(ph, br));
-  const savedCount = (ph) => myPharmacies.filter(m => m.pharmacyId && m.pharmacyId === ph.id).length;
   const addBtnStyle = { background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, padding: '0.45rem 0.9rem', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 };
   const addedPill = <span style={{ fontSize: '0.7rem', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 20, padding: '2px 8px', fontWeight: 700, whiteSpace: 'nowrap' }}>Added</span>;
 
@@ -4542,47 +4543,27 @@ export function MedPatEPharmacy({ profile }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {filteredPh.map(ph => {
-                const branches = branchesByPh[ph.id] || [];
-                const saved = savedCount(ph);
-                const singleSaved = branchesByPh[ph.id] && branches.length <= 1 && isSaved(ph, branches[0] || null);
+              {filteredPh.map(({ key, ph, br, distanceKm }) => {
+                const saved = isSaved(ph, br);
+                const rowKey = patientPharmacyKey(pharmacyEntryFromDirectory(ph, br));
+                const title = br ? (br.branchName || 'Branch') : (ph.pharmacyName || ph.name);
+                const address = br ? (br.address || [br.city, br.country].filter(Boolean).join(', ')) : ph.address;
+                const phone = br?.phone || ph.phone;
                 return (
-                  <div key={ph.id} style={{ background: 'white', borderRadius: 14, border: '1.5px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
-                    <div style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', flexShrink: 0 }}>🏪</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{ph.pharmacyName || ph.name}</p>
-                        {ph.country && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>🌍 {ph.country}</p>}
-                        {ph.address && <p style={{ margin: '0 0 2px', fontSize: '0.78rem', color: '#64748b' }}>📍 {ph.address}</p>}
-                        {ph.phone && <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>📞 {ph.phone}</p>}
-                        {saved > 0 && <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#7c3aed', fontWeight: 600 }}>⭐ In your pharmacies{saved > 1 ? ` (${saved} branches)` : ''}</p>}
-                      </div>
-                      {singleSaved ? addedPill : (
-                        <button type="button" style={addBtnStyle} disabled={!!addingKey} onClick={() => toggleAddPharmacy(ph)}>
-                          {addingKey === `ph:${ph.id}` ? 'Loading…' : openPhId === ph.id ? 'Close' : <><Plus size={13} style={{ verticalAlign: '-2px' }} /> Add to my pharmacies</>}
-                        </button>
-                      )}
+                  <div key={key} style={{ background: 'white', borderRadius: 14, border: `1.5px solid ${saved ? '#c4b5fd' : '#e2e8f0'}`, boxShadow: '0 1px 4px rgba(0,0,0,0.04)', padding: '1rem 1.15rem', display: 'flex', alignItems: 'flex-start', gap: '0.9rem' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0 }}>🏪</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>{title}</p>
+                      {br ? <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#6d28d9', fontWeight: 600 }}>{ph.pharmacyName || ph.name}</p> : null}
+                      {address ? <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#64748b' }}>📍 {address}</p> : null}
+                      <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                        {[distanceKm != null ? formatGeoDistance(distanceKm) : null, phone ? `📞 ${phone}` : null].filter(Boolean).join(' · ')}
+                      </p>
                     </div>
-                    {openPhId === ph.id && (
-                      <div style={{ background: '#faf5ff', borderTop: '1px solid #e9d5ff', padding: '0.85rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#6b21a8' }}>Choose the branch you use</p>
-                        {branches.map(br => {
-                          const key = patientPharmacyKey(pharmacyEntryFromDirectory(ph, br));
-                          return (
-                            <div key={br.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'white', border: '1px solid #ede9fe', borderRadius: 10, padding: '0.6rem 0.8rem' }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>{br.branchName || 'Branch'}</p>
-                                {br.address && <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#64748b' }}>📍 {br.address}</p>}
-                              </div>
-                              {isSaved(ph, br) ? addedPill : (
-                                <button type="button" style={addBtnStyle} disabled={!!addingKey} onClick={() => addPharmacy(ph, br)}>
-                                  {addingKey === key ? 'Adding…' : 'Add'}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                    {saved ? addedPill : (
+                      <button type="button" style={addBtnStyle} disabled={!!addingKey} onClick={() => addPharmacy(ph, br)}>
+                        {addingKey === rowKey ? 'Adding…' : <><Plus size={13} style={{ verticalAlign: '-2px' }} /> Add</>}
+                      </button>
                     )}
                   </div>
                 );
