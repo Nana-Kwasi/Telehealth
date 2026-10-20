@@ -49,7 +49,10 @@ function generateOrderId() {
 
 const SEARCH_TIERS_KM = [30, 80, 150, 400, 2500, 100000];
 
-export default function DoctorDiagnosticOrder({ profile }) {
+// clinician="therapist": a psychiatrist ordering for their psychiatry-track
+// clients (the server refuses anyone else). Same flow as the doctor's.
+export default function DoctorDiagnosticOrder({ profile, clinician = 'doctor' }) {
+  const isTherapist = clinician === 'therapist';
   const location = useLocation();
   const preselectedPatientId = location.state?.patientId || null;
   const preselectedPatientName = location.state?.patientName || null;
@@ -142,6 +145,25 @@ export default function DoctorDiagnosticOrder({ profile }) {
   const loadPatients = async () => {
     if (!profile?.id) return;
     setLoadingPatients(true);
+    if (isTherapist) {
+      try {
+        const snap = await getDocs(collection(db, 'therapists', profile.id, 'clients'));
+        const ids = [...new Set(snap.docs.map(d => d.data().clientId).filter(Boolean))];
+        const list = [];
+        for (const cid of ids) {
+          try {
+            const cd = await getDoc(doc(db, 'clients', cid));
+            if (!cd.exists()) continue;
+            const c = cd.data();
+            if (String(c.careTrack || '').toLowerCase() !== 'psychiatry') continue;
+            list.push({ id: cid, name: c.name || c.fullName || c.displayName || 'Client', email: c.email || '' });
+          } catch (_) { /* skip */ }
+        }
+        setPatients(list.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (e) { console.error(e); }
+      finally { setLoadingPatients(false); }
+      return;
+    }
     try {
       const snap = await getDocs(query(collection(db, 'doctorAppointments'), where('doctorId', '==', profile.id)));
       const map = new Map();
@@ -361,7 +383,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
           title: `${orderType === 'lab' ? 'Lab' : 'Scan'} order: ${test}`,
           status: 'PENDING',
           relatedId: orderId,
-          actor: { role: 'DOCTOR', name: profile.name || 'Doctor' },
+          actor: { role: isTherapist ? 'THERAPIST' : 'DOCTOR', name: profile.name || (isTherapist ? 'Psychiatrist' : 'Doctor') },
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }).catch(() => {});
@@ -464,7 +486,7 @@ export default function DoctorDiagnosticOrder({ profile }) {
             ))}
           </div>
           <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-            The patient will be notified. They must present their National ID at the center.
+            The patient gets a QR code and 8-digit check-in code in their app (and by SMS if their phone is verified). The centre checks them in with it before the test.
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
             <button className="doctor-btn doctor-btn-primary" onClick={resetForm}>New Order</button>

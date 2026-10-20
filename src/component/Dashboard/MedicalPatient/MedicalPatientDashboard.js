@@ -43,6 +43,7 @@ import { normalizeDiagnosticOrderStatus } from '../../../utils/diagnosticOrderSt
 import { parseCoords as parseGeo, attachDistance, formatDistanceKm as formatGeoDistance } from '../../../utils/homeCareGeo';
 import { deriveRxStockStatus, patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
 import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
+import DiagnosticCodeCard from '../../Common/DiagnosticCodeCard';
 import PrescriptionRequestPanel from '../../Common/PrescriptionRequestPanel';
 import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
 import PhoneForSms from '../../Common/PhoneForSms';
@@ -4720,7 +4721,7 @@ export function MedPatTimeline({ profile }) {
 }
 
 // ─── Diagnostic Orders ────────────────────────────────────────────────────────
-function MedPatDiagnostics({ profile }) {
+export function MedPatDiagnostics({ profile }) {
   const [orders, setOrders] = useState([]);
   // Results the ordering doctor has SHARED, keyed by order id. The server only
   // returns shared results to a patient; unshared ones never reach this screen.
@@ -4768,7 +4769,7 @@ function MedPatDiagnostics({ profile }) {
     <div className="mp-page">
       <div className="mp-page-header">
         <h1 className="mp-page-title">Lab &amp; Scan Orders</h1>
-        <p className="mp-page-sub">Diagnostic tests ordered by your doctor — visit the center with your National ID</p>
+        <p className="mp-page-sub">Tests ordered by your doctor or psychiatrist — show your check-in code at the centre</p>
       </div>
 
       {/* Summary cards */}
@@ -4806,11 +4807,11 @@ function MedPatDiagnostics({ profile }) {
       {/* National ID reminder */}
       {orders.some(o => normalizeDiagnosticOrderStatus(o.status) === 'PENDING') && (
         <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'flex-start', gap: '0.65rem', marginBottom: '1.25rem' }}>
-          <span style={{ fontSize: '1.3rem', lineHeight: 1, flexShrink: 0 }}>🪪</span>
+          <span style={{ fontSize: '1.3rem', lineHeight: 1, flexShrink: 0 }}>🔐</span>
           <div>
-            <p style={{ margin: '0 0 0.2rem', fontWeight: 800, fontSize: '0.875rem', color: '#92400e' }}>Bring Your National ID</p>
+            <p style={{ margin: '0 0 0.2rem', fontWeight: 800, fontSize: '0.875rem', color: '#92400e' }}>Show your check-in code</p>
             <p style={{ margin: 0, fontSize: '0.8rem', color: '#b45309', lineHeight: 1.5 }}>
-              You must present your National ID at the lab or imaging center to collect your diagnostic order.
+              Open an order and show its QR code or 8-digit code at the lab or scan centre. Staff use it to check you in before the test. Bring your ID too.
             </p>
           </div>
         </div>
@@ -4920,18 +4921,8 @@ function MedPatDiagnostics({ profile }) {
                   </div>
                 )}
 
-                {/* National ID reminder */}
-                {['PENDING', 'IN_PROGRESS', 'SCHEDULED'].includes(vnorm) && (
-                  <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-                    <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>🪪</span>
-                    <div>
-                      <p style={{ margin: '0 0 0.2rem', fontWeight: 800, color: '#92400e', fontSize: '0.875rem' }}>Present Your National ID</p>
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#b45309', lineHeight: 1.5 }}>
-                        Staff will check that the name on your ID matches this order before your {isLab ? 'lab test' : 'scan'} at <strong>{viewing.centerName}</strong>.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                {/* QR + 8-digit check-in code, shown at the centre. */}
+                <DiagnosticCodeCard order={viewing} />
                 {(() => {
                   const res = sharedByOrder[viewing.id];
                   if (res) {

@@ -5,6 +5,7 @@ import { api } from '../../../services/apiClient';
 import { db, auth } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
+import DiagnosticCodeCard from '../../Common/DiagnosticCodeCard';
 
 const TYPE_CFG = {
   lab:  { label: 'Lab Result',  emoji: '🧪', bg: '#d1fae5', color: '#065f46', border: '#6ee7b7' },
@@ -362,6 +363,7 @@ export default function DoctorDiagnosticResults({ profile }) {
                     {viewing.notes ? <div style={{ marginTop: '0.5rem', color: '#475569' }}>Order note: {viewing.notes}</div> : null}
                   </div>
                 )}
+                {viewing.kind === 'order' && <DiagnosticCodeCard order={viewing} canManage />}
 
                 {/* Findings */}
                 {viewing.findings && (

@@ -17,6 +17,7 @@ import MedicalPatientDashboard from './component/Dashboard/MedicalPatient/Medica
 import TherapistDashboard from './component/Dashboard/Therapist/TherapistDashboard';
 import DoctorDashboard from './component/Dashboard/Doctor/DoctorDashboard';
 import RxLinkPage from './component/Common/RxLinkPage';
+import DxLinkPage from './component/Common/DxLinkPage';
 import AdminDashboard from './component/Dashboard/Admin/AdminDashboard';
 import InsurerDashboard from './component/Dashboard/Insurer/InsurerDashboard';
 import FacilityDashboard from './component/Dashboard/Facility/FacilityDashboard';
@@ -342,6 +343,7 @@ export default function App() {
           <Route path="/match-therapist" element={<MatchTherapist />} />
           {/* Prescription QR link: no details shown; pharmacies verify from their dashboard. */}
           <Route path="/rx/:token"     element={<RxLinkPage />} />
+          <Route path="/dx/:token"     element={<DxLinkPage />} />
           <Route path="/terms"         element={<Terms />} />
           <Route path="/privacy"       element={<Privacy />} />
           <Route path="/about"         element={<AboutPage />} />

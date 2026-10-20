@@ -5,7 +5,7 @@ import ReferralComposer from '../../Common/ReferralComposer';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature, Pill,
+  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature, Pill, FlaskConical,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth, db, doc, getDoc } from '../../../services/firestoreShim';
@@ -29,6 +29,10 @@ import TherapistLogs from './Logs';
 import MoodDashboard from './MoodDashboard';
 import ClientDetails from './ClientDetails';
 import TherapistPrescriptions from './TherapistPrescriptions';
+import DoctorDiagnosticOrder from '../Doctor/DoctorDiagnosticOrder';
+import DoctorDiagnosticResults from '../Doctor/DoctorDiagnosticResults';
+import '../Doctor/DoctorDashboard.css';
+
 import PrescriptionRequestsInbox from '../../Common/PrescriptionRequestsInbox';
 import ViewNote from './ViewNote';
 import ReportDetails from './ReportDetails';
@@ -48,6 +52,8 @@ import AiClinicalAssistant from '../../Common/AiClinicalAssistant';
 import ClinicianFollowUps from '../../Common/ClinicianFollowUps';
 
 import BrandLogo from '../../Common/BrandLogo';
+
+const TherapistDiagnosticOrder = (props) => <DoctorDiagnosticOrder {...props} clinician="therapist" />;
 export default function TherapistDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -93,6 +99,9 @@ export default function TherapistDashboard({ profile }) {
     // Psychiatry: prescribing for psychiatry-track clients — the doctor's flow, copied.
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: TherapistPrescriptions },
     { path: '/dashboard/prescription-requests', icon: Pill, label: 'Prescription Requests', component: PrescriptionRequestsInbox },
+    // Psychiatry: lab tests and scans for psychiatry-track clients, as a doctor orders them.
+    { path: '/dashboard/diagnostic-order', icon: FlaskConical, label: 'Order Lab / Scan', component: TherapistDiagnosticOrder },
+    { path: '/dashboard/diagnostic-results', icon: FlaskConical, label: 'Lab & Scan Results', component: DoctorDiagnosticResults },
     { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans', component: CarePlanComposer },
     { path: '/dashboard/documents', icon: FileSignature, label: 'Documents', component: AdminDocComposer },
     { path: '/dashboard/referrals', icon: Share2, label: 'Referrals', component: ReferralComposer },
@@ -224,6 +233,8 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/prescriptions" element={<TherapistPrescriptions profile={profile} />} />
+          <Route path="/diagnostic-order" element={<TherapistDiagnosticOrder profile={profile} />} />
+          <Route path="/diagnostic-results" element={<DoctorDiagnosticResults profile={profile} />} />
           <Route path="/prescription-requests" element={<PrescriptionRequestsInbox />} />
           <Route path="/care-plans" element={<CarePlanComposer role="THERAPIST" />} />
           <Route path="/documents" element={<AdminDocComposer role="THERAPIST" />} />

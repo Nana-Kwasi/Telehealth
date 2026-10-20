@@ -10,13 +10,14 @@ import { StagePill, PriorityPill } from './DiagOverview';
 import './diagnostics.css';
 import { PreauthRequestModal } from '../../Common/ProviderInsurance';
 import Paged from '../../Common/Paged';
+import DiagCheckIn from './DiagCheckIn';
 
 const OPS = '/api/v1/diagnostics/operations';
 
 const EVENT_LABEL = {
   SAMPLE_COLLECTED: 'Sample collected', SCAN_SCHEDULED: 'Scan booked', ORDER_STARTED: 'Work started',
   ORDER_STATUS_UPDATED: 'Status updated', ORDER_COMPLETED: 'Result uploaded', ORDER_REJECTED: 'Order rejected',
-  PRIORITY_CHANGED: 'Priority changed',
+  PRIORITY_CHANGED: 'Priority changed', PATIENT_CHECKED_IN: 'Patient checked in',
 };
 export const eventLabel = (e) => EVENT_LABEL[e?.eventType || e?.action] || String(e?.eventType || e?.action || 'Activity').replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase());
 
@@ -259,6 +260,17 @@ export function useOrderActions(type, catalog, onChanged) {
     const st = stageOf(o.status);
     if (!OPEN_STAGES.includes(st)) return null;
     const sm = compact ? 'dx-btn dx-btn--sm' : 'dx-btn';
+    // New orders need the patient's code first (older orders are exempt).
+    const needsCheckIn = o.requiresCheckIn && !o.checkedInAt;
+    if (needsCheckIn) {
+      return (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+          <span className="dx-card-hint" style={{ fontWeight: 700, color: '#92400e' }}>Check in with code first</span>
+          {type === 'scan' && st === 'PENDING' && <button type="button" className={sm} onClick={() => setModal({ kind: 'schedule', order: o })}>Book</button>}
+          <button type="button" className={`${sm} dx-btn--danger`} onClick={() => setModal({ kind: 'reject', order: o })}>Reject</button>
+        </div>
+      );
+    }
     return (
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
         {type === 'lab' && st === 'PENDING' && <button type="button" className={`${sm} dx-btn--primary`} onClick={() => setModal({ kind: 'collect', order: o })}>Collect sample</button>}
@@ -366,13 +378,15 @@ export default function DiagWorklist({ type = 'lab', profile, mode = 'branch' })
       <div className="dx-hero">
         <div>
           <h1>{isParent ? 'All orders' : `${type === 'lab' ? 'Lab' : 'Scan'} worklist`}</h1>
-          <p>{isParent ? 'Every order across your branches. Filter, follow up and export.' : 'Urgent and late work first. Verify the patient’s National ID before every test.'}</p>
+          <p>{isParent ? 'Every order across your branches. Filter, follow up and export.' : 'Urgent and late work first. Check each patient in with their QR or 8-digit code before the test.'}</p>
         </div>
         <div className="dx-toolbar">
           <button type="button" className="dx-btn" onClick={load}>↻ Refresh</button>
           <button type="button" className="dx-btn" onClick={csv} disabled={!shown.length}>⬇ Export CSV</button>
         </div>
       </div>
+
+      <DiagCheckIn onCheckedIn={load} />
 
       <div className="dx-card" style={{ marginBottom: '0.8rem', display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="dx-input" style={{ flex: '1 1 260px' }} value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 Patient name as on National ID, order no., accession, test, doctor…" />
@@ -407,7 +421,7 @@ export default function DiagWorklist({ type = 'lab', profile, mode = 'branch' })
                   const ts = tatState(o, type);
                   return (
                     <tr key={o.id} className={`dx-click ${priorityOf(o.priority) !== 'ROUTINE' && OPEN_STAGES.includes(st) ? 'dx-urgent' : ''}`} onClick={() => navigate(`/dashboard/orders/${o.id}`)}>
-                      <td><div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><PriorityPill priority={o.priority} /><b>{o.patientName || 'Patient'}</b></div><div className="dx-card-hint">Dr. {o.doctorName || '—'}</div></td>
+                      <td><div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><PriorityPill priority={o.priority} /><b>{o.patientName || 'Patient'}</b></div><div className="dx-card-hint">{o.doctorName || '—'}</div>{o.checkedInAt ? <div className="dx-card-hint" style={{ color: '#047857', fontWeight: 700 }}>✓ Checked in</div> : null}</td>
                       <td>{o.testType || '—'}{o.specimenType ? <div className="dx-card-hint">{o.specimenType}</div> : null}</td>
                       <td><span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{o.orderCode || o.id.slice(0, 8)}</span>{o.accessionNo ? <div className="dx-card-hint" style={{ fontFamily: 'monospace' }}>{o.accessionNo}</div> : null}</td>
                       {isParent && <td>{o.branchName || '—'}</td>}
@@ -547,10 +561,12 @@ export function DiagOrderDetail({ type = 'lab' }) {
       <div className="dx-hero" style={{ marginTop: '0.75rem' }}>
         <div>
           <h1 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{order.testType || 'Order'} <StagePill status={st} /> <PriorityPill priority={order.priority} /></h1>
-          <p>{order.patientName || 'Patient'} · Dr. {order.doctorName || '—'} · {order.branchName || order.centerName || ''}</p>
+          <p>{order.patientName || 'Patient'} · {order.doctorName || '—'} · {order.branchName || order.centerName || ''}</p>
         </div>
         {actions.buttons(order)}
       </div>
+
+      {order.requiresCheckIn && !order.checkedInAt && OPEN_STAGES.includes(st) && <DiagCheckIn onCheckedIn={load} />}
 
       <div className="dx-grid">
         <section className="dx-card dx-span-8">
@@ -571,7 +587,9 @@ export function DiagOrderDetail({ type = 'lab' }) {
         <section className="dx-card dx-span-4">
           <div className="dx-card-head"><h2 className="dx-card-title">Details</h2></div>
           {[
-            ['Order no.', order.orderCode || order.id.slice(0, 8)], ['Accession', order.accessionNo], ['Specimen', order.specimenType],
+            ['Order no.', order.orderCode || order.id.slice(0, 8)],
+            ['Checked in', order.checkedInAt ? fmtDateTime(order.checkedInAt) : (order.requiresCheckIn ? 'Not yet — ask for the patient’s code' : null)],
+            ['Accession', order.accessionNo], ['Specimen', order.specimenType],
             ['Booked for', order.scheduledAt && fmtDateTime(order.scheduledAt)], ['Price', order.price != null ? `GHS ${Number(order.price).toFixed(2)}` : null],
             ['Doctor’s note', order.notes],
           ].filter(([, v]) => v).map(([k, v]) => (

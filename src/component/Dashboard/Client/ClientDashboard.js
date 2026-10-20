@@ -4,6 +4,7 @@ import AiAssistantFab from '../../Common/AiAssistantFab';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, MessageSquare, Video, Calendar, BookOpen, CreditCard, Settings, HelpCircle, LogOut, User, Bell, Sparkles, Pill, Leaf, ClipboardList, Search, Clock,
+  FlaskConical,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -39,7 +40,7 @@ import ClientWellness from '../../Common/ClientWellness';
 import MyCarePlan from '../../Common/MyCarePlan';
 import RecordExplorer from '../../Common/RecordExplorer';
 
-import { MedPatSettings, MedPatPrescriptions, MedPatEPharmacy, MedPatTimeline } from '../MedicalPatient/MedicalPatientDashboard';
+import { MedPatSettings, MedPatPrescriptions, MedPatEPharmacy, MedPatTimeline, MedPatDiagnostics } from '../MedicalPatient/MedicalPatientDashboard';
 import { api, getStoredUserId } from '../../../services/apiClient';
 import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
 import InsuranceCards from '../../Common/InsuranceCards';
@@ -82,6 +83,7 @@ export default function ClientDashboard({ profile }) {
     ...(isPsychiatry ? [
       { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: MedPatPrescriptions },
       { path: '/dashboard/epharmacy', icon: Pill, label: 'E-Pharmacy', component: MedPatEPharmacy },
+      { path: '/dashboard/diagnostics', icon: FlaskConical, label: 'Lab & Scan', component: MedPatDiagnostics },
       { path: '/dashboard/timeline', icon: Clock, label: 'Health Timeline', component: MedPatTimeline },
     ] : []),
     ...(isSecondOpinion ? [] : [
@@ -238,6 +240,7 @@ export default function ClientDashboard({ profile }) {
               The account id (not a profile-row id) is what the settings load by. */}
           <Route path="/prescriptions" element={<MedPatPrescriptions profile={selfProfile} />} />
           <Route path="/epharmacy" element={<MedPatEPharmacy profile={selfProfile} />} />
+          <Route path="/diagnostics" element={<MedPatDiagnostics profile={selfProfile} />} />
           <Route path="/timeline" element={<MedPatTimeline profile={selfProfile} />} />
           <Route path="/settings" element={<MedPatSettings variant="therapy" profile={{ ...(profile || {}), id: getStoredUserId(), uid: getStoredUserId() }} />} />
           <Route path="/support" element={<ClientSupport />} />
