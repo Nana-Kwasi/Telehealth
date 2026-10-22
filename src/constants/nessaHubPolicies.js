@@ -2,7 +2,7 @@
  * Hosted policy site (Firebase Hosting — Nessa-Hub-Policies).
  * Override at build time: REACT_APP_NESSA_HUB_POLICIES_URL=https://your-host.web.app
  */
-const DEFAULT_POLICIES_BASE = 'https://teleehealth.web.app';
+const DEFAULT_POLICIES_BASE = 'https://policy.nessahub.com';
 
 export function getNessaHubPoliciesBase() {
   const raw = process.env.REACT_APP_NESSA_HUB_POLICIES_URL || DEFAULT_POLICIES_BASE;

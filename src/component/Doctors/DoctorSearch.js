@@ -4,11 +4,14 @@ import { db } from '../../services/firestoreShim';
 import { collection, getDocs } from '../../services/firestoreShim';
 import './DoctorSearch.css';
 import Paged from '../Common/Paged';
+import { api } from '../../services/apiClient';
+import { careCatalog } from '../../services/careTransfers';
 
-const SPECIALTIES = [
-  'All Specialties', 'General Practice', 'Internal Medicine', 'Family Medicine',
+// Fallback until the server's list (the one doctors are onboarded with) loads.
+const FALLBACK_SPECIALTIES = [
+  'General Practice', 'Internal Medicine', 'Family Medicine',
   'Pediatrics', 'Psychiatry', 'Dermatology', 'Cardiology', 'Neurology',
-  'Orthopedics', 'Gynecology', 'Ophthalmology', 'ENT', 'Oncology', 'Urology',
+  'Orthopedics', 'Obstetrics and Gynecology', 'Ophthalmology', 'ENT', 'Urology',
 ];
 
 const LANGUAGES = ['Any Language', 'English', 'French', 'Spanish', 'Arabic', 'Portuguese', 'Twi', 'Hausa'];
@@ -55,6 +58,27 @@ export default function DoctorSearch({ session }) {
     ...DEFAULT_FILTERS,
     specialty: searchParams.get('specialty') || 'All Specialties',
   });
+
+  // Same matching the transfer and reassignment flows use: the exact specialty
+  // first (best), then related specialties (close). Keyed by doctor id.
+  const [specialties, setSpecialties] = useState(FALLBACK_SPECIALTIES);
+  const [matchMap, setMatchMap] = useState({});
+  useEffect(() => {
+    careCatalog().then((c) => { if (c?.doctorSpecialties?.length) setSpecialties(c.doctorSpecialties); }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (filters.specialty === 'All Specialties') { setMatchMap({}); return undefined; }
+    let live = true;
+    api(`/api/v1/matching/doctors?specialty=${encodeURIComponent(filters.specialty)}`, { authenticated: false })
+      .then((m) => {
+        if (!live) return;
+        const map = {};
+        [...(m?.best || []), ...(m?.close || [])].forEach((d) => { map[d.id] = d; });
+        setMatchMap(map);
+      })
+      .catch(() => { if (live) setMatchMap({}); });
+    return () => { live = false; };
+  }, [filters.specialty]);
 
   useEffect(() => {
     (async () => {
@@ -108,9 +132,14 @@ export default function DoctorSearch({ session }) {
       if (!haystack.includes(q)) return false;
     }
     if (filters.specialty !== 'All Specialties') {
-      if (!(d.specialization || '').toLowerCase().includes(filters.specialty.toLowerCase())) return false;
+      const matched = Object.keys(matchMap).length > 0;
+      if (matched ? !matchMap[d.id] : !(d.specialization || '').toLowerCase().includes(filters.specialty.toLowerCase())) return false;
     }
     return true;
+  }).sort((a, b) => {
+    // Best matches, then close matches, then everyone else (general practice).
+    const rank = (d) => (matchMap[d.id]?.tier === 'best' ? 0 : matchMap[d.id] ? 1 : 2);
+    return rank(a) - rank(b) || (matchMap[b.id]?.score || 0) - (matchMap[a.id]?.score || 0);
   });
 
   const resetFilters = () => setFilters(DEFAULT_FILTERS);
@@ -182,7 +211,7 @@ export default function DoctorSearch({ session }) {
           <div className="ds-filter-group">
             <div className="ds-filter-label">Specialty</div>
             <select className="ds-filter-select" value={filters.specialty} onChange={e => setFilter('specialty', e.target.value)}>
-              {SPECIALTIES.map(s => <option key={s}>{s}</option>)}
+              {['All Specialties', ...specialties].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
 
@@ -277,6 +306,11 @@ export default function DoctorSearch({ session }) {
                     <div className="ds-card-body">
                       <div className="ds-card-name-row">
                         <h3 className="ds-card-name">Dr. {doctor.name}</h3>
+                        {matchMap[doctor.id] ? (
+                          <span className={`ds-match-badge ${matchMap[doctor.id].tier}`}>
+                            {matchMap[doctor.id].tier === 'best' ? 'Best match' : 'Close match'}
+                          </span>
+                        ) : null}
                         <span className="ds-verified-badge">✓ Verified</span>
                       </div>
                       <p className="ds-card-specialty">{doctor.specialization || 'General Practice'}</p>

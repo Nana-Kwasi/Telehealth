@@ -28,6 +28,7 @@ import {
   Search
 } from 'lucide-react';
 import Paged from '../../Common/Paged';
+import PaymentsAndRefunds from '../../Common/PaymentsAndRefunds';
 
 export default function ClientBilling() {
   const [billingHistory, setBillingHistory] = useState([]);
@@ -237,6 +238,7 @@ export default function ClientBilling() {
         <h1 className="page-title">Billing & Payments</h1>
         <p className="subtitle">Manage your payments and view billing history</p>
       </div>
+      <PaymentsAndRefunds />
 
       {/* Billing Summary */}
       <div className="billing-summary">

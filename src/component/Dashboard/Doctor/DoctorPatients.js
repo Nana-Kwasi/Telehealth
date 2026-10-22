@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, getDoc, doc, query, where } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
+import { incomingTransferPatients } from '../../../services/careTransfers';
 
 const PATIENT_TABS = ['All', 'Active'];
 
@@ -37,6 +38,16 @@ export default function DoctorPatients({ profile }) {
           patientMap.set(a.clientId, { id: a.clientId, name: a.clientName || '', email: a.clientEmail || '', appointments: [] });
         }
         patientMap.get(a.clientId).appointments.push(a);
+      }
+
+      // Patients transferred in: they join the list like a new patient, with
+      // their whole record behind them, even before a first appointment here.
+      for (const t of await incomingTransferPatients()) {
+        if (!patientMap.has(t.id)) {
+          patientMap.set(t.id, { id: t.id, name: t.name || '', email: t.email || '', appointments: [], transferredFrom: t.from_name || null });
+        } else {
+          patientMap.get(t.id).transferredFrom = t.from_name || null;
+        }
       }
 
       // Enrich names AND emails.
@@ -184,6 +195,9 @@ export default function DoctorPatients({ profile }) {
                         </div>
                         <div>
                           <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#1e293b' }}>{patient.name}</p>
+                          {patient.transferredFrom && (
+                            <p style={{ margin: 0, fontSize: '0.72rem', color: '#1e6bb8' }}>Transferred from Dr. {patient.transferredFrom}</p>
+                          )}
                           {patient.completedCount > 0 && (
                             <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>
                               {patient.completedCount} completed

@@ -3,10 +3,12 @@ import { ProviderPreauthList, LicencePanel } from '../../Common/ProviderInsuranc
 import AiAssistantFab from '../../Common/AiAssistantFab';
 import CarePlanComposer from '../../Common/CarePlanComposer';
 import ReferralComposer from '../../Common/ReferralComposer';
+import TransfersPage from '../../Common/TransfersPage';
+import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, Users, Calendar, MessageSquare, FileText, Settings, LogOut, Activity, Video, Pill, Star, BarChart3, LayoutDashboard, FlaskConical, ClipboardList, Gift, Leaf, Bell, Sparkles, Tag, Share2, FileSignature,
+  Home, Users, Calendar, MessageSquare, FileText, Settings, LogOut, Activity, Video, Pill, Star, BarChart3, LayoutDashboard, FlaskConical, ClipboardList, Gift, Leaf, Bell, Sparkles, Tag, Share2, FileSignature, ArrowLeftRight, Wallet,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -71,6 +73,8 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans' },
     { path: '/dashboard/documents', icon: FileSignature, label: 'Documents' },
     { path: '/dashboard/referrals', icon: Share2, label: 'Referrals' },
+    { path: '/dashboard/transfers', icon: ArrowLeftRight, label: 'Transfers' },
+    { path: '/dashboard/earnings', icon: Wallet, label: 'Earnings' },
     { path: '/dashboard/wellness', icon: Leaf, label: 'Wellness' },
     { path: '/dashboard/feedback', icon: Star, label: 'Patient Feedback' },
     { path: '/dashboard/ai-assistant', icon: Sparkles, label: 'NessaHub Assistant' },
@@ -169,6 +173,8 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/care-plans" element={<CarePlanComposer role="DOCTOR" />} />
           <Route path="/documents" element={<AdminDocComposer role="DOCTOR" />} />
           <Route path="/referrals" element={<ReferralComposer role="DOCTOR" />} />
+          <Route path="/transfers" element={<TransfersPage role="DOCTOR" />} />
+          <Route path="/earnings" element={<EarningsPage serviceKey="consultation" />} />
           <Route path="/promotions" element={<ProviderPromotions />} />
           <Route path="/fee-offers" element={<ProviderPricePromotions />} />
           <Route path="/wellness" element={<ProviderWellness audience="my_patients" peopleNoun="patients" />} />

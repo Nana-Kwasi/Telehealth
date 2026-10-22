@@ -15,7 +15,10 @@ const SECTIONS = [
   { key: 'prescriptions', label: 'Prescriptions', icon: '💊', sub: 'NessaRx rules for prescribers, patients and pharmacies.' },
   { key: 'notifications', label: 'Notifications', icon: '🔔', sub: 'Email, SMS and phone alerts. Security messages always send.' },
   { key: 'security', label: 'Sign-in security', icon: '🔐', sub: 'How people sign in, for every app.' },
-  { key: 'payments', label: 'Payments', icon: '💳', sub: 'Tax, NessaHub\'s share and the free first consultation.' },
+  { key: 'payments', label: 'Payments & commission', icon: '💳', sub: 'Commission per service, the patient service fee, tax, insurer fees and the free first consultation.' },
+  { key: 'refunds', label: 'Refunds', icon: '↩️', sub: 'When patients get a full, partial or no refund. Published in the Refund & Cancellation Policy.' },
+  { key: 'payouts', label: 'Payouts', icon: '🏦', sub: 'When and how providers are paid their earnings.' },
+  { key: 'onboarding', label: 'Provider onboarding', icon: '📝', sub: 'The application portal: compliance contacts and where applicants send documents.' },
   { key: 'dataRetention', label: 'Data & retention', icon: '🗄', sub: 'How long records are kept. Medical records: never under 7 years.' },
   { key: 'features', label: 'Features', icon: '🧩', sub: 'Switch whole features on or off for everyone.' },
 ];

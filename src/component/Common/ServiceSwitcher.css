@@ -1,0 +1,30 @@
+.nh-service-switch {
+  display: flex;
+  gap: 4px;
+  margin: 12px 0 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nh-service-switch-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nh-service-switch-btn:hover {
+  color: #fff;
+}
+
+.nh-service-switch-btn.is-active {
+  background: #fff;
+  color: #0f172a;
+}

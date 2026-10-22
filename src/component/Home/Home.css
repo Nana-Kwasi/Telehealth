@@ -1197,3 +1197,36 @@
   }
   .hero-section .hero-module-label { white-space: normal; text-align: center; font-size: 0.92rem; line-height: 1.25; }
 }
+
+/* ── Join as a provider ─────────────────────────────────────────────────── */
+.provider-join { padding: 4rem 2rem; background: linear-gradient(135deg, #0b2a4a 0%, #12406b 55%, #0f766e 130%); color: #fff; }
+.provider-join-inner { max-width: var(--max-width, 1240px); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 3rem; align-items: center; }
+.provider-join-eyebrow { margin: 0 0 0.75rem; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #5eead4; }
+.provider-join h2 { margin: 0 0 1rem; font-size: clamp(1.75rem, 3vw, 2.4rem); font-weight: 800; letter-spacing: -0.5px; line-height: 1.15; color: #fff; }
+.provider-join-lead { margin: 0 0 1.25rem; font-size: 1.05rem; line-height: 1.7; color: #dbeafe; max-width: 620px; }
+.provider-join-points { list-style: none; margin: 0 0 1.75rem; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem 1.5rem; }
+.provider-join-points li { position: relative; padding-left: 1.6rem; font-weight: 600; font-size: 0.95rem; color: #fff; }
+.provider-join-points li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 1.15rem; height: 1.15rem; border-radius: 50%; background: rgba(94, 234, 212, 0.18); color: #5eead4; font-size: 0.75rem; display: grid; place-items: center; }
+.provider-join-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.provider-join-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.85rem 1.4rem; border-radius: 12px; font-weight: 700; font-size: 1rem; text-decoration: none; border: 1.5px solid rgba(255, 255, 255, 0.6); color: #fff; transition: background 0.15s, transform 0.15s; }
+.provider-join-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; transform: translateY(-1px); }
+.provider-join-btn.primary { background: #fff; border-color: #fff; color: #0b2a4a; }
+.provider-join-btn.primary:hover { background: #ecfeff; color: #0b2a4a; }
+.provider-join-btn:focus-visible { outline: 3px solid #5eead4; outline-offset: 2px; }
+.provider-join-paper { margin: 1.25rem 0 0; font-size: 0.92rem; color: #cbd5e1; }
+.provider-join-paper a { color: #5eead4; font-weight: 700; }
+.provider-join-card { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 20px; padding: 1.5rem; backdrop-filter: blur(6px); }
+.provider-join-card-title { margin: 0 0 1rem; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #bfdbfe; }
+.provider-join-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.provider-join-card li { display: flex; align-items: center; gap: 0.9rem; background: rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 0.75rem 0.9rem; }
+.provider-join-icon { width: 2.4rem; height: 2.4rem; border-radius: 10px; background: rgba(255, 255, 255, 0.12); display: grid; place-items: center; font-size: 1.2rem; flex: none; }
+.provider-join-card strong { display: block; color: #fff; font-size: 0.95rem; }
+.provider-join-card small { display: block; color: #cbd5e1; font-size: 0.82rem; margin-top: 2px; }
+@media (max-width: 900px) {
+  .provider-join { padding: 3rem 1rem; }
+  .provider-join-inner { grid-template-columns: 1fr; gap: 2rem; }
+}
+@media (max-width: 520px) {
+  .provider-join-points { grid-template-columns: 1fr; }
+  .provider-join-btn { width: 100%; justify-content: center; }
+}

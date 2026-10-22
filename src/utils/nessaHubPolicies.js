@@ -7,7 +7,7 @@
 // actually agreed to.
 
 /** Hosted policy site — same Firebase project as Nessa-Hub-Policies. */
-const DEFAULT_POLICIES_BASE = 'https://teleehealth.web.app';
+const DEFAULT_POLICIES_BASE = 'https://policy.nessahub.com';
 
 export function getNessaHubPoliciesBase() {
   return (process.env.REACT_APP_POLICIES_BASE || DEFAULT_POLICIES_BASE).replace(/\/+$/, '');

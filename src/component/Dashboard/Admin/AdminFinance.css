@@ -1,0 +1,16 @@
+.af-period { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.af-period label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: #334155; }
+.af-period input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; font: inherit; }
+.af-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.af-tile { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.af-tile.ok { border-left: 4px solid #16a34a; }
+.af-tile.warn { border-left: 4px solid #d97706; }
+.af-tile-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; font-weight: 700; }
+.af-tile-value { font-size: 20px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.af-tile-sub { font-size: 12px; color: #64748b; }
+.af-rates { list-style: none; padding: 0; margin: 0 0 10px; }
+.af-rates li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; flex-wrap: wrap; }
+.af-sub td { background: #f8fafc; }
+.af-acct { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; letter-spacing: 0.5px; }
+.af-record { display: flex; flex-wrap: wrap; gap: 6px; min-width: 260px; }
+.af-record input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 8px; font: inherit; font-size: 13px; flex: 1; min-width: 120px; }

@@ -42,6 +42,7 @@ import {
 } from '../../../utils/clientTherapyMetrics';
 import { getNoteSections, getNotePreview, getNoteTitle } from '../../../utils/noteDisplayUtils';
 import Paged from '../../Common/Paged';
+import TransferPatientModal from '../../Common/TransferPatientModal';
 
 const noteCardStyle = {
   padding: '1.2rem',
@@ -415,6 +416,8 @@ export default function ClientDetails() {
 
   const [client, setClient] = useState(null);
   const [authProfile, setAuthProfile] = useState(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferSent, setTransferSent] = useState('');
   const [resolvedTherapistId, setResolvedTherapistId] = useState(null);
   const [therapistName, setTherapistName] = useState('');
   const [sessions, setSessions] = useState([]);
@@ -871,6 +874,20 @@ export default function ClientDetails() {
         <ArrowLeft size={15} /> Back to Clients
       </button>
 
+      <TransferPatientModal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        onSent={(t) => setTransferSent(`Transfer sent. ${clientName} has been asked to consent; follow it under Transfers.${t?.toName ? ` Receiving therapist: ${t.toName}.` : ''}`)}
+        patient={{ id: clientId, name: clientName }}
+        role="THERAPIST"
+      />
+      {transferSent ? (
+        <div role="status" style={{ ...cardStyle, marginBottom: '1rem', background: '#f0fdf4', color: '#166534', padding: '0.9rem 1.1rem' }}>
+          {transferSent}{' '}
+          <button onClick={() => navigate('/dashboard/transfers')} style={{ border: '1px solid #86efac', background: '#fff', borderRadius: 8, padding: '0.3rem 0.7rem', cursor: 'pointer', fontFamily: 'inherit' }}>Open Transfers</button>
+        </div>
+      ) : null}
+
       {/* ── Profile Header Card ── */}
       <div style={{ ...cardStyle, padding: '1.5rem 1.75rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
@@ -912,6 +929,12 @@ export default function ClientDetails() {
 
         {/* ── Action Buttons Row ── */}
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9' }}>
+          <button
+            onClick={() => setTransferOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Transfer client
+          </button>
           <button
             onClick={() => setShowNoteModal(true)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#4f46e5,#6366f1)', color: '#fff', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(79,70,229,0.28)' }}

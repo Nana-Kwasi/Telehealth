@@ -3,7 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { steps, phq9Questions } from './steps';
 import './Questionnaire.css';
 import { db } from '../../services/firestoreShim';
-import { collection, addDoc } from '../../services/firestoreShim';
+import { collection, addDoc, doc, setDoc } from '../../services/firestoreShim';
+import { getStoredToken, getStoredRole, getStoredUserId } from '../../services/apiClient';
+import { refreshSession } from '../Auth/authService';
+import { chooseService } from '../../utils/careServices';
 import {
   buildTeenClientRecord,
   loadJson,
@@ -201,6 +204,23 @@ export default function Questionnaire() {
         clientData.consentComplete = true;
       }
       
+      // Already signed in (e.g. a medical patient adding therapy): one account
+      // covers both, so attach the intake to it and skip the account step. A
+      // merge write — POST /clients refuses a second profile for a returning client.
+      const signedInUid = getStoredToken() && getStoredRole() === 'client' ? getStoredUserId() : null;
+      if (signedInUid) {
+        await setDoc(doc(db, 'clients', signedInUid), {
+          ...clientData,
+          authUid: signedInUid,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+        localStorage.setItem('th.clientId', signedInUid);
+        chooseService(signedInUid, 'therapy');
+        refreshSession();
+        navigate('/match-therapist');
+        return;
+      }
+
       const docRef = await addDoc(collection(db, 'clients'), clientData);
 
       // Save the client document ID for later use — but ONLY when it is a real id.

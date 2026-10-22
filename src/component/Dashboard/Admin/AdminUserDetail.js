@@ -11,6 +11,7 @@ import { resolveFileUrl } from '../../../utils/fileUrl';
 import { api } from '../../../services/apiClient';
 import AdminUserActivity from './AdminUserActivity';
 import Paged from '../../Common/Paged';
+import ClinicianProfileForm from '../../Common/ClinicianProfileForm';
 /** Collections whose `name` is the person's own name (not an organisation's). */
 const PERSON_COLLECTIONS = ['auth', 'clients', 'doctors', 'therapists', 'homeCareNurses'];
 
@@ -205,7 +206,9 @@ export default function AdminUserDetail() {
   const [relatedLoaded, setRelatedLoaded] = useState(false);
   const [branches, setBranches]   = useState([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
+  // ?tab=professional opens a doctor's or therapist's matching profile directly
+  // (the Profile Completeness screen links here).
+  const [activeTab, setActiveTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'profile');
   const [roleType, setRoleType]   = useState('');
   const [feedback, setFeedback]   = useState({ type: '', msg: '' });
   const [branchEditModal, setBranchEditModal] = useState(null);
@@ -624,8 +627,10 @@ export default function AdminUserDetail() {
     'currentMedications', 'emergencyNotes', 'emergency_notes', 'vitals', 'vitalsLatest', 'diagnosis', 'symptoms', 'healthConditions', 'intake']);
   const allFields = Object.entries(user).filter(([k]) => !SKIP.has(k)).sort(([a], [b]) => a.localeCompare(b));
 
+  const isClinician = col === 'doctors' || col === 'therapists';
   const TABS = [
     { key: 'profile',  icon: '👤', label: 'Profile'  },
+    ...(isClinician ? [{ key: 'professional', icon: '🩺', label: 'Professional profile' }] : []),
     { key: 'trail',    icon: '🛰️', label: 'Activity trail' },
     { key: 'security', icon: '🔐', label: 'Security & devices' },
     { key: 'activity', icon: '📋', label: 'Care records'  },
@@ -1026,6 +1031,15 @@ export default function AdminUserDetail() {
             </>
           )}
         </div>
+      )}
+
+      {activeTab === 'professional' && isClinician && (
+        <ClinicianProfileForm
+          kind={col === 'doctors' ? 'doctor' : 'therapist'}
+          userId={user.userId || userId}
+          intro="Everything matching reads for this clinician. Gaps listed here are the ones on the Profile Completeness screen."
+          onSaved={() => showFeedback('success', 'Professional profile saved.')}
+        />
       )}
 
       {activeTab === 'trail' && <AdminUserActivity userId={trailUserId} name={user.fullName || user.name || user.displayName} view="trail" />}

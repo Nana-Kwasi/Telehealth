@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import AiAssistantFab from '../../Common/AiAssistantFab';
 import CarePlanComposer from '../../Common/CarePlanComposer';
 import ReferralComposer from '../../Common/ReferralComposer';
+import TransfersPage from '../../Common/TransfersPage';
+import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature, Pill, FlaskConical,
+  Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature, Pill, FlaskConical, ArrowLeftRight, Wallet,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth, db, doc, getDoc } from '../../../services/firestoreShim';
@@ -105,6 +107,8 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/care-plans', icon: ClipboardList, label: 'Care Plans', component: CarePlanComposer },
     { path: '/dashboard/documents', icon: FileSignature, label: 'Documents', component: AdminDocComposer },
     { path: '/dashboard/referrals', icon: Share2, label: 'Referrals', component: ReferralComposer },
+    { path: '/dashboard/transfers', icon: ArrowLeftRight, label: 'Transfers', component: TransfersPage },
+    { path: '/dashboard/earnings', icon: Wallet, label: 'Earnings', component: EarningsPage },
     { path: '/dashboard/resources', icon: BookOpen, label: 'Resources', component: TherapistResources },
     { path: '/dashboard/mood', icon: Heart, label: 'Client Moods', component: MoodDashboard },
     { path: '/dashboard/wellness', icon: Leaf, label: 'Wellness', component: ProviderWellness },
@@ -239,6 +243,8 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/care-plans" element={<CarePlanComposer role="THERAPIST" />} />
           <Route path="/documents" element={<AdminDocComposer role="THERAPIST" />} />
           <Route path="/referrals" element={<ReferralComposer role="THERAPIST" />} />
+          <Route path="/transfers" element={<TransfersPage role="THERAPIST" />} />
+          <Route path="/earnings" element={<EarningsPage serviceKey="therapy" />} />
           <Route path="/resources" element={<TherapistResources />} />
           <Route path="/promotions" element={<ProviderPromotions />} />
           <Route path="/fee-offers" element={<ProviderPricePromotions />} />

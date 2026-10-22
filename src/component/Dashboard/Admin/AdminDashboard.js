@@ -8,7 +8,7 @@ import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import {
   LayoutDashboard, Users, BadgeCheck, CalendarDays, Pill, Building2, Stethoscope, Brain, Home, HeartHandshake,
   FlaskConical, BarChart3, FileDown, Inbox, ShieldCheck, BookOpen, Radar, ScrollText, Bell, Mail, Megaphone, Tag,
-  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity, UserCog, SlidersHorizontal } from 'lucide-react';
+  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity, UserCog, SlidersHorizontal, ArrowLeftRight, ListChecks, ClipboardSignature, Wallet } from 'lucide-react';
 import { api } from '../../../services/apiClient';
 import AdminGlobalSearch from './AdminGlobalSearch';
 import './AdminDashboard.css';
@@ -24,6 +24,10 @@ import AdminTeam              from './AdminTeam';
 import AdminSettings          from './AdminSettings';
 import OnboardDoctor          from './OnboardDoctor';
 import OnboardTherapist       from './OnboardTherapist';
+import AdminProfileReadiness  from './AdminProfileReadiness';
+import TransfersPage          from '../../Common/TransfersPage';
+import AdminApplications      from './AdminApplications';
+import AdminFinance           from './AdminFinance';
 import AdminOnboardHomeCareNurse from './AdminOnboardHomeCareNurse';
 import AdminHomeCareManage from './AdminHomeCareManage';
 import AdminCreateLabScan     from './AdminCreateLabScan';
@@ -52,14 +56,18 @@ const NAV = [
   { path: '/dashboard/users',             label: 'User Management',       icon: Users,           section: 'PLATFORM' },
   { path: '/dashboard/approvals',         label: 'Account Approvals',     icon: BadgeCheck,      section: 'PLATFORM', count: 'approvals' },
   { path: '/dashboard/appointments',      label: 'Appointments',          icon: CalendarDays,    section: 'PLATFORM' },
+  { path: '/dashboard/transfers',         label: 'Patient Transfers',     icon: ArrowLeftRight,  section: 'PLATFORM' },
+  { path: '/dashboard/finance',           label: 'Finance & Payouts',     icon: Wallet,          section: 'PLATFORM' },
   { path: '/dashboard/prescriptions',     label: 'Prescription Monitor',  icon: Pill,            section: 'PLATFORM' },
   { path: '/dashboard/sms-follow-up',     label: 'SMS Follow-up',         icon: Pill,            section: 'PLATFORM' },
   { path: '/dashboard/insurers',          label: 'Insurers & Claims',     icon: ShieldCheck,     section: 'PLATFORM' },
   // ONBOARDING
+  { path: '/dashboard/applications',      label: 'Provider Applications', icon: ClipboardSignature, section: 'ONBOARDING' },
   { path: '/dashboard/create-pharmacy',   label: 'Create Pharmacy',       icon: Building2,       section: 'ONBOARDING' },
   { path: '/dashboard/insurers?onboard=1', label: 'Onboard Insurer',     icon: ShieldCheck,     section: 'ONBOARDING' },
   { path: '/dashboard/onboard-doctor',    label: 'Onboard Doctor',        icon: Stethoscope,     section: 'ONBOARDING' },
   { path: '/dashboard/onboard-therapist', label: 'Onboard Therapist',     icon: Brain,           section: 'ONBOARDING' },
+  { path: '/dashboard/profile-readiness', label: 'Profile Completeness',  icon: ListChecks,      section: 'ONBOARDING' },
   { path: '/dashboard/onboard-homecare-nurse', label: 'Onboard Home-Care Nurse', icon: Home,     section: 'ONBOARDING' },
   { path: '/dashboard/home-care-manage', label: 'Home Care Manage',       icon: HeartHandshake,  section: 'ONBOARDING' },
   { path: '/dashboard/create-lab-scan',   label: 'Create Lab / Scan',     icon: FlaskConical,    section: 'ONBOARDING' },
@@ -208,6 +216,11 @@ export default function AdminDashboard({ profile }) {
           <Route path="/create-pharmacy"     element={<AdminCreatePharmacy />} />
           <Route path="/onboard-doctor"      element={<OnboardDoctor />} />
           <Route path="/onboard-therapist"   element={<OnboardTherapist />} />
+          <Route path="/profile-readiness"   element={<AdminProfileReadiness />} />
+          <Route path="/transfers"           element={<TransfersPage admin />} />
+          <Route path="/applications"        element={<AdminApplications />} />
+          <Route path="/applications/:applicationId" element={<AdminApplications />} />
+          <Route path="/finance"             element={<AdminFinance />} />
           <Route path="/onboard-homecare-nurse" element={<AdminOnboardHomeCareNurse />} />
           <Route path="/home-care-manage" element={<AdminHomeCareManage />} />
           <Route path="/create-lab-scan"     element={<AdminCreateLabScan />} />

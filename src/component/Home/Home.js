@@ -8,6 +8,7 @@ import { beginTherapySession } from '../../utils/patientSessionIntent';
 import TherapyTypeModal, { THERAPY_TYPES, PSYCHIATRY_TYPES } from './TherapyTypeModal';
 
 import FaqSection from '../Common/FaqSection';
+import { PROVIDER_PORTAL_LINKS } from '../../constants/providerPortal';
 const steps = [
   { n: '1', title: 'Choose your service',       desc: 'Select therapy, medical care, psychiatry, or second opinion.' },
   { n: '2', title: 'Match with a professional', desc: 'We pair you with the right therapist or doctor based on your needs.' },
@@ -295,6 +296,55 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── JOIN AS A PROVIDER ── applications run on the provider portal */}
+      <section className="provider-join" aria-labelledby="provider-join-title">
+        <div className="provider-join-inner">
+          <div className="provider-join-copy">
+            <p className="provider-join-eyebrow">For healthcare professionals</p>
+            <h2 id="provider-join-title">Join NessaHub as a care provider</h2>
+            <p className="provider-join-lead">
+              Doctors, therapists, psychologists, pharmacies, laboratories and scan centres can apply to join
+              Ghana&rsquo;s connected care network. Reach more patients, consult securely online and receive
+              reliable monthly payouts. Every provider is verified with their regulator before going live.
+            </p>
+            <ul className="provider-join-points">
+              <li>Free to apply</li>
+              <li>Licences verified with the issuing council</li>
+              <li>You set your own fees</li>
+              <li>Monthly payouts to bank or mobile money</li>
+            </ul>
+            <div className="provider-join-actions">
+              <a className="provider-join-btn primary" href={PROVIDER_PORTAL_LINKS.apply} target="_blank" rel="noopener noreferrer">
+                Apply to join NessaHub <span aria-hidden="true">→</span>
+              </a>
+              <a className="provider-join-btn" href={PROVIDER_PORTAL_LINKS.track} target="_blank" rel="noopener noreferrer">
+                Track an application
+              </a>
+            </div>
+            <p className="provider-join-paper">
+              Prefer paper? <a href={PROVIDER_PORTAL_LINKS.paperForms} target="_blank" rel="noopener noreferrer">Print an application form</a>, fill it in and email it to us.
+            </p>
+          </div>
+          <div className="provider-join-card" aria-label="Who can apply">
+            <p className="provider-join-card-title">Who can apply</p>
+            <ul>
+              {[
+                ['🩺', 'Doctors', 'General practitioners and specialists'],
+                ['🧠', 'Therapists & psychologists', 'Including counsellors and psychiatrists'],
+                ['💊', 'Pharmacies', 'With a licensed superintendent pharmacist'],
+                ['🧪', 'Laboratories', 'HeFRA-licensed medical laboratories'],
+                ['🩻', 'Scan & imaging centres', 'HeFRA-licensed, NRA-authorised'],
+              ].map(([icon, title, sub]) => (
+                <li key={title}>
+                  <span className="provider-join-icon" aria-hidden="true">{icon}</span>
+                  <span><strong>{title}</strong><small>{sub}</small></span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       {/* ── FAQ ── shared with the dashboards and the app (backend /api/v1/faq) */}
       <section style={{ maxWidth: 1100, margin: '0 auto', padding: '1rem 16px 2.5rem' }}>
         <FaqSection compact audience="visitor" limit={8} />
@@ -315,6 +365,7 @@ export default function Home() {
                 <li><Link to="/login">Log in</Link></li>
                 <li><Link to="/faqs">FAQs</Link></li>
                 <li><Link to="/contact">Contact</Link></li>
+                <li><a className="footer-external-link" href={PROVIDER_PORTAL_LINKS.home} target="_blank" rel="noopener noreferrer">Join as a provider</a></li>
               </ul>
             </div>
             <div className="footer-section">

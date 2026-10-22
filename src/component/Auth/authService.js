@@ -14,6 +14,7 @@ import {
   getStoredProfile,
   hasActiveSession,
 } from '../../services/apiClient';
+import { applyChosenService } from '../../utils/careServices';
 
 // ── Internal auth-state observer (mimics Firebase onAuthStateChanged) ─────────
 
@@ -107,7 +108,10 @@ export async function resolveRole(uid) {
     // empty — the therapist Video Call page showed "No clients assigned yet" and
     // "No scheduled calls yet" even with an assigned client and a booked call.
     const rawProfile = data.profile || {};
-    const profile = { ...rawProfile, role, uid: rawProfile.uid || rawProfile.id || uid };
+    let profile = { ...rawProfile, role, uid: rawProfile.uid || rawProfile.id || uid };
+    // Medical and therapy share one account: open the dashboard for the service
+    // this person chose last on this device (see utils/careServices).
+    if (role === 'client') profile = applyChosenService(profile, uid);
 
     // Account status check — mirror the Firebase version's blocked-status logic
     const blockedStatuses = ['inactive', 'discharged', 'on_hold', 'suspended', 'disabled'];

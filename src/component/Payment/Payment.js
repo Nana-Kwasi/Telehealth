@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './Payment.css';
 import TherapistSelectionModal from '../Match/TherapistSelectionModal';
 import PriceTag from '../Common/PriceTag';
+import CheckoutBreakdown from '../Common/CheckoutBreakdown';
 import { quotePrice } from '../../services/pricing';
 import { auth } from '../../services/firestoreShim';
 import { api, getStoredUserId } from '../../services/apiClient';
@@ -192,6 +193,7 @@ export default function Payment() {
           <div className="pricing-price">
             <PriceTag quote={quote} baseAmount={therapistFee} size="lg" />
           </div>
+          <CheckoutBreakdown amount={amountDue} purpose="therapy_session" />
           <div className="pricing-features">
             <span>{therapistFee != null ? 'per session' : 'This therapist has not published a rate yet.'}</span>
           </div>

@@ -6,6 +6,7 @@ import Payment from './component/Payment/Payment';
 import Navbar from './component/Layout/Navbar';
 import { resolveRole, onAuthStateChanged, performLogout } from './component/Auth/authService';
 import { hasActiveSession } from './services/apiClient';
+import { isContinuingJourney } from './utils/careServices';
 import IncomingCall from './component/Common/IncomingCall';
 import { refreshCurrentLocation } from './services/liveLocation';
 import useSystemConfig, { cfg, useFeatureFlagsConfig } from './hooks/useSystemConfig';
@@ -104,9 +105,12 @@ function LoadingScreen() {
 }
 
 // Redirects authenticated users away from login / signup
-function PublicRoute({ children, session }) {
+function PublicRoute({ children, session, keepWhileContinuing = false }) {
   if (session.loading) return <LoadingScreen />;
-  if (session.role) {
+  // Sign-up signs the person in (new account, or an existing one logging in from
+  // the account step) and then still has their intake/booking to save — don't
+  // bounce them to the dashboard halfway through.
+  if (session.role && !(keepWhileContinuing && isContinuingJourney())) {
     return <AuthenticatedLandingRedirect session={session} />;
   }
   return children;
@@ -379,7 +383,7 @@ export default function App() {
           <Route path="/login"  element={<PublicRoute session={session}><Login  /></PublicRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/signup" element={<PublicRoute session={session}><SignUp /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute session={session} keepWhileContinuing><SignUp /></PublicRoute>} />
 
           {/* ── Video (accessible without sidebar) ── */}
           <Route path="/video-call/:roomName/:participantName" element={<VideoCallPage />} />

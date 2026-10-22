@@ -46,6 +46,7 @@ import PhoneVerifyBanner from '../../Common/PhoneVerifyBanner';
 import InsuranceCards from '../../Common/InsuranceCards';
 import ClaimConfirmations from '../../Common/ClaimConfirmations';
 import BrandLogo from '../../Common/BrandLogo';
+import ServiceSwitcher from '../../Common/ServiceSwitcher';
 export default function ClientDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -153,6 +154,7 @@ export default function ClientDashboard({ profile }) {
       <aside className="client-sidebar">
         <div className="sidebar-header">
           <BrandLogo tone="dark" badge="Therapy" />
+          <ServiceSwitcher profile={profile} current="therapy" />
           <div className="user-info">
             <div className="user-avatar" onClick={() => document.getElementById('profile-image-input').click()}>
               {profile?.photoURL ? (

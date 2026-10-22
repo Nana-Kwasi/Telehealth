@@ -62,6 +62,9 @@ import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import EmergencyContactsEditor from '../../Common/EmergencyContactsEditor';
 import { RxCoverChip } from '../../Common/RxInsuranceCard';
 import BrandLogo from '../../Common/BrandLogo';
+import ServiceSwitcher from '../../Common/ServiceSwitcher';
+import TransferConsentCard from '../../Common/TransferConsentCard';
+import PaymentsAndRefunds from '../../Common/PaymentsAndRefunds';
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -427,6 +430,8 @@ function MedPatHome({ profile }) {
 
   return (
     <div className="mp-page">
+      {/* A transfer of this patient's care waiting for their consent. */}
+      <TransferConsentCard kind="MEDICAL" />
       {/* ── Welcome hero ──────────────────────────────────────────────────
           Was a single cramped row: avatar and greeting squeezed against a
           red-outlined vitals box and a button, with no room for any of them.
@@ -2621,6 +2626,7 @@ function MedPatBilling({ profile }) {
   return (
     <div className="mp-page">
       <div className="mp-page-header"><h1>Billing &amp; Payments</h1><p>Your consultation invoices and payment history</p></div>
+      <PaymentsAndRefunds />
 
       <div className="mp-stats-grid-4" style={{ marginBottom: '1.5rem' }}>
         <div className="mp-stat-card mp-stat-blue">
@@ -5007,6 +5013,7 @@ export default function MedicalPatientDashboard({ profile }) {
       <aside className="mp-sidebar">
         <div className="mp-sidebar-header">
           <BrandLogo tone="dark" badge="Patient" />
+          <ServiceSwitcher profile={profile} current="medical" />
           <div className="mp-user-card">
             <div className="mp-user-avatar">{getInitials(profile?.name)}</div>
             <div className="mp-user-info">

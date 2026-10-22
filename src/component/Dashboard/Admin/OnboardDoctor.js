@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { api } from '../../../services/apiClient';
+import { careCatalog } from '../../../services/careTransfers';
 import { UserPlus, Save, Upload } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { doc, setDoc, serverTimestamp } from '../../../services/firestoreShim';
@@ -19,6 +22,30 @@ const _firebaseConfig = {
 const secondaryApp = getApps().find(a => a.name === 'secondary') || initializeApp(_firebaseConfig, 'secondary');
 const secondaryAuth = getAuth(secondaryApp);
 
+/** The server's doctor onboarding rules (ProviderProfileRules), checked before anything is created. */
+export function validateDoctorForm(f, catalog) {
+  const p = [];
+  const need = (v, label) => { if (!v || !String(v).trim()) p.push(`${label} is required`); };
+  need(f.name, 'Full name');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email || '')) p.push('A valid email is required');
+  if (!f.password || f.password.length < 6) p.push('Password must be at least 6 characters');
+  if (String(f.phone || '').replace(/\D/g, '').length < 9) p.push('A valid phone number is required');
+  if (!f.gender) p.push('Gender is required');
+  if (!f.city && !f.location) p.push('City is required');
+  if (catalog ? !catalog.doctorSpecialties.includes(f.specialization) : !f.specialization) p.push('Choose a specialization from the list');
+  const years = Number(f.experience);
+  if (f.experience === '' || !Number.isFinite(years) || years < 0 || years > 70) p.push('Years of experience must be between 0 and 70');
+  need(f.licenseNumber, 'License number');
+  need(f.licensingAuthority, 'Licensing authority');
+  if (!(Number(f.consultationFee) >= 1)) p.push('Consultation fee must be at least 1');
+  need(f.languages, 'Languages');
+  if (!Object.values(f.consultationTypes || {}).some(Boolean)) p.push('Choose at least one consultation type');
+  need(f.education, 'Education');
+  need(f.qualifications, 'Qualifications');
+  need(f.bio, 'Bio');
+  return p;
+}
+
 export default function OnboardDoctor({ profile }) {
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -26,6 +53,12 @@ export default function OnboardDoctor({ profile }) {
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const { detectAddress, loading: locating, message: locationMsg } = useAddressAutofill();
+
+  const [catalog, setCatalog] = useState(null);
+  // Opened from an approved provider application: pre-fill from it, and record
+  // the new account on the application once created.
+  const application = useLocation().state?.application || null;
+  useEffect(() => { careCatalog().then(setCatalog).catch(() => setCatalog(null)); }, []);
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '', password: '',
@@ -35,6 +68,36 @@ export default function OnboardDoctor({ profile }) {
     consultationTypes: { video: true, chat: false, inPerson: false },
     education: '', qualifications: '',
   });
+
+  useEffect(() => {
+    if (!application || application.type !== 'DOCTOR') return;
+    const d = application.details || {};
+    setForm((f) => ({
+      ...f,
+      name: d.fullName || f.name,
+      email: application.email || f.email,
+      phone: application.phone || f.phone,
+      specialization: d.specialty || f.specialization,
+      licenseNumber: d.mdcNumber || f.licenseNumber,
+      licensingAuthority: 'Medical and Dental Council',
+      experience: d.yearsExperience || f.experience,
+      consultationFee: d.proposedFee || f.consultationFee,
+      gender: d.gender || f.gender,
+      languages: Array.isArray(d.languages) ? d.languages.join(', ') : f.languages,
+      consultationTypes: {
+        video: (d.consultationTypes || []).includes('Video') || (d.consultationTypes || []).includes('Audio'),
+        chat: (d.consultationTypes || []).includes('Chat'),
+        inPerson: (d.consultationTypes || []).includes('In person'),
+      },
+      city: d.city || f.city,
+      region: d.region || f.region,
+      street: d.address || f.street,
+      location: [d.address, d.city].filter(Boolean).join(', ') || f.location,
+      ghanaDigitalAddress: d.digitalAddress || f.ghanaDigitalAddress,
+      qualifications: d.specialistCertification || f.qualifications,
+      bio: d.bio || f.bio,
+    }));
+  }, [application]);
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -58,12 +121,13 @@ export default function OnboardDoctor({ profile }) {
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim() || !form.email.trim() || !form.password || !form.specialization.trim()) {
-      setErrorMsg('Please fill in all required fields: Name, Email, Password, and Specialization.');
-      return;
-    }
-    if (form.password.length < 6) {
-      setErrorMsg('Password must be at least 6 characters.');
+    // The server refuses an incomplete doctor profile (patients are matched and
+    // transfers reassigned from these fields). Check first: the login is
+    // created before the profile, so a refused profile would leave a bare login.
+    const issues = validateDoctorForm(form, catalog);
+    if (issues.length) {
+      setErrorMsg(issues);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -142,6 +206,12 @@ export default function OnboardDoctor({ profile }) {
       setProfileImage(null);
       setImagePreview(null);
       setSuccessMsg(`Dr. ${doctorData.name} has been successfully onboarded!`);
+      if (application?.id) {
+        // Close the application: the applicant is emailed that their account is ready.
+        api(`/api/v1/admin/applications/${application.id}/account-created`, { method: 'POST', body: { userId: uid, email: form.email.trim() } })
+          .then(() => setSuccessMsg(`Dr. ${doctorData.name} has been onboarded and application ${application.code} is closed.`))
+          .catch((e) => setErrorMsg(`Account created, but the application could not be updated: ${e.message}. Record it from Provider Applications.`));
+      }
       setTimeout(() => setSuccessMsg(''), 5000);
     } catch (error) {
       console.error('Error onboarding doctor:', error);
@@ -176,8 +246,13 @@ export default function OnboardDoctor({ profile }) {
         <div style={{
           background: '#fee2e2', color: '#991b1b', padding: '0.75rem 1rem',
           borderRadius: 8, marginBottom: '1rem', fontSize: '0.875rem', fontWeight: 500,
-        }}>
-          {errorMsg}
+        }} role="alert">
+          {Array.isArray(errorMsg) ? (
+            <>
+              Please complete the profile before onboarding:
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{errorMsg.map((m) => <li key={m}>{m}</li>)}</ul>
+            </>
+          ) : errorMsg}
         </div>
       )}
 
@@ -201,18 +276,16 @@ export default function OnboardDoctor({ profile }) {
               onChange={e => handleChange('password', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>Phone</label>
+            <label>Phone *</label>
             <input className="doctor-form-input" placeholder="+1 (555) 000-0000" value={form.phone}
               onChange={e => handleChange('phone', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>Gender</label>
+            <label>Gender *</label>
             <select className="doctor-form-select" value={form.gender}
               onChange={e => handleChange('gender', e.target.value)}>
               <option value="">Select</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
+              {(catalog?.genders || ['Female', 'Male', 'Non-binary']).map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
           <div className="doctor-form-group">
@@ -234,7 +307,7 @@ export default function OnboardDoctor({ profile }) {
             </div>
           </div>
           <div className="doctor-form-group">
-            <label>City</label>
+            <label>City *</label>
             <input className="doctor-form-input" placeholder="e.g. Accra" value={form.city}
               onChange={e => handleChange('city', e.target.value)} />
           </div>
@@ -280,42 +353,40 @@ export default function OnboardDoctor({ profile }) {
             <select className="doctor-form-select" value={form.specialization}
               onChange={e => handleChange('specialization', e.target.value)}>
               <option value="">Select specialization</option>
-              {['General Practice', 'Cardiology', 'Dermatology', 'Endocrinology', 'Gastroenterology',
-                'Neurology', 'Oncology', 'Orthopedics', 'Pediatrics', 'Psychiatry', 'Pulmonology',
-                'Radiology', 'Surgery', 'Urology', 'Other'].map(s => (
+              {(catalog?.doctorSpecialties || []).map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
           <div className="doctor-form-group">
-            <label>Years of Experience</label>
+            <label>Years of Experience *</label>
             <input className="doctor-form-input" type="number" min="0" value={form.experience}
               onChange={e => handleChange('experience', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>License Number</label>
+            <label>License Number *</label>
             <input className="doctor-form-input" placeholder="Medical license number" value={form.licenseNumber}
               onChange={e => handleChange('licenseNumber', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>Licensing Authority</label>
+            <label>Licensing Authority *</label>
             <input className="doctor-form-input" placeholder="e.g., State Medical Board" value={form.licensingAuthority}
               onChange={e => handleChange('licensingAuthority', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>Consultation Fee (GHS)</label>
+            <label>Consultation Fee (GHS) *</label>
             <input className="doctor-form-input" type="number" min="0" value={form.consultationFee}
               onChange={e => handleChange('consultationFee', e.target.value)} />
           </div>
           <div className="doctor-form-group">
-            <label>Languages (comma-separated)</label>
+            <label>Languages (comma-separated) *</label>
             <input className="doctor-form-input" placeholder="English, Spanish" value={form.languages}
               onChange={e => handleChange('languages', e.target.value)} />
           </div>
         </div>
 
         <div className="doctor-form-group">
-          <label>Consultation Types</label>
+          <label>Consultation Types *</label>
           <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem' }}>
             {[['video', 'Video Call'], ['chat', 'Chat'], ['inPerson', 'In-Person']].map(([key, label]) => (
               <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.875rem', cursor: 'pointer' }}>
@@ -331,17 +402,17 @@ export default function OnboardDoctor({ profile }) {
       <div className="doctor-card">
         <h3>Education & Background</h3>
         <div className="doctor-form-group">
-          <label>Education</label>
+          <label>Education *</label>
           <input className="doctor-form-input" placeholder="e.g., MD from Harvard Medical School" value={form.education}
             onChange={e => handleChange('education', e.target.value)} />
         </div>
         <div className="doctor-form-group">
-          <label>Qualifications / Certifications</label>
+          <label>Qualifications / Certifications *</label>
           <input className="doctor-form-input" placeholder="e.g., Board Certified, FACC" value={form.qualifications}
             onChange={e => handleChange('qualifications', e.target.value)} />
         </div>
         <div className="doctor-form-group">
-          <label>Bio</label>
+          <label>Bio *</label>
           <textarea className="doctor-form-textarea" rows={4} placeholder="Doctor's professional bio..."
             value={form.bio} onChange={e => handleChange('bio', e.target.value)} />
         </div>

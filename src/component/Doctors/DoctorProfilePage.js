@@ -9,6 +9,9 @@ import './DoctorProfilePage.css';
 import { savePendingBooking } from '../../utils/pendingDoctorBooking';
 import { payForBooking } from '../../services/paystack';
 import { api } from '../../services/apiClient';
+import { chooseService } from '../../utils/careServices';
+import CheckoutBreakdown from '../Common/CheckoutBreakdown';
+import { refreshSession } from '../Auth/authService';
 import Paged from '../Common/Paged';
 
 function getInitials(name) {
@@ -248,6 +251,12 @@ export default function DoctorProfilePage({ session }) {
       ));
 
       setBookingState({ status: 'confirmed', error: '' });
+      // A therapy client booking a doctor uses the same account: open the
+      // medical dashboard next, where this appointment lives.
+      if (session.role === 'client') {
+        chooseService(clientId, 'medical');
+        refreshSession();
+      }
     } catch (err) {
       console.error('Booking error:', err);
       setBookingState({ status: 'error', error: 'Booking failed. Please try again.' });
@@ -468,6 +477,7 @@ export default function DoctorProfilePage({ session }) {
                 <p className="dp-booking-fee">
                   {doctor.consultationFee ? `GHS ${doctor.consultationFee} / session` : 'Free consultation'}
                 </p>
+                <CheckoutBreakdown amount={doctor.consultationFee} purpose="medical" />
 
                 {/* Consult Type */}
                 {consultTypes.length > 0 && (

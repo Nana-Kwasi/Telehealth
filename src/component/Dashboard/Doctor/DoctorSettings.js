@@ -9,6 +9,7 @@ import { resolveFileUrl } from '../../../utils/fileUrl';
 import { TwoStepSignIn, ChangePasswordCard, ClinicianAccountNote } from '../../Common/AccountSecurityCards';
 import ConsentHistory from '../../Common/ConsentHistory';
 import NotificationCentre from '../../Common/NotificationCentre';
+import ClinicianProfileForm from '../../Common/ClinicianProfileForm';
 // Map a doctor record (session profile and/or the full /doctors/{id} document,
 // whose metadataJson-preserved fields are expanded by the shim) to the form shape.
 function mapDoctorToForm(src = {}) {
@@ -195,6 +196,7 @@ export default function DoctorSettings({ profile }) {
   // Same sections as the app's doctor settings (and the therapist's).
   const tabs = [
     { key: 'profile', label: 'Profile' },
+    { key: 'professional', label: 'Professional details' },
     { key: 'security', label: 'Security' },
     { key: 'availability', label: 'Availability' },
     { key: 'notifications', label: 'Notifications' },
@@ -360,6 +362,14 @@ export default function DoctorSettings({ profile }) {
             <Save size={16} /> {saving ? 'Saving...' : 'Save Profile'}
           </button>
         </div>
+      )}
+
+      {activeTab === 'professional' && profile?.id && (
+        <ClinicianProfileForm
+          kind="doctor"
+          userId={profile.id}
+          intro="Your licence, specialty, languages and the rest of what patients are matched on. Fields marked * are required."
+        />
       )}
 
       {activeTab === 'security' && (

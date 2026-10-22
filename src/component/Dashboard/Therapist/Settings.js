@@ -67,6 +67,7 @@ import {
 } from '../../../services/firestoreShim';
 import { ref, uploadBytes, getDownloadURL } from '../../../services/firestoreShim';
 import './Settings.css';
+import ClinicianProfileForm from '../../Common/ClinicianProfileForm';
 import { uploadAvatar } from '../../../utils/profileImage';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 
@@ -213,7 +214,7 @@ export default function TherapistSettings() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!['profile', 'security', 'availability', 'notifications', 'legal'].includes(activeTab)) setActiveTab('profile');
+    if (!['profile', 'professional', 'security', 'availability', 'notifications', 'legal'].includes(activeTab)) setActiveTab('profile');
   }, [activeTab]);
 
   // Handle image upload
@@ -495,6 +496,7 @@ export default function TherapistSettings() {
   // same order.
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'professional', label: 'Professional details', icon: Award },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'availability', label: 'Availability', icon: Calendar },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -742,6 +744,16 @@ export default function TherapistSettings() {
 
 
           {/* Availability Tab — mirrors the mobile Availability section */}
+          {activeTab === 'professional' && currentUser && (
+            <div className="settings-section">
+              <ClinicianProfileForm
+                kind="therapist"
+                userId={currentUser.uid}
+                intro="Your licence, the clients you see, your focus areas and the rest of what clients are matched on. Fields marked * are required."
+              />
+            </div>
+          )}
+
           {activeTab === 'availability' && (
             <div className="settings-section">
               <h2>Current Status</h2>

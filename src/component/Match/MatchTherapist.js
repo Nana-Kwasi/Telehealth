@@ -14,6 +14,7 @@ import {
   confirmCoupleTherapist,
 } from '../../services/coupleTherapyService';
 import { therapistFee } from '../../utils/therapistFee';
+import { api } from '../../services/apiClient';
 import { resolveFileUrl } from '../../utils/fileUrl';
 import Paged from '../Common/Paged';
 
@@ -25,6 +26,12 @@ export function therapistRate(t) {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+const TIERS = [
+  ['best', 'Best matches', 'They see the kind of therapy you chose and work with what you want help with.'],
+  ['close', 'Close matches', 'They see the kind of therapy you chose and cover part of what you need.'],
+  ['other', 'Other available therapists', 'No exact match is available yet — these therapists can still see you.'],
+];
 
 export default function MatchTherapist() {
   const navigate = useNavigate();
@@ -131,6 +138,23 @@ export default function MatchTherapist() {
           setTherapists(list);
           setLoading(false);
           return;
+        }
+
+        // The server matches from the client's questionnaire: therapists who see
+        // the kind of therapy they chose, ranked by how much of what they need
+        // help with they cover, with their preferences (gender, faith, LGBTQ+
+        // affirming) weighed in. Best matches first, then close ones.
+        try {
+          const match = await api('/api/v1/matching/therapists', {
+            method: 'POST',
+            body: { intake: questionnaireData, therapyType: questionnaireData.therapyType || null },
+          });
+          const ranked = [...(match?.best || []), ...(match?.close || []), ...(match?.other || [])];
+          setTherapists(ranked.map((t) => ({ ...t, therapyType: t.professionalType })));
+          return;
+        } catch (matchErr) {
+          // An older server without matching: fall back to the list below.
+          console.warn('Matching unavailable, using the basic list:', matchErr?.message);
         }
 
         const col = collection(db, 'therapists');
@@ -299,8 +323,17 @@ export default function MatchTherapist() {
       {loading ? (
         <div className="loading-card">Loading matches…</div>
       ) : therapists.length ? (
+        <>
+        {TIERS.map(([tier, heading, blurb]) => {
+          const group = therapists.filter((t) => (t.tier || 'best') === tier);
+          if (!group.length) return null;
+          const showHeading = therapists.some((t) => t.tier);
+          return (
+        <section key={tier} aria-label={heading}>
+        {showHeading ? <h2 className="match-tier-title">{heading}</h2> : null}
+        {showHeading && blurb ? <p className="subtitle" style={{ marginTop: 0 }}>{blurb}</p> : null}
         <div className="card-grid">
-          <Paged items={therapists}>{(therapists) => therapists.map((t) => (
+          <Paged items={group}>{(therapists) => therapists.map((t) => (
             <div key={t.id} className="therapist-card">
               <div className="therapist-avatar">{t.photoURL ? <img alt="" src={resolveFileUrl(t.photoURL)} /> : '🧑‍⚕️'}</div>
               <div className="therapist-info">
@@ -323,6 +356,9 @@ export default function MatchTherapist() {
                   ) : 'Rate not published'}
                 </div>
                 {t.score ? <div className="therapist-score">Match: {Math.round(t.score)}%</div> : null}
+                {Array.isArray(t.reasons) && t.reasons.length ? (
+                  <div className="therapist-details" style={{ marginTop: 4 }}>{t.reasons.join(' · ')}</div>
+                ) : null}
               </div>
               <div>
                 <button type="button" className="select-button" onClick={() => choose(t)}>
@@ -332,6 +368,10 @@ export default function MatchTherapist() {
             </div>
           ))}</Paged>
         </div>
+        </section>
+          );
+        })}
+        </>
       ) : (
         <div className="no-matches-card">No exact matches yet. We'll assign the best available therapist shortly.</div>
       )}

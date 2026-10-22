@@ -1896,6 +1896,8 @@ export async function addDoc(colRef, data) {
           scheduledAt: data.scheduledAt || (data.date ? `${data.date}T${data.time || '09:00'}:00` : new Date().toISOString()),
           notes: [apptType ? `[${apptType}]` : '', data.reason || data.notes || ''].filter(Boolean).join(' ').trim(),
           status: data.status || 'pending',
+          // Ties the payment to this appointment (refund window, doctor's earning).
+          ...(data.paymentReference ? { paymentReference: data.paymentReference } : {}),
         } });
       }
       case 'doctorPrescriptions':

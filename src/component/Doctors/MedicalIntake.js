@@ -5,7 +5,9 @@ import {
   ArrowLeft, ArrowRight, Clock, CalendarCheck, Zap, ShieldCheck,
 } from 'lucide-react';
 import './MedicalIntake.css';
-import { api } from '../../services/apiClient';
+import { api, getStoredToken, getStoredRole, getStoredUserId } from '../../services/apiClient';
+import { chooseService } from '../../utils/careServices';
+import { refreshSession } from '../Auth/authService';
 
 /**
  * Medical Care intake — three short steps before the doctor list.
@@ -46,6 +48,13 @@ export default function MedicalIntake() {
   const [screening, setScreening] = useState(false);
 
   const handleSkip = () => {
+    // Already signed in (e.g. a therapy client): same account, no sign-up step.
+    if (getStoredToken() && getStoredRole() === 'client') {
+      chooseService(getStoredUserId(), 'medical');
+      refreshSession();
+      navigate('/dashboard');
+      return;
+    }
     localStorage.setItem('th.medicalSkip', 'true');
     navigate('/signup');
   };

@@ -6,6 +6,7 @@ import SmartDocumentUpload from '../../Common/SmartDocumentUpload';
 import CodingAssistPanel from '../../Common/CodingAssistPanel';
 import RecordExplorer from '../../Common/RecordExplorer';
 import PatientTranscripts from '../../Common/PatientTranscripts';
+import TransferPatientModal from '../../Common/TransferPatientModal';
 import {
   ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video,
   AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
@@ -96,6 +97,8 @@ export default function DoctorPatientDetail({ profile }) {
   const [viewingRecord, setViewingRecord] = useState(null);
 
   const [patient, setPatient] = useState(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferSent, setTransferSent] = useState('');
   const [appointments, setAppointments] = useState([]);
   const [notes, setNotes] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
@@ -514,6 +517,19 @@ export default function DoctorPatientDetail({ profile }) {
           disagree about what is on file. */}
       <RecordExplorer subjectId={patientId} title="This patient's record" />
 
+      <TransferPatientModal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        onSent={(t) => setTransferSent(`Transfer sent. ${patient.name} has been asked to consent; you can follow it under Transfers.${t?.toName ? ` Receiving doctor: Dr. ${t.toName}.` : ''}`)}
+        patient={patient}
+        role="DOCTOR"
+      />
+      {transferSent ? (
+        <div className="doctor-card" role="status" style={{ marginBottom: '1rem', background: '#f0fdf4', color: '#166534' }}>
+          {transferSent} <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => navigate('/dashboard/transfers')}>Open Transfers</button>
+        </div>
+      ) : null}
+
       {/* Patient Header */}
       <div className="doctor-card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
@@ -557,6 +573,9 @@ export default function DoctorPatientDetail({ profile }) {
             </button>
             <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => navigate('/dashboard/video')}>
               <Video size={14} /> Video Call
+            </button>
+            <button className="doctor-btn doctor-btn-outline doctor-btn-sm" onClick={() => setTransferOpen(true)}>
+              Transfer patient
             </button>
             {/* Status actions */}
             {patientStatus === 'active' && (
