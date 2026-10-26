@@ -10,8 +10,13 @@ import { API_BASE, refreshAccessToken } from './apiClient';
  * Callback names mirror the server's event names exactly, so adding an event on
  * the backend cannot silently do nothing here.
  */
-export async function streamAssist({ body, onChunk, onEscalation, onRefusal, onRetract, onDone, onError }) {
+export async function streamAssist({ body, onChunk, onEscalation, onRefusal, onRetract, onDone, onError, signal }) {
   const controller = new AbortController();
+  // An outside signal (voice mode, when the person talks over the reply) stops the stream too.
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
 
   const open = (token) => fetch(`${API_BASE}/api/v1/ai/assist/stream`, {
     method: 'POST',

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Sparkles, X, ArrowUp } from 'lucide-react';
+import { Sparkles, X, ArrowUp, Headphones } from 'lucide-react';
 import { api } from '../../services/apiClient';
 import AiMarkdown from './AiMarkdown';
+import VoiceConversation, { useVoiceReveal } from './voice/VoiceConversation';
+import { voiceAvailable } from './voice/speechApi';
 
 /**
  * "Ask AI" on the pharmacy, lab / scan centre, insurer and facility
@@ -23,19 +25,61 @@ export default function RoleAssistant({ kind = 'pharmacy', accent = '#0f766e', l
   const [busy, setBusy] = useState(false);
   const endRef = useRef(null);
 
+  // Hands-free conversation: the answer is spoken as well as shown, its text following the voice.
+  const [voiceOk, setVoiceOk] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceRef = useRef(null);
+  const voiceModeRef = useRef(false);
+  voiceModeRef.current = voiceMode;
+  const turnRef = useRef(0);
+  const reveal = useVoiceReveal(voiceMode);
+  useEffect(() => { if (open && !voiceOk) voiceAvailable().then(setVoiceOk); }, [open, voiceOk]);
+  // Closing the drawer ends the conversation and releases the microphone.
+  useEffect(() => { if (!open) setVoiceMode(false); }, [open]);
+
   const ask = useCallback(async (text) => {
     const question = String(text || '').trim();
     if (!question || busy) return;
     setQ(''); setBusy(true);
+    const turn = (turnRef.current += 1);
+    const voice = voiceModeRef.current ? voiceRef.current : null;
+    if (voice) { voice.onTurnStart(); reveal.beginReply(); }
     const history = thread.map((m) => ({ role: m.role === 'me' ? 'user' : 'assistant', content: m.text }));
     setThread((t) => [...t, { role: 'me', text: question }]);
     try {
       const d = await api('/api/v1/assistant/ask', { method: 'POST', body: { question, history } });
+      if (turn !== turnRef.current) return;   // talked over while it was being worked out
       setThread((t) => [...t, { role: 'ai', text: d.answer, people: d.people || [] }]);
+      if (voice) { voice.onDelta(d.answer || ''); voice.onDone(); }
     } catch (e) {
-      setThread((t) => [...t, { role: 'ai', text: e?.message || 'The assistant could not answer right now.' }]);
-    } finally { setBusy(false); }
+      if (turn !== turnRef.current) return;
+      const msg = e?.message || 'The assistant could not answer right now.';
+      setThread((t) => [...t, { role: 'ai', text: msg }]);
+      voice?.onError(msg);
+    } finally { if (turn === turnRef.current) setBusy(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, thread]);
+
+  const askRef = useRef(ask);
+  askRef.current = ask;
+  const onVoiceUtterance = useCallback((text) => askRef.current(text), []);
+  const onVoiceEscalation = useCallback((text) => setThread((t) => [...t, { role: 'ai', text }]), []);
+  const onVoiceClose = useCallback(() => setVoiceMode(false), []);
+  const onVoiceText = useCallback((e) => {
+    reveal.onVoiceText(e);
+    if (e.type !== 'stop') return;
+    // Talked over: the answer on screen ends where the voice did.
+    const heard = reveal.stoppedAt();
+    setThread((t) => {
+      const next = [...t];
+      const i = next.length - 1;
+      if (i >= 0 && next[i].role === 'ai' && heard != null) {
+        next[i] = { ...next[i], text: `${(next[i].text || '').slice(0, heard).trimEnd()} …` };
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [thread, busy]);
   useEffect(() => {
@@ -73,7 +117,7 @@ export default function RoleAssistant({ kind = 'pharmacy', accent = '#0f766e', l
               )}
               {thread.map((m, i) => (
                 <div key={i} style={m.role === 'me' ? { ...S.me, background: accent } : S.ai}>
-                  {m.role === 'ai' ? <AiMarkdown text={m.text} /> : m.text}
+                  {m.role === 'ai' ? <AiMarkdown text={voiceMode && i === thread.length - 1 ? reveal.visible(m.text) : m.text} /> : m.text}
                   {m.people?.length > 1 ? (
                     <div style={S.chips}>{m.people.map((p) => (
                       <button key={p.id} type="button" style={S.chip} onClick={() => ask(`Tell me about ${p.name} (${p.hint})`)}>{p.name} · {p.hint}</button>
@@ -84,10 +128,20 @@ export default function RoleAssistant({ kind = 'pharmacy', accent = '#0f766e', l
               {busy && <div style={{ ...S.ai, color: '#64748b' }}>Thinking…</div>}
               <div ref={endRef} />
             </div>
+            {voiceMode ? (
+              <VoiceConversation ref={voiceRef} accent={accent} title="NessaHub AI"
+                onUtterance={onVoiceUtterance} onEscalation={onVoiceEscalation}
+                onClose={onVoiceClose} onVoiceText={onVoiceText} />
+            ) : (
             <form style={S.form} onSubmit={(e) => { e.preventDefault(); ask(q); }}>
+              {voiceOk ? (
+                <button type="button" onClick={() => setVoiceMode(true)} style={{ ...S.send, background: '#fff', color: accent, border: `1.5px solid ${accent}` }}
+                  aria-label="Start a voice conversation" title="Talk with the assistant, hands-free"><Headphones size={17} /></button>
+              ) : null}
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask about your organisation…" maxLength={800} autoFocus style={S.input} />
               <button type="submit" disabled={busy || !q.trim()} style={{ ...S.send, background: accent, opacity: busy || !q.trim() ? 0.5 : 1 }} aria-label="Send"><ArrowUp size={17} /></button>
             </form>
+            )}
           </aside>
         </div>
       )}

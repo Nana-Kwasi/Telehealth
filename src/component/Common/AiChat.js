@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../services/apiClient';
 import { streamAssist } from '../../services/aiStream';
 import AiMarkdown from './AiMarkdown';
+import { Headphones } from 'lucide-react';
+import VoiceConversation, { useVoiceReveal } from './voice/VoiceConversation';
+import { transcribe as voiceTranscribe, voiceAvailable } from './voice/speechApi';
 
 /**
  * Conversational AI assistant for the web, matching the mobile surface.
@@ -65,6 +68,19 @@ export default function AiChat({ clinician = false, embedded = false }) {
   const chunksRef = useRef([]);
   const capRef = useRef(null);
   const spokenRef = useRef(-1);
+
+  // Hands-free conversation (see voice/VoiceConversation). The reply streams here as usual and
+  // is forwarded to the dock, which speaks it; its text is revealed at the pace of the voice.
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceOk, setVoiceOk] = useState(false);
+  const voiceRef = useRef(null);
+  const voiceModeRef = useRef(false);
+  voiceModeRef.current = voiceMode;
+  const streamAbort = useRef(null);
+  const reveal = useVoiceReveal(voiceMode);
+  const sendRef = useRef(null);
+
+  useEffect(() => { voiceAvailable().then(setVoiceOk); }, []);
 
   useEffect(() => {
     (async () => {
@@ -229,19 +245,13 @@ export default function AiChat({ clinician = false, embedded = false }) {
   const transcribeAndSend = async (blob) => {
     setVoiceBusy(true);
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onloadend = () => resolve(String(r.result).split(',')[1] || '');
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
-      const res = await api('/api/v1/ai/transcribe', {
-        method: 'POST', body: { audioBase64: base64, mimeType: blob.type || 'audio/webm' },
-      });
+      // The dedicated recogniser, which tells words from noise — a chat model given audio
+      // "transcribed" an unclear clip as a whole made-up sentence.
+      const res = await voiceTranscribe(blob);
       // A recording that trips the safety screen comes back as the crisis
-      // response in `text`, with no transcript — shown, never sent on.
-      if (res?.transcript) send(res.transcript);
-      else if (res?.text) setMessages((m) => [...m, { role: 'assistant', content: res.text, escalated: !!res.escalated }]);
+      // response, with no transcript sent on.
+      if (res.escalated && res.safetyText) setMessages((m) => [...m, { role: 'assistant', content: res.safetyText, escalated: true }]);
+      else if (res.text) send(res.text);
       else setMessages((m) => [...m, { role: 'assistant', ok: false, content: 'Nothing could be heard in that recording.' }]);
     } catch (e) {
       setMessages((m) => [...m, { role: 'assistant', ok: false, content: e?.message || 'The recording could not be transcribed.' }]);
@@ -261,7 +271,7 @@ export default function AiChat({ clinician = false, embedded = false }) {
 
   // Read each finished reply once, as plain words (markdown symbols stripped).
   useEffect(() => {
-    if (!speakReplies || !window.speechSynthesis) return;
+    if (!speakReplies || voiceMode || !window.speechSynthesis) return;
     const i = messages.length - 1;
     const last = messages[i];
     if (!last || last.role !== 'assistant' || last.streaming || !last.content || spokenRef.current === i) return;
@@ -269,7 +279,7 @@ export default function AiChat({ clinician = false, embedded = false }) {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(
       last.content.replace(/[*_#`>|-]+/g, ' ').replace(/\s+/g, ' ').slice(0, 1200)));
-  }, [messages, speakReplies]);
+  }, [messages, speakReplies, voiceMode]);
 
   const send = async (text) => {
     const message = (text ?? input).trim();
@@ -303,9 +313,18 @@ export default function AiChat({ clinician = false, embedded = false }) {
 
     routeServiceInBackground(message);
 
+    // Voice mode: a typed message or a tapped suggestion is spoken too.
+    const voice = voiceModeRef.current ? voiceRef.current : null;
+    if (voice) { voice.onTurnStart(); reveal.beginReply(); }
+    const abort = new AbortController();
+    streamAbort.current = abort;
+    const said = (t) => { if (voice && t) { voice.onDelta(t); voice.onDone(); } };
+
     await streamAssist({
       body: { task, message, history },
-      onChunk: (piece) =>
+      signal: abort.signal,
+      onChunk: (piece) => {
+        voice?.onDelta(piece);
         setMessages((m) => {
           const next = [...m];
           const i = next.length - 1;
@@ -313,12 +332,14 @@ export default function AiChat({ clinician = false, embedded = false }) {
             next[i] = { ...next[i], content: (next[i].content || '') + piece };
           }
           return next;
-        }),
-      onEscalation: (p) => { patchLast({ content: p.text, escalated: true, streaming: false }); setBusy(false); },
-      onRefusal:    (p) => { patchLast({ content: p.text, ok: false, streaming: false }); setBusy(false); },
-      // Finished answer failed output screening — discard what was shown.
-      onRetract:    (p) => { patchLast({ content: p.text, ok: false, streaming: false }); setBusy(false); },
+        });
+      },
+      onEscalation: (p) => { said(p.text); patchLast({ content: p.text, escalated: true, streaming: false }); setBusy(false); },
+      onRefusal:    (p) => { said(p.text); patchLast({ content: p.text, ok: false, streaming: false }); setBusy(false); },
+      // Finished answer failed output screening — discard what was shown (and stop saying it).
+      onRetract:    (p) => { voice?.onError(p.text); patchLast({ content: p.text, ok: false, streaming: false }); setBusy(false); },
       onDone:       (p) => {
+        voice?.onDone();
         patchLast({
           disclaimer: p?.disclaimer || null,
           streaming: false,
@@ -327,6 +348,7 @@ export default function AiChat({ clinician = false, embedded = false }) {
         setBusy(false); scrollToEnd(); refreshQuota();
       },
       onError:      (e) => {
+        voice?.onError(e?.message);
         patchLast({ content: e?.message || 'The assistant could not be reached.', ok: false, streaming: false });
         setBusy(false);
         // Also on failure: hitting the cap IS an error, and the count is the
@@ -335,6 +357,31 @@ export default function AiChat({ clinician = false, embedded = false }) {
       },
     });
   };
+
+  sendRef.current = send;
+  const onVoiceUtterance = useCallback((text) => sendRef.current?.(text), []);
+  const onVoiceEscalation = useCallback((text) => {
+    setMessages((m) => [...m, { role: 'assistant', content: text, escalated: true }]);
+  }, []);
+  const onVoiceClose = useCallback(() => setVoiceMode(false), []);
+  // Talking over the reply: the stream stops, and the text ends where the voice did.
+  const onVoiceText = useCallback((e) => {
+    reveal.onVoiceText(e);
+    if (e.type !== 'stop') return;
+    streamAbort.current?.abort();
+    const heard = reveal.stoppedAt();
+    setMessages((m) => {
+      const next = [...m];
+      const i = next.length - 1;
+      if (i >= 0 && next[i].role === 'assistant' && next[i].streaming !== undefined) {
+        const cut = heard == null ? next[i].content : (next[i].content || '').slice(0, heard);
+        next[i] = { ...next[i], content: cut ? `${cut.trimEnd()} …` : '…', streaming: false };
+      }
+      return next;
+    });
+    setBusy(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Create the booking the person just confirmed.
@@ -549,7 +596,7 @@ export default function AiChat({ clinician = false, embedded = false }) {
                 <ThinkingLine reading={m.pending} />
               ) : (
                 <div>
-                  <AiMarkdown text={m.content} />
+                  <AiMarkdown text={voiceMode && i === messages.length - 1 ? reveal.visible(m.content) : m.content} />
                   {m.streaming ? <span style={{ color: '#1d4ed8', fontWeight: 700 }}>▍</span> : null}
                 </div>
               )}
@@ -613,6 +660,13 @@ export default function AiChat({ clinician = false, embedded = false }) {
         <div ref={endRef} />
       </div>
 
+      {voiceMode ? (
+        <div style={{ marginTop: '0.85rem' }}>
+          <VoiceConversation ref={voiceRef} onUtterance={onVoiceUtterance} onEscalation={onVoiceEscalation}
+            onClose={onVoiceClose} onVoiceText={onVoiceText}
+            title={clinician ? 'Clinical assistant' : 'Assistant'} />
+        </div>
+      ) : (
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end',
                     borderTop: '1px solid #e2e8f0', paddingTop: '0.85rem', marginTop: '0.85rem' }}>
         <input ref={fileRef} type="file" accept="image/*,application/pdf"
@@ -627,6 +681,15 @@ export default function AiChat({ clinician = false, embedded = false }) {
                    cursor: 'pointer', opacity: (busy || voiceBusy) && !recording ? 0.4 : 1 }}>
           {voiceBusy ? '…' : recording ? '■' : '\u{1F3A4}'}
         </button>
+        {voiceOk ? (
+          <button onClick={() => { window.speechSynthesis?.cancel(); setVoiceMode(true); }} disabled={recording}
+            title="Talk with the assistant, hands-free" aria-label="Start a voice conversation"
+            style={{ background: '#1d4ed8', color: '#fff', border: '1px solid #1d4ed8', borderRadius: 12,
+                     padding: '0.7rem 0.8rem', lineHeight: 1, cursor: 'pointer', display: 'inline-flex',
+                     alignItems: 'center' }}>
+            <Headphones size={18} />
+          </button>
+        ) : null}
         <button onClick={toggleSpeak} aria-pressed={speakReplies}
           title={speakReplies ? 'Stop reading replies aloud' : 'Read replies aloud'}
           aria-label="Read replies aloud"
@@ -659,6 +722,7 @@ export default function AiChat({ clinician = false, embedded = false }) {
           {busy ? '…' : 'Send'}
         </button>
       </div>
+      )}
       {/* Only once it is worth knowing. At the full allowance this was a
           permanent reminder of a quota nobody was close to; the old #94a3b8
           also measured 2.56:1 on white, well under the 4.5:1 floor. */}
