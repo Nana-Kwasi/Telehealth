@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.5080092f.css",
-    "main.js": "/static/js/main.60f1b03c.js",
+    "main.js": "/static/js/main.efdfd0a9.js",
     "static/js/239.021ed72c.chunk.js": "/static/js/239.021ed72c.chunk.js",
     "static/js/213.a73fa5e0.chunk.js": "/static/js/213.a73fa5e0.chunk.js",
     "static/js/455.18faaddf.chunk.js": "/static/js/455.18faaddf.chunk.js",
@@ -14,13 +14,13 @@
     "static/media/nessahub-logo-white.png": "/static/media/nessahub-logo-white.56e89d91b32ab7a1c770.png",
     "index.html": "/index.html",
     "main.5080092f.css.map": "/static/css/main.5080092f.css.map",
-    "main.60f1b03c.js.map": "/static/js/main.60f1b03c.js.map",
+    "main.efdfd0a9.js.map": "/static/js/main.efdfd0a9.js.map",
     "239.021ed72c.chunk.js.map": "/static/js/239.021ed72c.chunk.js.map",
     "213.a73fa5e0.chunk.js.map": "/static/js/213.a73fa5e0.chunk.js.map",
     "455.18faaddf.chunk.js.map": "/static/js/455.18faaddf.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.5080092f.css",
-    "static/js/main.60f1b03c.js"
+    "static/js/main.efdfd0a9.js"
   ]
 }

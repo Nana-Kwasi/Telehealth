@@ -94,7 +94,7 @@ export default function ClientSupport() {
     {
       id: 2,
       question: "What if I need to cancel a session?",
-      answer: "You can cancel a session up to 24 hours before the scheduled time. Go to your Schedule, find the session, and click 'Cancel'. For urgent cancellations, contact support."
+      answer: "You can move or cancel a session from your Schedule until shortly before it starts (the cut-off is shown if it has passed). After that, message your therapist or contact support."
     },
     {
       id: 3,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../../services/firestoreShim';
+import { api } from '../../../services/apiClient';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
 import { generateVideoToken, roomNameForCall } from '../../../services/twilioVideoService';
 import { getJoinWindow } from '../../../utils/sessionJoinWindow';
@@ -64,6 +65,17 @@ const ClientVideoCall = ({ profile }) => {
     return () => clearInterval(timer);
   }, []);
   const [message, setMessage] = useState({ type: '', text: '' });
+  // When a client may still move a session — the platform rule from System Config.
+  // Until it loads, the platform default (2 hours) applies; the server checks either way.
+  const [changeRules, setChangeRules] = useState({ allowRescheduling: true, cutoffHours: 2 });
+  useEffect(() => {
+    api('/api/v1/admin/system-config/public/settings', { authenticated: false })
+      .then((s) => {
+        const a = s?.appointments;
+        if (a) setChangeRules({ allowRescheduling: a.allowRescheduling !== false, cutoffHours: Number(a.cancelCutoffHours) || 0 });
+      })
+      .catch(() => {});
+  }, []);
   const [showTherapistCalendar, setShowTherapistCalendar] = useState(false);
   const [therapistBusyDates, setTherapistBusyDates] = useState([]);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
@@ -488,12 +500,16 @@ const ClientVideoCall = ({ profile }) => {
     return result;
   };
 
-  // Check if session can be edited (within 24 hours)
-  const canEditSession = (sessionTime) => {
-    const now = new Date();
+  // A session can be changed any time up to the cut-off set in System Config
+  // (appointments → cancel / reschedule cut-off; the server enforces the same rule). The
+  // check used to be the wrong way round: editing was allowed ONLY in the last 24 hours,
+  // so a session booked a week ahead could not be moved until the day before.
+  const canEditSession = (sessionTime, status) => {
+    if (!changeRules.allowRescheduling) return false;
+    if (['completed', 'cancelled', 'canceled', 'in_progress', 'missed'].includes(String(status || '').toLowerCase())) return false;
     const sessionDate = sessionTime?.toDate ? sessionTime.toDate() : new Date(sessionTime);
-    const hoursDiff = (sessionDate - now) / (1000 * 60 * 60);
-    return hoursDiff <= 24 && hoursDiff > 0;
+    const hoursDiff = (sessionDate - new Date()) / (1000 * 60 * 60);
+    return hoursDiff > 0 && hoursDiff >= changeRules.cutoffHours;
   };
 
   // Check therapist availability for a specific date
@@ -604,8 +620,10 @@ const ClientVideoCall = ({ profile }) => {
 
   // Handle edit session
   const handleEditSession = (session) => {
-    if (!canEditSession(session.scheduledTime)) {
-      setMessage({ type: 'error', text: 'This session cannot be edited. Only sessions within 24 hours can be modified.' });
+    if (!canEditSession(session.scheduledTime, session.status)) {
+      setMessage({ type: 'error', text: changeRules.allowRescheduling
+        ? `This session can no longer be changed online — changes need at least ${changeRules.cutoffHours} hour${changeRules.cutoffHours === 1 ? '' : 's'}' notice. Please message your therapist.`
+        : 'Sessions can only be moved by your therapist. Please message them.' });
       return;
     }
     
@@ -727,14 +745,20 @@ const ClientVideoCall = ({ profile }) => {
         return;
       }
 
+      // A new time is a new request: the therapist confirms it again, as with a first booking.
+      const oldTime = selectedSession.scheduledTime?.toDate ? selectedSession.scheduledTime.toDate() : new Date(selectedSession.scheduledTime);
+      const timeChanged = oldTime.getTime() !== dateTime.getTime();
       await updateDoc(doc(db, 'scheduledCalls', selectedSession.id), {
         scheduledTime: dateTime,
         duration: parseInt(editScheduleForm.duration),
         notes: editScheduleForm.notes,
+        ...(timeChanged ? { status: 'pending' } : {}),
         updatedAt: serverTimestamp()
       });
       
-      setMessage({ type: 'success', text: 'Session updated successfully!' });
+      setMessage({ type: 'success', text: timeChanged
+        ? 'Session moved. Your therapist will confirm the new time.'
+        : 'Session updated successfully!' });
       setShowEditScheduleModal(false);
       setSelectedSession(null);
       
@@ -951,7 +975,7 @@ const ClientVideoCall = ({ profile }) => {
                   const timeInfo = formatSessionDateParts(session.scheduledTime);
                   const sessionDate = session.scheduledTime?.toDate?.() || session.scheduledTime;
                   const isUpcoming = sessionDate > new Date();
-                  const canEdit = isUpcoming && (sessionDate - new Date()) <= (24 * 60 * 60 * 1000); // 24 hours
+                  const canEdit = isUpcoming && canEditSession(session.scheduledTime, session.status);
                   // Join only opens around the booked time — see sessionJoinWindow.
                   const joinWindow = getJoinWindow(session, nowTick);
                   // The therapist joining flips the call to `in_progress`. Gating
