@@ -189,6 +189,14 @@ export default function ClientHome({ profile }) {
            date.getFullYear() === today.getFullYear();
   };
 
+  // A day on the home calendar opens the Calendar page on that date: its sessions if it has
+  // any, otherwise the booking form with the date filled in — as on the therapist home.
+  const openDay = (date) => {
+    setSelectedDate(date);
+    const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    navigate('/dashboard/schedule', { state: { focusDate: ymd } });
+  };
+
   const isSelected = (date) => {
     return selectedDate.getDate() === date.getDate() && 
            selectedDate.getMonth() === date.getMonth() && 
@@ -2374,7 +2382,8 @@ export default function ClientHome({ profile }) {
                   <button
                     key={day}
                     className={`calendar-day ${isToday(date) ? 'today' : ''} ${isSelected(date) ? 'selected' : ''}`}
-                    onClick={() => setSelectedDate(date)}
+                    onClick={() => openDay(date)}
+                    title="Open this day — book a session or see what's scheduled"
                   >
                     {day}
                   </button>

@@ -1675,8 +1675,12 @@
   color: #1e293b;
 }
 
+button.mp-cal-day { border: 1px solid transparent; background: none; font: inherit; padding: 0; }
+.mp-cal-day--open { cursor: pointer; transition: background 0.12s; }
+.mp-cal-day--open:not(.mp-cal-day--booked):hover { background: #eff6ff; }
+.mp-cal-day--past { cursor: default; }
 .mp-cal-day--other { color: #cbd5e1; }
-.mp-cal-day--today { border: 1px solid #2563eb; }
+.mp-cal-day.mp-cal-day--today { border: 1px solid #2563eb; }
 
 .mp-cal-day--booked {
   background: #2563eb;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
   Plus, 
@@ -52,6 +53,9 @@ export default function ClientSchedule() {
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
 
   const currentUser = auth.currentUser;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
 
   // Appointment types
   const appointmentTypes = {
@@ -216,10 +220,33 @@ export default function ClientSchedule() {
       });
       
       setAppointments(appointmentsData);
+      setAppointmentsLoaded(true);
     });
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Arrived from a day tapped on the home calendar: open that day here — its sessions if it has
+  // any, otherwise the booking form on that date — once the therapist and the sessions have
+  // loaded. The request is then dropped so a refresh does not reopen it.
+  useEffect(() => {
+    const ymd = location.state?.focusDate;
+    if (!ymd || isLoadingTherapist || !appointmentsLoaded) return;
+    navigate(location.pathname, { replace: true, state: {} });
+    const [y, m, d] = ymd.split('-').map(Number);
+    const day = new Date(y, m - 1, d);
+    setCurrentMonth(day);
+    setSelectedDate(day);
+    const dayAppointments = getAppointmentsForDate(day);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (dayAppointments.length === 0 && day < startOfToday) {
+      alert('You cannot schedule sessions in the past.');
+      return;
+    }
+    handleDayClick(day, dayAppointments);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, isLoadingTherapist, appointmentsLoaded]);
 
   // Format time for display
   const formatTime = (timestamp) => {

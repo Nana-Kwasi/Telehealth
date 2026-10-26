@@ -5,7 +5,7 @@ import {
   Clock, Video, Phone, MessageCircle, AlertTriangle, Plus,
   User, UserCheck,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
 import {
   collection, query, where, getDocs, doc, getDoc, updateDoc,
@@ -58,6 +58,7 @@ function getInitials(name) {
 
 export default function DoctorAppointments({ profile }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [appointments, setAppointments] = useState([]);
   const [patients, setPatients] = useState([]);          // deduplicated patient list
   const [loading, setLoading] = useState(true);
@@ -160,6 +161,20 @@ export default function DoctorAppointments({ profile }) {
     }
     setScheduleDay(dateStr);
   };
+
+  // Arrived from a day tapped on the home calendar: open the schedule form on that date, once
+  // the patient list it needs has loaded, then drop the request so a refresh does not reopen it.
+  useEffect(() => {
+    const ds = location.state?.scheduleDate;
+    if (!ds || loading) return;
+    const [y, m] = ds.split('-').map(Number);
+    setCalYear(y);
+    setCalMonth(m - 1);
+    setView('calendar');
+    openScheduleDay(ds);
+    navigate(location.pathname, { replace: true, state: {} });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, loading]);
 
   const handleScheduleNew = async () => {
     if (!sForm.patientId) { setSError('Please select a patient.'); return; }

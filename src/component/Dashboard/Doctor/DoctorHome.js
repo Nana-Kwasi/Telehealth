@@ -27,6 +27,11 @@ import { dedupePatientPharmacies, hasPatientPharmacy } from '../../../utils/pati
 import FaqSection from '../../Common/FaqSection';
 import Paged from '../../Common/Paged';
 const TODAY = new Date().toISOString().split('T')[0];
+// The local date, for "is this day in the past": TODAY above is UTC.
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
@@ -420,6 +425,17 @@ export default function DoctorHome({ profile }) {
 
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
   const firstDOW = (y, m) => new Date(y, m, 1).getDay();
+  /**
+   * A day on the home calendar. One with appointments opens them; an empty day from today on
+   * opens the schedule form on the Appointments page with that date filled in — the same as
+   * the therapist home. A past empty day cannot be booked.
+   */
+  const openDay = (ds, hasAppts) => {
+    if (hasAppts) { navigate('/dashboard/appointments'); return; }
+    if (ds < localToday()) { window.alert('You cannot schedule appointments in the past.'); return; }
+    navigate('/dashboard/appointments', { state: { scheduleDate: ds } });
+  };
+
   const toDS = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
   const calCells = () => {
@@ -779,21 +795,22 @@ export default function DoctorHome({ profile }) {
             return (
               <div
                 key={idx}
-                onClick={() => dayAppts.length > 0 && navigate('/dashboard/appointments')}
+                onClick={() => openDay(ds, dayAppts.length > 0)}
+                title={dayAppts.length > 0 ? 'View appointments' : ds < localToday() ? undefined : 'Schedule an appointment'}
                 style={{
                   minHeight: 56,
                   borderRadius: 10,
                   padding: '0.4rem 0.3rem',
                   background: isToday ? '#eff6ff' : dayAppts.length > 0 ? '#f8fafc' : 'white',
                   border: isToday ? '2px solid #2563eb' : dayAppts.length > 0 ? '1.5px solid #e2e8f0' : '1px solid #f1f5f9',
-                  cursor: dayAppts.length > 0 ? 'pointer' : 'default',
+                  cursor: dayAppts.length > 0 || ds >= localToday() ? 'pointer' : 'default',
                   transition: 'all 0.15s',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   gap: 3,
                 }}
-                onMouseEnter={e => { if (dayAppts.length > 0) e.currentTarget.style.background = '#eff6ff'; }}
+                onMouseEnter={e => { if (dayAppts.length > 0 || ds >= localToday()) e.currentTarget.style.background = '#eff6ff'; }}
                 onMouseLeave={e => { if (!isToday) e.currentTarget.style.background = dayAppts.length > 0 ? '#f8fafc' : 'white'; }}
               >
                 <span style={{ fontSize: '0.78rem', fontWeight: isToday ? 800 : 500, color: isToday ? '#2563eb' : '#0f172a' }}>{day}</span>

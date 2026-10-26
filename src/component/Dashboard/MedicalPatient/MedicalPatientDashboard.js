@@ -860,26 +860,36 @@ function MedPatHome({ profile }) {
             const booked = appointmentDates.has(key);
             const inMonth = day.getMonth() === calendarMonth.getMonth();
             const isToday = ymdLocal(new Date()) === key;
+            const past = key < ymdLocal(new Date());
+            const usable = booked || !past;
             return (
-              <div
+              <button
+                type="button"
                 key={i}
                 className={[
                   'mp-cal-day',
                   !inMonth ? 'mp-cal-day--other' : '',
                   isToday ? 'mp-cal-day--today' : '',
                   booked ? 'mp-cal-day--booked' : '',
+                  usable ? 'mp-cal-day--open' : 'mp-cal-day--past',
                 ].filter(Boolean).join(' ')}
-                title={booked ? 'Appointment scheduled' : undefined}
+                title={booked ? 'View this appointment' : past ? undefined : 'Book an appointment on this day'}
+                onClick={() => {
+                  // A booked day shows its appointment; a free day from today on opens the
+                  // booking form on that date — as on the therapist home.
+                  if (!usable) { window.alert('You cannot book appointments in the past.'); return; }
+                  navigate('/dashboard/appointments', { state: { focusDate: key } });
+                }}
               >
                 {day.getDate()}
-              </div>
+              </button>
             );
           })}
         </div>
         <p className="mp-cal-legend">
           {appointmentDates.size > 0
-            ? 'Highlighted days have a scheduled appointment.'
-            : 'No appointments scheduled yet.'}
+            ? 'Highlighted days have an appointment. Click a free day to book.'
+            : 'No appointments yet — tap a day to book one.'}
         </p>
       </div>
       </div>{/* end mp-home-grid */}
@@ -1241,6 +1251,32 @@ function MedPatAppointments({ profile }) {
     })();
   }, [profile]);
 
+  // A day on the calendar: its appointments if it has any, otherwise (from today on) the
+  // booking form on that date.
+  const openDay = (dateStr, hasAppts) => {
+    if (hasAppts) { setModalDay(dateStr); return; }
+    if (dateStr < ymdLocal(new Date())) return;
+    // A patient can only book with a doctor they already have. With none, the modal's picker
+    // is empty and the booking can never be submitted — send them to find a doctor instead.
+    if (myDoctors.length === 0) { navigate('/doctors'); return; }
+    setScheduleDay(dateStr); setConflict(null); setSForm(f => ({...f}));
+  };
+
+  // Arrived from a day tapped on the home calendar: open it here once appointments and
+  // doctors have loaded, then drop the request so a refresh does not reopen it.
+  const location = useLocation();
+  useEffect(() => {
+    const ds = location.state?.focusDate;
+    if (!ds || loading) return;
+    navigate(location.pathname, { replace: true, state: {} });
+    const [y, m] = ds.split('-').map(Number);
+    setCalYear(y);
+    setCalMonth(m - 1);
+    setView('calendar');
+    openDay(ds, appts.some((a) => a.date === ds));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, loading]);
+
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
   const firstDayOfMonth = (y, m) => new Date(y, m, 1).getDay();
   const toDateStr = (d) => `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -1424,16 +1460,7 @@ function MedPatAppointments({ profile }) {
 
                 return (
                   <button key={dateStr}
-                    onClick={() => {
-                      if (isPast && !hasAppts) return;
-                      if (hasAppts) { setModalDay(dateStr); return; }
-                      if (isPast) return;
-                      // A patient can only book with a doctor they already have.
-                      // With none, the modal's picker is empty and the booking can
-                      // never be submitted — send them to find a doctor instead.
-                      if (myDoctors.length === 0) { navigate('/doctors'); return; }
-                      setScheduleDay(dateStr); setConflict(null); setSForm(f => ({...f}));
-                    }}
+                    onClick={() => openDay(dateStr, hasAppts)}
                     style={{ minHeight:82,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'0.5rem 0.3rem 0.3rem',borderRadius:12,border,background:bg,cursor:(isPast&&!hasAppts)?'default':'pointer',opacity:isPast&&!hasAppts?0.3:1,transition:'all 0.12s' }}
                     onMouseEnter={e => { if(!(isPast&&!hasAppts)) e.currentTarget.style.transform='translateY(-1px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.transform=''; }}
