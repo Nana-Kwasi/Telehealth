@@ -59,11 +59,10 @@ export function startOrb(el, variant, getState, getLevel, SIZE = 168) {
     g.save();
     g.globalAlpha = muted ? 0.45 : 1;
 
-    // Backdrop: the soft dark tile the orb sits on.
-    const bd = g.createRadialGradient(C, C, C * 0.2, C, C, C);
-    bd.addColorStop(0, theme.bg);
-    bd.addColorStop(0.93, theme.bg);
-    bd.addColorStop(1, hexA(theme.bg, 0));
+    // On white: no tinted tile behind the orb, just a faint glow of its own colour.
+    const bd = g.createRadialGradient(C, C, C * 0.3, C, C, C);
+    bd.addColorStop(0, hexA(theme.base, 0.16 + energy * 0.14));
+    bd.addColorStop(1, hexA(theme.base, 0));
     g.fillStyle = bd;
     g.beginPath();
     g.arc(C, C, C, 0, Math.PI * 2);
@@ -90,8 +89,8 @@ export function startOrb(el, variant, getState, getLevel, SIZE = 168) {
         fill.addColorStop(0.55, theme.core);
         fill.addColorStop(1, theme.deep);
       } else {
-        fill.addColorStop(0, hexA(theme.light, 0.5));
-        fill.addColorStop(1, hexA(theme.base, 0.34 + f * 0.24));
+        fill.addColorStop(0, hexA(theme.light, 0.55));
+        fill.addColorStop(1, hexA(theme.base, 0.42 + f * 0.22));
       }
       path(pts);
       g.fillStyle = fill;
@@ -109,30 +108,31 @@ export function startOrb(el, variant, getState, getLevel, SIZE = 168) {
           g.moveTo(C, C);
           g.arc(C, C, radius, a - 0.05, a + 0.05);
           g.closePath();
-          g.fillStyle = 'rgba(255,255,255,0.07)';
+          g.fillStyle = 'rgba(255,255,255,0.16)';
           g.fill();
         }
         g.restore();
       }
 
-      // Rims: a bright edge with a darker line just inside — the cut-glass look.
+      // Rims: a coloured edge (it has to show on white) with a bright line just inside —
+      // the cut-glass look.
       path(pts);
       g.lineJoin = 'round';
-      g.strokeStyle = hexA(theme.rim, 0.95);
-      g.lineWidth = isCore ? 1.4 : 1.8;
+      g.strokeStyle = hexA(theme.deep, isCore ? 0.7 : 0.6);
+      g.lineWidth = isCore ? 1.3 : 1.5;
       g.stroke();
-      path(layerPoints(theme, C, C, radius * 0.985, rotation, energy * (1 - f), wobble, 72));
-      g.strokeStyle = hexA(theme.deep, 0.55);
-      g.lineWidth = 0.8;
+      path(layerPoints(theme, C, C, radius * 0.975, rotation, energy * (1 - f), wobble, 72));
+      g.strokeStyle = hexA(theme.rim, 0.95);
+      g.lineWidth = 1.1;
       g.stroke();
     }
 
     // The small shaped opening at the centre.
     const hole = layerPoints(theme, C, C, C * 0.055 * (1 + energy * 0.3), spin * 2, 0, 0, 48);
     path(hole);
-    g.fillStyle = hexA(theme.bg, 0.55);
+    g.fillStyle = '#ffffff';
     g.fill();
-    g.strokeStyle = hexA(theme.rim, 0.9);
+    g.strokeStyle = hexA(theme.deep, 0.8);
     g.lineWidth = 1;
     g.stroke();
     g.restore();

@@ -117,7 +117,9 @@ export default function RoleAssistant({ kind = 'pharmacy', accent = '#0f766e', l
               )}
               {thread.map((m, i) => (
                 <div key={i} style={m.role === 'me' ? { ...S.me, background: accent } : S.ai}>
-                  {m.role === 'ai' ? <AiMarkdown text={voiceMode && i === thread.length - 1 ? reveal.visible(m.text) : m.text} /> : m.text}
+                  {m.role === 'ai' ? (voiceMode && i === thread.length - 1 && !reveal.visible(m.text)
+                    ? <span style={{ color: '#64748b' }}>Thinking…</span>
+                    : <AiMarkdown text={voiceMode && i === thread.length - 1 ? reveal.visible(m.text) : m.text} />) : m.text}
                   {m.people?.length > 1 ? (
                     <div style={S.chips}>{m.people.map((p) => (
                       <button key={p.id} type="button" style={S.chip} onClick={() => ask(`Tell me about ${p.name} (${p.hint})`)}>{p.name} · {p.hint}</button>

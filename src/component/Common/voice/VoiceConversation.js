@@ -3,7 +3,7 @@ import { Mic, MicOff, X } from 'lucide-react';
 import AudioIo from './audioIo';
 import { speak, transcribe } from './speechApi';
 import { classifyTurn, pickBackchannel, ALL_BACKCHANNELS } from './voiceTurn';
-import { chooseAck, ALL_PHRASES, DIDNT_CATCH, NO_CONNECTION } from './voiceAcks';
+import { chooseAck, pickPhrase, ALL_PHRASES, DIDNT_CATCH, NO_CONNECTION, THINKING, STILL_THINKING } from './voiceAcks';
 import VoiceOrb from './VoiceOrb';
 import { pickOrbTheme } from './orbThemes';
 
@@ -104,7 +104,24 @@ const VoiceConversation = forwardRef(function VoiceConversation(
   const lastBackchannel = useRef(null);
   const asideUntil = useRef(0);
 
-  const go = (p) => { phaseRef.current = p; setPhase(p); };
+  // Spoken waiting: while the answer is being worked out and nothing is being said, say so —
+  // a silent pause sounds like it has stopped. At most two phrases a turn (see voiceAcks).
+  const WAIT_FIRST_MS = 2500;
+  const WAIT_AGAIN_MS = 7000;
+  const waitSaid = useRef(0);
+  const waitTimer = useRef(null);
+  const lastWait = useRef(null);
+  const waitCheckRef = useRef(() => {});
+
+  const go = (p) => {
+    phaseRef.current = p;
+    setPhase(p);
+    clearTimeout(waitTimer.current);
+    if (p === 'thinking' && waitSaid.current < 2) {
+      waitTimer.current = setTimeout(() => waitCheckRef.current(),
+        waitSaid.current === 0 ? WAIT_FIRST_MS : WAIT_AGAIN_MS);
+    }
+  };
 
   // ── Listening ─────────────────────────────────────────────────────────────────────────
 
@@ -153,6 +170,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
   };
 
   const resetReply = () => {
+    waitSaid.current = 0;
     replyBuf.current = '';
     spokenChars.current = 0;
     capped.current = false;
@@ -220,6 +238,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
     const ack = chooseAck(text, lastAck.current);
     if (ack) {
       lastAck.current = ack;
+      waitSaid.current = 1;   // the acknowledgement already says it is working on it
       speakPhrase(ack);
     }
     if (phaseRef.current === 'transcribing') go('thinking');
@@ -347,6 +366,16 @@ const VoiceConversation = forwardRef(function VoiceConversation(
       // Follows the echo both ways, slowly, so a loud passage of the reply raises the bar.
       b.echo += (db - b.echo) * 0.05;
     }
+  };
+
+  // Still thinking, nothing playing and no part of the answer queued yet: say a waiting phrase.
+  waitCheckRef.current = () => {
+    if (!alive.current || phaseRef.current !== 'thinking' || playing.current) return;
+    if (clips.current.length || spokenChars.current > 0 || replyDone.current || ignoreReply.current) return;
+    const phrase = pickPhrase(waitSaid.current === 0 ? THINKING : STILL_THINKING, lastWait.current);
+    waitSaid.current += 1;
+    lastWait.current = phrase;
+    if (!speakPhrase(phrase)) go('thinking'); // not synthesised: keep the next check scheduled
   };
 
   const onMeterRef = useRef(onMeter);
@@ -516,6 +545,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
     return () => {
       onVoiceText?.({ type: 'all' });
       alive.current = false;
+      clearTimeout(waitTimer.current);
       ignoreReply.current = true;
       clips.current = [];
       audio.stop();
@@ -607,8 +637,12 @@ export function useVoiceReveal(active) {
     const v = sched.current;
     if (v.all) return Infinity;
     if (v.stopped) return v.base;
-    // Safety net: if the voice has gone quiet for long (synthesis failing), stop holding back.
-    if (Date.now() - v.at > 8000) return Infinity;
+    // Safety net, only once the voice has begun: if it then goes quiet for a long time after the
+    // sentence it was saying (synthesis stuck), stop holding the words back. It used to count
+    // from the question, so any answer the model took more than 8 s to start was shown as text
+    // before a word of it was spoken. Before the first sentence nothing is shown: a sentence
+    // that fails to synthesise is reported at once, and done or error releases everything.
+    if (v.len > 0 && Date.now() - (v.start + v.ms) > 12000) return Infinity;
     const elapsed = Date.now() - v.start;
     const marks = v.marks;
     if (marks && marks.length > 1) {

@@ -588,7 +588,9 @@ export default function AiChat({ clinician = false, embedded = false }) {
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#854d0e',
                               marginBottom: '0.35rem' }}>{m.disclaimer}</div>
               ) : null}
-              {(m.streaming || m.pending) && !m.content ? (
+              {/* In voice mode the words wait for the voice; until it starts, say it is thinking
+                  rather than show an empty bubble. */}
+              {((m.streaming || m.pending) && !m.content) || (voiceMode && i === messages.length - 1 && m.content && !reveal.visible(m.content)) ? (
                 /* `pending` is the document-reading path. It used to be checked
                    nowhere, so uploading an image showed no indicator at all —
                    the screen simply sat there for the ten-odd seconds the read
