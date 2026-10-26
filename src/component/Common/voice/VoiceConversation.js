@@ -5,6 +5,7 @@ import { speak, transcribe } from './speechApi';
 import { classifyTurn, pickBackchannel, ALL_BACKCHANNELS } from './voiceTurn';
 import { chooseAck, ALL_PHRASES, DIDNT_CATCH, NO_CONNECTION } from './voiceAcks';
 import VoiceOrb from './VoiceOrb';
+import { pickOrbTheme } from './orbThemes';
 
 /**
  * Hands-free conversation with the assistant — the web port of the Bankai care VoiceDock.
@@ -76,6 +77,8 @@ const VoiceConversation = forwardRef(function VoiceConversation(
   const [phase, setPhase] = useState('warming');
   const [caption, setCaption] = useState('Getting ready…');
   const [heard, setHeard] = useState('');
+  // A different orb design for each conversation.
+  const [orbVariant] = useState(pickOrbTheme);
   const phaseRef = useRef('warming');
   const levelRef = useRef(0);
   const io = useRef(null);
@@ -568,7 +571,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
 
   return (
     <div style={S.dock} role="region" aria-label={`${title} voice conversation`}>
-      <VoiceOrb state={orbState} levelRef={levelRef} onPress={onOrb} accent={accent} />
+      <VoiceOrb state={orbState} levelRef={levelRef} onPress={onOrb} variant={orbVariant} />
       <div style={S.status} aria-live="polite">{statusLine}</div>
       <div style={S.hint}>{hint}</div>
       <div style={S.controls}>
