@@ -3,7 +3,7 @@ import { Mic, MicOff, X } from 'lucide-react';
 import AudioIo from './audioIo';
 import { speak, transcribe } from './speechApi';
 import { classifyTurn, pickBackchannel, ALL_BACKCHANNELS } from './voiceTurn';
-import { chooseAck, pickPhrase, ALL_PHRASES, DIDNT_CATCH, NO_CONNECTION, THINKING, STILL_THINKING } from './voiceAcks';
+import { chooseAck, pickPhrase, isSmallTalk, ALL_PHRASES, DIDNT_CATCH, NO_CONNECTION, THINKING, STILL_THINKING } from './voiceAcks';
 import VoiceOrb from './VoiceOrb';
 import { pickOrbTheme } from './orbThemes';
 
@@ -241,6 +241,8 @@ const VoiceConversation = forwardRef(function VoiceConversation(
       waitSaid.current = 1;   // the acknowledgement already says it is working on it
       speakPhrase(ack);
     }
+    // "Hi" or "thanks" is answered at once; a waiting phrase over it would be absurd.
+    if (isSmallTalk(text)) waitSaid.current = 2;
     if (phaseRef.current === 'transcribing') go('thinking');
     onUtterance?.(text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,7 +250,8 @@ const VoiceConversation = forwardRef(function VoiceConversation(
 
   // "Mm-hmm." while still listening. Not queued with the reply: the person is mid-turn.
   const playAside = async (phrase) => {
-    const clip = await ackAudio.current[phrase];
+    // Only if it is ready now: a late "mm-hmm" would land on the person's next words.
+    const clip = await within(ackAudio.current[phrase], 200);
     if (!clip?.buffer || !alive.current || phaseRef.current !== 'listening') return;
     try {
       const { seconds } = io.current.play(clip.buffer);
@@ -349,6 +352,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
   };
 
   const detectBargeIn = (db) => {
+    if (deviceSpeaking.current) return;   // its own voice is not cancelled: tap to interrupt
     const b = barge.current;
     const now = Date.now();
     if (b.echo === null) b.echo = roomFloor.db ?? QUIET_ROOM_DB;
@@ -387,6 +391,42 @@ const VoiceConversation = forwardRef(function VoiceConversation(
     .then(async ({ bytes, marks }) => ({ buffer: await io.current.decode(bytes), marks }))
     .catch(() => null);
 
+  // How long to wait for the natural voice before the device's own voice says it instead.
+  // A short phrase must be instant; a sentence of the answer can wait a little longer.
+  const PHRASE_WAIT_MS = 350;
+  const SENTENCE_WAIT_MS = 4500;
+  const within = (promise, ms) => Promise.race([promise, new Promise((r) => setTimeout(() => r(null), ms))]);
+
+  /**
+   * The device's own voice (the browser's speech synthesis). Used when the natural voice is not
+   * ready in time — the speech provider can be busy — so the answer is always spoken, never
+   * left as text alone. It plays outside the echo canceller's reference, so talking over it is
+   * not detected; tapping the orb still interrupts.
+   */
+  const deviceSpeaking = useRef(false);
+  const deviceVoice = useRef(null);
+  const sayOnDevice = (text) => {
+    const synth = window.speechSynthesis;
+    if (!synth || !window.SpeechSynthesisUtterance) return null;
+    if (!deviceVoice.current) {
+      const voices = synth.getVoices();
+      deviceVoice.current = voices.find((v) => /en[-_](GB|US)/i.test(v.lang) && /female|samantha|google uk|karen|serena/i.test(v.name))
+        || voices.find((v) => /^en/i.test(v.lang)) || null;
+    }
+    const u = new window.SpeechSynthesisUtterance(text);
+    if (deviceVoice.current) u.voice = deviceVoice.current;
+    u.rate = 1.02;
+    const ended = new Promise((resolve) => { u.onend = resolve; u.onerror = resolve; });
+    deviceSpeaking.current = true;
+    synth.cancel();
+    synth.speak(u);
+    return { ms: (text.length / CHARS_PER_SECOND) * 1000, ended: ended.then(() => { deviceSpeaking.current = false; }) };
+  };
+  const stopDeviceVoice = () => {
+    deviceSpeaking.current = false;
+    try { window.speechSynthesis?.cancel(); } catch { /* nothing playing */ }
+  };
+
   const afterSpeaking = () => {
     if (!alive.current || ignoreReply.current) return;
     if (replyDone.current && clips.current.length === 0) {
@@ -403,11 +443,21 @@ const VoiceConversation = forwardRef(function VoiceConversation(
     if (!next) { afterSpeaking(); return; }
     playing.current = true;
     if (phaseRef.current === 'speaking') go('thinking');
-    const clip = await next.audio;
+    const clip = await within(next.audio, next.keep ? PHRASE_WAIT_MS : SENTENCE_WAIT_MS);
     if (!alive.current || ignoreReply.current) { playing.current = false; return; }
     if (!clip?.buffer) {
-      // One sentence failed to synthesise: show it at once and carry on.
-      if (next.reply) onVoiceText?.({ type: 'chunk', text: next.text, ms: 0 });
+      // The natural voice is not ready (or failed): say it with the device's voice instead.
+      const said = sayOnDevice(next.text.trim());
+      if (!said) {
+        if (next.reply) onVoiceText?.({ type: 'chunk', text: next.text, ms: 0 });
+        playing.current = false;
+        playNext();
+        return;
+      }
+      if (phaseRef.current !== 'speaking') go('speaking');
+      if (next.reply) onVoiceText?.({ type: 'chunk', text: next.text, ms: said.ms });
+      await said.ended;
+      if (ignoreReply.current) return;
       playing.current = false;
       playNext();
       return;
@@ -473,6 +523,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
     clips.current = [];
     playing.current = false;
     io.current?.stopPlayback();
+    stopDeviceVoice();
     if (byVoice && io.current) {
       // Already talking: their turn starts now, from just before they began.
       turnSeq.current += 1;
@@ -537,9 +588,14 @@ const VoiceConversation = forwardRef(function VoiceConversation(
         return;
       }
       if (!alive.current) return;
-      // Every acknowledgement synthesised up front: they must be instant when needed.
+      // Every acknowledgement synthesised up front, ONE AT A TIME: sending them all together
+      // made the speech provider answer "busy" to everything, the reply included. The server
+      // keeps them, so after the first session these come back at once. Until a phrase is
+      // ready, the device's voice says it.
+      let chain = Promise.resolve();
       for (const phrase of [...ALL_PHRASES, ...ALL_BACKCHANNELS]) {
-        ackAudio.current[phrase] = fetchClip(phrase);
+        chain = chain.then(() => (alive.current ? fetchClip(phrase) : null));
+        ackAudio.current[phrase] = chain;
       }
     })();
     return () => {
@@ -548,6 +604,7 @@ const VoiceConversation = forwardRef(function VoiceConversation(
       clearTimeout(waitTimer.current);
       ignoreReply.current = true;
       clips.current = [];
+      stopDeviceVoice();
       audio.stop();
       io.current = null;
     };
