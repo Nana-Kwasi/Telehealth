@@ -27,6 +27,7 @@ export default function TransferPatientModal({ open, onClose, onSent, patient, r
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [ai, setAi] = useState({ busy: false, used: false, auditId: null, message: '' });
+  const [checked, setChecked] = useState(false);
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [sending, setSending] = useState(false);
@@ -82,6 +83,7 @@ export default function TransferPatientModal({ open, onClose, onSent, patient, r
         currentMedications: r.draft.currentMedications || f.currentMedications,
         activeIssues: r.draft.activeIssues || f.activeIssues,
       }));
+      setChecked(false);
       setAi({ busy: false, used: true, auditId: r.aiAuditId || null, message: 'Drafted from the record — check and edit it before sending.' });
     } catch (e) {
       setAi({ busy: false, used: ai.used, auditId: ai.auditId, message: e.message || 'Could not draft the summary.' });
@@ -111,7 +113,7 @@ export default function TransferPatientModal({ open, onClose, onSent, patient, r
         neededSpecialty: isDoctor ? form.neededSpecialty : null,
         neededFormat: isDoctor ? null : form.neededFormat,
         neededFocus: isDoctor ? [] : form.neededFocus,
-        aiAssisted: ai.used, aiAuditId: ai.auditId,
+        aiAssisted: ai.used, aiAuditId: ai.auditId, checkedAgainstRecord: checked,
       });
       onSent?.(t);
       onClose();
@@ -214,6 +216,12 @@ export default function TransferPatientModal({ open, onClose, onSent, patient, r
             </button>
             {ai.message ? <span className="ct-meta" style={{ alignSelf: 'center' }}>{ai.message}</span> : null}
           </div>
+          {ai.used ? (
+            <label className="ct-meta" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+              I have checked this AI draft against the patient&apos;s record, and I am responsible for what it says.
+            </label>
+          ) : null}
 
           {field('clinicalSummary', 'Clinical summary for the receiving clinician *', (
             <textarea id="ct-clinicalSummary" style={{ minHeight: 120 }} value={form.clinicalSummary} onChange={(e) => set('clinicalSummary', e.target.value)} />

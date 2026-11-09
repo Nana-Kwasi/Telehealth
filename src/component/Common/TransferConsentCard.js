@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { getStoredUserId } from '../../services/apiClient';
-import { consentToTransfer, fmtWhen, getTransfer, listTransfers } from '../../services/careTransfers';
+import { askToReconsider, consentToTransfer, fmtWhen, getTransfer, listTransfers } from '../../services/careTransfers';
 import './CareTransfers.css';
 
 /**
@@ -10,6 +10,8 @@ import './CareTransfers.css';
  * The exact consent wording comes from the server and is what gets stored with
  * the decision (with its time), so what the patient reads is what they agreed to.
  */
+const REVIEW_DAYS_MS = 21 * 86400000;
+
 export default function TransferConsentCard({ kind }) {
   const me = getStoredUserId();
   const [pending, setPending] = useState([]);
@@ -22,7 +24,7 @@ export default function TransferConsentCard({ kind }) {
       setPending(await Promise.all(waiting.map((t) => getTransfer(t.id).catch(() => t))));
       const weekAgo = Date.now() - 7 * 86400000;
       setRecent(rows.find((t) => ['AWAITING_RECIPIENT', 'REJECTED_AWAITING_REASSIGN'].includes(t.status)
-        || (t.status === 'COMPLETED' && new Date(t.completedAt).getTime() > weekAgo)) || null);
+        || (t.status === 'COMPLETED' && new Date(t.completedAt).getTime() > (t.autoReassigned ? Date.now() - REVIEW_DAYS_MS : weekAgo))) || null);
     } catch {
       setPending([]);
     }
@@ -39,6 +41,7 @@ export default function TransferConsentCard({ kind }) {
             : recent.status === 'AWAITING_RECIPIENT'
               ? `You agreed to transfer your care to ${recent.toName}. We are waiting for them to accept and will let you know.`
               : 'Your transfer is still in progress: we are arranging another clinician and will let you know who.'}
+          <ReconsiderTransfer t={recent} onDone={load} />
         </div>
       ) : null}
     </>
@@ -90,5 +93,41 @@ function ConsentRequest({ t, onDone }) {
       </div>
       <p className="ct-meta" style={{ marginTop: 8 }}>Your answer is saved with the date and time and appears in your consent history in Settings.</p>
     </section>
+  );
+}
+
+/** An automatic move can be looked at again by a person, within 21 days. */
+function ReconsiderTransfer({ t, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (t.status !== 'COMPLETED' || !t.autoReassigned) return null;
+  if (t.reconsiderationRequestedAt) {
+    return <p className="ct-meta" style={{ marginTop: 8 }}>You asked for a review. NessaHub will reply to you in writing within 21 days.</p>;
+  }
+  if (new Date(t.completedAt).getTime() <= Date.now() - REVIEW_DAYS_MS) return null;
+
+  const send = async () => {
+    setBusy(true); setError('');
+    try { await askToReconsider(t.id, note); onDone(); }
+    catch (e) { setError(e.message || 'Your request could not be sent. Please try again.'); setBusy(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <p className="ct-meta">This was decided automatically because no clinician confirmed in time. You can ask a person to reconsider it.</p>
+      {open ? (
+        <div className="ct-field">
+          <label htmlFor={`ct-review-${t.id}`}>Anything you would like us to know (optional)</label>
+          <textarea id={`ct-review-${t.id}`} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+      ) : null}
+      {error ? <div className="ct-error">{error}</div> : null}
+      <button type="button" className="ct-btn" disabled={busy} onClick={open ? send : () => setOpen(true)}>
+        {open ? 'Send request' : 'Ask for a review'}
+      </button>
+    </div>
   );
 }

@@ -45,8 +45,8 @@ export default function SymptomTriage() {
         <div style={{ minWidth: 0 }}>
           <h2 style={S.title}>Not sure where to start?</h2>
           <p style={S.sub}>
-            Describe what is going on and we will suggest how soon to be seen and
-            by whom. This is not a diagnosis.
+            Describe what is going on and we will check it for emergency warning
+            signs. This is not a diagnosis.
           </p>
         </div>
       </header>
@@ -66,7 +66,7 @@ export default function SymptomTriage() {
         disabled={busy || !text.trim()}
       >
         {busy ? <Loader size={15} /> : <ArrowRight size={15} />}
-        {busy ? 'Checking…' : 'Check where to start'}
+        {busy ? 'Checking…' : 'Check for warning signs'}
       </button>
 
       {error ? <p style={S.error}>{error}</p> : null}

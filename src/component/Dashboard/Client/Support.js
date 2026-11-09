@@ -512,10 +512,9 @@ export default function ClientSupport() {
 
   const crisisHotlines = [
     { name: 'National Emergency — 112', desc: 'Police, ambulance & fire — 24/7 toll-free', href: 'tel:112', color: '#dc2626' },
-    { name: 'Mental Health Authority Helpline', desc: '0509 405 480 — 24/7 crisis counselling', href: 'tel:+233509405480', color: '#7c3aed' },
-    { name: 'Suicide Prevention (Ghana)', desc: '0244 846 701 — trained volunteers', href: 'tel:+233244846701', color: '#0ea5e9' },
+    { name: 'Mental Health Authority Helpline', desc: '0800 678 678 — toll-free, 24/7', href: 'tel:0800678678', color: '#7c3aed' },
     { name: 'National Ambulance — 193', desc: 'Ambulance dispatch, nationwide', href: 'tel:193', color: '#ea580c' },
-    { name: 'NAMI Helpline', desc: '1-800-950-6264 (Mon–Fri)', href: 'tel:18009506264', color: '#16a34a' },
+    { name: 'Accra Psychiatric Hospital', desc: '0302 228 688 — emergency psychiatric care', href: 'tel:+233302228688', color: '#16a34a' },
   ];
 
   return (

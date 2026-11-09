@@ -16,6 +16,7 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
   const [patients, setPatients] = useState([]);
   const [form, setForm] = useState({ patientId: '', specialty: '', reason: '' });
   const [packet, setPacket] = useState(null);
+  const [checked, setChecked] = useState(false);
   const [proposed, setProposed] = useState(null);
   const [auditId, setAuditId] = useState(null);
   const [busy, setBusy] = useState('');
@@ -90,6 +91,7 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
       if (!res?.ok) { writeManually(res?.message); return; }
       setPacket(res.packet);
       setProposed(JSON.stringify(res.packet));
+      setChecked(false);
       setAuditId(res.aiAuditId || null);
     } catch (e) {
       writeManually(e?.message);
@@ -119,6 +121,7 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
           submit,
           aiAssisted: Boolean(auditId),
           aiAuditId: auditId,
+          checkedAgainstRecord: checked,
           aiEdited: auditId ? JSON.stringify(packet) !== proposed : null,
           recipientId: sendMode === 'clinician' ? recipient?.id || null : null,
           recipientEmail: sendMode === 'email' ? recipientEmail.trim() || null : null,
@@ -221,6 +224,13 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
           {field('relevantHistory', 'Relevant history', History)}
           {field('currentMedications', 'Current medications', Pill, 2)}
           {field('relevantResults', 'Relevant results', FlaskConical)}
+
+          {auditId ? (
+          <label className="rf-hint" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+            I have checked this AI draft against the patient&apos;s record, and I am responsible for what it says.
+          </label>
+          ) : null}
 
           <div className="rf-sendto">
             <label className="rf-label" style={{ marginTop: 0 }}><Send size={14} /> Send to</label>

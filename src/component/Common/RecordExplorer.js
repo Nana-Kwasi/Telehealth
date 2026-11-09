@@ -135,7 +135,7 @@ export default function RecordExplorer({ subjectId = null, title = 'Records' }) 
               Back to the full timeline
             </button>
           </div>
-          {result.summary ? <p className="rx-summary">{result.summary}</p> : null}
+          {result.summary ? <p className="rx-summary">{result.summary}<br /><small>AI summary of the entries below. Check it against them.</small></p> : null}
           <div className="rx-entries">
             {(result.entries || []).map((e, i) => <Row key={i} entry={e} />)}
           </div>

@@ -467,6 +467,16 @@ export default function AiChat({ clinician = false, embedded = false }) {
 
   if (loading) return <div style={{ padding: '2rem', color: '#64748b' }}>Loading…</div>;
 
+  if (status?.available && status.consentRequired) {
+    return (
+      <AiConsentPanel
+        text={status.consentText}
+        emergencyNumber={status.emergencyNumber}
+        onAgreed={() => setStatus((s) => ({ ...s, consentRequired: false }))}
+      />
+    );
+  }
+
   if (status && !status.available) {
     return (
       <div style={{ padding: '2rem', maxWidth: 780 }}>
@@ -837,3 +847,40 @@ function ThinkingLine({ reading = false }) {
 const bookingNote = { fontSize: '0.8rem', color: '#64748b', marginTop: '0.6rem', fontStyle: 'italic' };
 
 const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1.25rem' };
+
+/** Shown once, before a patient's or client's first use of the assistant. */
+function AiConsentPanel({ text, emergencyNumber, onAgreed }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const agree = async () => {
+    setBusy(true); setError('');
+    try {
+      await api('/api/v1/ai/consent', { method: 'POST', body: { platform: 'web' } });
+      onAgreed();
+    } catch (e) {
+      setError(e?.message || 'That could not be saved. Please try again.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section style={{ padding: '1.25rem', maxWidth: 560, margin: '0 auto', color: '#334155', lineHeight: 1.55 }}>
+      <h2 style={{ margin: '0 0 0.6rem', fontSize: '1.1rem', color: '#0f172a' }}>Before you use the assistant</h2>
+      <p style={{ margin: '0 0 0.8rem', fontSize: '0.92rem' }}>{text}</p>
+      <p style={{ margin: '0 0 1rem', fontSize: '0.85rem' }}>
+        In an emergency call <strong>{emergencyNumber || '112'}</strong>.
+      </p>
+      {error ? <p role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem' }}>{error}</p> : null}
+      <button
+        type="button"
+        onClick={agree}
+        disabled={busy}
+        style={{ padding: '0.6rem 1.2rem', borderRadius: 8, border: 'none', background: '#4338ca',
+                 color: '#fff', fontWeight: 700, cursor: busy ? 'default' : 'pointer' }}
+      >
+        {busy ? 'Saving…' : 'I agree'}
+      </button>
+    </section>
+  );
+}

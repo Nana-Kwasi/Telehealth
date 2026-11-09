@@ -23,6 +23,7 @@ const CONTEXT_LABELS = {
   second_opinion: 'Second opinion',
   in_call: 'During a session',
   care_transfer: 'Transfer of care',
+  ai_assistant: 'AI assistant',
 };
 
 /** Where to read the document behind a consent, when there is one. */

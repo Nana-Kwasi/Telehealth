@@ -2175,18 +2175,11 @@ export default function ClientHome({ profile }) {
                   <div className="hotline-desc">Police, ambulance & fire · 24/7 toll-free</div>
                 </div>
               </a>
-              <a className="hotline-card" href="tel:+233509405480">
+              <a className="hotline-card" href="tel:0800678678">
                 <div className="hotline-icon">📞</div>
                 <div>
                   <div className="hotline-name">Mental Health Authority Helpline</div>
-                  <div className="hotline-desc">0509 405 480 · 24/7 crisis counselling</div>
-                </div>
-              </a>
-              <a className="hotline-card" href="tel:+233244846701">
-                <div className="hotline-icon">💚</div>
-                <div>
-                  <div className="hotline-name">Suicide Prevention (Ghana)</div>
-                  <div className="hotline-desc">0244 846 701 · trained volunteers</div>
+                  <div className="hotline-desc">0800 678 678 · toll-free, 24/7</div>
                 </div>
               </a>
               <a className="hotline-card" href="tel:193">
@@ -2196,11 +2189,11 @@ export default function ClientHome({ profile }) {
                   <div className="hotline-desc">Ambulance dispatch, nationwide</div>
                 </div>
               </a>
-              <a className="hotline-card" href="tel:+233302666987">
+              <a className="hotline-card" href="tel:+233302228688">
                 <div className="hotline-icon">🏥</div>
                 <div>
                   <div className="hotline-name">Accra Psychiatric Hospital</div>
-                  <div className="hotline-desc">030 266 6987 · emergency psychiatric care</div>
+                  <div className="hotline-desc">0302 228 688 · emergency psychiatric care</div>
                 </div>
               </a>
             </div>

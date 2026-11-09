@@ -25,6 +25,8 @@ export const transferSuggestions = ({ patientId, specialty, format, focus = [] }
 };
 export const consentToTransfer = (id, agree, declineReason) =>
   api(`/api/v1/care-transfers/${id}/consent`, { method: 'POST', body: { agree, declineReason, platform: 'web' } });
+export const askToReconsider = (id, note) =>
+  api(`/api/v1/care-transfers/${id}/reconsider`, { method: 'POST', body: { note } });
 export const decideTransfer = (id, accept, note) =>
   api(`/api/v1/care-transfers/${id}/decision`, { method: 'POST', body: { accept, note } });
 export const redirectTransfer = (id, toClinicianId) =>

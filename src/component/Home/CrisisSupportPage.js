@@ -7,44 +7,35 @@ export default function CrisisSupportPage() {
     <PublicPageShell
       eyebrow="Safety first"
       title="Crisis support"
-      lead="NessaHub is not an emergency service. If you or someone else is in immediate danger, contact local emergency services right away."
+      lead="NessaHub is not an emergency service. If you or someone else is in immediate danger, call 112 right away."
     >
       <div className="crisis-banner">
         <h2>If this is an emergency</h2>
         <p>
-          Call your local emergency number (e.g. <strong>911</strong> in the US/Canada, <strong>999</strong> in Ghana/UK,
-          <strong>112</strong> in much of the EU). Do not wait for an email reply from our support team.
+          Call <strong>112</strong>, Ghana&apos;s national emergency number, open 24/7. For an ambulance you can also call{' '}
+          <strong>193</strong>. Do not wait for an email reply from our support team.
         </p>
       </div>
 
       <div className="public-card">
-        <h2>United States — 988</h2>
+        <h2>Mental Health Authority helpline</h2>
         <p style={{ marginBottom: '1rem' }}>
-          The <strong>988 Suicide &amp; Crisis Lifeline</strong> offers free, confidential support 24/7 by phone or chat.
-          NessaHub is not affiliated with 988; we list it as a trusted public resource.
+          Ghana&apos;s Mental Health Authority runs a toll-free helpline, open 24/7, for anyone in distress, including
+          if you are having thoughts of suicide. NessaHub is not affiliated with the Authority.
         </p>
         <div className="hotline-card">
-          <span>Call or text</span>
-          <a href="tel:988">988</a>
-          <a href="https://988lifeline.org/" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-            988lifeline.org ↗
-          </a>
+          <span>Call free</span>
+          <a href="tel:0800678678">0800 678 678</a>
         </div>
       </div>
 
       <div className="public-card">
-        <h2>International</h2>
-        <p style={{ marginBottom: '0.75rem' }}>
-          Find helplines by country via the international association for suicide prevention directory.
-        </p>
-        <a
-          href="https://www.iasp.info/resources/Crisis_Centres/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="public-btn public-btn-ghost"
-        >
-          IASP crisis centres directory ↗
-        </a>
+        <h2>Accra Psychiatric Hospital</h2>
+        <p style={{ marginBottom: '1rem' }}>Emergency psychiatric care, on Castle Road, Accra.</p>
+        <div className="hotline-card">
+          <span>Emergencies</span>
+          <a href="tel:+233302228688">0302 228 688</a>
+        </div>
       </div>
 
       <div className="public-card">
