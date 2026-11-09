@@ -200,7 +200,7 @@ export async function signInWithEmailOrUsername(identifier, password) {
   // yet. The web ignored this and tried to finish with a null token, so the
   // code was emailed but there was nowhere to type it.
   if (loginData?.twoFactorRequired) {
-    return { twoFactorRequired: true, challengeId: loginData.challengeId, email: loginData.email || email };
+    return { twoFactorRequired: true, challengeId: loginData.challengeId, email: loginData.codeDestination || loginData.email || email };
   }
 
   return finishWebSession(loginData, identifier);

@@ -5,6 +5,7 @@ import HomeCareNurseManageProfile from './HomeCareNurseManageProfile';
 import HomeCareNurseAvailability from './HomeCareNurseAvailability';
 import HomeCareNurseDocuments from './HomeCareNurseDocuments';
 import HomeCareNurseEarnings from './HomeCareNurseEarnings';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import './HomeCareNurseDashboard.css';
 
 const TABS = [
@@ -12,6 +13,7 @@ const TABS = [
   { id: 'availability', label: 'Availability' },
   { id: 'documents', label: 'Documents' },
   { id: 'earnings', label: 'Earnings' },
+  { id: 'security', label: 'Security' },
 ];
 
 export default function HomeCareNurseAccount() {
@@ -36,6 +38,7 @@ export default function HomeCareNurseAccount() {
         {tab === 'availability' ? <HomeCareNurseAvailability embedded /> : null}
         {tab === 'documents' ? <HomeCareNurseDocuments embedded /> : null}
         {tab === 'earnings' ? <HomeCareNurseEarnings embedded /> : null}
+        {tab === 'security' ? <TwoStepSignIn /> : null}
       </div>
     </div>
   );

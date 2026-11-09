@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api, getStoredRefreshToken, storeSession } from '../../../services/apiClient';
+import { TwoStepChannel } from '../../Common/AccountSecurityCards';
 
 /**
  * The super admin's own account: profile, password, two-step sign-in, the
@@ -104,7 +105,7 @@ export default function AdminSettings() {
   const setTwo = (enabled) => act('two', async () => {
     const r = await api('/api/v1/auth/2fa', { method: 'PUT', body: { enabled } });
     setTwoStep({ ...twoStep, enabled: r.enabled });
-    setTwoMsg({ ok: true, text: enabled ? 'On: a code is emailed to you at each sign-in.' : 'Off.' });
+    setTwoMsg({ ok: true, text: enabled ? 'On: a code is sent to you at each sign-in.' : 'Off.' });
   }, setTwoMsg);
 
   const endDevice = (d) => act(`dev-${d.id}`, async () => {
@@ -185,7 +186,7 @@ export default function AdminSettings() {
         </div>
 
         <div>
-          <Card title="Two-step sign-in" sub="After your password, a 6-digit code is emailed to you. A stolen password alone is then not enough.">
+          <Card title="Two-step sign-in" sub="After your password, a 6-digit code is sent to you. A stolen password alone is then not enough.">
             {!twoStep ? <p className="toggle-desc">Loading…</p> : (
               <div className="toggle-row" style={{ borderBottom: 'none', paddingTop: 0 }}>
                 <div className="toggle-info">
@@ -198,6 +199,7 @@ export default function AdminSettings() {
                 </label>
               </div>
             )}
+            {twoStep?.enabled ? <TwoStepChannel /> : null}
             <Note msg={twoMsg} />
           </Card>
 

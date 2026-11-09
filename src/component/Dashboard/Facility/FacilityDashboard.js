@@ -5,6 +5,7 @@ import { auth } from '../../../services/firestoreShim';
 import { api } from '../../../services/apiClient';
 import ForcedPasswordChangeOverlay from '../../Common/ForcedPasswordChangeOverlay';
 import InsuranceNetworks from '../../Common/InsuranceNetworks';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import { ProviderClaims, ProviderPreauthList, PreauthRequestModal, AttachmentLinks, uploadAll } from '../../Common/ProviderInsurance';
 import { money, when, Kpi, Modal, Page, Empty, useLoad } from '../Insurer/insurerUi';
 import '../Pharmacy/PharmacyDashboard.css';
@@ -375,7 +376,7 @@ export default function FacilityDashboard({ profile }) {
   const [facility, setFacility] = useState(null);
   useEffect(() => { api(`${F}/overview`).then(o => setFacility(o.facility)).catch(() => setFacility({ error: true })); }, []);
   const nav = [['/dashboard', 'Overview', '📊'], ['/dashboard/check-in', 'Check in', '🪪'], ['/dashboard/visits', 'Visits', '📋'], ['/dashboard/preauth', 'Pre-authorisation', '✅'],
-    ['/dashboard/claims', 'Insurance claims', '🧾'], ['/dashboard/services', 'Services & prices', '🏷️'], ['/dashboard/staff', 'Staff', '🧑‍⚕️'], ['/dashboard/insurance', 'Insurance networks', '🛡️']];
+    ['/dashboard/claims', 'Insurance claims', '🧾'], ['/dashboard/services', 'Services & prices', '🏷️'], ['/dashboard/staff', 'Staff', '🧑‍⚕️'], ['/dashboard/insurance', 'Insurance networks', '🛡️'], ['/dashboard/security', 'Security', '🔒']];
   const isActive = (p) => (p === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(p));
   const logout = async () => { try { await signOut(auth); navigate('/'); } catch (_) {} };
   if (facility?.error) return <div style={{ padding: '3rem', textAlign: 'center' }}><h2>This account is not linked to a facility.</h2><button type="button" onClick={logout}>Log out</button></div>;
@@ -406,6 +407,7 @@ export default function FacilityDashboard({ profile }) {
           <Route path="/claims" element={<ProviderClaims />} />
           <Route path="/services" element={<Services />} />
           <Route path="/staff" element={<Staff facility={facility} />} />
+          <Route path="/security" element={<Page title="Security"><TwoStepSignIn /></Page>} />
           <Route path="/insurance" element={<div className="pharmacy-page"><InsuranceNetworks accent="#1d4ed8" /></div>} />
         </Routes>
       </main>

@@ -40,6 +40,7 @@ export default function PhoneForSms({ onVerified, embedded = false }) {
     <div style={embedded ? { fontSize: '0.85rem' } : { background: '#f0fdfa', border: '1.5px solid #99f6e4', borderRadius: 12, padding: '0.75rem 0.9rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
       {status.verified && !editing ? (
         <span>📱 Prescription codes and updates are texted to <strong>{status.phone}</strong>.{' '}
+          {status.refillNumber ? <>To ask for a refill, text <strong>REFILL: medicine name</strong> to <strong>{status.refillNumber}</strong>.{' '}</> : null}
           <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', color: '#0f766e', fontWeight: 700, cursor: 'pointer' }}>Change</button>
         </span>
       ) : sentTo ? (

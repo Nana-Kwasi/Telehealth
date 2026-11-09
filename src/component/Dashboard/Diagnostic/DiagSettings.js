@@ -7,6 +7,7 @@ import {
 } from '../../../services/authShim';
 import useAddressAutofill from '../../../hooks/useAddressAutofill';
 import InsuranceNetworks from '../../Common/InsuranceNetworks';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 
 /**
  * Lab / scan Settings — same layout and styles as the pharmacy Settings page
@@ -341,6 +342,7 @@ export default function DiagSettings({ type = 'lab', profile, mode = 'parent' })
 
         {tab === 'security' && (
           <div className="pharmacy-settings-tab-panel" role="tabpanel">
+            <TwoStepSignIn />
             <section className="pharmacy-settings-section pharmacy-settings-section--flush">
               <h2 className="pharmacy-settings-heading">Password</h2>
               <p className="pharmacy-settings-lead">Use a strong password you do not reuse elsewhere. Staff should not share one login.</p>

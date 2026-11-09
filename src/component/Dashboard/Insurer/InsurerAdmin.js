@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { INS, money, when, Kpi, Modal, Page, Empty, useLoad, get, post, patch, downloadCsv } from './insurerUi';
 import Paged from '../../Common/Paged';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 import { PlanPicker } from './InsurerPeople';
 
 const canDo = (me, roles) => me?.staffRole === 'ADMIN' || roles.includes(me?.staffRole);
@@ -227,6 +228,7 @@ export function InsSettings({ me, onChanged }) {
   };
   return (
     <Page title="Settings" sub={`${data.name} (${data.code}) · adapter ${data.adapter}`}>
+      <div style={{ maxWidth: 760, marginBottom: 12 }}><TwoStepSignIn /></div>
       <div className="dx-card" style={{ display: 'grid', gap: 12, maxWidth: 760 }}>
         <div className="dx-field"><label>Where claims are decided</label>
           <select className="dx-select" disabled={!isAdmin} value={data.claimsMode} onChange={e => setData({ ...data, claimsMode: e.target.value })}>

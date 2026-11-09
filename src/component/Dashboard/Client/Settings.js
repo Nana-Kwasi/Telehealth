@@ -47,6 +47,7 @@ import { resolveFileUrl } from '../../../utils/fileUrl';
 
 import ConsentHistory from '../../Common/ConsentHistory';
 import PhoneForSms from '../../Common/PhoneForSms';
+import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
 export default function ClientSettings() {
   const [clientData, setClientData] = useState(null);
   const [authData, setAuthData] = useState(null);
@@ -793,6 +794,7 @@ export default function ClientSettings() {
               </div>
               {/* Verify the number reminders and codes are texted to. */}
               <div style={{ marginBottom: '1.25rem' }}><PhoneForSms /></div>
+              <div style={{ marginBottom: '1.25rem' }}><TwoStepSignIn /></div>
               
               <div className="settings-security">
                 <div className="settings-security-item">

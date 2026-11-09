@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
+import PhoneForSms from './PhoneForSms';
 
 /**
  * Sign-in security, shared by every role's web Settings → Security (the web
@@ -24,7 +25,7 @@ export function TwoStepSignIn() {
     try {
       await api('/api/v1/auth/2fa', { method: 'PUT', body: { enabled: next } });
       setEnabled(next);
-      setMsg(next ? 'On. Next time you sign in we will email you a code.' : 'Off.');
+      setMsg(next ? 'On. Next time you sign in we will send you a code.' : 'Off.');
     } catch (e) {
       setMsg(e?.message || 'Could not update. Please try again.');
     } finally { setBusy(false); }
@@ -35,7 +36,7 @@ export function TwoStepSignIn() {
       <div style={S.row}>
         <div style={{ flex: 1 }}>
           <p style={S.title}>Two-step sign-in</p>
-          <p style={S.desc}>Require a code emailed to you each time you sign in, as well as your password.</p>
+          <p style={S.desc}>Require a code each time you sign in, as well as your password.</p>
         </div>
         <button type="button" role="switch" aria-checked={!!enabled} aria-label="Two-step sign-in"
           disabled={enabled === null || busy} onClick={toggle}
@@ -43,6 +44,56 @@ export function TwoStepSignIn() {
           <span style={{ ...S.knob, transform: enabled ? 'translateX(20px)' : 'translateX(0)' }} />
         </button>
       </div>
+      {enabled ? <TwoStepChannel /> : null}
+      {msg ? <p style={S.note}>{msg}</p> : null}
+    </div>
+  );
+}
+
+/** How the sign-in code reaches this person. Hidden while SMS is not set up. */
+export function TwoStepChannel() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const load = useCallback(() => {
+    api('/api/v1/auth/2fa').then(setState).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (!state?.smsAvailable) return null;
+
+  const choose = async (channel) => {
+    if (channel === state.channel || busy) return;
+    setBusy(true); setMsg('');
+    try {
+      await api('/api/v1/auth/2fa', { method: 'PUT', body: { enabled: true, channel } });
+      setState((s) => ({ ...s, channel }));
+    } catch (e) {
+      setMsg(e?.message || 'Could not update. Please try again.');
+    } finally { setBusy(false); }
+  };
+
+  const option = (channel, label, disabled) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.25rem 0', fontSize: '0.88rem',
+                    color: '#334155', opacity: disabled ? 0.55 : 1 }}>
+      <input type="radio" name="two-step-channel" checked={state.channel === channel}
+        disabled={disabled || busy} onChange={() => choose(channel)} />
+      {label}
+    </label>
+  );
+
+  return (
+    <div style={{ marginTop: '0.75rem' }}>
+      <p style={{ ...S.title, marginBottom: '0.3rem' }}>Send my sign-in code by</p>
+      {option('email', 'Email', false)}
+      {option('sms', state.phone ? `Text message to ${state.phone}` : 'Text message', !state.phoneVerified)}
+      {state.phoneVerified ? null : (
+        <div style={{ marginTop: '0.4rem' }}>
+          <p style={S.desc}>Verify your mobile number to use text messages.</p>
+          <PhoneForSms embedded onVerified={load} />
+        </div>
+      )}
       {msg ? <p style={S.note}>{msg}</p> : null}
     </div>
   );
