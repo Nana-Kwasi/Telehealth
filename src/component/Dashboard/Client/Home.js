@@ -44,6 +44,8 @@ import { resolveFileUrl } from '../../../utils/fileUrl';
 
 import FaqSection from '../../Common/FaqSection';
 import TransferConsentCard from '../../Common/TransferConsentCard';
+import { MyQuestionnaires } from '../../Common/Measures';
+import { MyIntakeForms } from '../../Common/Intake';
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
@@ -1907,6 +1909,8 @@ export default function ClientHome({ profile }) {
     <div className="dashboard-home">
       {/* A transfer to another therapist waiting for this client's consent. */}
       <TransferConsentCard kind="THERAPY" />
+      <MyIntakeForms />
+      <MyQuestionnaires />
       {clientData?.coupleId ? (
         <div
           role="button"

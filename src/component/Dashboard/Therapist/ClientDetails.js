@@ -43,6 +43,10 @@ import {
 import { getNoteSections, getNotePreview, getNoteTitle } from '../../../utils/noteDisplayUtils';
 import Paged from '../../Common/Paged';
 import TransferPatientModal from '../../Common/TransferPatientModal';
+import { MeasuresPanel } from '../../Common/Measures';
+import { RecordGapsBanner, TimelinePanel, MsePanel, DiagnosisPlanPanel, PrivateNotesPanel } from '../../Common/PsychRecord';
+import { ShareIntakeModal, IntakeStatus } from '../../Common/Intake';
+import { AddToWaitlistButton } from '../../Common/PracticePage';
 
 const noteCardStyle = {
   padding: '1.2rem',
@@ -429,6 +433,10 @@ export default function ClientDetails() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareSent, setShareSent] = useState('');
+  const [recordVersion, setRecordVersion] = useState(0);
+  const recordChanged = () => setRecordVersion((v) => v + 1);
 
   // ── Prescribing (psychiatry track only) ────────────────────────────────────
   // Opens the full prescription form (Prescriptions page) with this client
@@ -824,10 +832,10 @@ export default function ClientDetails() {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   };
 
-  const TABS = ['overview', 'sessions', 'notes', 'mood', 'goals',
+  const TABS = ['overview', 'timeline', 'sessions', 'notes', 'measures', 'mse', 'diagnosis', 'private', 'mood', 'goals',
     // Psychiatry: the doctor page's Prescriptions and E-Pharmacy tabs.
     ...(isPsychiatryClient ? ['prescriptions', 'epharmacy'] : [])];
-  const TAB_LABELS = { epharmacy: 'E-Pharmacy' };
+  const TAB_LABELS = { epharmacy: 'E-Pharmacy', mse: 'Mental status', diagnosis: 'Diagnosis & plan', private: 'Private notes' };
 
   if (loading) {
     return (
@@ -873,6 +881,12 @@ export default function ClientDetails() {
       >
         <ArrowLeft size={15} /> Back to Clients
       </button>
+
+      {shareOpen && (
+        <ShareIntakeModal clientId={clientId} clientName={clientName} onClose={() => setShareOpen(false)}
+          onSent={() => { setShareSent(`Forms sent to ${clientName}. They have been notified.`); recordChanged(); }} />
+      )}
+      {shareSent && <div role="status" style={{ background: '#f0fdf4', border: '1px solid #86efac', color: '#166534', borderRadius: 10, padding: '0.6rem 1rem', marginBottom: '1rem', fontSize: '0.875rem' }}>{shareSent}</div>}
 
       <TransferPatientModal
         open={transferOpen}
@@ -929,6 +943,10 @@ export default function ClientDetails() {
 
         {/* ── Action Buttons Row ── */}
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9' }}>
+          <button onClick={() => setShareOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Share forms
+          </button>
+          <AddToWaitlistButton clientId={clientId} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} />
           <button
             onClick={() => setTransferOpen(true)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -1026,6 +1044,9 @@ export default function ClientDetails() {
       <CodingAssistPanel patientId={clientId} />
       {isPsychiatryClient && <AdherencePanel patientId={clientId} />}
 
+      <RecordGapsBanner clientId={clientId} onOpen={setActiveTab} refreshKey={recordVersion} />
+      <IntakeStatus clientId={clientId} refreshKey={recordVersion} />
+
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', background: '#fff', borderRadius: 14, padding: '0.4rem', border: '1px solid #e2e8f0', width: 'fit-content' }}>
         {TABS.map(tab => (
@@ -1046,6 +1067,12 @@ export default function ClientDetails() {
       </div>
 
       {/* ── Tab content ── */}
+
+      {activeTab === 'measures' && <MeasuresPanel clientId={clientId} />}
+      {activeTab === 'timeline' && <TimelinePanel key={recordVersion} clientId={clientId} onAddNote={() => setShowNoteModal(true)} />}
+      {activeTab === 'mse' && <MsePanel clientId={clientId} onSaved={recordChanged} />}
+      {activeTab === 'diagnosis' && <DiagnosisPlanPanel clientId={clientId} onSaved={recordChanged} />}
+      {activeTab === 'private' && <PrivateNotesPanel clientId={clientId} />}
 
       {activeTab === 'prescriptions' && (
         dataSharing.prescriptions === false

@@ -64,6 +64,8 @@ import { RxCoverChip } from '../../Common/RxInsuranceCard';
 import BrandLogo from '../../Common/BrandLogo';
 import ServiceSwitcher from '../../Common/ServiceSwitcher';
 import TransferConsentCard from '../../Common/TransferConsentCard';
+import { MyQuestionnaires } from '../../Common/Measures';
+import { MyIntakeForms } from '../../Common/Intake';
 import PaymentsAndRefunds from '../../Common/PaymentsAndRefunds';
 /** Local YYYY-MM-DD — toISOString() would shift the day across UTC. */
 function ymdLocal(d) {
@@ -432,6 +434,8 @@ function MedPatHome({ profile }) {
     <div className="mp-page">
       {/* A transfer of this patient's care waiting for their consent. */}
       <TransferConsentCard kind="MEDICAL" />
+      <MyIntakeForms />
+      <MyQuestionnaires />
       {/* ── Welcome hero ──────────────────────────────────────────────────
           Was a single cramped row: avatar and greeting squeezed against a
           red-outlined vitals box and a button, with no room for any of them.

@@ -3,6 +3,7 @@ import AiAssistantFab from '../../Common/AiAssistantFab';
 import CarePlanComposer from '../../Common/CarePlanComposer';
 import ReferralComposer from '../../Common/ReferralComposer';
 import TransfersPage from '../../Common/TransfersPage';
+import PracticePage from '../../Common/PracticePage';
 import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -97,6 +98,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/video', icon: Video, label: 'Video Call', component: TherapistVideoCall },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
+    { path: '/dashboard/practice', icon: Clock, label: 'Waitlist & Time Off', component: PracticePage },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     // Psychiatry: prescribing for psychiatry-track clients — the doctor's flow, copied.
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: TherapistPrescriptions },
@@ -235,6 +237,7 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/video" element={<TherapistVideoCall profile={profile} />} />
           <Route path="/appointments" element={<TherapistAppointments />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
+          <Route path="/practice" element={<PracticePage />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/prescriptions" element={<TherapistPrescriptions profile={profile} />} />
           <Route path="/diagnostic-order" element={<TherapistDiagnosticOrder profile={profile} />} />
