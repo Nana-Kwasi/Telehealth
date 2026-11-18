@@ -1,0 +1,95 @@
+/*
+ * Admin layout for pages shared with (or built like) the clinician screens:
+ * Patient Transfers, Finance & Payouts, Provider Applications and Profile
+ * Completeness. Those pages use the clinician `.ct-page` shell, which has no
+ * side padding and a narrow max width, so inside the admin shell everything
+ * sat against the left edge. Scoped to `.admin-main`, so clinician screens are
+ * unchanged.
+ */
+.admin-main .ct-page {
+  width: 100%; max-width: none; box-sizing: border-box;
+  padding: 1.75rem 2rem 2.75rem; gap: 1.25rem;
+}
+.admin-main .ct-page.aa-page { padding-top: 1.75rem; }
+
+/* Page heading: the same as every other admin page. */
+.admin-main .ct-head, .admin-main .aa-pagehead { margin-bottom: 0.25rem; }
+.admin-main .ct-head h2, .admin-main .aa-pagehead h2 {
+  font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; color: #0f172a; margin: 0 0 6px;
+}
+.admin-main .ct-head p, .admin-main .aa-pagehead p { font-size: 0.92rem; line-height: 1.55; color: #64748b; max-width: 760px; }
+
+/* Tabs: one pill track instead of loose buttons. */
+.admin-main .ct-tabs {
+  display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f1f5f9;
+  border-radius: 12px; align-self: flex-start; max-width: 100%;
+}
+.admin-main .ct-tab { border: 0; background: transparent; padding: 0.5rem 1rem; border-radius: 9px; color: #475569; }
+.admin-main .ct-tab:hover { background: rgba(255, 255, 255, 0.7); color: #0f172a; }
+.admin-main .ct-tab.is-active { background: #fff; color: #0f172a; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
+
+/* Cards and sections. */
+.admin-main .ct-card {
+  border-radius: 16px; border-color: #e5e7eb; padding: 1.25rem 1.4rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.admin-main .ct-card > h3 { font-size: 1.05rem; margin: 0 0 0.9rem; }
+.admin-main .ct-card .aa-table-wrap { margin: 0 -1.4rem; }
+.admin-main .ct-card .aa-table th:first-child, .admin-main .ct-card .aa-table td:first-child { padding-left: 1.4rem; }
+.admin-main .ct-card .aa-table th:last-child, .admin-main .ct-card .aa-table td:last-child { padding-right: 1.4rem; }
+.admin-main .ct-list { gap: 12px; }
+.admin-main .ct-section { padding-top: 0.9rem; margin-top: 0.9rem; }
+.admin-main .ct-meta { line-height: 1.5; }
+.admin-main .ct-empty { padding: 2rem 1rem; border-radius: 16px; border: 1px dashed #e2e8f0; }
+.admin-main .ct-status-note { border-radius: 12px; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.admin-main .ct-actions { gap: 0.6rem; }
+
+/* Tables read better with room and right-aligned headers left alone. */
+.admin-main .aa-table th { padding: 12px 14px; }
+.admin-main .aa-table td { padding: 13px 14px; color: #334155; }
+.admin-main .aa-table td:first-child { color: #0f172a; font-weight: 600; }
+.admin-main .ct-page:not(.aa-apps) .aa-table tbody tr { cursor: default; }
+
+/* Finance: period picker as a toolbar, tiles as proper stat cards. */
+.admin-main .af-period {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 0.8rem 1rem; align-self: flex-start;
+}
+.admin-main .af-period label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
+.admin-main .af-period input { border: 1.5px solid #d6dde6; border-radius: 10px; padding: 0.55rem 0.75rem; color: #0f172a; }
+.admin-main .af-tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.admin-main .af-tile {
+  border-radius: 16px; padding: 1.05rem 1.15rem; gap: 6px; border-color: #e5e7eb;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); position: relative; overflow: hidden;
+}
+.admin-main .af-tile.ok, .admin-main .af-tile.warn { border-left-width: 1px; }
+.admin-main .af-tile.ok::before, .admin-main .af-tile.warn::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+.admin-main .af-tile.ok::before { background: #16a34a; }
+.admin-main .af-tile.warn::before { background: #d97706; }
+.admin-main .af-tile-label { font-size: 0.7rem; }
+.admin-main .af-tile-value { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+.admin-main .af-tile-sub { line-height: 1.4; }
+
+/* Provider applications: stats and pipeline breathe. */
+.admin-main .aa-stats { gap: 14px; }
+.admin-main .aa-stat { border-radius: 16px; padding: 1.1rem 1.2rem; }
+.admin-main .aa-card { border-radius: 16px; padding: 1.25rem 1.4rem; }
+
+/* Profile completeness cards. */
+.pr-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.pr-ready-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 1.15rem 1.25rem; display: flex; flex-direction: column; gap: 0.85rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.pr-ready-top { display: flex; align-items: center; gap: 0.85rem; }
+.pr-ready-avatar { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; flex-shrink: 0; }
+.pr-ready-avatar.doctor { background: linear-gradient(135deg, #1e6bb8, #3b82f6); }
+.pr-ready-avatar.therapist { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+.pr-ready-name { flex: 1; min-width: 0; }
+.pr-ready-name strong { display: block; color: #0f172a; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-ready-name span { font-size: 0.8rem; color: #64748b; }
+.pr-ready-missing { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pr-ready-missing li { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 999px; padding: 3px 10px; font-size: 0.78rem; font-weight: 600; }
+.pr-ready-foot { display: flex; justify-content: flex-end; }
+
+@media (max-width: 720px) {
+  .admin-main .ct-page { padding: 1.1rem 1rem 2rem; }
+  .admin-main .ct-card .aa-table-wrap { margin: 0 -1rem; }
+  .pr-ready { grid-template-columns: 1fr; }
+}

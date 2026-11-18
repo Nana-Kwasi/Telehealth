@@ -5,6 +5,15 @@ import AiMarkdown from './AiMarkdown';
 import { Headphones } from 'lucide-react';
 import VoiceConversation, { useVoiceReveal } from './voice/VoiceConversation';
 import { transcribe as voiceTranscribe, voiceAvailable } from './voice/speechApi';
+import { useNavigate } from 'react-router-dom';
+import AddServiceModal from './AddServiceModal';
+import { chooseService } from '../../utils/careServices';
+import { refreshSession } from '../Auth/authService';
+import { getStoredUserId } from '../../services/apiClient';
+
+// A short yes or no to the assistant's offer, typed instead of tapped.
+const YES = /^(yes|yeah|yep|yes please|ok|okay|sure|please|go ahead|proceed|let'?s (do it|go)|i would|i'?d like (that|to))\b[.!]*$/i;
+const NO = /^(no|nope|not now|no thanks|no thank you|maybe later|later)\b[.!]*$/i;
 
 /**
  * Conversational AI assistant for the web, matching the mobile surface.
@@ -37,7 +46,7 @@ const CLINICIAN_SUGGESTIONS = [
   'Help me structure a consultation note',
 ];
 
-export default function AiChat({ clinician = false, embedded = false }) {
+export default function AiChat({ clinician = false, embedded = false, careService = null }) {
   // `embedded` = rendered inside the floating panel rather than as a page.
   // The page version centres itself in a wide column; inside a 440px panel
   // that same padding and max-width leave the composer cramped.
@@ -51,6 +60,12 @@ export default function AiChat({ clinician = false, embedded = false }) {
   // made later in this conversation carries it to the clinician.
   const [intake, setIntake]     = useState(null);
   const [intakeBusy, setIntakeBusy] = useState(false);
+  // "You can see a therapist here too" (or a doctor, from therapy). Offered at
+  // most once per service per conversation; the server decides when.
+  const navigate = useNavigate();
+  const [joinService, setJoinService] = useState(null);
+  const pendingOffer = useRef(null);
+  const offered = useRef(new Set());
   const endRef = useRef(null);
   const fileRef = useRef(null);
 
@@ -281,9 +296,51 @@ export default function AiChat({ clinician = false, embedded = false }) {
       last.content.replace(/[*_#`>|-]+/g, ' ').replace(/\s+/g, ' ').slice(0, 1200)));
   }, [messages, speakReplies, voiceMode]);
 
+  /** Act on the offer: open the sign-up steps, or the dashboard they already have. */
+  const takeOffer = (offer) => {
+    pendingOffer.current = null;
+    if (!offer) return;
+    if (offer.kind === 'switch') {
+      chooseService(getStoredUserId(), offer.service);
+      navigate('/dashboard');
+      refreshSession();
+      return;
+    }
+    setJoinService(offer.service);
+  };
+
+  const resolveOffer = (index, accepted) => {
+    const offer = messages[index]?.offer;
+    setMessages((m) => {
+      const next = [...m];
+      if (next[index]) next[index] = { ...next[index], offerResolved: accepted ? 'yes' : 'no' };
+      return next;
+    });
+    if (accepted) takeOffer(offer); else pendingOffer.current = null;
+  };
+
   const send = async (text) => {
     const message = (text ?? input).trim();
     if (!message || busy) return;
+
+    // A typed answer to the offer the assistant just made.
+    if (pendingOffer.current && (YES.test(message) || NO.test(message))) {
+      const offer = pendingOffer.current;
+      const accepted = YES.test(message);
+      setInput('');
+      setMessages((m) => {
+        const next = m.map((x) => (x.offer === offer ? { ...x, offerResolved: accepted ? 'yes' : 'no' } : x));
+        return [...next, { role: 'user', content: message }, { role: 'assistant', content: accepted
+          ? (offer.kind === 'switch' ? 'Taking you there now.' : 'Great, here is what is left to do. It only takes a few minutes.')
+          : 'No problem. You can ask me about it any time.' }];
+      });
+      if (accepted) takeOffer(offer); else pendingOffer.current = null;
+      return;
+    }
+    pendingOffer.current = null;
+    const offerAsk = !clinician && careService
+      ? api('/api/v1/ai/cross-service-offer', { method: 'POST', body: { message, current: careService } }).catch(() => null)
+      : Promise.resolve(null);
 
     const mine = { role: 'user', content: message };
     const history = [...messages, mine]
@@ -346,6 +403,14 @@ export default function AiChat({ clinician = false, embedded = false }) {
           proposal: p?.proposal || null,   // a suggested booking; nothing exists yet
         });
         setBusy(false); scrollToEnd(); refreshQuota();
+        offerAsk.then((r) => {
+          const offer = r?.offer;
+          if (!offer || offered.current.has(offer.service)) return;
+          offered.current.add(offer.service);
+          pendingOffer.current = offer;
+          setMessages((m) => [...m, { role: 'assistant', content: offer.message, offer }]);
+          scrollToEnd();
+        });
       },
       onError:      (e) => {
         voice?.onError(e?.message);
@@ -647,6 +712,23 @@ export default function AiChat({ clinician = false, embedded = false }) {
                 </div>
               ) : null}
 
+              {m.offer && !m.offerResolved ? (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                  <button onClick={() => resolveOffer(i, true)}
+                    style={{ background: m.offer.service === 'therapy' ? '#7c3aed' : '#1e6bb8', color: '#fff', border: 'none', borderRadius: 999,
+                             padding: '0.55rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
+                    {m.offer.kind === 'switch'
+                      ? `Go to my ${m.offer.service === 'therapy' ? 'therapy' : 'medical'} dashboard`
+                      : m.offer.service === 'therapy' ? 'Yes, find me a therapist' : 'Yes, find me a doctor'}
+                  </button>
+                  <button onClick={() => resolveOffer(i, false)}
+                    style={{ background: '#fff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 999,
+                             padding: '0.55rem 1.1rem', fontWeight: 600, cursor: 'pointer' }}>
+                    Not now
+                  </button>
+                </div>
+              ) : null}
+
               {m.booking === 'sending' ? (
                 <div style={bookingNote}>Sending your request…</div>
               ) : m.booking === 'done' ? (
@@ -751,6 +833,7 @@ export default function AiChat({ clinician = false, embedded = false }) {
             : `${status.remainingRequests} AI requests left this hour`}
         </div>
       ) : null}
+      {joinService ? <AddServiceModal service={joinService} onClose={() => setJoinService(null)} /> : null}
     </div>
   );
 }

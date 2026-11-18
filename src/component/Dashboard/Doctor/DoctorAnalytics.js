@@ -5,8 +5,13 @@ import {
   DollarSign, Users, Calendar, Star,
 } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
-import { collection, query, where, getDocs, doc, getDoc } from '../../../services/firestoreShim';
+import { collection, query, where, getDocs } from '../../../services/firestoreShim';
 import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
+import StatCard, { StatGrid } from '../../Common/StatCard';
+import { api } from '../../../services/apiClient';
+import { Link } from 'react-router-dom';
+
+const GHS = (v) => `GHS ${Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function DoctorAnalytics({ profile }) {
   const [loading, setLoading] = useState(true);
@@ -37,33 +42,26 @@ export default function DoctorAnalytics({ profile }) {
       const reviewsSnap = await getDocs(reviewsQ);
       const reviews = reviewsSnap.docs.map(d => d.data());
 
-      // The doctor's consultation fee (appointment rows don't carry a fee).
-      let fee = 0;
-      try {
-        const docSnap = await getDoc(doc(db, 'doctors', profile.id));
-        const dd = docSnap.exists() ? docSnap.data() : {};
-        fee = Number(dd.consultationFee);
-        if (!Number.isFinite(fee)) fee = Number(JSON.parse(dd.metadataJson || '{}').consultationFee) || 0;
-      } catch { fee = 0; }
+      // Earnings come from the same summary as the Earnings screen: every paid
+      // booking's price minus NessaHub's commission and any refund. Estimating
+      // "completed appointments × fee" here made the two screens disagree.
+      let summary = null;
+      try { summary = await api('/api/v1/finance/earnings/summary'); } catch { summary = null; }
 
       // Compute stats
       const completed = appts.filter(a => a.status === 'completed');
       const cancelled = appts.filter(a => a.status === 'cancelled');
-      const totalEarnings = completed.length * fee;
+      const totalEarnings = Number(summary?.lifetimeNet || 0);
       const avgRating = reviews.length > 0
         ? reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length
         : 0;
 
       // Group by month
       const monthMap = {};
-      const earningsMap = {};
       appts.forEach(a => {
         if (!a.date) return;
         const month = a.date.substring(0, 7); // YYYY-MM
         monthMap[month] = (monthMap[month] || 0) + 1;
-        if (a.status === 'completed') {
-          earningsMap[month] = (earningsMap[month] || 0) + fee;
-        }
       });
 
       const sortedMonths = Object.keys(monthMap).sort();
@@ -71,10 +69,12 @@ export default function DoctorAnalytics({ profile }) {
         month: new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         count: monthMap[m],
       }));
-      const earningsByMonth = sortedMonths.map(m => ({
-        month: new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-        amount: earningsMap[m] || 0,
-      }));
+      const earningsByMonth = (summary?.earnedByMonth || [])
+        .filter((e, i, all) => Number(e.amount) > 0 || all.slice(0, i).some((x) => Number(x.amount) > 0))
+        .map((e) => ({
+          month: new Date(`${e.month}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          amount: Number(e.amount) || 0,
+        }));
 
       // Group by type
       const typeMap = {};
@@ -129,44 +129,13 @@ export default function DoctorAnalytics({ profile }) {
       <PracticeAnalyticsPanel scope="me" />
 
       {/* Top Stats */}
-      <div className="doctor-stats-grid">
-        <div className="doctor-stat-card">
-          <div className="doctor-stat-icon" style={{ background: '#dcfce7', color: '#16a34a' }}>
-            <DollarSign size={24} />
-          </div>
-          <div>
-            <p className="doctor-stat-value">GHS {stats.totalEarnings.toLocaleString()}</p>
-            <p className="doctor-stat-label">Total Earnings</p>
-          </div>
-        </div>
-        <div className="doctor-stat-card">
-          <div className="doctor-stat-icon" style={{ background: '#e8f1fb', color: '#1e6bb8' }}>
-            <Calendar size={24} />
-          </div>
-          <div>
-            <p className="doctor-stat-value">{stats.totalAppointments}</p>
-            <p className="doctor-stat-label">Total Appointments</p>
-          </div>
-        </div>
-        <div className="doctor-stat-card">
-          <div className="doctor-stat-icon" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
-            <Users size={24} />
-          </div>
-          <div>
-            <p className="doctor-stat-value">{stats.totalPatients}</p>
-            <p className="doctor-stat-label">Total Patients</p>
-          </div>
-        </div>
-        <div className="doctor-stat-card">
-          <div className="doctor-stat-icon" style={{ background: '#fef3c7', color: '#d97706' }}>
-            <Star size={24} />
-          </div>
-          <div>
-            <p className="doctor-stat-value">{stats.avgRating}</p>
-            <p className="doctor-stat-label">Avg Rating ({stats.totalReviews} reviews)</p>
-          </div>
-        </div>
-      </div>
+      <StatGrid>
+        <StatCard icon={DollarSign} tone="green" value={GHS(stats.totalEarnings)} label="Total Earnings"
+          sub={<>After commission and refunds · <Link to="/dashboard/earnings">Earnings</Link></>} />
+        <StatCard icon={Calendar} tone="blue" value={stats.totalAppointments} label="Total Appointments" />
+        <StatCard icon={Users} tone="violet" value={stats.totalPatients} label="Total Patients" />
+        <StatCard icon={Star} tone="amber" value={stats.avgRating} label={`Avg Rating (${stats.totalReviews} reviews)`} />
+      </StatGrid>
 
       <div className="doctor-grid-2">
         {/* Appointments Chart */}
@@ -207,7 +176,7 @@ export default function DoctorAnalytics({ profile }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', height: 180, padding: '0.5rem 0' }}>
               {stats.earningsByMonth.slice(-12).map((m, i) => (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 600 }}>GHS {m.amount}</span>
+                  <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 600 }}>GHS {Math.round(m.amount).toLocaleString()}</span>
                   <div style={{
                     width: '100%', maxWidth: 40, borderRadius: '4px 4px 0 0',
                     background: 'linear-gradient(180deg, #10b981, #059669)',

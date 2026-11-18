@@ -1,0 +1,16 @@
+.svc-back { position: fixed; inset: 0; z-index: 10040; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.svc-card { width: 100%; max-width: 620px; background: #fff; border-radius: 22px; padding: 2rem 1.75rem 1.5rem; box-shadow: 0 30px 80px -20px rgba(15, 23, 42, 0.45); text-align: center; animation: svc-rise 0.22s ease-out; }
+.svc-card h2 { margin: 0; font-size: 1.5rem; color: #0f172a; }
+.svc-card > p { margin: 0.35rem 0 1.4rem; color: #475569; }
+.svc-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.svc-choice { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.55rem; padding: 1.5rem 1rem 1.3rem; border-radius: 18px; border: 2px solid #e2e8f0; background: #fff; cursor: pointer; font: inherit; color: inherit; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+.svc-choice:hover, .svc-choice:focus-visible { transform: translateY(-3px); outline: none; }
+.svc-medical:hover, .svc-medical:focus-visible { border-color: #1e6bb8; box-shadow: 0 14px 30px -18px #1e6bb8; }
+.svc-therapy:hover, .svc-therapy:focus-visible { border-color: #7c3aed; box-shadow: 0 14px 30px -18px #7c3aed; }
+.svc-choice strong { font-size: 1.15rem; color: #0f172a; }
+.svc-choice span { font-size: 0.85rem; color: #64748b; line-height: 1.4; }
+.svc-choice em { position: absolute; top: 10px; right: 12px; font-style: normal; font-size: 0.7rem; font-weight: 700; color: #475569; background: #f1f5f9; border-radius: 999px; padding: 0.1rem 0.55rem; }
+.svc-foot { margin: 1.2rem 0 0; font-size: 0.8rem; color: #94a3b8; }
+@keyframes svc-rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 520px) { .svc-choices { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .svc-card { animation: none; } }

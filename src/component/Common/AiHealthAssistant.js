@@ -8,6 +8,6 @@ import AiChat from './AiChat';
  * is no task picker: someone describing stomach pain should not first have to
  * understand the platform's four service categories.
  */
-export default function AiHealthAssistant() {
-  return <AiChat />;
+export default function AiHealthAssistant({ careService = null }) {
+  return <AiChat careService={careService} />;
 }

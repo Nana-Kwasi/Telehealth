@@ -28,7 +28,7 @@ const CORNER_BUSY = /\/(messages|messaging|staff|chat|calendar|schedule)(\/|$)/i
  * It hides itself entirely when AI is unavailable. A button that opens a panel
  * saying "not available" is worse than no button.
  */
-export default function AiAssistantFab({ clinician = false }) {
+export default function AiAssistantFab({ clinician = false, careService = null }) {
   const { pathname }              = useLocation();
   const [open, setOpen]           = useState(false);
   const [expanded, setExpanded]   = useState(false);
@@ -117,7 +117,7 @@ export default function AiAssistantFab({ clinician = false }) {
             {/* The same AiChat the sidebar route renders. One implementation,
                 so a fix to streaming, documents or booking lands in both. */}
             <div style={S.body}>
-              <AiChat clinician={clinician} embedded />
+              <AiChat clinician={clinician} embedded careService={careService} />
             </div>
           </div>
         </div>

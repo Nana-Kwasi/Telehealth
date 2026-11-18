@@ -30,24 +30,31 @@ export default function AdminProfileReadiness() {
       {rows === null ? <div className="ct-empty">Loading…</div> : rows.length === 0 ? (
         <div className="ct-ok">Every doctor and therapist profile is complete.</div>
       ) : (
-        <div className="ct-list">
-          {rows.map((r) => (
-            <div key={`${r.kind}-${r.id}`} className="ct-card">
-              <div className="ct-card-row">
-                <h3>{r.kind === 'doctor' ? `Dr. ${r.name}` : r.name}</h3>
-                <span className="ct-badge warn">{r.kind === 'doctor' ? 'Doctor' : 'Therapist'} · {r.missing.length} to fix</span>
+        <div className="pr-ready">
+          {rows.map((r) => {
+            const initials = String(r.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+            return (
+              <div key={`${r.kind}-${r.id}`} className="pr-ready-card">
+                <div className="pr-ready-top">
+                  <div className={`pr-ready-avatar ${r.kind}`} aria-hidden>{initials}</div>
+                  <div className="pr-ready-name">
+                    <strong>{r.kind === 'doctor' ? `Dr. ${r.name}` : r.name}</strong>
+                    <span>{r.kind === 'doctor' ? 'Doctor' : 'Therapist'}</span>
+                  </div>
+                  <span className="ct-badge warn">{r.missing.length} to fix</span>
+                </div>
+                <ul className="pr-ready-missing" aria-label="Missing from the profile">
+                  {r.missing.map((m) => <li key={m}>{m}</li>)}
+                </ul>
+                <div className="pr-ready-foot">
+                  <button type="button" className="ct-btn primary"
+                    onClick={() => navigate(`/dashboard/users/${r.kind === 'doctor' ? 'doctors' : 'therapists'}/${r.id}?tab=professional`)}>
+                    Fix profile
+                  </button>
+                </div>
               </div>
-              <div className="ct-actions" style={{ marginTop: 0, marginBottom: 6 }}>
-                <button type="button" className="ct-btn primary"
-                  onClick={() => navigate(`/dashboard/users/${r.kind === 'doctor' ? 'doctors' : 'therapists'}/${r.id}?tab=professional`)}>
-                  Fix profile
-                </button>
-              </div>
-              <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#334155' }}>
-                {r.missing.map((m) => <li key={m}>{m}</li>)}
-              </ul>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

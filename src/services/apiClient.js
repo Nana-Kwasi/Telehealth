@@ -63,6 +63,7 @@ export function clearSession() {
   sessionStorage.removeItem('previousSession');
   sessionStorage.removeItem('sessionId');
   sessionStorage.removeItem('loginTime');
+  sessionStorage.removeItem('nessa.dashboardChosen'); // ask which dashboard again on the next sign-in
 }
 
 // ── Token refresh ─────────────────────────────────────────────────────────────

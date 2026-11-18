@@ -1,0 +1,12 @@
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1.1rem; margin-bottom: 1.5rem; }
+.sc-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.25rem 1.4rem;
+  display: flex; align-items: center; gap: 1rem; transition: transform 0.2s ease, box-shadow 0.2s ease; min-width: 0;
+}
+.sc-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -16px rgba(15, 23, 42, 0.35); }
+.sc-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sc-text { min-width: 0; }
+.sc-value { font-size: 1.6rem; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.1; letter-spacing: -0.03em; overflow-wrap: anywhere; }
+.sc-label { font-size: 0.78rem; color: #475569; margin: 0.25rem 0 0; font-weight: 600; }
+.sc-sub { font-size: 0.75rem; color: #64748b; margin: 0.2rem 0 0; line-height: 1.35; }
+@media (max-width: 600px) { .sc-value { font-size: 1.35rem; } }

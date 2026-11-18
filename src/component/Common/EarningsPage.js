@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import * as HI from '@healthicons/react';
 import { EmptyLine } from './EmptyState';
 import { api } from '../../services/apiClient';
+import { DollarSign, Wallet, Clock, RotateCcw, Send, CheckCircle2, CalendarCheck } from 'lucide-react';
+import StatCard, { StatGrid } from './StatCard';
 import { Ledger } from '../Dashboard/Admin/AdminFinance';
 import { nessaHubPolicyUrl } from '../../constants/nessaHubPolicies';
 import './CareTransfers.css';
@@ -47,18 +49,17 @@ export default function EarningsPage({ serviceKey = 'consultation' }) {
       {error ? <div className="ct-error">{error}</div> : null}
       {!s ? <div className="ct-empty">Loading…</div> : (
         <>
-          <div className="af-tiles">
-            <div className="af-tile ok"><span className="af-tile-label">Next payout</span><strong className="af-tile-value">{GHS(s.balance)}</strong>
-              <span className="af-tile-sub">Around {fmt(s.nextPayoutDate)}{Number(s.balance) < Number(s.payoutMinimum) ? ` · below the ${GHS(s.payoutMinimum)} minimum, rolls over` : ''}</span></div>
-            <div className="af-tile warn"><span className="af-tile-label">Pending</span><strong className="af-tile-value">{GHS(s.pending)}</strong>
-              <span className="af-tile-sub">Available {s.clearingDays} day(s) after each session</span></div>
-            {Number(s.adjustments) !== 0 ? <div className="af-tile warn"><span className="af-tile-label">Refund adjustments</span><strong className="af-tile-value">{GHS(s.adjustments)}</strong>
-              <span className="af-tile-sub">Refunds on bookings already paid out</span></div> : null}
-            <div className="af-tile"><span className="af-tile-label">Being sent</span><strong className="af-tile-value">{GHS(s.inPayout)}</strong></div>
-            <div className="af-tile"><span className="af-tile-label">Paid to you so far</span><strong className="af-tile-value">{GHS(s.paidOut)}</strong></div>
-            <div className="af-tile"><span className="af-tile-label">Bookings</span><strong className="af-tile-value">{s.bookings}</strong>
-              <span className="af-tile-sub">{GHS(s.lifetimeGross)} booked · {GHS(s.lifetimeCommission)} commission</span></div>
-          </div>
+          {/* Same cards as Analytics, and the same Total Earnings figure. */}
+          <StatGrid>
+            <StatCard icon={DollarSign} tone="green" value={GHS(s.lifetimeNet)} label="Total Earnings" sub="After commission and refunds" />
+            <StatCard icon={Wallet} tone="teal" value={GHS(s.balance)} label="Next payout"
+              sub={`Around ${fmt(s.nextPayoutDate)}${Number(s.balance) < Number(s.payoutMinimum) ? ` · below the ${GHS(s.payoutMinimum)} minimum, rolls over` : ''}`} />
+            <StatCard icon={Clock} tone="amber" value={GHS(s.pending)} label="Pending" sub={`Available ${s.clearingDays} day(s) after each session`} />
+            {Number(s.adjustments) !== 0 ? <StatCard icon={RotateCcw} tone="rose" value={GHS(s.adjustments)} label="Refund adjustments" sub="Refunds on bookings already paid out" /> : null}
+            <StatCard icon={Send} tone="blue" value={GHS(s.inPayout)} label="Being sent" />
+            <StatCard icon={CheckCircle2} tone="green" value={GHS(s.paidOut)} label="Paid to you so far" />
+            <StatCard icon={CalendarCheck} tone="violet" value={s.bookings} label="Bookings" sub={`${GHS(s.lifetimeGross)} booked · ${GHS(s.lifetimeCommission)} commission`} />
+          </StatGrid>
 
           <PayoutDetails method={s.payoutMethod} onSaved={load} />
 

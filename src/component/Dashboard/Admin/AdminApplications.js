@@ -98,7 +98,7 @@ function ApplicationList() {
   ];
 
   return (
-    <div className="ct-page aa-page">
+    <div className="ct-page aa-page aa-apps">
       <header className="aa-pagehead">
         <div>
           <h2>Provider applications</h2>

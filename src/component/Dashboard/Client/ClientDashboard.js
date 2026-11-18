@@ -39,6 +39,7 @@ import CareCentre from '../../Common/CareCentre';
 import ClientWellness from '../../Common/ClientWellness';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import Journal from '../../Common/Journal';
+import ServiceChooser from '../../Common/ServiceChooser';
 import Community from '../../Common/Community';
 import MyCarePlan from '../../Common/MyCarePlan';
 import RecordExplorer from '../../Common/RecordExplorer';
@@ -161,6 +162,7 @@ export default function ClientDashboard({ profile }) {
         <div className="sidebar-header">
           <BrandLogo tone="dark" badge="Therapy" />
           <ServiceSwitcher profile={profile} current="therapy" />
+          <ServiceChooser profile={profile} current="therapy" />
           <div className="user-info">
             <div className="user-avatar" onClick={() => document.getElementById('profile-image-input').click()}>
               {profile?.photoURL ? (
@@ -244,7 +246,7 @@ export default function ClientDashboard({ profile }) {
           <Route path="/billing" element={<><BillingAssistantPanel /><ClientBilling /></>} />
           <Route path="/insurance" element={<div className="mp-page"><InsuranceCards accent="#5046bd" /></div>} />
           <Route path="/notifications" element={<NotificationCentre />} />
-          <Route path="/ai-assistant" element={<AiHealthAssistant />} />
+          <Route path="/ai-assistant" element={<AiHealthAssistant careService="therapy" />} />
           <Route path="/my-care" element={<CareCentre variant="therapy" userId={profile?.id || profile?.uid} />} />
           {/* Same settings as the app: the patient benchmark in its therapy variant.
               The account id (not a profile-row id) is what the settings load by. */}
@@ -261,7 +263,7 @@ export default function ClientDashboard({ profile }) {
         </Routes>
         {/* Floating, so the assistant is reachable from every screen without
             navigating away from what you are looking at. */}
-        <AiAssistantFab />
+        <AiAssistantFab careService="therapy" />
 
       </main>
     </div>

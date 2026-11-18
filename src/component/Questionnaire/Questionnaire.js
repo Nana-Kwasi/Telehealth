@@ -4,7 +4,7 @@ import { steps, phq9Questions } from './steps';
 import './Questionnaire.css';
 import { db } from '../../services/firestoreShim';
 import { collection, addDoc, doc, setDoc } from '../../services/firestoreShim';
-import { getStoredToken, getStoredRole, getStoredUserId } from '../../services/apiClient';
+import { api, getStoredToken, getStoredRole, getStoredUserId } from '../../services/apiClient';
 import { refreshSession } from '../Auth/authService';
 import { chooseService } from '../../utils/careServices';
 import {
@@ -73,6 +73,38 @@ export default function Questionnaire() {
   });
   const [loading, setLoading] = useState(false);
 
+  // Already signed in (a medical patient adding therapy): what the account
+  // already knows (country, gender, age) is filled in, and the country page is
+  // skipped when it is known. Everything clinical is still asked.
+  const signedInUid = getStoredToken() && getStoredRole() === 'client' ? getStoredUserId() : null;
+  const [knownCountry, setKnownCountry] = useState(false);
+  useEffect(() => {
+    if (!signedInUid || medpsychMode) return;
+    api(`/api/v1/patients/${signedInUid}`).then((p) => {
+      if (!p) return;
+      const fill = {};
+      const country = p.country || p.nationality || p.countryOfResidence;
+      if (country && !data.country) fill.country = country;
+      const gender = String(p.gender || p.sex || '').toLowerCase();
+      const g = gender === 'female' ? 'woman' : gender === 'male' ? 'man' : gender;
+      const genderStep = steps.find((st) => st.key === 'identity')?.fields.find((f) => f.name === 'gender');
+      if (g && !data.gender && genderStep?.options.includes(g)) fill.gender = g;
+      const dob = p.dateOfBirth || p.dob || p.birthDate;
+      if (dob && !data.age) {
+        const d = new Date(dob);
+        if (!Number.isNaN(d.getTime())) {
+          const now = new Date();
+          let age = now.getFullYear() - d.getFullYear();
+          if (now < new Date(now.getFullYear(), d.getMonth(), d.getDate())) age -= 1;
+          if (age >= 18 && age <= 100) fill.age = String(age);
+        }
+      }
+      if (Object.keys(fill).length) setData((prev) => ({ ...fill, ...Object.fromEntries(Object.entries(prev).filter(([, v]) => v !== '' && v != null)) }));
+      if (fill.country || data.country) setKnownCountry(true);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedInUid, medpsychMode]);
+
   const activeSteps = useMemo(() => {
     // Psychology & Counseling already collected consent at its policy gate,
     // one tick per document with a timestamp, written to policy_acceptances_v2.
@@ -83,11 +115,12 @@ export default function Questionnaire() {
     // The standard therapy sign-up has no earlier gate, so it keeps this step.
     if (medpsychMode) return steps;
 
+    const base = knownCountry ? steps.filter((st) => st.key !== 'country') : steps;
     if (needsIndividualQuestionnaireConsent(data.therapyType)) {
-      return [...steps, INDIVIDUAL_CONSENT_STEP];
+      return [...base, INDIVIDUAL_CONSENT_STEP];
     }
-    return steps;
-  }, [data.therapyType, medpsychMode]);
+    return base;
+  }, [data.therapyType, medpsychMode, knownCountry]);
 
   useEffect(() => {
     if (data.therapyType === 'teen' && !data.parentInfo?.firstName) {
@@ -207,7 +240,6 @@ export default function Questionnaire() {
       // Already signed in (e.g. a medical patient adding therapy): one account
       // covers both, so attach the intake to it and skip the account step. A
       // merge write — POST /clients refuses a second profile for a returning client.
-      const signedInUid = getStoredToken() && getStoredRole() === 'client' ? getStoredUserId() : null;
       if (signedInUid) {
         await setDoc(doc(db, 'clients', signedInUid), {
           ...clientData,

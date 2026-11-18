@@ -3,6 +3,7 @@ import AiAssistantFab from '../../Common/AiAssistantFab';
 import ClientWellness from '../../Common/ClientWellness';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import Journal from '../../Common/Journal';
+import ServiceChooser from '../../Common/ServiceChooser';
 import * as HI from '@healthicons/react';
 import { IconBubble } from '../../Common/EmptyState';
 import Community from '../../Common/Community';
@@ -5053,6 +5054,7 @@ export default function MedicalPatientDashboard({ profile }) {
         <div className="mp-sidebar-header">
           <BrandLogo tone="dark" badge="Patient" />
           <ServiceSwitcher profile={profile} current="medical" />
+          <ServiceChooser profile={profile} current="medical" />
           <div className="mp-user-card">
             <div className="mp-user-avatar">{getInitials(profile?.name)}</div>
             <div className="mp-user-info">
@@ -5112,12 +5114,12 @@ export default function MedicalPatientDashboard({ profile }) {
           <Route path="/care-plan"     element={<MyCarePlan />} />
           <Route path="/my-care"       element={<CareCentre userId={profile?.id || profile?.uid} />} />
           <Route path="/my-records" element={<RecordExplorer title="My records" />} />
-          <Route path="/ai-assistant"  element={<AiHealthAssistant />} />
+          <Route path="/ai-assistant"  element={<AiHealthAssistant careService="medical" />} />
           <Route path="/notifications" element={<NotificationCentre />} />
         </Routes>
         {/* Floating, so the assistant is reachable from every screen without
             navigating away from what you are looking at. */}
-        <AiAssistantFab />
+        <AiAssistantFab careService="medical" />
 
       </main>
     </div>

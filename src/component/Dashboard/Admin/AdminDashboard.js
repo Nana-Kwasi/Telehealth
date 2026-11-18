@@ -43,6 +43,7 @@ import AdminInsuranceVerification from './AdminInsuranceVerification';
 import FormularyManager from '../../Common/FormularyManager';
 import AdminRiskAlerts from './AdminRiskAlerts';
 import { CommunityModeration } from '../../Common/Community';
+import './AdminPagesPolish.css';
 import AdminEngagement from './AdminEngagement';
 import AdminSystemPdfExport   from './AdminSystemPdfExport';
 import AdminAuditLog          from './AdminAuditLog';
