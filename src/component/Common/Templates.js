@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
+import * as HI from '@healthicons/react';
+import EmptyState, { IconHeading } from './EmptyState';
 import './Measures.css';
 import './PsychRecord.css';
 import './Templates.css';
@@ -50,15 +52,15 @@ export function TemplatesPanel() {
   );
   return (
     <div className="ms-card">
-      <h3 className="ms-title">Templates</h3>
+      <IconHeading icon={HI.HealthWorkerForm} tone="violet">Templates</IconHeading>
       <p className="ms-muted pr-hint">Build your own note layouts, and forms for clients to fill in. Send forms from a client's page with “Share forms”.</p>
       {error && <p className="ms-err">{error}</p>}
       {list === null ? <p className="ms-muted">Loading…</p> : (
         <>
           <p className="tp-sub">Note templates</p>
-          {notes.length === 0 ? <p className="ms-muted">None yet.</p> : <ul className="ms-pending">{notes.map((t) => <Row key={t.id} t={t} />)}</ul>}
+          {notes.length === 0 ? <EmptyState compact icon={HI.PrescriptionDocument} tone="violet" title="No note templates yet">Make your own note layout once and reuse it.</EmptyState> : <ul className="ms-pending">{notes.map((t) => <Row key={t.id} t={t} />)}</ul>}
           <p className="tp-sub">Client forms</p>
-          {forms.length === 0 ? <p className="ms-muted">None yet.</p> : <ul className="ms-pending">{forms.map((t) => <Row key={t.id} t={t} />)}</ul>}
+          {forms.length === 0 ? <EmptyState compact icon={HI.HealthWorkerForm} tone="teal" title="No client forms yet">Build a form for clients to fill in before their first session.</EmptyState> : <ul className="ms-pending">{forms.map((t) => <Row key={t.id} t={t} />)}</ul>}
         </>
       )}
       <div className="ms-actions">

@@ -48,6 +48,8 @@ import { RecordGapsBanner, TimelinePanel, MsePanel, DiagnosisPlanPanel, PrivateN
 import { ShareIntakeModal, IntakeStatus } from '../../Common/Intake';
 import { TemplateNoteModal } from '../../Common/Templates';
 import { SharedJournalPanel } from '../../Common/Journal';
+import * as HI from '@healthicons/react';
+import EmptyState, { IconBubble } from '../../Common/EmptyState';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import { AddToWaitlistButton } from '../../Common/PracticePage';
 
@@ -1103,7 +1105,7 @@ export default function ClientDetails() {
               }}>↻ Refresh</button>
             </div>
             {prescriptions.length === 0 ? (
-              <div className="doctor-empty-state"><Pill size={36} /><p>No prescriptions issued yet.</p></div>
+              <div className="doctor-empty-state"><IconBubble icon={HI.Medicines} tone="emerald" size={40} /><p>No prescriptions issued yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <Paged items={prescriptions}>{(prescriptions) => prescriptions.map(rx => {
@@ -1492,7 +1494,7 @@ export default function ClientDetails() {
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Scheduled Sessions ({sessions.length})</h3>
           </div>
           {sessions.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No sessions found.</div>
+            <EmptyState icon={HI.Calendar} tone="sky" title="No sessions found">Sessions you schedule with this client appear here.</EmptyState>
           ) : (
             <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
               <Paged items={sessions}>{(sessions) => sessions.map(sess => {
@@ -1555,7 +1557,7 @@ export default function ClientDetails() {
               </div>
             </div>
             {therapyNotes.length === 0 ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No therapy notes yet.</div>
+              <EmptyState compact icon={HI.MentalHealthTherapy} tone="violet" title="No therapy notes yet" />
             ) : (
               <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
                 <Paged items={therapyNotes}>{(therapyNotes) => therapyNotes.map((note) => (
@@ -1571,7 +1573,7 @@ export default function ClientDetails() {
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Clinical Notes ({clinicalNotes.length})</h3>
             </div>
             {clinicalNotes.length === 0 ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No clinical notes found.</div>
+              <EmptyState compact icon={HI.PrescriptionDocument} tone="blue" title="No clinical notes yet" />
             ) : (
               <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
                 <Paged items={clinicalNotes}>{(clinicalNotes) => clinicalNotes.map((note) => (
@@ -1590,7 +1592,7 @@ export default function ClientDetails() {
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Mood Tracking ({moodEntries.length} entries)</h3>
           </div>
           {moodEntries.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No mood entries found.</div>
+            <EmptyState icon={HI.FaceHappy} tone="amber" title="No mood entries yet">Mood check-ins from this client will appear here.</EmptyState>
           ) : (
             <div style={{ padding: '0.5rem 1.5rem 1.5rem' }}>
               <Paged items={moodEntries}>{(moodEntries) => moodEntries.map(entry => {
@@ -1702,7 +1704,7 @@ export default function ClientDetails() {
 
           {goals.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
-              <Target size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 0.75rem' }} />
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Running} tone="orange" size={44} /></div>
               <p style={{ margin: 0, fontWeight: 600, color: '#64748b' }}>No treatment goals yet</p>
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem' }}>Add goals to track this client's therapy progress</p>
             </div>

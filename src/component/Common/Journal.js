@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { api, uploadFile, API_BASE } from '../../services/apiClient';
 import { usePlatformFeatures, featureOn } from './platformFeatures';
+import * as HI from '@healthicons/react';
+import EmptyState, { IconBubble } from './EmptyState';
 import './Measures.css';
 import './PsychRecord.css';
 import './Journal.css';
@@ -102,9 +104,12 @@ export default function Journal() {
   return (
     <div className="ms-wrap jr-wrap">
       <div className="jr-head">
-        <div>
+        <div style={{ display: 'flex', gap: '0.9rem', alignItems: 'center' }}>
+          <IconBubble icon={HI.MentalHealth} tone="violet" size={30} />
+          <div>
           <h2 style={{ margin: 0 }}>My Journal</h2>
           <p className="ms-muted" style={{ margin: '0.2rem 0 0' }}>Your private record of how you are doing. Only you can see it, unless you share an entry with your care team.</p>
+          </div>
         </div>
         <div className="jr-head-actions no-print">
           {canWrite && <button className="ms-btn" onClick={() => setEditing({ entry_date: todayStr(), area: 'health' })}>New entry</button>}
@@ -176,7 +181,10 @@ export default function Journal() {
         </div>
         {entries === null ? <p className="ms-muted">Loading…</p>
           : view === 'calendar' ? <CalendarView entries={entries} onOpen={(e) => canWrite && setEditing(e)} onNew={(d) => canWrite && setEditing({ entry_date: d, area: 'health' })} />
-          : entries.length === 0 ? <p className="ms-muted">No entries yet. Start with how today went, a mood, or a photo.</p>
+          : entries.length === 0 ? <EmptyState icon={HI.MentalHealth} tone="violet" title={q || area ? 'Nothing matches' : 'Your journal is empty'}
+              action={canWrite && !q && !area ? <button className="ms-btn" onClick={() => setEditing({ entry_date: todayStr(), area: 'health' })}>Write your first entry</button> : null}>
+              {q || area ? 'Try another word or area.' : 'Start with how today went: a few lines, a mood, a photo or your steps.'}
+            </EmptyState>
           : entries.map((e) => (
             <EntryCard key={e.id} entry={e} readOnly={!canWrite} onEdit={() => setEditing(e)} onDelete={() => remove(e.id)} onShare={() => shareToCommunity(e)} />
           ))}
@@ -481,7 +489,7 @@ export function SharedJournalPanel({ clientId }) {
       <h3 className="ms-title">Journal entries shared with you</h3>
       <p className="ms-muted pr-hint">Their journal is private. You only see entries they chose to share with their care team.</p>
       {error && <p className="ms-err">{error}</p>}
-      {list === null ? <p className="ms-muted">Loading…</p> : list.length === 0 ? <p className="ms-muted">Nothing shared yet.</p> : list.map((e) => {
+      {list === null ? <p className="ms-muted">Loading…</p> : list.length === 0 ? <EmptyState compact icon={HI.HealthDataSecurity} tone="teal" title="Nothing shared yet">Entries appear here only when they choose to share them.</EmptyState> : list.map((e) => {
         const mood = moodOf(e.mood);
         const m = e.measures || {};
         return (

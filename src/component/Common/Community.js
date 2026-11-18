@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
+import * as HI from '@healthicons/react';
+import EmptyState, { IconBubble } from './EmptyState';
 import './Measures.css';
 import './PsychRecord.css';
 import './Journal.css';
@@ -10,6 +12,15 @@ import './Community.css';
  * NessaHub. People post under a nickname. Posts that need a moderator first are
  * shown to their writer as "waiting for a moderator", never silently dropped.
  */
+
+// A picture for each group, by its slug; anything new gets a general one.
+const GROUP_ICON = {
+  diabetes: [HI.Diabetes, 'sky'], 'blood-pressure-heart': [HI.BloodPressure, 'rose'], 'sickle-cell': [HI.BloodCells, 'rose'],
+  'asthma-breathing': [HI.Lungs, 'teal'], 'pregnancy-new-parents': [HI.Pregnant, 'pink'], 'weight-fitness': [HI.Running, 'orange'],
+  'skin-beauty': [HI.SkinLayers, 'amber'], 'healthy-ageing': [HI.Elderly, 'emerald'], sleep: [HI.HappySleepy, 'indigo'],
+  'low-mood': [HI.MentalHealth, 'violet'], 'anxiety-stress': [HI.FaceNervous, 'blue'], 'grief-loss': [HI.People, 'slate'],
+};
+const groupIcon = (g) => GROUP_ICON[g.slug] || [g.category === 'mind' ? HI.Psychology : g.category === 'lifestyle' ? HI.Exercise : HI.Health, 'indigo'];
 
 const REACTIONS = [['encourage', '💪', 'Encourage'], ['relate', '🤝', 'Me too'], ['thanks', '🙏', 'Thank you']];
 const REPORT_REASONS = [
@@ -71,6 +82,7 @@ export default function Community() {
 function GroupCard({ g, onOpen }) {
   return (
     <button className="cm-group" onClick={onOpen}>
+      <IconBubble icon={groupIcon(g)[0]} tone={groupIcon(g)[1]} size={28} />
       <strong>{g.name}</strong>
       <span className="ms-muted">{g.description}</span>
       <span className="cm-meta">{g.members} member{Number(g.members) === 1 ? '' : 's'}{g.joined ? ' · joined' : ''}</span>
@@ -88,7 +100,8 @@ function NicknameSetup({ onDone }) {
   };
   return (
     <div className="ms-card">
-      <h2 style={{ marginTop: 0 }}>Join the NessaHub community</h2>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}><IconBubble icon={HI.GroupDiscussionMeetingx3} tone="indigo" size={52} /></div>
+      <h2 style={{ marginTop: 0, textAlign: 'center' }}>Join the NessaHub community</h2>
       <p>Meet people living with the same condition or working on the same goal, share how you are doing and cheer each other on.</p>
       <p className="ms-muted">First, choose a nickname. It is how others will see you. To keep your health private, do not use your real name.</p>
       <label className="pr-label">Nickname<input className="pr-full" value={n} maxLength={30} onChange={(e) => setN(e.target.value)} placeholder="e.g. MorningWalker" /></label>
@@ -156,7 +169,10 @@ function GroupView({ group, me, onBack }) {
     <>
       <button className="ms-link" onClick={onBack} style={{ alignSelf: 'flex-start' }}>‹ All groups</button>
       <div className="ms-card">
-        <h2 style={{ margin: 0 }}>{group.name}</h2>
+        <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+          <IconBubble icon={groupIcon(group)[0]} tone={groupIcon(group)[1]} size={30} />
+          <h2 style={{ margin: 0 }}>{group.name}</h2>
+        </div>
         <p className="ms-muted" style={{ margin: '0.3rem 0 0' }}>{group.description}</p>
         {joined && <button className="ms-link" onClick={leave} style={{ marginTop: 6 }}>Leave group</button>}
       </div>
@@ -182,7 +198,7 @@ function GroupView({ group, me, onBack }) {
               <div className="ms-actions"><button className="ms-btn" onClick={post} disabled={busy || draft.trim().length < 2}>{busy ? 'Posting…' : 'Post'}</button></div>
             </div>
           )}
-          {posts === null ? <p className="ms-muted">Loading…</p> : posts.length === 0 ? <div className="ms-card"><p className="ms-muted">No posts yet. Be the first to say hello.</p></div>
+          {posts === null ? <p className="ms-muted">Loading…</p> : posts.length === 0 ? <div className="ms-card"><EmptyState icon={HI.GroupDiscussionMeetingx3} tone="indigo" title="No posts yet">Be the first to say hello and share how you are doing.</EmptyState></div>
             : posts.map((p) => <PostCard key={p.id} post={p} group={group} canWrite={joined} moderator={moderator} onChanged={() => load()} />)}
           {more && <button className="ms-link" onClick={() => load(posts[posts.length - 1].created_at)}>Show older posts</button>}
         </>
@@ -323,7 +339,7 @@ export function CommunityModeration({ admin = false }) {
       {!q ? <p className="ms-muted">Loading…</p> : q.groups.length === 0 && !admin ? <div className="ms-card"><p className="ms-muted">You do not moderate any groups yet. An administrator can add you.</p></div> : <>
         <div className="ms-card">
           <h3 className="ms-title">Waiting for review ({q.held.length})</h3>
-          {q.held.length === 0 ? <p className="ms-muted">Nothing waiting.</p> : q.held.map((h) => (
+          {q.held.length === 0 ? <EmptyState compact icon={HI.HealthDataSecurity} tone="emerald" title="Nothing waiting">Every post has been reviewed.</EmptyState> : q.held.map((h) => (
             <div key={`${h.type}-${h.id}`} className={`cm-queue ${h.hold_reason === 'safety' ? 'cm-urgent' : ''}`}>
               <span className="ms-muted">{h.group_name} · {h.type} by {h.nickname} · {ago(h.created_at)} · {h.status === 'hidden' ? 'hidden after reports' : REASON[h.hold_reason] || 'held'}</span>
               <p className="cm-body">{h.body}</p>
@@ -337,7 +353,7 @@ export function CommunityModeration({ admin = false }) {
         </div>
         <div className="ms-card">
           <h3 className="ms-title">Reports ({q.reports.length})</h3>
-          {q.reports.length === 0 ? <p className="ms-muted">No open reports.</p> : q.reports.map((r) => (
+          {q.reports.length === 0 ? <EmptyState compact icon={HI.CommunityMeeting} tone="teal" title="No open reports">The groups are calm right now.</EmptyState> : q.reports.map((r) => (
             <div key={r.id} className={`cm-queue ${r.reason === 'worrying' ? 'cm-urgent' : ''}`}>
               <span className="ms-muted">{r.group_name} · {r.target_type} · {r.reason.replace('_', ' ')} · {ago(r.created_at)}{r.target_status !== 'visible' ? ` · now ${r.target_status}` : ''}</span>
               <p className="cm-body">{r.body}</p>

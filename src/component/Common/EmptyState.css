@@ -1,0 +1,17 @@
+.es-bubble {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  border-radius: 999px; color: var(--es-ink);
+  background: radial-gradient(circle at 30% 25%, #ffffff 0%, var(--es-bg) 72%);
+  box-shadow: 0 10px 24px -14px var(--es-ink), inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+.es-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 2rem 1rem; gap: 0.35rem; }
+.es-empty .es-bubble { margin-bottom: 0.6rem; animation: es-float 5s ease-in-out infinite; }
+.es-compact { padding: 1.1rem 0.75rem; }
+.es-title { margin: 0; font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+.es-compact .es-title { font-size: 0.95rem; }
+.es-text { color: #64748b; font-size: 0.88rem; max-width: 34rem; line-height: 1.45; }
+.es-action { margin-top: 0.6rem; }
+.es-heading { display: flex; align-items: center; gap: 0.55rem; margin: 0 0 0.6rem; }
+.es-heading .es-bubble { box-shadow: none; }
+@keyframes es-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .es-empty .es-bubble { animation: none; } }

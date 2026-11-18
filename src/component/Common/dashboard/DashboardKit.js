@@ -1,4 +1,6 @@
 import React from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../EmptyState';
 import { ChevronRight, Search, Bell } from 'lucide-react';
 import './dashboard.css';
 
@@ -229,8 +231,14 @@ export function TrendRow({ Icon, tone = 'lilac', label, delta, positive = true }
 }
 
 /** Said plainly, so an empty panel never reads as a broken one. */
-export function Empty({ children }) {
-  return <p className="nd-empty">{children}</p>;
+/** An empty card: a colourful Health Icon beside the message. */
+export function Empty({ children, icon = HI.Health, tone = 'indigo' }) {
+  return (
+    <div className="nd-empty" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', textAlign: 'left' }}>
+      <IconBubble icon={icon} tone={tone} size={24} />
+      <span>{children}</span>
+    </div>
+  );
 }
 
 /**

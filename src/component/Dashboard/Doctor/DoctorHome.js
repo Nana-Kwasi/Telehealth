@@ -1,3 +1,5 @@
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   DashboardGrid, HeroBanner, StatTile, Panel, ScoreRing, MetricTile,
@@ -11,9 +13,7 @@ import InboxTriagePanel from '../../Common/InboxTriagePanel';
 import clinicianHero from '../../../assets/clinician-hero.jpg';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Calendar, Clock, CheckCircle, AlertCircle, FileText,
-  Video, TrendingUp, Activity, Pill, ChevronRight, Star,
-  ChevronLeft, ShoppingBag, Search, X, FlaskConical, ClipboardList,
+  Users, Calendar, Clock, CheckCircle, AlertCircle, FileText, Video, Activity, Pill, ChevronRight, Star, ChevronLeft, ShoppingBag, Search, X, FlaskConical, ClipboardList,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -576,7 +576,7 @@ export default function DoctorHome({ profile }) {
           action={{ onClick: () => navigate('/dashboard/appointments') }}
         >
           {(todayAppointments || []).length === 0 ? (
-            <Empty>Nothing booked for today.</Empty>
+            <Empty icon={HI.Calendar} tone="sky">Nothing booked for today.</Empty>
           ) : todayAppointments.slice(0, 4).map((a) => (
             <PersonRow
               key={a.id}
@@ -602,7 +602,7 @@ export default function DoctorHome({ profile }) {
         {/* ── Recent activity ── */}
         <Panel title="Recent activity">
           {(recentActivity || []).length === 0 ? (
-            <Empty>Nothing yet. Activity appears here as you work.</Empty>
+            <Empty icon={HI.Heartbeat} tone="rose">Nothing yet. Activity appears here as you work.</Empty>
           ) : recentActivity.slice(0, 5).map((act, i) => (
             <ActivityRow
               key={act.id || i}
@@ -695,7 +695,7 @@ export default function DoctorHome({ profile }) {
           action={{ label: 'Analytics', onClick: () => navigate('/dashboard/analytics') }}
         >
           {monthlyAppts.length === 0 ? (
-            <Empty>No consultations recorded yet.</Empty>
+            <Empty icon={HI.Stethoscope} tone="blue">No consultations recorded yet.</Empty>
           ) : (
             <div className="nd-bars">
               {monthlyAppts.map((m) => (
@@ -850,7 +850,7 @@ export default function DoctorHome({ profile }) {
         {/* ── Recent patients ── */}
         <Panel title="Recent patients" action={{ onClick: () => navigate('/dashboard/patients') }}>
           {(recentPatients || []).length === 0 ? (
-            <Empty>No patients yet.</Empty>
+            <Empty icon={HI.People} tone="teal">No patients yet.</Empty>
           ) : recentPatients.slice(0, 5).map((p, i) => (
             <PersonRow
               key={p.id || i}
@@ -890,7 +890,7 @@ export default function DoctorHome({ profile }) {
             </ResponsiveContainer>
           ) : (
             <div className="doctor-empty-state" style={{ height: 200 }}>
-              <TrendingUp size={36} color="#cbd5e1" /><p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>No data yet — trends will appear as appointments are booked.</p>
+              <IconBubble icon={HI.HeartCardiogram} tone="sky" size={34} /><p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.85rem' }}>No data yet — trends will appear as appointments are booked.</p>
             </div>
           )}
         </div>
@@ -923,7 +923,7 @@ export default function DoctorHome({ profile }) {
             </>
           ) : (
             <div className="doctor-empty-state" style={{ height: 200 }}>
-              <Activity size={36} color="#cbd5e1" /><p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.85rem' }}>No appointment data yet.</p>
+              <IconBubble icon={HI.Calendar} tone="blue" size={34} /><p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.85rem' }}>No appointment data yet.</p>
             </div>
           )}
         </div>

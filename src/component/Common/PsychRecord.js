@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
+import * as HI from '@healthicons/react';
+import EmptyState from './EmptyState';
 import './Measures.css';
 import './PsychRecord.css';
 
@@ -71,7 +73,7 @@ export function TimelinePanel({ clientId, onAddNote }) {
           {KINDS.map((k) => <option key={k} value={k}>{k === 'all' ? 'Everything' : KIND_LABEL[k]}</option>)}
         </select>
       </div>
-      {items.length === 0 ? <p className="ms-muted">Nothing on the chart yet.</p> : (
+      {items.length === 0 ? <EmptyState compact icon={HI.HealthDataSync} tone="sky" title="Nothing on the chart yet">Sessions, notes, results and plans will appear here in date order.</EmptyState> : (
         <ol className="pr-timeline">
           {items.map((i) => (
             <li key={`${i.kind}-${i.id}`} className={i.flag ? 'pr-flag' : ''}>
@@ -111,7 +113,7 @@ export function MsePanel({ clientId, onSaved }) {
             <h3 className="ms-title">Mental status exams</h3>
             <button className="ms-btn" onClick={() => setOpen(true)}>New exam</button>
           </div>
-          {list.length === 0 ? <p className="ms-muted">No exam recorded yet.</p> : (
+          {list.length === 0 ? <EmptyState compact icon={HI.MentalHealthTherapy} tone="violet" title="No exam recorded yet" /> : (
             <ul className="ms-pending">
               {list.map((m) => (
                 <li key={m.id}>
@@ -242,7 +244,7 @@ export function DiagnosisPlanPanel({ clientId, onSaved }) {
     <div className="ms-wrap">
       <div className="ms-card">
         <h3 className="ms-title">Diagnoses (ICD-10)</h3>
-        {dx.length === 0 ? <p className="ms-muted">No diagnosis recorded.</p> : (
+        {dx.length === 0 ? <EmptyState compact icon={HI.Stethoscope} tone="blue" title="No diagnosis recorded" /> : (
           <ul className="ms-pending">
             {dx.map((d) => (
               <li key={d.id} className={d.status !== 'active' ? 'pr-inactive' : ''}>
@@ -284,7 +286,7 @@ export function DiagnosisPlanPanel({ clientId, onSaved }) {
             <h3 className="ms-title">Treatment plan{cur ? ` · version ${cur.version}` : ''}</h3>
             <button className="ms-btn" onClick={() => setEditing(true)}>{cur ? 'Update plan' : 'Write plan'}</button>
           </div>
-          {!cur ? <p className="ms-muted">No treatment plan yet.</p> : (
+          {!cur ? <EmptyState compact icon={HI.PrescriptionDocument} tone="teal" title="No treatment plan yet" /> : (
             <>
               {cur.reviewDue && <p className="ms-err">The review date ({fmt(cur.review_date)}) has come. Review and update the plan.</p>}
               <p><strong>Presenting problem:</strong> {cur.presenting_problem}</p>

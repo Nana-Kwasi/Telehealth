@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard, Plus, Pill } from 'lucide-react';
+import {
+  MessageSquare, Calendar, User, BookOpen, TrendingUp, Activity, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard, Plus, Pill,
+} from 'lucide-react';
 import './Home.css';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
 import { buildProgressMetrics, overallProgressScore } from '../../../utils/clientDashboardMetrics';
@@ -2056,7 +2060,7 @@ export default function ClientHome({ profile }) {
             <button className="mp-card-link" onClick={() => navigate('/dashboard/prescriptions')}>View all</button>
           </div>
           {rxList.length === 0 ? (
-            <div className="mp-empty-small"><Pill size={32} /><p>No prescriptions yet</p></div>
+            <div className="mp-empty-small"><IconBubble icon={HI.Medicines} tone="emerald" size={34} /><p>No prescriptions yet</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {rxList.map(rx => (

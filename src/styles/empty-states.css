@@ -1,0 +1,36 @@
+/*
+ * Friendlier empty screens, everywhere at once.
+ *
+ * Every existing "nothing here yet" block that starts with an icon gets that
+ * icon drawn big, in colour, inside a soft circle. Each family of screens has
+ * its own colour so the app does not look grey and samey when it is new.
+ * New screens use <EmptyState> (Common/EmptyState.js), which follows the same look.
+ */
+body :is(.mp-empty, .mp-empty-small, .empty-state, .doctor-empty-state, .admin-empty, .cc-empty, .rx-empty, .rf-empty,
+  .ta-empty, .ds-empty, .hc-dash-empty, .nh-notif-empty, .empty-chat, .dashboard-empty, .mood-empty, .questionnaire-empty,
+  .pharmacy-overview-empty, .th-empty, .vc-empty, .aa-empty, .hc-visit-log-empty) > svg:first-child {
+  width: 56px;
+  height: 56px;
+  padding: 20px;
+  box-sizing: content-box;
+  border-radius: 999px;
+  opacity: 1;
+  color: var(--es-ink, #4f46e5);
+  background: radial-gradient(circle at 30% 25%, #ffffff 0%, var(--es-bg, #e0e7ff) 70%);
+  box-shadow: 0 10px 24px -12px var(--es-ink, #4f46e5), inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  margin: 0 auto 0.75rem;
+  display: block;
+}
+body .mp-empty-small > svg:first-child { width: 36px; height: 36px; padding: 14px; }
+
+/* A colour per family of screens. */
+body :is(.mp-empty, .mp-empty-small) { --es-ink: #0ea5e9; --es-bg: #e0f2fe; }
+body :is(.doctor-empty-state, .dashboard-empty) { --es-ink: #2563eb; --es-bg: #dbeafe; }
+body :is(.th-empty, .mood-empty, .questionnaire-empty, .empty-state) { --es-ink: #7c3aed; --es-bg: #ede9fe; }
+body :is(.rx-empty, .pharmacy-overview-empty) { --es-ink: #059669; --es-bg: #d1fae5; }
+body :is(.admin-empty, .aa-empty) { --es-ink: #0f766e; --es-bg: #ccfbf1; }
+body :is(.cc-empty, .rf-empty, .ta-empty, .ds-empty) { --es-ink: #db2777; --es-bg: #fce7f3; }
+body :is(.hc-dash-empty, .hc-visit-log-empty) { --es-ink: #ea580c; --es-bg: #ffedd5; }
+body :is(.nh-notif-empty, .empty-chat, .vc-empty) { --es-ink: #d97706; --es-bg: #fef3c7; }
+
+body :is(.mp-empty, .mp-empty-small, .doctor-empty-state, .admin-empty) h3 { color: #0f172a; font-size: 1.05rem; }

@@ -1,3 +1,4 @@
+import * as HI from '@healthicons/react';
 import React, { useState, useEffect, useMemo } from 'react';
 import ScheduleCallModal from './ScheduleCallModal';
 import ClientEPharmacyModal from './ClientEPharmacyModal';
@@ -9,8 +10,7 @@ import {
 } from '../../Common/dashboard/DashboardKit';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Calendar, FileText, TrendingUp, ChevronRight, Clock, CheckCircle, Activity,
-  Heart, Video, ClipboardList, BookOpen, ShoppingBag, Pill,
+  Users, Calendar, FileText, TrendingUp, ChevronRight, Clock, Activity, Heart, Video, ClipboardList, BookOpen, ShoppingBag, Pill,
 } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import {
@@ -895,7 +895,7 @@ export default function TherapistHome({ profile }) {
           action={{ onClick: () => navigate('/dashboard/appointments') }}
         >
           {upcomingSessions.length === 0 ? (
-            <Empty>Nothing booked yet. Use “Schedule” above to add one.</Empty>
+            <Empty icon={HI.Calendar} tone="sky">Nothing booked yet. Use “Schedule” above to add one.</Empty>
           ) : upcomingSessions.map((a) => (
             <PersonRow
               key={a.id}
@@ -921,7 +921,7 @@ export default function TherapistHome({ profile }) {
         {/* ── Recent activity ── */}
         <Panel title="Recent activity" action={{ onClick: () => navigate('/dashboard/logs') }}>
           {recentActivities.length === 0 ? (
-            <Empty>Nothing yet. Activity appears here as you work.</Empty>
+            <Empty icon={HI.Heartbeat} tone="rose">Nothing yet. Activity appears here as you work.</Empty>
           ) : recentActivities.slice(0, 5).map((act, i) => (
             <ActivityRow
               key={act.id || i}
@@ -950,7 +950,7 @@ export default function TherapistHome({ profile }) {
         {/* ── Needs attention ── */}
         <Panel title="Needs your attention">
           {attentionItems.length === 0 ? (
-            <Empty>
+            <Empty icon={HI.People} tone="violet">
               You are all clear — no unconfirmed sessions, unfinished notes or clients at risk.
             </Empty>
           ) : attentionItems.map((item) => (
@@ -1003,7 +1003,7 @@ export default function TherapistHome({ profile }) {
           action={{ label: 'Reports', onClick: () => navigate('/dashboard/reports') }}
         >
           {monthlySessions.length === 0 ? (
-            <Empty>No sessions recorded yet.</Empty>
+            <Empty icon={HI.MentalHealthTherapy} tone="violet">No sessions recorded yet.</Empty>
           ) : (
             <div className="nd-bars">
               {monthlySessions.map((m) => (
@@ -1023,7 +1023,7 @@ export default function TherapistHome({ profile }) {
           action={{ label: 'Moods', onClick: () => navigate('/dashboard/mood') }}
         >
           {(clientProgress || []).length === 0 ? (
-            <Empty>No progress recorded yet.</Empty>
+            <Empty icon={HI.HeartCardiogram} tone="teal">No progress recorded yet.</Empty>
           ) : clientProgress.slice(0, 6).map((c, i) => {
             // `progress` is the OBJECT calculateClientProgress returns —
             // { percent, direction, reliable } — not a number. progressLabel

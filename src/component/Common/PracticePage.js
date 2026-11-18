@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, API_BASE } from '../../services/apiClient';
 import { TemplatesPanel } from './Templates';
 import { usePlatformFeatures, featureOn } from './platformFeatures';
+import * as HI from '@healthicons/react';
+import EmptyState, { IconBubble, IconHeading } from './EmptyState';
 import './Measures.css';
 import './PsychRecord.css';
 import './Templates.css';
@@ -25,7 +27,7 @@ export default function PracticePage({ clientsPath = '/api/v1/therapy-management
   const features = usePlatformFeatures();
   return (
     <div className="ms-wrap" style={{ padding: '1.5rem', maxWidth: 900 }}>
-      <h2 style={{ margin: 0 }}>Practice</h2>
+      <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}><IconBubble icon={HI.Stethoscope} tone="indigo" size={30} /><h2 style={{ margin: 0 }}>Practice</h2></div>
       <p className="ms-muted" style={{ margin: 0 }}>Your goals, waitlist, time off, policies, calendar, announcements and templates.</p>
       <Goals />
       <Waitlist clientsPath={clientsPath} />
@@ -61,7 +63,7 @@ function Policies({ features = {} }) {
   if (!s) return <div className="ms-card">{error || 'Loading…'}</div>;
   return (
     <div className="ms-card">
-      <h3 className="ms-title">Session policies</h3>
+      <IconHeading icon={HI.PrescriptionDocument} tone="teal">Session policies</IconHeading>
       <label className="pr-label">Clients must cancel or move a session at least
         <select value={s.cancelNoticeHours ?? ''} onChange={(e) => save({ cancelNoticeHours: e.target.value === '' ? null : Number(e.target.value) })}
           style={{ marginLeft: 8 }}>
@@ -121,7 +123,7 @@ function Goals() {
   const pct = (a, b) => (b ? Math.min(100, Math.round((Number(a) / Number(b)) * 100)) : 0);
   return (
     <div className="ms-card">
-      <h3 className="ms-title">This week and this month</h3>
+      <IconHeading icon={HI.HeartCardiogram} tone="rose">This week and this month</IconHeading>
       <div className="tp-stats">
         <div className="tp-stat">
           <span className="ms-muted">Sessions this week</span>
@@ -174,7 +176,7 @@ function CalendarSync() {
   if (!st) return <div className="ms-card">{error || 'Loading…'}</div>;
   return (
     <div className="ms-card">
-      <h3 className="ms-title">Calendar sync</h3>
+      <IconHeading icon={HI.Calendar} tone="blue">Calendar sync</IconHeading>
       <p className="ms-muted pr-hint">See your NessaHub sessions in Google, Outlook or Apple Calendar. It is one way: make changes in NessaHub, and your calendar updates within a few hours.</p>
       {!path ? (
         <button className="ms-btn" onClick={() => run(async () => { const r = await api('/api/v1/practice/calendar', { method: 'POST', body: {} }); setPath(r.path); setSt({ ...st, calendarOn: true }); })}>Get my calendar link</button>
@@ -233,7 +235,7 @@ function Announcements({ clientsPath }) {
   };
   return (
     <div className="ms-card">
-      <h3 className="ms-title">Announcements</h3>
+      <IconHeading icon={HI.CommunityMeeting} tone="pink">Announcements</IconHeading>
       <p className="ms-muted pr-hint">One message to many clients, for practice news such as a closure or a change of hours. Up to 5 a day.</p>
       <label className="pr-label">Title<input className="pr-full" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder="Closed on Friday" /></label>
       <label className="pr-label">Message<textarea rows={3} className="pr-full" value={body} maxLength={1000} onChange={(e) => setBody(e.target.value)} /></label>
@@ -309,7 +311,7 @@ function TimeOff() {
 
   return (
     <div className="ms-card">
-      <h3 className="ms-title">Time off</h3>
+      <IconHeading icon={HI.Calendar} tone="amber">Time off</IconHeading>
       <p className="ms-muted pr-hint">No one can book you during time off, through any booking screen or the assistant.</p>
       <div className="pr-row">
         <label>From <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
@@ -364,7 +366,7 @@ function Waitlist({ clientsPath }) {
 
   return (
     <div className="ms-card">
-      <h3 className="ms-title">Waitlist</h3>
+      <IconHeading icon={HI.People} tone="sky">Waitlist</IconHeading>
       <div className="pr-row">
         <select value={clientId} onChange={(e) => setClientId(e.target.value)} aria-label="Client">
           <option value="">Choose a client</option>
@@ -378,7 +380,7 @@ function Waitlist({ clientsPath }) {
         })}>Add</button>
       </div>
       {error && <p className="ms-err">{error}</p>}
-      {list.length === 0 ? <p className="ms-muted" style={{ marginTop: '0.75rem' }}>No one is waiting.</p> : (
+      {list.length === 0 ? <EmptyState compact icon={HI.Calendar} tone="sky" title="No one is waiting">Add clients who would like an earlier time.</EmptyState> : (
         <ul className="ms-pending">
           {list.map((w) => (
             <li key={w.id}>

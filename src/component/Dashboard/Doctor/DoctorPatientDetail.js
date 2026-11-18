@@ -21,6 +21,8 @@ import { hasPatientPharmacy, patientPharmacyKey, removePatientPharmacyByKey } fr
 import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
 import Paged from '../../Common/Paged';
 import { SharedJournalPanel } from '../../Common/Journal';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -693,7 +695,7 @@ export default function DoctorPatientDetail({ profile }) {
           : <div className="doctor-card">
           <h3>All Appointments ({appointments.length})</h3>
           {appointments.length === 0 ? (
-            <div className="doctor-empty-state"><Calendar size={36} /><p>No appointments yet.</p></div>
+            <div className="doctor-empty-state"><IconBubble icon={HI.Calendar} tone="sky" size={40} /><p>No appointments yet.</p></div>
           ) : (
             <table className="doctor-table">
               <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
@@ -769,7 +771,7 @@ export default function DoctorPatientDetail({ profile }) {
           <div className="doctor-card">
             <h3>Consultation Notes ({notes.length})</h3>
             {notes.length === 0 ? (
-              <div className="doctor-empty-state"><FileText size={36} /><p>No notes for this patient yet.</p></div>
+              <div className="doctor-empty-state"><IconBubble icon={HI.PrescriptionDocument} tone="violet" size={40} /><p>No notes for this patient yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <Paged items={notes}>{(notes) => notes.map(n => (
@@ -815,7 +817,7 @@ export default function DoctorPatientDetail({ profile }) {
               }}>↻ Refresh</button>
             </div>
             {prescriptions.length === 0 ? (
-              <div className="doctor-empty-state"><Pill size={36} /><p>No prescriptions issued yet.</p></div>
+              <div className="doctor-empty-state"><IconBubble icon={HI.Medicines} tone="emerald" size={40} /><p>No prescriptions issued yet.</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <Paged items={prescriptions}>{(prescriptions) => prescriptions.map(rx => {
@@ -1207,7 +1209,7 @@ export default function DoctorPatientDetail({ profile }) {
                 </div>
               </>
             ) : (
-              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No vitals recorded by patient yet.</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><IconBubble icon={HI.BloodPressureMonitor} tone="rose" size={26} /><p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>No vitals recorded by patient yet.</p></div>
             )}
           </div>
 
@@ -1270,7 +1272,7 @@ export default function DoctorPatientDetail({ profile }) {
           {dailyFeelings.length === 0 ? (
             <div className="doctor-card">
               <div className="doctor-empty-state">
-                <span style={{ fontSize: '2rem' }}>😊</span>
+                <IconBubble icon={HI.FaceHappy} tone="amber" size={44} />
                 <h3>No daily check-ins yet</h3>
                 <p>The patient has not submitted any daily feeling reports.</p>
               </div>
@@ -1491,7 +1493,7 @@ export default function DoctorPatientDetail({ profile }) {
             {timeline.length === 0 ? (
               <div className="doctor-card">
                 <div className="doctor-empty-state">
-                  <Clock size={36} />
+                  <IconBubble icon={HI.Heartbeat} tone="rose" size={44} />
                   <h3>No timeline events yet</h3>
                   <p>Events appear here as the patient receives care — prescriptions, lab orders, scan orders, and results.</p>
                 </div>

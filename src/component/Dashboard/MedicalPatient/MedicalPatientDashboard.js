@@ -3,6 +3,8 @@ import AiAssistantFab from '../../Common/AiAssistantFab';
 import ClientWellness from '../../Common/ClientWellness';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import Journal from '../../Common/Journal';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import Community from '../../Common/Community';
 import SymptomTriage from '../../Common/SymptomTriage';
 import MyCarePlan from '../../Common/MyCarePlan';
@@ -730,7 +732,7 @@ function MedPatHome({ profile }) {
             <button className="mp-card-link" onClick={() => navigate('/dashboard/prescriptions')}>View all</button>
           </div>
           {loading ? <p className="mp-loading-text">Loading…</p> : prescriptions.length === 0 ? (
-            <div className="mp-empty-small"><Pill size={32} /><p>No prescriptions yet</p></div>
+            <div className="mp-empty-small"><IconBubble icon={HI.Medicines} tone="emerald" size={34} /><p>No prescriptions yet</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {prescriptions.map(rx => (
@@ -787,7 +789,7 @@ function MedPatHome({ profile }) {
               }
             });
             return doctors.length === 0 ? (
-              <div className="mp-empty-small"><User size={32} /><p>No doctors assigned yet</p></div>
+              <div className="mp-empty-small"><IconBubble icon={HI.Doctor} tone="blue" size={34} /><p>No doctors assigned yet</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 {doctors.map(d => (
@@ -811,7 +813,7 @@ function MedPatHome({ profile }) {
         <div className="mp-card">
           <div className="mp-card-header"><h3>Recent Activity</h3></div>
           {loading ? <p className="mp-loading-text">Loading…</p> : allAppts.length === 0 ? (
-            <div className="mp-empty-small"><Activity size={32} /><p>No activity yet</p></div>
+            <div className="mp-empty-small"><IconBubble icon={HI.Heartbeat} tone="rose" size={34} /><p>No activity yet</p></div>
           ) : (
             <div className="mp-activity-feed">
               {allAppts.slice(0, 5).map((a, i) => {
@@ -955,7 +957,7 @@ function MedPatHome({ profile }) {
         </div>
         {(stats.completed + stats.upcoming + stats.pending) === 0 ? (
           <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '0.5rem' }}>
-            <Activity size={36} color="#cbd5e1" />
+            <IconBubble icon={HI.HeartCardiogram} tone="sky" size={36} />
             <p style={{ margin: 0, fontSize: '0.875rem' }}>No appointment data yet</p>
           </div>
         ) : (
@@ -1519,7 +1521,7 @@ function MedPatAppointments({ profile }) {
             ))}
           </div>
           {loading ? <p className="mp-loading-text">Loading appointments…</p> : filtered.length===0 ? (
-            <div className="mp-empty"><Calendar size={40}/><p>No appointments found</p></div>
+            <div className="mp-empty"><IconBubble icon={HI.Calendar} tone="sky" size={44} /><p>No appointments found</p></div>
           ) : (
             <div className="mp-appt-list">
               {filtered.map(a => (
@@ -1979,9 +1981,7 @@ export function MedPatPrescriptions({ profile }) {
 
       {loading ? <p className="mp-loading-text">Loading…</p> : prescriptions.length === 0 ? (
         <div className="mp-card" style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
-            <Pill size={36} color="#059669" />
-          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '0 auto 1rem' }}><IconBubble icon={HI.Medicines} tone="emerald" size={48} /></div>
           <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No prescriptions yet</h3>
           <p style={{ color: '#64748b' }}>Prescriptions from your doctor will appear here after your consultation.</p>
         </div>
@@ -2325,7 +2325,7 @@ function MedPatMessages({ profile }) {
             {loading ? <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem', fontSize: '0.85rem' }}>Loading…</p>
               : filteredDoctors.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-                  <MessageSquare size={32} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}><IconBubble icon={HI.DoctorFemale} tone="blue" size={34} /></div>
                   <p style={{ margin: 0, fontSize: '0.85rem' }}>No doctors yet</p>
                 </div>
               ) : filteredDoctors.map(d => {
@@ -2381,6 +2381,7 @@ function MedPatMessages({ profile }) {
               <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                 {messages.length === 0 ? (
                   <div style={{ textAlign: 'center', margin: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Telemedicine} tone="sky" size={40} /></div>
                     <div style={{ background: 'rgba(255,255,255,0.85)', borderRadius: 12, padding: '0.6rem 1.25rem', display: 'inline-block', fontSize: '0.82rem', color: '#64748b' }}>No messages yet — send the first message</div>
                   </div>
                 ) : messages.map((m, i) => renderMessage(m, i))}
@@ -2484,7 +2485,7 @@ function MedPatHistory({ profile }) {
       <div className="mp-card">
         {loading ? <p className="mp-loading-text">Loading…</p> : tab === 'consultations' ? (
           history.length === 0 ? (
-            <div className="mp-empty"><CheckCircle size={40} /><h3>No consultations yet</h3><p>Completed appointments will appear here.</p></div>
+            <div className="mp-empty"><IconBubble icon={HI.Stethoscope} tone="blue" size={44} /><h3>No consultations yet</h3><p>Completed appointments will appear here.</p></div>
           ) : (
             <div className="mp-history-list">
               {history.map(a => (
@@ -2511,7 +2512,7 @@ function MedPatHistory({ profile }) {
           )
         ) : tab === 'prescriptions' ? (
           prescriptions.length === 0 ? (
-            <div className="mp-empty"><Pill size={40} /><h3>No prescriptions yet</h3><p>Prescriptions from your doctor will appear here.</p></div>
+            <div className="mp-empty"><IconBubble icon={HI.Medicines} tone="emerald" size={44} /><h3>No prescriptions yet</h3><p>Prescriptions from your doctor will appear here.</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {activeRx.length > 0 && (
@@ -2631,7 +2632,7 @@ function MedPatHistory({ profile }) {
             )}
 
             {!healthProfile && (
-              <div className="mp-empty"><Shield size={40} /><h3>No health records yet</h3><p>Your health information will appear here once added.</p></div>
+              <div className="mp-empty"><IconBubble icon={HI.HealthDataSecurity} tone="teal" size={44} /><h3>No health records yet</h3><p>Your health information will appear here once added.</p></div>
             )}
           </div>
         )}
@@ -2682,7 +2683,7 @@ function MedPatBilling({ profile }) {
         <div className="mp-card-header"><h3>Invoice History</h3></div>
         {loading ? <p className="mp-loading-text">Loading…</p> : appts.length === 0 ? (
           <div className="mp-empty">
-            <CreditCard size={40} />
+            <IconBubble icon={HI.MoneyBag} tone="amber" size={44} />
             <h3>No invoices yet</h3>
             <p>Billing records appear after completed consultations.</p>
           </div>
@@ -3072,7 +3073,7 @@ function MedPatHealthRecords({ profile }) {
 
       {records.length === 0 ? (
         <div className="mp-card mp-empty-state-card">
-          <FileText size={48} color="#cbd5e1" />
+          <div style={{ display: 'flex', justifyContent: 'center' }}><IconBubble icon={HI.HealthDataSync} tone="teal" size={48} /></div>
           <p style={{ fontWeight: 600, fontSize: '1rem', margin: '0.75rem 0 0.25rem' }}>No health records yet</p>
           <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.25rem' }}>Upload lab results, scans, or reports so your doctor has a full picture.</p>
         </div>
@@ -3882,7 +3883,7 @@ export function MedPatSettings({ profile, variant = 'medical' }) {
                     <p key={key} style={{ margin: 0, fontSize: '0.875rem', color: '#334155' }}><strong>{label}:</strong> {insuranceInfo[key]}</p>
                   ) : null)}
                 </div>
-              ) : <p style={{ color: '#94a3b8', fontSize: '0.875rem', margin: '0 0 0.875rem' }}>No insurance on file yet.</p>}
+              ) : <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '0 0 0.875rem' }}><IconBubble icon={HI.InsuranceCard} tone="violet" size={26} /><p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>No insurance on file yet.</p></div>}
               {!therapy && <a href="/dashboard/insurance" className="mp-btn mp-btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none' }}>
                 🛡️ {insuranceInfo ? 'Update Insurance' : 'Add Insurance'}
               </a>}
@@ -3891,7 +3892,7 @@ export function MedPatSettings({ profile, variant = 'medical' }) {
           <div style={card}>
             <h3 style={{ margin: '0 0 0.875rem', fontSize: '1rem', fontWeight: 700 }}>Billing History</h3>
             {billingHistory.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No billing records yet.</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><IconBubble icon={HI.Coins} tone="amber" size={26} /><p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>No billing records yet.</p></div>
             ) : billingHistory.slice(-8).reverse().map((b, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', borderBottom: '1px solid #f8fafc' }}>
                 <div>
@@ -4360,8 +4361,8 @@ export function MedPatEPharmacy({ profile }) {
           ) : prescriptions.length === 0 ? (
             <div className="mp-card">
               <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94a3b8' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>💊</div>
-                <h3 style={{ margin: '0 0 0.5rem', color: '#64748b' }}>No pharmacy prescriptions yet</h3>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Pharmacy} tone="emerald" size={48} /></div>
+                <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No pharmacy prescriptions yet</h3>
                 <p style={{ margin: 0, fontSize: '0.875rem' }}>When your doctor sends a prescription to a pharmacy, it will appear here with real-time status updates.</p>
               </div>
             </div>
@@ -4718,7 +4719,7 @@ export function MedPatTimeline({ profile }) {
         <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>Loading timeline…</div>
       ) : filtered.length === 0 ? (
         <div className="mp-card" style={{ textAlign: 'center', padding: '4rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🕐</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}><IconBubble icon={HI.Heartbeat} tone="rose" size={48} /></div>
           <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No events yet</h3>
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Your health events will appear here as you receive care.</p>
         </div>
@@ -4862,7 +4863,7 @@ export function MedPatDiagnostics({ profile }) {
         <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>Loading orders…</div>
       ) : filtered.length === 0 ? (
         <div className="mp-card" style={{ textAlign: 'center', padding: '4rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔬</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}><IconBubble icon={HI.MicroscopeWithSpecimen} tone="violet" size={48} /></div>
           <h3 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No orders yet</h3>
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>Diagnostic orders from your doctor will appear here.</p>
         </div>

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../services/apiClient';
+import * as HI from '@healthicons/react';
+import EmptyState, { IconBubble } from '../../Common/EmptyState';
 
 /*
  * Practice & engagement (super admin): how the practice tools, journal and
@@ -68,10 +70,10 @@ function Stat({ label, value, warn }) {
   );
 }
 
-function Block({ title, children, off }) {
+function Block({ title, children, off, icon, tone }) {
   return (
     <div style={S.card}>
-      <div style={S.blockHead}><b>{title}</b>{off ? <span style={S.offBadge}>Switched off</span> : null}</div>
+      <div style={S.blockHead}>{icon ? <IconBubble icon={icon} tone={tone} size={18} /> : null}<b>{title}</b>{off ? <span style={S.offBadge}>Switched off</span> : null}</div>
       <div style={S.stats}>{children}</div>
     </div>
   );
@@ -91,14 +93,14 @@ function Overview({ o }) {
           ))}
         </div>
       </div>
-      <Block title="My Journal" off={f.journal === false}>
+      <Block title="My Journal" icon={HI.MentalHealth} tone="violet" off={f.journal === false}>
         <Stat label="Entries" value={o.journal.entries} />
         <Stat label="People writing" value={o.journal.writers} />
         <Stat label="Shared with care team" value={o.journal.shared} />
         <Stat label="In a programme now" value={o.journal.inProgrammes} />
         <Stat label="Daily reminder on" value={o.journal.remindersOn} />
       </Block>
-      <Block title="Community" off={f.community === false}>
+      <Block title="Community" icon={HI.GroupDiscussionMeetingx3} tone="indigo" off={f.community === false}>
         <Stat label="Groups" value={o.community.groups} />
         <Stat label="Groups with no moderator" value={o.community.groupsWithoutModerator} warn={o.community.groupsWithoutModerator > 0} />
         <Stat label="Members" value={o.community.members} />
@@ -109,18 +111,18 @@ function Overview({ o }) {
         <Stat label="Moderator actions" value={o.community.moderatorActions} />
       </Block>
       <div style={S.linkRow}><Link to="/dashboard/community-moderation">Manage groups, moderators and the review queue ›</Link></div>
-      <Block title="Questionnaires (PHQ-9, GAD-7)" off={f.scoredMeasures === false}>
+      <Block title="Questionnaires (PHQ-9, GAD-7)" icon={HI.Psychology} tone="violet" off={f.scoredMeasures === false}>
         <Stat label="Sent" value={o.questionnaires.sent} />
         <Stat label="Answered" value={o.questionnaires.completed} />
         <Stat label="Self-harm answers" value={o.questionnaires.safetyFlags} warn={o.questionnaires.safetyFlags > 0} />
       </Block>
-      <Block title="Psychiatry record" off={f.psychRecord === false}>
+      <Block title="Psychiatry record" icon={HI.MentalHealthTherapy} tone="blue" off={f.psychRecord === false}>
         <Stat label="Mental status exams" value={o.psychRecord.mentalStatusExams} />
         <Stat label="Diagnoses added" value={o.psychRecord.diagnoses} />
         <Stat label="Treatment plans" value={o.psychRecord.treatmentPlans} />
         <Stat label="Private notes" value={o.psychRecord.privateNotes} />
       </Block>
-      <Block title="Intake forms and templates" off={f.intakeForms === false && f.customTemplates === false}>
+      <Block title="Intake forms and templates" icon={HI.HealthWorkerForm} tone="teal" off={f.intakeForms === false && f.customTemplates === false}>
         <Stat label="Packets sent" value={o.intake.sent} />
         <Stat label="Packets finished" value={o.intake.completed} />
         <Stat label="Signatures" value={o.intake.signatures} />
@@ -129,7 +131,7 @@ function Overview({ o }) {
         <Stat label="Client forms" value={o.templates.clientForms} />
         <Stat label="Notes written with a template" value={o.templates.notesWritten} />
       </Block>
-      <Block title="Practice tools">
+      <Block title="Practice tools" icon={HI.Stethoscope} tone="sky">
         <Stat label="Announcements" value={o.practice.announcements} />
         <Stat label="Clients reached" value={o.practice.announcementRecipients} />
         <Stat label="Calendar links on" value={o.practice.calendarLinks} />
@@ -139,7 +141,7 @@ function Overview({ o }) {
         <Stat label="Upcoming time off" value={o.practice.upcomingTimeOff} />
         <Stat label="Clinicians with goals" value={o.practice.goalsSet} />
       </Block>
-      <Block title="Reminder texts and calls">
+      <Block title="Reminder texts and calls" icon={HI.Phone} tone="amber">
         <Stat label="Texts sent" value={sum(texts, ['SENT', 'DELIVERED'])} />
         <Stat label="Texts failed" value={sum(texts, ['FAILED', 'UNDELIVERED'])} warn={sum(texts, ['FAILED', 'UNDELIVERED']) > 0} />
         <Stat label="Texts not sent (SMS not set up or off)" value={sum(texts, ['NOT_CONFIGURED', 'SWITCHED_OFF'])} />
@@ -176,7 +178,7 @@ function Safety({ onChanged }) {
       </p>
       <label style={S.check}><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show ones already followed up</label>
       {msg && <p style={S.ok}>{msg}</p>}
-      {list === null ? <p style={S.muted}>Loading…</p> : list.length === 0 ? <div style={S.card}><p style={{ margin: 0 }}>Nothing waiting. Every safety flag has been followed up.</p></div> : list.map((i) => {
+      {list === null ? <p style={S.muted}>Loading…</p> : list.length === 0 ? <div style={S.card}><EmptyState icon={HI.Heart} tone="emerald" title="Nothing waiting">Every safety flag has been followed up.</EmptyState></div> : list.map((i) => {
         const key = `${i.source}-${i.id}`;
         return (
           <div key={key} style={{ ...S.card, borderLeft: `4px solid ${i.followed_at ? '#94a3b8' : '#dc2626'}` }}>
@@ -208,7 +210,7 @@ function Announcements() {
   const [open, setOpen] = useState(null);
   useEffect(() => { api(`${BASE}/announcements?limit=200`).then((l) => setList(Array.isArray(l) ? l : [])).catch(() => setList([])); }, []);
   if (list === null) return <p style={S.muted}>Loading…</p>;
-  if (list.length === 0) return <div style={S.card}><p style={{ margin: 0 }}>No announcements yet.</p></div>;
+  if (list.length === 0) return <div style={S.card}><EmptyState icon={HI.CommunityMeeting} tone="pink" title="No announcements yet">When clinicians message many clients at once, it is logged here.</EmptyState></div>;
   return (
     <div style={S.card}>
       <table style={S.table}>

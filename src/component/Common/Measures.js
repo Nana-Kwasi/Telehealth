@@ -3,6 +3,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceArea, ResponsiveContainer,
 } from 'recharts';
 import { api } from '../../services/apiClient';
+import * as HI from '@healthicons/react';
+import EmptyState from './EmptyState';
 import './Measures.css';
 
 /*
@@ -114,7 +116,7 @@ function MeasureHistory({ def, rows }) {
         {last && <span className={`ms-band ms-band--${last.severity}`}>{last.score}/{def.maxScore} · {last.severityLabel}</span>}
       </div>
       {rows.length === 0 ? (
-        <p className="ms-muted">No results yet.</p>
+        <EmptyState compact icon={HI.Psychology} tone="violet" title="No results yet">Send a PHQ-9 or GAD-7 to see scores over time here.</EmptyState>
       ) : (
         <>
           <div className="ms-stats">
