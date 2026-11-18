@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, API_BASE } from '../../services/apiClient';
 import { TemplatesPanel } from './Templates';
+import { usePlatformFeatures, featureOn } from './platformFeatures';
 import './Measures.css';
 import './PsychRecord.css';
 import './Templates.css';
@@ -21,6 +22,7 @@ const fmtTime = (d) => (d ? new Date(d).toLocaleString(undefined, { weekday: 'sh
 const toIso = (local) => (local ? new Date(local).toISOString() : '');
 
 export default function PracticePage({ clientsPath = '/api/v1/therapy-management/clients' }) {
+  const features = usePlatformFeatures();
   return (
     <div className="ms-wrap" style={{ padding: '1.5rem', maxWidth: 900 }}>
       <h2 style={{ margin: 0 }}>Practice</h2>
@@ -28,15 +30,15 @@ export default function PracticePage({ clientsPath = '/api/v1/therapy-management
       <Goals />
       <Waitlist clientsPath={clientsPath} />
       <TimeOff />
-      <Policies />
-      <CalendarSync />
-      <Announcements clientsPath={clientsPath} />
-      <TemplatesPanel />
+      <Policies features={features} />
+      {featureOn(features, 'calendarSync') && <CalendarSync />}
+      {featureOn(features, 'practiceAnnouncements') && <Announcements clientsPath={clientsPath} />}
+      {featureOn(features, 'customTemplates') && <TemplatesPanel />}
     </div>
   );
 }
 
-function Policies() {
+function Policies({ features = {} }) {
   const [s, setS] = useState(null);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState('');
@@ -75,12 +77,15 @@ function Policies() {
         <input type="checkbox" checked={!!s.smsReminders} onChange={(e) => save({ smsReminders: e.target.checked })} />
         Text clients a reminder the day before (to verified numbers; the text does not name you or the service)
       </label>
-      <h4 className="tp-sub">Automatic help</h4>
+      {(featureOn(features, 'waitlistAutoOffers') || featureOn(features, 'reminderCalls')) && <h4 className="tp-sub">Automatic help</h4>}
+      {featureOn(features, 'waitlistAutoOffers') && <>
       <label className="pr-check">
         <input type="checkbox" checked={!!s.autoOfferWaitlist} onChange={(e) => automate({ autoOfferWaitlist: e.target.checked })} />
         When a session is cancelled, offer the time to the person who has waited longest on my waitlist
       </label>
-      <p className="ms-muted pr-hint">Not offered when the time is less than 3 hours away, inside your time off, or already booked again. One person per freed time.</p>
+      <p className="ms-muted pr-hint">Not offered when the time is only a few hours away, inside your time off, or already booked again. One person per freed time.</p>
+      </>}
+      {featureOn(features, 'reminderCalls') && <>
       <label className="pr-check">
         <input type="checkbox" checked={!!s.voiceReminders} onChange={(e) => automate({ voiceReminders: e.target.checked })} />
         Also phone clients with an automated reminder the day before
@@ -89,6 +94,7 @@ function Policies() {
         The call names neither you nor the service, and is never placed between 8 pm and 8 am.
         {!s.voiceAvailable && ' Reminder calls are not switched on for NessaHub yet, so nothing is dialled until they are.'}
       </p>
+      </>}
       {saved && <p className="ms-ok">{saved}</p>}
       {error && <p className="ms-err">{error}</p>}
     </div>

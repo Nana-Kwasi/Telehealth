@@ -5,6 +5,7 @@ import ReferralComposer from '../../Common/ReferralComposer';
 import TransfersPage from '../../Common/TransfersPage';
 import PracticePage from '../../Common/PracticePage';
 import { CommunityModeration } from '../../Common/Community';
+import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -92,6 +93,7 @@ export default function TherapistDashboard({ profile }) {
     profile?.isAdminTherapist === true ||
     therapistRole === 'admin';
 
+  const features = usePlatformFeatures();
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: 'Home', component: TherapistHome },
     { path: '/dashboard/clients', icon: Users, label: 'Clients', component: TherapistClients },
@@ -101,7 +103,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/practice', icon: Clock, label: 'My Practice', component: PracticePage },
-    { path: '/dashboard/community-moderation', icon: ModIcon, label: 'Community moderation', component: CommunityModeration },
+    { path: '/dashboard/community-moderation', icon: ModIcon, label: 'Community moderation', component: CommunityModeration, feature: 'community' },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     // Psychiatry: prescribing for psychiatry-track clients — the doctor's flow, copied.
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: TherapistPrescriptions },
@@ -207,7 +209,7 @@ export default function TherapistDashboard({ profile }) {
           <div className="nav-section">
             <h3>MAIN MENU</h3>
             <ul className="nav-list">
-              {navigationItems.map((item) => (
+              {navigationItems.filter((i) => featureOn(features, i.feature)).map((item) => (
                 <li key={item.path}>
                   <button
                     className={`nav-item ${isActiveRoute(item.path) ? 'active' : ''}`}

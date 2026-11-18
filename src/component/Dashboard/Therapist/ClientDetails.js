@@ -48,6 +48,7 @@ import { RecordGapsBanner, TimelinePanel, MsePanel, DiagnosisPlanPanel, PrivateN
 import { ShareIntakeModal, IntakeStatus } from '../../Common/Intake';
 import { TemplateNoteModal } from '../../Common/Templates';
 import { SharedJournalPanel } from '../../Common/Journal';
+import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import { AddToWaitlistButton } from '../../Common/PracticePage';
 
 const noteCardStyle = {
@@ -436,6 +437,7 @@ export default function ClientDetails() {
 
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showTemplateNote, setShowTemplateNote] = useState(false);
+  const features = usePlatformFeatures();
   const [shareOpen, setShareOpen] = useState(false);
   const [shareSent, setShareSent] = useState('');
   const [recordVersion, setRecordVersion] = useState(0);
@@ -835,9 +837,11 @@ export default function ClientDetails() {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   };
 
+  // Tabs whose feature the super admin can switch off in System Config.
+  const TAB_FEATURE = { measures: 'scoredMeasures', mse: 'psychRecord', diagnosis: 'psychRecord', private: 'psychRecord' };
   const TABS = ['overview', 'timeline', 'sessions', 'notes', 'measures', 'mse', 'diagnosis', 'private', 'mood', 'journal', 'goals',
     // Psychiatry: the doctor page's Prescriptions and E-Pharmacy tabs.
-    ...(isPsychiatryClient ? ['prescriptions', 'epharmacy'] : [])];
+    ...(isPsychiatryClient ? ['prescriptions', 'epharmacy'] : [])].filter((t) => featureOn(features, TAB_FEATURE[t]));
   const TAB_LABELS = { epharmacy: 'E-Pharmacy', mse: 'Mental status', diagnosis: 'Diagnosis & plan', private: 'Private notes' };
 
   if (loading) {
@@ -946,9 +950,9 @@ export default function ClientDetails() {
 
         {/* ── Action Buttons Row ── */}
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid #f1f5f9' }}>
-          <button onClick={() => setShareOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {featureOn(features, 'intakeForms') && <button onClick={() => setShareOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             Share forms
-          </button>
+          </button>}
           <AddToWaitlistButton clientId={clientId} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', borderRadius: 10, border: '1.5px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }} />
           <button
             onClick={() => setTransferOpen(true)}
@@ -1542,9 +1546,9 @@ export default function ClientDetails() {
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Therapy Notes ({therapyNotes.length})</h3>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button className="btn-secondary" onClick={() => setShowTemplateNote(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
+                {featureOn(features, 'customTemplates') && <button className="btn-secondary" onClick={() => setShowTemplateNote(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
                   <FileText size={14} /> Write with my template
-                </button>
+                </button>}
                 <button className="btn-primary" onClick={() => setShowNoteModal(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
                   <FileText size={14} /> Add Note
                 </button>

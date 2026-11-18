@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Calendar, User, BookOpen, Clock, TrendingUp, Activity, Target, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard, Plus, Pill } from 'lucide-react';
 import './Home.css';
@@ -61,6 +62,7 @@ ChartJS.register(
 );
 
 export default function ClientHome({ profile }) {
+  const platformFeatures = usePlatformFeatures();
   const navigate = useNavigate();
 
   // Psychiatry: the medical patient home's Prescriptions card and shortcuts.
@@ -1909,8 +1911,8 @@ export default function ClientHome({ profile }) {
     <div className="dashboard-home">
       {/* A transfer to another therapist waiting for this client's consent. */}
       <TransferConsentCard kind="THERAPY" />
-      <MyIntakeForms />
-      <MyQuestionnaires />
+      {featureOn(platformFeatures, 'intakeForms') && <MyIntakeForms />}
+      {featureOn(platformFeatures, 'scoredMeasures') && <MyQuestionnaires />}
       {clientData?.coupleId ? (
         <div
           role="button"

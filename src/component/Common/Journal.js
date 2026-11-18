@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { api, uploadFile, API_BASE } from '../../services/apiClient';
+import { usePlatformFeatures, featureOn } from './platformFeatures';
 import './Measures.css';
 import './PsychRecord.css';
 import './Journal.css';
@@ -46,6 +47,7 @@ export function JournalText({ text }) {
 
 export default function Journal() {
   const navigate = useNavigate();
+  const canWrite = featureOn(usePlatformFeatures(), 'journal');
   const [entries, setEntries] = useState(null);
   const [overview, setOverview] = useState(null);
   const [programs, setPrograms] = useState([]);
@@ -105,7 +107,7 @@ export default function Journal() {
           <p className="ms-muted" style={{ margin: '0.2rem 0 0' }}>Your private record of how you are doing. Only you can see it, unless you share an entry with your care team.</p>
         </div>
         <div className="jr-head-actions no-print">
-          <button className="ms-btn" onClick={() => setEditing({ entry_date: todayStr(), area: 'health' })}>New entry</button>
+          {canWrite && <button className="ms-btn" onClick={() => setEditing({ entry_date: todayStr(), area: 'health' })}>New entry</button>}
           <button className="ms-link" onClick={() => window.print()}>Print or save as PDF</button>
         </div>
       </div>
@@ -118,6 +120,7 @@ export default function Journal() {
         </div>
       )}
       {error && <p className="ms-err">{error}</p>}
+      {!canWrite && <div className="pr-gaps" style={{ display: 'block' }}>Writing new entries is switched off on NessaHub at the moment. You can still read, search and print everything you wrote.</div>}
 
       {overview && (
         <div className="tp-stats jr-stats">
@@ -129,7 +132,7 @@ export default function Journal() {
         </div>
       )}
 
-      {overview && overview.prompts.length > 0 && (
+      {canWrite && overview && overview.prompts.length > 0 && (
         <div className="ms-card no-print">
           <h3 className="ms-title">Today's prompts</h3>
           {overview.prompts.map((p) => (
@@ -172,14 +175,14 @@ export default function Journal() {
           </div>
         </div>
         {entries === null ? <p className="ms-muted">Loading…</p>
-          : view === 'calendar' ? <CalendarView entries={entries} onOpen={(e) => setEditing(e)} onNew={(d) => setEditing({ entry_date: d, area: 'health' })} />
+          : view === 'calendar' ? <CalendarView entries={entries} onOpen={(e) => canWrite && setEditing(e)} onNew={(d) => canWrite && setEditing({ entry_date: d, area: 'health' })} />
           : entries.length === 0 ? <p className="ms-muted">No entries yet. Start with how today went, a mood, or a photo.</p>
           : entries.map((e) => (
-            <EntryCard key={e.id} entry={e} onEdit={() => setEditing(e)} onDelete={() => remove(e.id)} onShare={() => shareToCommunity(e)} />
+            <EntryCard key={e.id} entry={e} readOnly={!canWrite} onEdit={() => setEditing(e)} onDelete={() => remove(e.id)} onShare={() => shareToCommunity(e)} />
           ))}
       </div>
 
-      <div className="ms-card no-print">
+      {canWrite && <div className="ms-card no-print">
         <h3 className="ms-title">Guided programmes</h3>
         <p className="ms-muted pr-hint">A prompt a day for a week. Start one whenever you like.</p>
         <ul className="ms-pending">
@@ -192,9 +195,9 @@ export default function Journal() {
             </li>
           ))}
         </ul>
-      </div>
+      </div>}
 
-      {settings && <ReminderSetting settings={settings} onChange={setSettings} />}
+      {canWrite && settings && <ReminderSetting settings={settings} onChange={setSettings} />}
     </div>
   );
 }
@@ -283,7 +286,7 @@ function CalendarView({ entries, onOpen, onNew }) {
   );
 }
 
-function EntryCard({ entry, onEdit, onDelete, onShare }) {
+function EntryCard({ entry, readOnly, onEdit, onDelete, onShare }) {
   const [confirm, setConfirm] = useState(false);
   const mood = moodOf(entry.mood);
   const m = entry.measures || {};
@@ -291,12 +294,12 @@ function EntryCard({ entry, onEdit, onDelete, onShare }) {
     <article className="jr-entry">
       <header>
         <span className="ms-muted">{fmtDay(entry.entry_date)} · {areaLabel(entry.area)}{mood ? ` · ${mood[1]} ${mood[2]}` : ''}{entry.shared_with_care ? ' · shared with my care team' : ''}</span>
-        <span className="no-print">
+        {!readOnly && <span className="no-print">
           <button className="ms-link" onClick={onEdit}>Edit</button>
           <button className="ms-link" onClick={onShare}>Post to a group</button>
           {confirm ? <><button className="ms-link" style={{ color: '#b91c1c' }} onClick={onDelete}>Yes, delete</button><button className="ms-link" onClick={() => setConfirm(false)}>Keep</button></>
             : <button className="ms-link" onClick={() => setConfirm(true)}>Delete</button>}
-        </span>
+        </span>}
       </header>
       {entry.title && <h4 style={{ margin: '0.3rem 0' }}>{entry.title}</h4>}
       <JournalText text={entry.body} />

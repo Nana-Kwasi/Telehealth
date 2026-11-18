@@ -6,6 +6,7 @@ import ReferralComposer from '../../Common/ReferralComposer';
 import TransfersPage from '../../Common/TransfersPage';
 import PracticePage from '../../Common/PracticePage';
 import { CommunityModeration } from '../../Common/Community';
+import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -63,13 +64,14 @@ export default function DoctorDashboard({ profile }) {
       .catch(() => {});
   }, [profile?.id]);
 
+  const features = usePlatformFeatures();
   const navigationItems = [
     { path: '/dashboard', icon: Home, label: 'Home' },
     { path: '/dashboard/patients', icon: Users, label: 'Patients' },
     { path: '/dashboard/patient-panel', icon: LayoutDashboard, label: 'Patient Panel' },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments' },
     { path: '/dashboard/practice', icon: Calendar, label: 'My Practice' },
-    { path: '/dashboard/community-moderation', icon: ModIcon, label: 'Community moderation' },
+    { path: '/dashboard/community-moderation', icon: ModIcon, label: 'Community moderation', feature: 'community' },
     { path: '/dashboard/video', icon: Video, label: 'Video Calls' },
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/dashboard/notes', icon: FileText, label: 'Notes' },
@@ -135,7 +137,7 @@ export default function DoctorDashboard({ profile }) {
           <div className="nav-section">
             <h3>NAVIGATION</h3>
             <ul className="nav-list">
-              {navigationItems.map((item) => (
+              {navigationItems.filter((i) => featureOn(features, i.feature)).map((item) => (
                 <li key={item.path}>
                   <button
                     className={`nav-item ${isActiveRoute(item.path) ? 'active' : ''}`}

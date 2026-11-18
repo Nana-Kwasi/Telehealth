@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import AiAssistantFab from '../../Common/AiAssistantFab';
 import ClientWellness from '../../Common/ClientWellness';
+import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import Journal from '../../Common/Journal';
 import Community from '../../Common/Community';
 import SymptomTriage from '../../Common/SymptomTriage';
@@ -152,6 +153,7 @@ function StatusBadge({ status }) {
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
 function MedPatHome({ profile }) {
+  const platformFeatures = usePlatformFeatures();
   const navigate = useNavigate();
   const [appts, setAppts] = useState([]);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
@@ -436,8 +438,8 @@ function MedPatHome({ profile }) {
     <div className="mp-page">
       {/* A transfer of this patient's care waiting for their consent. */}
       <TransferConsentCard kind="MEDICAL" />
-      <MyIntakeForms />
-      <MyQuestionnaires />
+      {featureOn(platformFeatures, 'intakeForms') && <MyIntakeForms />}
+      {featureOn(platformFeatures, 'scoredMeasures') && <MyQuestionnaires />}
       {/* ── Welcome hero ──────────────────────────────────────────────────
           Was a single cramped row: avatar and greeting squeezed against a
           red-outlined vitals box and a button, with no room for any of them.
@@ -5010,6 +5012,7 @@ export default function MedicalPatientDashboard({ profile }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const features = usePlatformFeatures();
   const NAV = [
     { path: '/dashboard',               icon: Home,         label: 'Home' },
     { path: '/dashboard/timeline',      icon: Clock,        label: 'Health Timeline' },
@@ -5032,7 +5035,7 @@ export default function MedicalPatientDashboard({ profile }) {
     { path: '/dashboard/my-care',       icon: Pill,          label: 'My Care' },
     { path: '/dashboard/my-records',   icon: Search,        label: 'My Records' },
     { path: '/dashboard/journal',       icon: PenLine,      label: 'My Journal' },
-    { path: '/dashboard/community',     icon: Users,        label: 'Community' },
+    { path: '/dashboard/community',     icon: Users,        label: 'Community', feature: 'community' },
     { path: '/dashboard/wellness',      icon: Leaf,         label: 'Wellness' },
     { path: '/dashboard/notifications', icon: Bell,         label: 'Notifications' },
     { path: '/dashboard/ai-assistant',  icon: Sparkles,     label: 'NessaHub Assistant' },
@@ -5061,7 +5064,7 @@ export default function MedicalPatientDashboard({ profile }) {
 
         <nav className="mp-nav">
           <p className="mp-nav-label">MAIN MENU</p>
-          {NAV.map(item => (
+          {NAV.filter((i) => featureOn(features, i.feature)).map(item => (
             <button
               key={item.path}
               className={`mp-nav-item ${isActive(item.path) ? 'active' : ''}`}

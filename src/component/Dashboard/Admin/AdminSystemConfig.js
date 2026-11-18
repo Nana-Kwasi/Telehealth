@@ -21,6 +21,7 @@ const SECTIONS = [
   { key: 'onboarding', label: 'Provider onboarding', icon: '📝', sub: 'The application portal: compliance contacts and where applicants send documents.' },
   { key: 'dataRetention', label: 'Data & retention', icon: '🗄', sub: 'How long records are kept. Medical records: never under 7 years.' },
   { key: 'features', label: 'Features', icon: '🧩', sub: 'Switch whole features on or off for everyone.' },
+  { key: 'engagement', label: 'Practice & community', icon: '🤝', sub: 'Limits for announcements, community groups, waitlist offers and reminder calls.' },
 ];
 
 const when = (v) => (v ? new Date(v).toLocaleString() : '');
