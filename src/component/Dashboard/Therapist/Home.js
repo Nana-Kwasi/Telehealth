@@ -28,6 +28,7 @@ import { mergeLocationProfile, fetchAuthLocationProfile } from '../../../utils/l
 import WeatherCard from '../../Common/WeatherCard';
 import ClinicianStatus, { clinicianStatusOf } from '../../Common/ClinicianStatus';
 import DailyBrief from '../../Common/DailyBrief';
+import { GoalsStrip } from '../../Common/PracticePage';
 import SessionsToReview from '../../Common/SessionsToReview';
 import InboxTriagePanel from '../../Common/InboxTriagePanel';
 import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
@@ -849,6 +850,7 @@ export default function TherapistHome({ profile }) {
         {/* Counted server-side; the model only writes the sentence over those
             figures, so the card is right even when the model is not there. */}
         <DailyBrief role="THERAPIST" />
+        <GoalsStrip />
 
         {/* Transcribed sessions whose notes are not saved yet. */}
         <SessionsToReview />

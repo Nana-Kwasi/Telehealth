@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
+import { TemplateFields, AnswersView, missingRequired } from './Templates';
 import './Measures.css';
 import './PsychRecord.css';
 
@@ -16,6 +17,7 @@ export function ShareIntakeModal({ clientId, clientName, onClose, onSent }) {
   const [catalog, setCatalog] = useState(null);
   const [docs, setDocs] = useState([]);
   const [measures, setMeasures] = useState([]);
+  const [forms, setForms] = useState([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -30,7 +32,7 @@ export function ShareIntakeModal({ clientId, clientName, onClose, onSent }) {
   const send = async () => {
     setBusy(true); setError('');
     try {
-      const r = await api('/api/v1/intake/packets', { method: 'POST', body: { clientId, documents: docs, measures, message } });
+      const r = await api('/api/v1/intake/packets', { method: 'POST', body: { clientId, documents: docs, measures, forms, message } });
       onSent && onSent(r);
       onClose();
     } catch (e) { setError(e?.message || 'Could not send.'); setBusy(false); }
@@ -48,6 +50,14 @@ export function ShareIntakeModal({ clientId, clientName, onClose, onSent }) {
                 <input type="checkbox" checked={docs.includes(d.key)} onChange={() => toggle(docs, setDocs, d.key)} /> {d.title}
               </label>
             ))}
+            {(catalog.forms || []).length > 0 && <>
+              <p className="ms-muted" style={{ marginTop: '0.75rem' }}>My forms</p>
+              {catalog.forms.map((f) => (
+                <label key={f.id} className="pr-check" style={{ display: 'flex', margin: '0.3rem 0' }}>
+                  <input type="checkbox" checked={forms.includes(f.id)} onChange={() => toggle(forms, setForms, f.id)} /> {f.name}
+                </label>
+              ))}
+            </>}
             <p className="ms-muted" style={{ marginTop: '0.75rem' }}>Questionnaires</p>
             {catalog.measures.map((m) => (
               <label key={m.code} className="pr-check" style={{ display: 'flex', margin: '0.3rem 0' }}>
@@ -60,7 +70,7 @@ export function ShareIntakeModal({ clientId, clientName, onClose, onSent }) {
             {error && <p className="ms-err">{error}</p>}
             <div className="ms-actions">
               <button className="ms-link" onClick={onClose} disabled={busy}>Cancel</button>
-              <button className="ms-btn" onClick={send} disabled={busy || (docs.length === 0 && measures.length === 0)}>{busy ? 'Sending…' : 'Send'}</button>
+              <button className="ms-btn" onClick={send} disabled={busy || (docs.length === 0 && measures.length === 0 && forms.length === 0)}>{busy ? 'Sending…' : 'Send'}</button>
             </div>
           </>
         )}
@@ -71,19 +81,38 @@ export function ShareIntakeModal({ clientId, clientName, onClose, onSent }) {
 
 export function IntakeStatus({ clientId, refreshKey }) {
   const [packets, setPackets] = useState([]);
+  const [viewing, setViewing] = useState(null);
   useEffect(() => {
     api(`/api/v1/intake/clients/${clientId}`).then((p) => setPackets(Array.isArray(p) ? p : [])).catch(() => setPackets([]));
   }, [clientId, refreshKey]);
   const open = packets.filter((p) => p.status === 'sent');
-  if (open.length === 0) return null;
+  const answered = packets.flatMap((p) => (p.forms || []).filter((f) => f.submittedAt).map((f) => ({ ...f, packetId: p.id })));
+  if (open.length === 0 && answered.length === 0) return null;
   return (
     <div className="ms-card ms-client">
-      <h3 className="ms-title">Forms waiting for the client</h3>
+      {open.length > 0 && <h3 className="ms-title">Forms waiting for the client</h3>}
       {open.map((p) => (
         <p key={p.id} className="ms-muted" style={{ margin: '0.25rem 0' }}>
-          Sent {fmt(p.created_at)}: {p.documents.map((d) => `${d.title} ${d.signedAt ? '✓ signed' : '(not signed yet)'}`).join(' · ')}
+          Sent {fmt(p.created_at)}: {[
+            ...p.documents.map((d) => `${d.title} ${d.signedAt ? '✓ signed' : '(not signed yet)'}`),
+            ...(p.forms || []).map((f) => `${f.name} ${f.submittedAt ? '✓ filled in' : '(not filled in yet)'}`),
+          ].join(' · ')}
         </p>
       ))}
+      {answered.length > 0 && <>
+        <h3 className="ms-title" style={{ marginTop: open.length ? '0.75rem' : 0 }}>Forms the client filled in</h3>
+        <ul className="ms-pending">
+          {answered.map((f) => (
+            <li key={`${f.packetId}-${f.id}`}>
+              <span>{f.name} <span className="ms-muted">· {fmt(f.submittedAt)}</span></span>
+              <button className="ms-link" onClick={() => setViewing(viewing && viewing.packetId === f.packetId && viewing.id === f.id ? null : f)}>
+                {viewing && viewing.packetId === f.packetId && viewing.id === f.id ? 'Hide' : 'View answers'}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {viewing && <AnswersView fields={viewing.fields} answers={viewing.answers} />}
+      </>}
     </div>
   );
 }
@@ -97,13 +126,16 @@ export function MyIntakeForms() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  if (reading && reading.form) {
+    return <FillForm packet={reading.packet} form={reading.form} onClose={() => setReading(null)} onSent={() => { setReading(null); load(); }} />;
+  }
   if (reading) {
     return <SignForm packet={reading.packet} doc={reading.doc} onClose={() => setReading(null)} onSigned={() => { setReading(null); load(); }} />;
   }
   if (packets.length === 0) return null;
   return (
     <div className="ms-card ms-client">
-      <h3 className="ms-title">Forms to read and sign</h3>
+      <h3 className="ms-title">Forms from your clinician</h3>
       {packets.map((p) => (
         <div key={p.id}>
           <p className="ms-muted" style={{ margin: '0 0 0.4rem' }}>From {p.clinician_name || 'your clinician'}{p.message ? `: “${p.message}”` : ''}</p>
@@ -113,6 +145,13 @@ export function MyIntakeForms() {
                 <span>{d.title}</span>
                 {d.signedAt ? <span className="ms-ok" style={{ margin: 0 }}>Signed</span>
                   : <button className="ms-btn" onClick={() => setReading({ packet: p, doc: d })}>Read and sign</button>}
+              </li>
+            ))}
+            {(p.forms || []).map((f) => (
+              <li key={f.id}>
+                <span>{f.name}</span>
+                {f.submittedAt ? <span className="ms-ok" style={{ margin: 0 }}>Sent</span>
+                  : <button className="ms-btn" onClick={() => setReading({ packet: p, form: f })}>Fill in</button>}
               </li>
             ))}
           </ul>
@@ -148,6 +187,34 @@ function SignForm({ packet, doc, onClose, onSigned }) {
       <div className="ms-actions">
         <button className="ms-link" onClick={onClose} disabled={busy}>Later</button>
         <button className="ms-btn" onClick={sign} disabled={busy || !agree || name.trim().length < 2}>{busy ? 'Signing…' : 'Sign'}</button>
+      </div>
+    </div>
+  );
+}
+
+function FillForm({ packet, form, onClose, onSent }) {
+  const [answers, setAnswers] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const send = async () => {
+    const missing = missingRequired(form.fields || [], answers);
+    if (missing.length) { setError(`Please answer “${missing[0].label}”.`); return; }
+    setBusy(true); setError('');
+    try {
+      await api(`/api/v1/intake/packets/${packet.id}/forms/${form.id}`, { method: 'POST', body: { answers } });
+      onSent();
+    } catch (e) { setError(e?.message || 'Could not send.'); setBusy(false); }
+  };
+  return (
+    <div className="ms-card ms-client pr-doc">
+      <h3 className="ms-title">{form.name}</h3>
+      {form.description && <p className="ms-muted">{form.description}</p>}
+      <p className="ms-muted" style={{ fontSize: '0.8rem' }}>Only your clinician sees your answers. Questions marked * need an answer.</p>
+      <TemplateFields fields={form.fields || []} answers={answers} onChange={setAnswers} />
+      {error && <p className="ms-err">{error}</p>}
+      <div className="ms-actions">
+        <button className="ms-link" onClick={onClose} disabled={busy}>Later</button>
+        <button className="ms-btn" onClick={send} disabled={busy}>{busy ? 'Sending…' : 'Send to my clinician'}</button>
       </div>
     </div>
   );

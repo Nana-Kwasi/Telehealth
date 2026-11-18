@@ -98,7 +98,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/video', icon: Video, label: 'Video Call', component: TherapistVideoCall },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
-    { path: '/dashboard/practice', icon: Clock, label: 'Waitlist & Time Off', component: PracticePage },
+    { path: '/dashboard/practice', icon: Clock, label: 'My Practice', component: PracticePage },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     // Psychiatry: prescribing for psychiatry-track clients — the doctor's flow, copied.
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: TherapistPrescriptions },

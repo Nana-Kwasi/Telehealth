@@ -46,6 +46,7 @@ import TransferPatientModal from '../../Common/TransferPatientModal';
 import { MeasuresPanel } from '../../Common/Measures';
 import { RecordGapsBanner, TimelinePanel, MsePanel, DiagnosisPlanPanel, PrivateNotesPanel } from '../../Common/PsychRecord';
 import { ShareIntakeModal, IntakeStatus } from '../../Common/Intake';
+import { TemplateNoteModal } from '../../Common/Templates';
 import { AddToWaitlistButton } from '../../Common/PracticePage';
 
 const noteCardStyle = {
@@ -433,6 +434,7 @@ export default function ClientDetails() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showTemplateNote, setShowTemplateNote] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareSent, setShareSent] = useState('');
   const [recordVersion, setRecordVersion] = useState(0);
@@ -1537,9 +1539,14 @@ export default function ClientDetails() {
           <div style={cardStyle}>
             <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Therapy Notes ({therapyNotes.length})</h3>
-              <button className="btn-primary" onClick={() => setShowNoteModal(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
-                <FileText size={14} /> Add Note
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="btn-secondary" onClick={() => setShowTemplateNote(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
+                  <FileText size={14} /> Write with my template
+                </button>
+                <button className="btn-primary" onClick={() => setShowNoteModal(true)} style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
+                  <FileText size={14} /> Add Note
+                </button>
+              </div>
             </div>
             {therapyNotes.length === 0 ? (
               <div style={{ padding: '2.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>No therapy notes yet.</div>
@@ -1729,6 +1736,9 @@ export default function ClientDetails() {
       )}
 
       {/* ── Modals ── */}
+      {showTemplateNote && (
+        <TemplateNoteModal clientId={clientId} onClose={() => setShowTemplateNote(false)} onSaved={() => { reloadNotes(); recordChanged(); }} />
+      )}
       {showNoteModal && (
         <TherapyNoteModal
           clientId={clientId}

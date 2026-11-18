@@ -66,7 +66,7 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/patients', icon: Users, label: 'Patients' },
     { path: '/dashboard/patient-panel', icon: LayoutDashboard, label: 'Patient Panel' },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments' },
-    { path: '/dashboard/practice', icon: Calendar, label: 'Waitlist & Time Off' },
+    { path: '/dashboard/practice', icon: Calendar, label: 'My Practice' },
     { path: '/dashboard/video', icon: Video, label: 'Video Calls' },
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/dashboard/notes', icon: FileText, label: 'Notes' },
