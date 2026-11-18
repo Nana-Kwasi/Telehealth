@@ -1619,7 +1619,7 @@ function MedPatAppointments({ profile }) {
                 <label style={{ fontSize:'0.83rem',fontWeight:700,color:'#374151' }}>Select Doctor</label>
                 {myDoctors.length===0 ? (
                   <div style={{ padding:'0.75rem',background:'#f8fafc',borderRadius:10,fontSize:'0.85rem',color:'#64748b',textAlign:'center' }}>
-                    No doctors yet. <button className="mp-btn mp-btn-primary mp-btn-sm" style={{ marginLeft:8 }} onClick={() => { setScheduleDay(null); navigate('/doctors'); }}>Find a Doctor</button>
+                    <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 8 }}><IconBubble icon={HI.Doctor} tone="blue" size={18} /></span>No doctors yet. <button className="mp-btn mp-btn-primary mp-btn-sm" style={{ marginLeft:8 }} onClick={() => { setScheduleDay(null); navigate('/doctors'); }}>Find a Doctor</button>
                   </div>
                 ) : (
                   <select
@@ -4581,7 +4581,7 @@ export function MedPatEPharmacy({ profile }) {
             <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading pharmacies…</p>
           ) : filteredPh.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🏪</div>
+              <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Pharmacy} tone="emerald" size={48} /></span>
               <p>{searchPh ? 'No pharmacies match your search.' : 'No active pharmacies available.'}</p>
             </div>
           ) : (

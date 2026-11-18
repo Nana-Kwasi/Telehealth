@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { getStoredUserId } from '../../services/apiClient';
 import {
@@ -94,10 +96,10 @@ export default function TransfersPage({ role = 'DOCTOR', admin = false }) {
       {error ? <div className="ct-error">{error}</div> : null}
       {rows === null ? <div className="ct-empty">Loading…</div> : (
         <div className="ct-list">
-          {groups[tab].length === 0 ? <div className="ct-empty">{
+          {groups[tab].length === 0 ? <div className="ct-empty"><EmptyLine icon={HI.Hospital} tone="blue">{
             tab === 'incoming' ? (admin ? 'No transfers in progress.' : 'No transfer requests are waiting for you.')
               : tab === 'sent' ? 'You have no transfers in progress.' : 'No finished transfers yet.'
-          }</div> : groups[tab].map((t) => (
+          }</EmptyLine></div> : groups[tab].map((t) => (
             <TransferRow key={t.id} t={t} me={me} admin={admin} isDoctor={isDoctor}
               expanded={openId === t.id} onToggle={() => setOpenId(openId === t.id ? null : t.id)} onChanged={load} />
           ))}
@@ -240,7 +242,7 @@ function TransferDetail({ id, me, admin, isDoctor, onChanged }) {
             choosing ? (
               <div className="ct-pick">
                 <div className="ct-pick-group">Choose another {isDoctor ? 'doctor' : 'therapist'}</div>
-                {options.length === 0 ? <span className="ct-meta">No other matching clinician is available right now.</span> : options.map((o) => (
+                {options.length === 0 ? <span className="ct-meta"><EmptyLine icon={HI.Calendar} tone="sky">No other matching clinician is available right now.</EmptyLine></span> : options.map((o) => (
                   <button type="button" key={o.id} className={`ct-option${pick === o.id ? ' is-on' : ''}`} onClick={() => setPick(o.id)}>
                     <div><strong>{isDoctor ? `Dr. ${o.name}` : o.name}</strong><span>{o.specialization || o.professionalType || ''}{o.reasons?.length ? ` · ${o.reasons.join(' · ')}` : ''}</span></div>
                     <span className="ct-score">{o.score}%</span>

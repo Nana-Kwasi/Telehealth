@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { api } from '../../../services/apiClient';
@@ -108,7 +110,7 @@ export default function AdminActivityMonitor() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
             <thead><tr>{['When', 'Who', 'Kind', 'What', 'Result', 'Record', 'App', 'IP'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-            <tbody>{rows.length === 0 ? <tr><td colSpan={8} style={{ ...td, color: '#94a3b8' }}>{busy ? 'Loading…' : 'No activity matches.'}</td></tr> : <Paged items={rows} table>{(rows) => rows.map((r) => (
+            <tbody>{rows.length === 0 ? <tr><td colSpan={8} style={{ ...td, color: '#94a3b8' }}>{busy ? 'Loading…' : <EmptyLine icon={HI.Heartbeat} tone="rose">No activity matches.</EmptyLine>}</td></tr> : <Paged items={rows} table>{(rows) => rows.map((r) => (
               <tr key={r.id}>
                 <td style={{ ...td, whiteSpace: 'nowrap' }}>{when(r.createdAt)}</td>
                 <td style={td}>{r.userId ? <button type="button" onClick={() => navigate(profilePath(r.role, r.userId))} style={{ border: 'none', background: 'none', padding: 0, color: '#1d4ed8', fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>{r.userName || 'Unknown'}</button> : (r.userName || 'Unknown account')}

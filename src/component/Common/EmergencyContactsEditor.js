@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { api, getStoredUserId } from '../../services/apiClient';
 
 /**
@@ -45,7 +47,7 @@ export default function EmergencyContactsEditor({ accent = 'var(--nh-accent, #25
       <h3 style={S.h3}>Emergency contacts</h3>
       <p style={S.desc}>Someone we can reach if you are unwell or at risk.</p>
       {contacts === null ? <p style={S.desc}>Loading…</p> : null}
-      {contacts?.length === 0 ? <p style={S.desc}>No emergency contact yet — please add one.</p> : null}
+      {contacts?.length === 0 ? <p style={S.desc}><EmptyLine icon={HI.People} tone="teal">No emergency contact yet — please add one.</EmptyLine></p> : null}
       {(contacts || []).map((c) => (
         <div key={c.id || c.phone} style={S.row}>
           <div style={{ flex: 1 }}>

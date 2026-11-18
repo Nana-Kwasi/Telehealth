@@ -1,17 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FileText, 
-  Download, 
-  Calendar,
-  Filter,
-  Users,
-  Shield,
-  LogIn,
-  LogOut,
-  Activity,
-  Clock,
-  Search,
-  RefreshCw
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
+import {
+  Download, Filter, Users, Shield, LogIn, LogOut, Activity, Clock, Search, RefreshCw,
 } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import { 
@@ -400,7 +391,7 @@ export default function TherapistLogs() {
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="empty-state">
-            <FileText size={48} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Heartbeat} tone="rose" size={43} /></span>
             <h3>No logs found</h3>
             <p>Try adjusting your filters or date range</p>
           </div>

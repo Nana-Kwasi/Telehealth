@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Calendar, MessageSquare, Video, Star, X } from 'lucide-react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
+import {
+  Bell, Calendar, MessageSquare, Video, Star,
+} from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, onSnapshot, doc, updateDoc, orderBy, limit, serverTimestamp } from '../../../services/firestoreShim';
 
@@ -129,7 +133,7 @@ export default function NotificationBell({ userId }) {
           <div style={{ maxHeight: 380, overflowY: 'auto' }}>
             {notifications.length === 0 ? (
               <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
-                <Bell size={28} style={{ marginBottom: 8 }} />
+                <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Phone} tone="amber" size={26} /></span>
                 <p style={{ margin: 0, fontSize: '0.85rem' }}>No notifications yet</p>
               </div>
             ) : (

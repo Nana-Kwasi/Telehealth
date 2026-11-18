@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { db, doc, getDoc } from '../../../services/firestoreShim';
 import { collection, getDocs } from '../../../services/firestoreShim';
 import RxFullDetails from '../Pharmacy/RxFullDetails';
@@ -133,7 +135,7 @@ export default function AdminPrescriptionMonitor() {
         {loading ? (
           <div className="admin-empty"><p>Loading prescriptions…</p></div>
         ) : filtered.length === 0 ? (
-          <div className="admin-empty"><p>No prescriptions match your filters.</p></div>
+          <div className="admin-empty"><p><EmptyLine icon={HI.Medicines} tone="emerald">No prescriptions match your filters.</EmptyLine></p></div>
         ) : (
           <table className="admin-table">
             <thead>

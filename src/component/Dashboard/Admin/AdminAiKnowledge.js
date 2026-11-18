@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { api } from '../../../services/apiClient';
 
 /**
@@ -212,6 +214,7 @@ export default function AdminAiKnowledge() {
           <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b' }}>Loading…</div>
         ) : entries.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Book} tone="violet" size={44} /></span>
             No entries yet. Without any, the assistant answers purely from the model's own
             knowledge — which cannot be reviewed or corrected.
           </div>

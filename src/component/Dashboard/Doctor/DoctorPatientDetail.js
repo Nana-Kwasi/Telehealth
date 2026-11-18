@@ -8,9 +8,7 @@ import RecordExplorer from '../../Common/RecordExplorer';
 import PatientTranscripts from '../../Common/PatientTranscripts';
 import TransferPatientModal from '../../Common/TransferPatientModal';
 import {
-  ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video,
-  AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download,
-  UserX, UserCheck, Activity, FlaskConical, Minus,
+  ChevronLeft, Calendar, FileText, Pill, MessageSquare, Video, AlertTriangle, Check, X, Plus, Save, Trash2, Clock, Download, UserCheck, Activity, FlaskConical, Minus,
 } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import {
@@ -22,7 +20,7 @@ import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
 import Paged from '../../Common/Paged';
 import { SharedJournalPanel } from '../../Common/Journal';
 import * as HI from '@healthicons/react';
-import { IconBubble } from '../../Common/EmptyState';
+import { IconBubble, EmptyLine } from '../../Common/EmptyState';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -653,7 +651,7 @@ export default function DoctorPatientDetail({ profile }) {
           <div className="doctor-card">
             <h3>Recent Appointments</h3>
             {appointments.slice(0, 4).length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No appointments yet.</p>
+              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}><EmptyLine icon={HI.Calendar} tone="sky">No appointments yet.</EmptyLine></p>
             ) : appointments.slice(0, 4).map(a => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
                 <div style={{ width: 36, height: 36, borderRadius: 8, background: a.status === 'completed' ? '#dcfce7' : a.status === 'pending' ? '#fef3c7' : '#e8f1fb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -671,7 +669,7 @@ export default function DoctorPatientDetail({ profile }) {
             <h3>Latest Notes</h3>
             {notes.slice(0, 3).length === 0 ? (
               <div style={{ textAlign: 'center', padding: '1rem' }}>
-                <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No notes yet.</p>
+                <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No notes yet.</EmptyLine></p>
                 <button className="doctor-btn doctor-btn-primary doctor-btn-sm" onClick={() => { setActiveTab('notes'); setShowNoteForm(true); }}><Plus size={14} /> Add First Note</button>
               </div>
             ) : notes.slice(0, 3).map(n => (
@@ -930,7 +928,7 @@ export default function DoctorPatientDetail({ profile }) {
           {pharmacies.length === 0 ? (
             <div className="doctor-card">
               <div className="doctor-empty-state">
-                <span style={{ fontSize: '2rem' }}>💊</span>
+                <IconBubble icon={HI.Pharmacy} tone="emerald" size={40} />
                 <h3>No pharmacies on file</h3>
                 <p>This patient has not added any pharmacies yet. You can add one on their behalf.</p>
               </div>
@@ -1023,7 +1021,7 @@ export default function DoctorPatientDetail({ profile }) {
             <div style={{ marginTop: '1rem', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
               <AlertTriangle size={16} color="#d97706" />
               <p style={{ margin: 0, fontSize: '0.825rem', color: '#92400e' }}>
-                No prescriptions issued yet. Issue a prescription first before sending to a pharmacy.
+                <EmptyLine icon={HI.Medicines} tone="emerald">No prescriptions issued yet. Issue a prescription first before sending to a pharmacy.</EmptyLine>
               </p>
             </div>
           )}
@@ -1235,7 +1233,7 @@ export default function DoctorPatientDetail({ profile }) {
                 ) : null)}
               </div>
             ) : (
-              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No health information recorded.</p>
+              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No health information recorded.</EmptyLine></p>
             )}
           </div>
         </div>
@@ -1446,7 +1444,7 @@ export default function DoctorPatientDetail({ profile }) {
                 {!viewingFeeling.mood && viewingFeeling.painLevel == null && symptomList.length === 0
                   && !viewingFeeling.medications && !viewingFeeling.notes && (
                   <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 10, padding: '1rem 1.25rem' }}>
-                    <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#92400e' }}>No details were recorded with this check-in.</p>
+                    <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#92400e' }}><EmptyLine icon={HI.FaceHappy} tone="amber">No details were recorded with this check-in.</EmptyLine></p>
                     <p style={{ margin: '0.35rem 0 0', fontSize: '0.82rem', color: '#a16207', lineHeight: 1.5 }}>
                       The patient logged it, but the answers were not stored. Check-ins submitted from now on capture mood, pain level, symptoms, medications and notes.
                     </p>

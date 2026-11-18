@@ -1,4 +1,6 @@
 import React, { useCallback, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useHomeCareNurse } from './HomeCareNurseContext';
 import { fetchUserNotifications, markNotificationRead } from '../../../services/homeCareService';
 import './HomeCareNurseDashboard.css';
@@ -54,7 +56,7 @@ export default function HomeCareNurseNotifications({ embedded = false, onClose }
         Refresh
       </button>
       {loading ? <p className="hcn-empty">Loading…</p> : null}
-      {!loading && list.length === 0 ? <p className="hcn-empty">No notifications yet.</p> : null}
+      {!loading && list.length === 0 ? <p className="hcn-empty"><EmptyLine icon={HI.Phone} tone="amber">No notifications yet.</EmptyLine></p> : null}
       <Paged items={list}>{(list) => list.map((n) => (
         <button
           key={n.id}

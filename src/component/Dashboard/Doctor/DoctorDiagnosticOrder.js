@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { ChevronLeft, ChevronRight, Check, MapPin, AlertCircle, Search, Plus, Trash2 } from 'lucide-react';
 import { db, auth } from '../../../services/firestoreShim';
 import {
@@ -621,7 +623,7 @@ export default function DoctorDiagnosticOrder({ profile, clinician = 'doctor' })
                 {loadingPatients ? (
                   <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>Loading patients…</p>
                 ) : filteredPatients.length === 0 ? (
-                  <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>No patients found.</p>
+                  <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}><EmptyLine icon={HI.People} tone="teal">No patients found.</EmptyLine></p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 360, overflowY: 'auto' }}>
                     <Paged items={filteredPatients}>{(filteredPatients) => filteredPatients.map(p => (
@@ -671,7 +673,7 @@ export default function DoctorDiagnosticOrder({ profile, clinician = 'doctor' })
                   {loadingBranches ? (
                     <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>Loading centers…</p>
                   ) : branches.length === 0 ? (
-                    <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>No centers available. Add branches via Admin dashboard first.</p>
+                    <p style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No centers available. Add branches via Admin dashboard first.</EmptyLine></p>
                   ) : (
                     <div style={{ maxHeight: 400, overflowY: 'auto', paddingRight: 4 }}>
                       {nearBranches.length > 0 && (

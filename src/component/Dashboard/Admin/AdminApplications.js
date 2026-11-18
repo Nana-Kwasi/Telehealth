@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../../services/apiClient';
 import '../../Common/CareTransfers.css';
@@ -158,7 +160,7 @@ function ApplicationList() {
         {error ? <div className="ct-error aa-inset">{error}</div> : null}
         {!data ? <div className="aa-empty">Loading applications…</div> : data.items.length === 0 ? (
           <div className="aa-empty">
-            <strong>No applications match.</strong>
+            <strong><EmptyLine icon={HI.Health} tone="indigo">No applications match.</EmptyLine></strong>
             <span>Try another stage, type or search.</span>
           </div>
         ) : (

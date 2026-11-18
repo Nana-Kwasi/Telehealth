@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../../services/firestoreShim';
 import { doc, getDoc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
@@ -354,7 +356,7 @@ export default function WorksheetView() {
                               </label>
                             ))
                           ) : (
-                            <p className="no-options">No options available</p>
+                            <p className="no-options"><EmptyLine icon={HI.Calendar} tone="sky">No options available</EmptyLine></p>
                           )}
                         </div>
                       )}
@@ -433,7 +435,7 @@ export default function WorksheetView() {
                               </label>
                             ))
                           ) : (
-                            <p className="no-options">No options available</p>
+                            <p className="no-options"><EmptyLine icon={HI.Calendar} tone="sky">No options available</EmptyLine></p>
                           )}
                         </div>
                       )}

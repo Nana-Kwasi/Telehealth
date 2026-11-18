@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine, IconBubble } from '../../Common/EmptyState';
 import { Users, ArrowLeft, ShieldAlert, RefreshCw } from 'lucide-react';
 import { listMyCouples, getCoupleCaseForTherapist } from '../../../services/coupleTherapyService';
 import './CoupleCases.css';
@@ -149,7 +151,7 @@ export default function CoupleCases() {
                     : couple?.partnerBName || couple?.partnerB?.name || '—'}
                 </h2>
                 {intakesByPartner[key].length === 0 ? (
-                  <div className="cc-empty-sm">No intake sections submitted yet.</div>
+                  <div className="cc-empty-sm"><EmptyLine icon={HI.Health} tone="indigo">No intake sections submitted yet.</EmptyLine></div>
                 ) : (
                   intakesByPartner[key].map((row) => {
                     const data = parseSectionData(row.sectionData);
@@ -161,7 +163,7 @@ export default function CoupleCases() {
                           <span className="cc-when">{fmtDate(row.submittedAt || row.createdAt)}</span>
                         </div>
                         {entries.length === 0 ? (
-                          <div className="cc-empty-sm">No answers recorded.</div>
+                          <div className="cc-empty-sm"><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No answers recorded.</EmptyLine></div>
                         ) : (
                           <dl className="cc-kv">
                             {entries.map(([k, v]) => (
@@ -202,7 +204,7 @@ export default function CoupleCases() {
         <div className="cc-empty">Loading couple cases…</div>
       ) : couples.length === 0 ? (
         <div className="cc-empty">
-          <Users size={28} />
+          <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.People} tone="teal" size={26} /></span>
           <p>No couples matched to you yet.</p>
           <span>A couple appears here once both partners confirm you as their therapist.</span>
         </div>

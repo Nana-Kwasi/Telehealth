@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../../services/firestoreShim';
 import { fetchPatientBookings } from '../../services/homeCareService';
@@ -31,7 +33,7 @@ export default function HomeCareHistory() {
       <p><Link to="/home-care">← Home Care</Link></p>
       <h1>My visits</h1>
       {loading ? <p className="hc-empty">Loading…</p> : null}
-      {!loading && list.length === 0 ? <p className="hc-empty">No bookings yet.</p> : null}
+      {!loading && list.length === 0 ? <p className="hc-empty"><EmptyLine icon={HI.Calendar} tone="sky">No bookings yet.</EmptyLine></p> : null}
       <Paged items={list}>{(list) => list.map((b) => (
         <div key={b.id} className="hc-card" style={{ cursor: 'pointer' }} onClick={() => navigate(`/home-care/booking/${b.id}`)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && navigate(`/home-care/booking/${b.id}`)}>
           <span className="hc-status">{statusLabel(b.status)}</span>

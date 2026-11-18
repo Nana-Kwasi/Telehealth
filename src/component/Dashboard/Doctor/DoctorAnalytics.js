@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, DollarSign, Users, Calendar, Star, Clock } from 'lucide-react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
+import {
+  DollarSign, Users, Calendar, Star,
+} from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, getDoc } from '../../../services/firestoreShim';
 import PracticeAnalyticsPanel from '../../Common/PracticeAnalyticsPanel';
@@ -170,7 +174,7 @@ export default function DoctorAnalytics({ profile }) {
           <h3>Appointments by Month</h3>
           {stats.appointmentsByMonth.length === 0 ? (
             <div className="doctor-empty-state">
-              <TrendingUp size={32} />
+              <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Calendar} tone="sky" size={29} /></span>
               <p>No appointment data yet</p>
             </div>
           ) : (
@@ -196,7 +200,7 @@ export default function DoctorAnalytics({ profile }) {
           <h3>Earnings by Month</h3>
           {stats.earningsByMonth.length === 0 ? (
             <div className="doctor-empty-state">
-              <DollarSign size={32} />
+              <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.MoneyBag} tone="amber" size={29} /></span>
               <p>No earnings data yet</p>
             </div>
           ) : (
@@ -248,7 +252,7 @@ export default function DoctorAnalytics({ profile }) {
           <h3>Consultation Types</h3>
           {Object.keys(stats.appointmentsByType).length === 0 ? (
             <div className="doctor-empty-state">
-              <Clock size={32} />
+              <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.HeartCardiogram} tone="rose" size={29} /></span>
               <p>No consultation data yet</p>
             </div>
           ) : (

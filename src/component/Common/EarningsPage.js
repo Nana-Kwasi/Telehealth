@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { api } from '../../services/apiClient';
 import { Ledger } from '../Dashboard/Admin/AdminFinance';
 import { nessaHubPolicyUrl } from '../../constants/nessaHubPolicies';
@@ -67,7 +69,7 @@ export default function EarningsPage({ serviceKey = 'consultation' }) {
 
           <section className="ct-card">
             <h3>Payouts</h3>
-            {payouts.length === 0 ? <p className="ct-meta">No payouts yet. Payouts are made monthly, around day {rates?.payoutDayOfMonth || 5}.</p> : (
+            {payouts.length === 0 ? <p className="ct-meta"><EmptyLine icon={HI.MoneyBag} tone="amber">No payouts yet. Payouts are made monthly, around day {rates?.payoutDayOfMonth || 5}.</EmptyLine></p> : (
               <div className="aa-table-wrap">
                 <table className="aa-table">
                   <thead><tr><th>Period up to</th><th>Bookings</th><th>Earnings</th><th>Adjustments</th><th>Sent</th><th>To</th><th>Status</th></tr></thead>

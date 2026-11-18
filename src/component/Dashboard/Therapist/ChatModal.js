@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { auth, db } from '../../../services/firestoreShim';
 import {
   collection, addDoc, onSnapshot, orderBy, query,
   serverTimestamp, doc, updateDoc, where, getDocs
 } from '../../../services/firestoreShim';
-import { Send, X, Phone, Video, MoreVertical, Smile, Paperclip, Image as ImageIcon, Check, CheckCheck, Download } from 'lucide-react';
+import {
+  Send, X, Video, Smile, Paperclip, Image as ImageIcon, Check, CheckCheck, Download,
+} from 'lucide-react';
 import { uploadFile } from '../../../services/apiClient';
 import ChatImage from '../../Common/ChatImage';
 import VoiceNote from '../../Common/VoiceNote';
@@ -242,7 +246,7 @@ export default function ChatModal({ target, type, onClose }) {
         }}>
           {messages.length === 0 ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '0.75rem', padding: '3rem 1rem' }}>
-              <div style={{ fontSize: '3rem' }}>💬</div>
+              <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Telemedicine} tone="sky" size={48} /></span>
               <p style={{ margin: 0, fontWeight: 700, color: '#64748b', fontSize: '1rem' }}>No messages yet</p>
               <p style={{ margin: 0, fontSize: '0.82rem', textAlign: 'center' }}>Start the conversation with {targetName}</p>
             </div>

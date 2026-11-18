@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { db } from '../../../services/firestoreShim';
 import { collection, addDoc, serverTimestamp, getDocs } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
@@ -216,7 +218,7 @@ export default function AdminNotifications() {
                 <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Click "Load History" to view past notifications</p>
               </div>
             ) : history.length === 0 ? (
-              <div className="admin-empty"><p>No notifications sent yet.</p></div>
+              <div className="admin-empty"><p><EmptyLine icon={HI.Phone} tone="amber">No notifications sent yet.</EmptyLine></p></div>
             ) : (
               <div>
                 <Paged items={history}>{(history) => history.map(n => {

@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { api } from '../../services/apiClient';
 import Paged from './Paged';
 
@@ -58,7 +60,7 @@ export default function InsuranceNetworks({ accent = '#0f766e' }) {
 
       {insurers.length === 0 ? (
         <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, padding: '0.85rem 1rem', margin: '0.75rem 0', fontSize: '0.84rem', color: '#475569', lineHeight: 1.55 }}>
-          <strong style={{ color: '#0f172a' }}>No insurance company has joined NessaHub yet.</strong><br />
+          <strong style={{ color: '#0f172a' }}><EmptyLine icon={HI.InsuranceCard} tone="violet">No insurance company has joined NessaHub yet.</EmptyLine></strong><br />
           As soon as one joins, it appears in the list below. Choose it, type the provider code that insurer gave you, and
           press <em>Add &amp; verify</em>. Until then you can still serve patients who pay themselves.
         </div>
@@ -96,7 +98,7 @@ export default function InsuranceNetworks({ accent = '#0f766e' }) {
             <dd><code className="pharmacy-settings-code">{c.providerCode}</code> <span style={{ fontSize: '0.75rem', color: '#64748b' }}>via your head office</span></dd>
           </div>
         ))}</Paged>
-        {codes.length === 0 && inherited.length === 0 && insurers.length > 0 && <p className="pharmacy-settings-muted">No insurers yet.</p>}
+        {codes.length === 0 && inherited.length === 0 && insurers.length > 0 && <p className="pharmacy-settings-muted"><EmptyLine icon={HI.InsuranceCard} tone="violet">No insurers yet.</EmptyLine></p>}
       </dl>
     </section>
   );

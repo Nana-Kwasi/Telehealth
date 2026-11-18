@@ -4,6 +4,8 @@
 // checks and approvals. Differences from the doctor copy are marked "Psychiatry:".
 // Keep fixes to the shared flow in step with Doctor/DoctorPrescriptions.js.
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble, EmptyLine } from '../../Common/EmptyState';
 import { parseCoords, attachDistance, formatDistanceKm } from '../../../utils/homeCareGeo';
 import RxAdvicePanel from '../../Common/RxAdvicePanel';
 import { RxInsurancePicker, RxEstimateCard, attachRxCard } from '../../Common/RxInsuranceCard';
@@ -11,7 +13,9 @@ import '../Doctor/DoctorDashboard.css';
 import PrescriptionAssistant from '../../Common/PrescriptionAssistant';
 import PrescriptionCodeCard from '../../Common/PrescriptionCodeCard';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FileText, Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDown } from 'lucide-react';
+import {
+  Plus, Search, Save, Trash2, Printer, AlertTriangle, ChevronDown,
+} from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, onSnapshot } from '../../../services/firestoreShim';
@@ -749,7 +753,7 @@ export default function TherapistPrescriptions({ profile }) {
                 </div>
                 {showPatientPicker && (
                   <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: 'auto', background: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', position: 'relative', zIndex: 10 }}>
-                    {patients.length === 0 && <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}>No psychiatry clients yet. Only clients on the psychiatry track can be prescribed for.</div>}
+                    {patients.length === 0 && <div style={{ padding: '0.75rem', fontSize: '0.82rem', color: '#94a3b8' }}><EmptyLine icon={HI.People} tone="teal">No psychiatry clients yet. Only clients on the psychiatry track can be prescribed for.</EmptyLine></div>}
                     <Paged items={patients}>{(patients) => patients.map(p => (
                       <div key={p.id} onClick={() => { setForm(prev => ({ ...prev, patientId: p.id, patientName: p.name })); setShowPatientPicker(false); loadPatientAllergies(p.id); }}
                         style={{ padding: '0.55rem 0.85rem', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', borderBottom: '1px solid #f1f5f9', background: form.patientId === p.id ? '#eff6ff' : 'transparent' }}>
@@ -1169,7 +1173,7 @@ export default function TherapistPrescriptions({ profile }) {
           <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading...</p>
         ) : filtered.length === 0 ? (
           <div className="doctor-empty-state">
-            <FileText size={40} /><h3>{searchQuery ? 'No prescriptions match your search' : 'No prescriptions yet'}</h3>
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Medicines} tone="emerald" size={36} /></span><h3>{searchQuery ? 'No prescriptions match your search' : 'No prescriptions yet'}</h3>
             <p>Click "New Prescription" to create one.</p>
           </div>
         ) : (

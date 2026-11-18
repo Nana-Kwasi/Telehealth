@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
@@ -377,7 +379,7 @@ export default function AdminReports() {
             Top Prescribing Doctors
           </h3>
           {data.topDocs.length === 0 ? (
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>No prescription data yet.</p>
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}><EmptyLine icon={HI.Medicines} tone="emerald">No prescription data yet.</EmptyLine></p>
           ) : data.topDocs.map((d, i) => (
             <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' }}>
               <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#94a3b8', width: 18 }}>#{i + 1}</span>

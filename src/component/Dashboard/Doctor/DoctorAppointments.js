@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import AppointmentRiskPanel from '../../Common/AppointmentRiskPanel';
 import {
-  Calendar, Check, X, List, ChevronLeft, ChevronRight,
-  Clock, Video, Phone, MessageCircle, AlertTriangle, Plus,
-  User, UserCheck,
+  Calendar, Check, X, List, ChevronLeft, ChevronRight, Clock, Video, Phone, MessageCircle, AlertTriangle, Plus, UserCheck,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
@@ -676,7 +676,7 @@ export default function DoctorAppointments({ profile }) {
                 </label>
                 {patients.length === 0 ? (
                   <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 10, fontSize: '0.85rem', color: '#64748b', textAlign: 'center' }}>
-                    No existing patients. Patients will appear here after they book with you.
+                    <EmptyLine icon={HI.People} tone="teal">No existing patients. Patients will appear here after they book with you.</EmptyLine>
                   </div>
                 ) : (
                   <select

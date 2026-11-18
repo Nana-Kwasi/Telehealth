@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { Sparkles } from 'lucide-react';
 import {
   careCatalog, draftTransferSummary, requestTransfer, transferReasons, transferSuggestions,
@@ -250,7 +252,7 @@ export default function TransferPatientModal({ open, onClose, onSent, patient, r
                 <><div className="ct-pick-group">Other available clinicians</div>{groups.other.map(option)}</>
               )}
               {!loadingSuggestions && suggestions.length === 0 && (!isDoctor || form.neededSpecialty)
-                ? <span className="ct-meta">No available clinician matches yet. Try another specialty or kind of therapy.</span> : null}
+                ? <span className="ct-meta"><EmptyLine icon={HI.Calendar} tone="sky">No available clinician matches yet. Try another specialty or kind of therapy.</EmptyLine></span> : null}
             </div>
           ))}
 

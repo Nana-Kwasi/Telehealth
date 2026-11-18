@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs } from '../../../services/firestoreShim';
 
@@ -96,7 +98,7 @@ export default function AdminWalkInVerify() {
 
         {result?.type === 'not_found' && (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Medicines} tone="emerald" size={48} /></span>
             <p style={{ fontWeight: 700, color: '#64748b' }}>No prescription found</p>
             <p style={{ fontSize: '0.85rem' }}>No prescription matches the reference code <b style={{ fontFamily: 'monospace', color: '#0c4a6e' }}>{input.trim().toUpperCase()}</b>. Please check the code and try again.</p>
           </div>

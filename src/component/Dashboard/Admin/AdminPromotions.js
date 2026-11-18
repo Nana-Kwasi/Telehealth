@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { api } from '../../../services/apiClient';
 import { resolveFileUrl } from '../../../utils/fileUrl';
 import Paged from '../../Common/Paged';
@@ -204,7 +206,7 @@ export default function AdminPromotions() {
           <Field label="Providers featured — each must approve">
             <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0.5rem' }}>
               {providers.length === 0 ? (
-                <div style={{ color: '#64748b', fontSize: '0.83rem', padding: '0.5rem' }}>No providers found.</div>
+                <div style={{ color: '#64748b', fontSize: '0.83rem', padding: '0.5rem' }}><EmptyLine icon={HI.Doctor} tone="blue">No providers found.</EmptyLine></div>
               ) : <Paged items={providers}>{(providers) => providers.map((p) => {
                 const id = p.id || p.userId;
                 const on = form.providerIds.includes(id);
@@ -235,7 +237,7 @@ export default function AdminPromotions() {
             <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b' }}>Loading…</div>
           ) : campaigns.length === 0 ? (
             <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b' }}>
-              No promotions yet.
+              <EmptyLine icon={HI.Health} tone="indigo">No promotions yet.</EmptyLine>
             </div>
           ) : <Paged items={campaigns}>{(campaigns) => campaigns.map((c) => (
             <button key={c.id} onClick={() => openDetail(c.id)}

@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../../services/apiClient';
 import { ref, uploadBytes, getDownloadURL, storage } from '../../../services/firestoreShim';
@@ -408,7 +410,7 @@ export default function DiagWorklist({ type = 'lab', profile, mode = 'branch' })
 
       <div className="dx-card">
         {loading && !orders.length ? <p className="dx-empty">Loading orders…</p> : shown.length === 0 ? (
-          <p className="dx-empty">{q ? 'No orders match. Check the spelling against the National ID.' : 'Nothing here right now.'}</p>
+          <p className="dx-empty"><EmptyLine icon={HI.MicroscopeWithSpecimen} tone="violet">{q ? 'No orders match. Check the spelling against the National ID.' : 'Nothing here right now.'}</EmptyLine></p>
         ) : (
           <div className="dx-table-wrap">
             <table className="dx-table">
@@ -581,7 +583,7 @@ export function DiagOrderDetail({ type = 'lab' }) {
           </div>
           {st === 'REJECTED' && <div className="dx-alert dx-alert--red" style={{ marginTop: 12, marginBottom: 0 }}><div><strong>Rejected</strong><p>{order.rejectReason || 'No reason recorded.'}</p></div></div>}
           <div style={{ marginTop: '1rem', display: 'grid', gap: 8 }}>
-            {results.length ? <Paged items={results}>{(results) => results.map(r => <ResultView key={r.id} r={r} />)}</Paged> : <p className="dx-empty">No result yet.</p>}
+            {results.length ? <Paged items={results}>{(results) => results.map(r => <ResultView key={r.id} r={r} />)}</Paged> : <p className="dx-empty"><EmptyLine icon={HI.MicroscopeWithSpecimen} tone="violet">No result yet.</EmptyLine></p>}
           </div>
         </section>
         <section className="dx-card dx-span-4">
@@ -605,7 +607,7 @@ export function DiagOrderDetail({ type = 'lab' }) {
                 <div className="dx-card-hint">{fmtDateTime(e.createdAt)}</div>
               </li>
             ))}</Paged></ul>
-          ) : <p className="dx-empty">No activity yet.</p>}
+          ) : <p className="dx-empty"><EmptyLine icon={HI.Heartbeat} tone="rose">No activity yet.</EmptyLine></p>}
         </section>
       </div>
       {actions.element}

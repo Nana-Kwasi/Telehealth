@@ -1,4 +1,6 @@
 // import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 // import { collection, query, where, getDocs, addDoc, orderBy, onSnapshot, Timestamp, doc, getDoc } from '../../services/firestoreShim';
 // import { db, functions, httpsCallable, auth } from '../../services/firestoreShim';
 // import { Phone, Calendar, Clock, User } from 'lucide-react';
@@ -547,7 +549,7 @@
 //           </div>
 //         ) : (
 //           <div className="empty-state">
-//             <p>No scheduled calls yet.</p>
+//             <p><EmptyLine icon={HI.Telemedicine} tone="blue">No scheduled calls yet.</EmptyLine></p>
 //           </div>
 //         )}
 //       </div>
@@ -1647,7 +1649,7 @@ const VideoCall = ({ user }) => {
           </div>
         ) : (
           <div className="empty-state">
-            <p>No scheduled calls yet.</p>
+            <p><EmptyLine icon={HI.Telemedicine} tone="blue">No scheduled calls yet.</EmptyLine></p>
           </div>
         )}
       </div>

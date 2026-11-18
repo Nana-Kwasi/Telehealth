@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../../services/firestoreShim';
 import {
@@ -432,7 +434,7 @@ export default function DoctorProfilePage({ session }) {
             <div className="dp-reviews">
               {reviews.length === 0 ? (
                 <div className="dp-empty-reviews">
-                  <p>No reviews yet. Be the first to leave one after your consultation.</p>
+                  <p><EmptyLine icon={HI.Heart} tone="pink">No reviews yet. Be the first to leave one after your consultation.</EmptyLine></p>
                 </div>
               ) : <Paged items={reviews}>{(reviews) => reviews.map(r => (
                 <div key={r.id} className="dp-review-card">

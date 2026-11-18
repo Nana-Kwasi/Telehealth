@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../../services/firestoreShim';
 import { 
@@ -10,19 +12,8 @@ import {
   orderBy,
   where
 } from '../../../services/firestoreShim';
-import { 
-  Flag, 
-  Eye, 
-  Clock, 
-  CheckCircle, 
-  AlertTriangle,
-  Search,
-  Filter,
-  Calendar,
-  User,
-  MessageSquare,
-  ChevronDown,
-  ChevronUp
+import {
+  Flag, Eye, Clock, CheckCircle, AlertTriangle, Search, Calendar, User, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import './Reports.css';
 
@@ -288,7 +279,7 @@ export default function TherapistReports() {
       <div className="reports-list">
         {filteredReports.length === 0 ? (
           <div className="no-reports">
-            <Flag size={48} className="no-reports-icon" />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.PrescriptionDocument} tone="violet" size={43} /></span>
             <h3>No Reports Found</h3>
             <p>No incident reports match your current filters.</p>
           </div>

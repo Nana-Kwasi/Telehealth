@@ -1,26 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  FileText, 
-  Mic, 
-  MicOff, 
-  Save, 
-  Edit, 
-  Eye, 
-  Download, 
-  Upload,
-  Clock,
-  User,
-  Calendar,
-  CheckCircle,
-  AlertCircle,
-  FileSignature,
-  History,
-  Users,
-  Settings
+import {
+  Plus, Search, Filter, FileText, Save, Edit, Eye, Upload, Calendar, CheckCircle, AlertCircle, Users, Settings,
 } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import { 
@@ -1240,7 +1223,7 @@ export default function TherapistNotes() {
                       client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                       client.email?.toLowerCase().includes(searchQuery.toLowerCase())
                     ).length === 0 && (
-                      <div className="no-clients">No assigned clients found</div>
+                      <div className="no-clients"><EmptyLine icon={HI.People} tone="teal">No assigned clients found</EmptyLine></div>
                     )}
                   </div>
                 </div>
@@ -1282,7 +1265,7 @@ export default function TherapistNotes() {
                       (client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                        client.email?.toLowerCase().includes(searchQuery.toLowerCase()))
                     ).length === 0 && (
-                      <div className="no-clients">No other clients found</div>
+                      <div className="no-clients"><EmptyLine icon={HI.People} tone="teal">No other clients found</EmptyLine></div>
                     )}
                   </div>
                 </div>

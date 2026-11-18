@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine, IconBubble } from '../../Common/EmptyState';
 import { MessageSquare, Send, Search, Phone, Video, Mic, MicOff, Paperclip, Download, FileText } from 'lucide-react';
 import { db, storage } from '../../../services/firestoreShim';
 import {
@@ -329,7 +331,7 @@ export default function DoctorMessages({ profile }) {
             {loading ? <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem', fontSize: '0.85rem' }}>Loading...</p>
               : filteredPatients.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-                  <MessageSquare size={32} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+                  <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.People} tone="teal" size={29} /></span>
                   <p style={{ margin: 0, fontSize: '0.85rem' }}>{search ? 'No patients found' : 'No patients yet'}</p>
                 </div>
               ) : <Paged items={filteredPatients}>{(filteredPatients) => filteredPatients.map(p => {
@@ -396,7 +398,7 @@ export default function DoctorMessages({ profile }) {
               <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
                 {messages.length === 0 ? (
                   <div style={{ textAlign: 'center', margin: 'auto' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.85)', borderRadius: 12, padding: '0.6rem 1.25rem', display: 'inline-block', fontSize: '0.82rem', color: '#64748b' }}>No messages yet — start the conversation</div>
+                    <div style={{ background: 'rgba(255,255,255,0.85)', borderRadius: 12, padding: '0.6rem 1.25rem', display: 'inline-block', fontSize: '0.82rem', color: '#64748b' }}><EmptyLine icon={HI.Telemedicine} tone="sky">No messages yet — start the conversation</EmptyLine></div>
                   </div>
                 ) : messages.map((msg, i) => renderMessage(msg, i))}
                 <div ref={endRef} />

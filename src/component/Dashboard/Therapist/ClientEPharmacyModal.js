@@ -3,6 +3,8 @@
 // modal), for therapists. Differences are marked "Psychiatry:".
 // Keep fixes in step with DoctorHome.js.
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { ShoppingBag, Search, X } from 'lucide-react';
 import { db, collection, query, where, getDocs, doc, getDoc, setDoc } from '../../../services/firestoreShim';
 import { dedupePatientPharmacies, hasPatientPharmacy } from '../../../utils/patientPharmacyDedupe';
@@ -312,7 +314,7 @@ export default function ClientEPharmacyModal({ open, onClose, therapistId }) {
                 {/* Patient list */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', maxHeight: 240, overflowY: 'auto' }}>
                   {allPatientsList.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}>No psychiatry clients found</p>
+                    <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}><EmptyLine icon={HI.People} tone="teal">No psychiatry clients found</EmptyLine></p>
                   ) : <Paged items={ephPatients}>{(ephPatients) => ephPatients.map(p => {
                     const isSel = selectedPatientIds.has(p.id);
                     return (

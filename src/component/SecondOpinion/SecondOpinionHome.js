@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Clock, CheckCircle, Video, ArrowRight, Sparkles } from 'lucide-react';
 import { api } from '../../services/apiClient';
@@ -101,7 +103,7 @@ export default function SecondOpinionHome({ profile }) {
             </button>
           </>
         ) : (
-          <p className="zc-meta">No consultation scheduled yet.</p>
+          <p className="zc-meta"><EmptyLine icon={HI.Calendar} tone="sky">No consultation scheduled yet.</EmptyLine></p>
         )}
       </div>
 

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { X, Calendar, Clock, User, Search } from 'lucide-react';
 import { api, getStoredUserId } from '../../../services/apiClient';
 
@@ -164,7 +166,7 @@ export default function ScheduleCallModal({ open, initialDate, onClose, onSchedu
               </div>
               <div style={S.clientBox}>
                 {visible.length === 0 ? (
-                  <p style={S.muted}>No client matches that.</p>
+                  <p style={S.muted}><EmptyLine icon={HI.People} tone="teal">No client matches that.</EmptyLine></p>
                 ) : visible.slice(0, 40).map((c) => {
                   const id = c.id || c.userId || c.clientId;
                   return (

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../../services/firestoreShim';
 import { fetchApprovedNurses, fetchRecentlyHiredNurses, getCurrentLocationMobile } from '../../services/homeCareService';
@@ -137,7 +139,7 @@ export default function HomeCareHome() {
       <h2 style={{ fontSize: '1rem', color: '#134e4a', marginBottom: '0.75rem' }}>Top rated</h2>
       {loading ? <p className="hc-empty">Loading…</p> : null}
       {!loading && filtered.length === 0 ? (
-        <p className="hc-empty">No nurses available yet. An admin can onboard nurses from the dashboard.</p>
+        <p className="hc-empty"><EmptyLine icon={HI.Calendar} tone="sky">No nurses available yet. An admin can onboard nurses from the dashboard.</EmptyLine></p>
       ) : null}
 
       <div className="hc-grid">

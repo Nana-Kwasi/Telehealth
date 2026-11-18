@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
@@ -237,7 +239,7 @@ export default function AdminAppointments() {
         {loading ? (
           <div className="admin-empty"><p>Loading appointments…</p></div>
         ) : filtered.length === 0 ? (
-          <div className="admin-empty"><p>No appointments match your filters.</p></div>
+          <div className="admin-empty"><p><EmptyLine icon={HI.Calendar} tone="sky">No appointments match your filters.</EmptyLine></p></div>
         ) : (
           <table className="admin-table">
             <thead>

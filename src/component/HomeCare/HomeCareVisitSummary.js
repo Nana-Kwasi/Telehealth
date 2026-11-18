@@ -1,4 +1,6 @@
 import React from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { Link, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { fetchBooking } from '../../services/homeCareService';
@@ -14,7 +16,7 @@ export default function HomeCareVisitSummary() {
 
   const summary = booking?.patientVisitSummary;
   if (!booking) return <p className="hc-empty hc-page">Loading…</p>;
-  if (!summary) return <p className="hc-empty hc-page">No visit summary yet.</p>;
+  if (!summary) return <p className="hc-empty hc-page"><EmptyLine icon={HI.Calendar} tone="sky">No visit summary yet.</EmptyLine></p>;
 
   return (
     <div className="hc-page">

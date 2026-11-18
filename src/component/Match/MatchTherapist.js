@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import PriceTag from '../Common/PriceTag';
 import { quotePrices } from '../../services/pricing';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -373,7 +375,7 @@ export default function MatchTherapist() {
         })}
         </>
       ) : (
-        <div className="no-matches-card">No exact matches yet. We'll assign the best available therapist shortly.</div>
+        <div className="no-matches-card"><EmptyLine icon={HI.Calendar} tone="sky">No exact matches yet. We'll assign the best available therapist shortly.</EmptyLine></div>
       )}
     </div>
   );

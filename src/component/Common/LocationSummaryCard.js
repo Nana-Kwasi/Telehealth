@@ -1,4 +1,6 @@
 import React from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 
 export function formatDashboardLocationLine(profile = {}) {
   const loc = pickLocation(profile);
@@ -188,7 +190,7 @@ export default function LocationSummaryCard({ profile, title = 'Your Saved Locat
         </div>
       ) : (
         <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: '#64748b', flex: compact ? 1 : undefined }}>
-          No location on record yet. Open Settings and save your address/location to improve nearby matching.
+          <EmptyLine icon={HI.PrescriptionDocument} tone="violet">No location on record yet. Open Settings and save your address/location to improve nearby matching.</EmptyLine>
         </p>
       )}
       {onEdit ? (

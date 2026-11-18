@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/apiClient';
 import Paged from './Paged';
@@ -100,7 +102,7 @@ export default function PrescriptionRequestsInbox() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) minmax(300px, 2fr)', gap: '1rem', alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           {loading ? <p style={{ color: '#94a3b8' }}>Loading…</p> : rows.length === 0 ? (
-            <p style={{ color: '#94a3b8' }}>No requests here.</p>
+            <p style={{ color: '#94a3b8' }}><EmptyLine icon={HI.Health} tone="indigo">No requests here.</EmptyLine></p>
           ) : <Paged items={rows}>{(rows) => rows.map(r => (
             <button key={r.id} type="button" onClick={() => open(r)}
               style={{ textAlign: 'left', background: selected?.id === r.id ? '#eff6ff' : '#fff', border: `1.5px solid ${r.urgentFlag && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(r.status) ? '#fca5a5' : '#e2e8f0'}`, borderRadius: 12, padding: '0.7rem 0.8rem', cursor: 'pointer' }}>

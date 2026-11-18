@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { api } from '../../services/apiClient';
 import { NESSA_HUB_POLICY_LINKS, nessaHubPolicyUrl } from '../../utils/nessaHubPolicies';
 import Paged from './Paged';
@@ -66,7 +68,7 @@ export default function ConsentHistory() {
       {rows === null ? <p style={S.muted}>Loading…</p> : null}
       {failed ? <p style={S.muted}>Your consent record could not be loaded right now.</p> : null}
       {rows && !failed && rows.length === 0 ? (
-        <p style={S.muted}>No agreements are recorded for this account yet.</p>
+        <p style={S.muted}><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No agreements are recorded for this account yet.</EmptyLine></p>
       ) : null}
       {[...groups.entries()].map(([ctx, list]) => (
         <div key={ctx} style={S.card}>

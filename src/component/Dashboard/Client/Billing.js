@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { auth, db } from '../../../services/firestoreShim';
 import './Billing.css';
 import { 
@@ -11,21 +13,8 @@ import {
   doc,
   getDoc
 } from '../../../services/firestoreShim';
-import { 
-  CreditCard, 
-  DollarSign, 
-  Calendar, 
-  Download, 
-  Eye, 
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  FileText,
-  CreditCard as CardIcon,
-  TrendingUp,
-  TrendingDown,
-  Filter,
-  Search
+import {
+  CreditCard, DollarSign, Download, Eye, AlertCircle, CheckCircle, Clock, CreditCard as CardIcon, TrendingDown, Filter, Search,
 } from 'lucide-react';
 import Paged from '../../Common/Paged';
 import PaymentsAndRefunds from '../../Common/PaymentsAndRefunds';
@@ -382,7 +371,7 @@ export default function ClientBilling() {
 
         {filteredHistory.length === 0 ? (
           <div className="no-history">
-            <FileText size={48} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.MoneyBag} tone="amber" size={43} /></span>
             <h3>No billing history found</h3>
             <p>
               {searchTerm || statusFilter !== 'all' || dateFilter !== 'all'

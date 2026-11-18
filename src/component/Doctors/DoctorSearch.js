@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { db } from '../../services/firestoreShim';
 import { collection, getDocs } from '../../services/firestoreShim';
@@ -274,7 +276,7 @@ export default function DoctorSearch({ session }) {
           ) : filtered.length === 0 ? (
             <div className="ds-empty">
               <div className="ds-empty-icon">🩺</div>
-              <h3>No doctors found</h3>
+              <h3><EmptyLine icon={HI.Doctor} tone="blue">No doctors found</EmptyLine></h3>
               <p>Try adjusting your search or filters.</p>
               <button className="ds-reset-inline-btn" onClick={() => { setSearchQuery(''); resetFilters(); }}>
                 Clear all

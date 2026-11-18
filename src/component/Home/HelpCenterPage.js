@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Rocket, UserCircle, CalendarClock, CreditCard, Pill, ShieldCheck, ChevronDown, ArrowRight, Mail,
@@ -87,7 +89,7 @@ export default function HelpCenterPage() {
           {topic ? <p className="pp-sub"><button type="button" onClick={() => setTopic(null)} style={{ background: 'none', border: 0, padding: 0, color: '#1d4ed8', fontWeight: 800, cursor: 'pointer' }}>Show all topics</button></p> : null}
         </div>
         {shown.length === 0 ? (
-          <div className="pp-card"><p>No answers match that search. Try other words, or <a href="/contact">send us a message</a>.</p></div>
+          <div className="pp-card"><p><EmptyLine icon={HI.Book} tone="violet">No answers match that search. Try other words, or <a href="/contact">send us a message</a>.</EmptyLine></p></div>
         ) : shown.map((x) => (
           <details key={x.q} className="pp-acc">
             <summary>{x.q}<ChevronDown size={18} /></summary>

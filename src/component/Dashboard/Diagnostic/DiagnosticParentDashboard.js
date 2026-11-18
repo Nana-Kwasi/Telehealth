@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { signOut, sendPasswordResetEmail } from '../../../services/authShim';
 import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from '../../../services/firestoreShim';
@@ -235,7 +237,7 @@ function ParentBranches({ type, profile }) {
 
       <div className="pharmacy-card diagnostic-branches-card" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem' }}>
         <h3 style={{ marginTop: 0, fontSize: '0.92rem' }}>Branch Directory</h3>
-        {loading ? <p>Loading...</p> : branches.length === 0 ? <p style={{ color: '#64748b' }}>No branches yet.</p> : (
+        {loading ? <p>Loading...</p> : branches.length === 0 ? <p style={{ color: '#64748b' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No branches yet.</EmptyLine></p> : (
           <div className="diagnostic-branches-table-wrap">
             <table className="diagnostic-branches-table">
               <thead>

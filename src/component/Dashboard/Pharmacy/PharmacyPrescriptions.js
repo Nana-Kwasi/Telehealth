@@ -1,4 +1,6 @@
 import PrescriptionCodeVerify from './PrescriptionCodeVerify';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
@@ -273,7 +275,7 @@ export default function PharmacyPrescriptions({ profile }) {
         <div style={{ color: '#64748b' }}>Loading prescriptions…</div>
       ) : prescriptions.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8', background: '#fff', borderRadius: 12, border: '1px solid #e0f2fe' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💊</div>
+          <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Medicines} tone="emerald" size={48} /></span>
           <p>No prescriptions routed to this pharmacy yet.</p>
         </div>
       ) : filtered.length === 0 ? (

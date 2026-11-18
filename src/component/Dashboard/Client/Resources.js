@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../../services/firestoreShim';
 import './Resources.css';
@@ -584,7 +586,7 @@ export default function ClientResources() {
       {/* Resources Grid/List */}
       {filteredResources.length === 0 ? (
         <div className="no-resources">
-          <BookOpen size={48} />
+          <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Book} tone="violet" size={43} /></span>
           <h3>No resources found</h3>
           <p>
             {searchTerm || selectedCategory !== 'all' 

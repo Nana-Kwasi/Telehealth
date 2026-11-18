@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Search, Save, Trash2, ChevronDown, Layers } from 'lucide-react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
+import {
+  FileText, Plus, Search, Save, Trash2, Layers,
+} from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, orderBy, serverTimestamp } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
@@ -349,7 +353,7 @@ export default function DoctorNotes({ profile }) {
           <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading notes...</p>
         ) : filtered.length === 0 ? (
           <div className="doctor-empty-state">
-            <FileText size={40} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.PrescriptionDocument} tone="violet" size={36} /></span>
             <h3>{searchQuery ? 'No notes match your search' : 'No consultation notes yet'}</h3>
             <p>Click "New Note" to create your first consultation note.</p>
           </div>

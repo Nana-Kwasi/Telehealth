@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { Search, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
@@ -179,7 +181,7 @@ export default function DoctorPatientPanel({ profile }) {
           <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading patients...</p>
         ) : filtered.length === 0 ? (
           <div className="doctor-empty-state">
-            <Users size={40} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.People} tone="teal" size={36} /></span>
             <h3>{searchQuery ? 'No patients match your search' : `No ${activeTab.toLowerCase()} patients`}</h3>
             <p>Patients appear here when they book appointments with you.</p>
           </div>

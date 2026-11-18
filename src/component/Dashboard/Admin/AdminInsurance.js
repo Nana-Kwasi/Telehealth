@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { api } from '../../../services/apiClient';
 import '../Diagnostic/diagnostics.css';
@@ -91,7 +93,7 @@ function Overview({ insurers }) {
           {(d.topProviders || []).length ? (
             <table className="dx-table"><thead><tr><th>Provider</th><th>Claims</th><th>Value</th><th>Flagged</th></tr></thead>
               <tbody>{d.topProviders.map(p => <tr key={p.name}><td><b>{p.name || '—'}</b></td><td>{p.claims}</td><td>{money(p.amount)}</td><td style={{ color: p.flagged ? '#b91c1c' : undefined, fontWeight: p.flagged ? 800 : 400 }}>{p.flagged}</td></tr>)}</tbody></table>
-          ) : <p className="dx-empty">No claims yet.</p>}
+          ) : <p className="dx-empty"><EmptyLine icon={HI.InsuranceCard} tone="violet">No claims yet.</EmptyLine></p>}
         </section>
       </div>
     </>
@@ -133,7 +135,7 @@ function Insurers({ insurers, reload, openOnboard = 0 }) {
             <td style={{ whiteSpace: 'nowrap' }}><button type="button" className="dx-btn dx-btn--sm" onClick={() => test(i)}>Test</button>{' '}
               <button type="button" className="dx-btn dx-btn--sm" onClick={() => setEdit({ ...i, credentialsText: '' })}>Edit</button>{' '}
               <button type="button" className="dx-btn dx-btn--sm" onClick={() => setStaffOf(i)}>Logins</button></td></tr>
-        ))}</Paged> : <tr><td colSpan={8} className="dx-empty">No insurers yet. Add one — use the Sandbox adapter to try the whole flow.</td></tr>}</tbody>
+        ))}</Paged> : <tr><td colSpan={8} className="dx-empty"><EmptyLine icon={HI.InsuranceCard} tone="violet">No insurers yet. Add one — use the Sandbox adapter to try the whole flow.</EmptyLine></td></tr>}</tbody>
       </table></div></div>
       {edit && (
         <div className="dx-modal-bg" onClick={() => setEdit(null)}><div className="dx-modal" onClick={e => e.stopPropagation()}>
@@ -258,7 +260,7 @@ function Checks({ insurers }) {
           <tr key={r.id}><td className="dx-card-hint">{when(r.createdAt)}</td><td>{r.insurerName}</td><td>{String(r.purpose).replace(/_/g, ' ').toLowerCase()}</td><td>{r.patientName || '—'}</td><td>{r.providerName || '—'}</td>
             <td><Pill map={OUTCOME} k={r.outcome} /></td><td>{r.amountRequested != null ? money(r.amountRequested) : '—'}</td><td>{r.amountCovered != null ? money(r.amountCovered) : '—'}</td>
             <td className="dx-card-hint" style={{ maxWidth: 260 }}>{r.reason || ''}</td><td className="dx-card-hint">{r.latencyMs != null ? `${r.latencyMs} ms` : ''}</td></tr>
-        ))}</Paged> : <tr><td colSpan={10} className="dx-empty">No checks yet.</td></tr>}</tbody>
+        ))}</Paged> : <tr><td colSpan={10} className="dx-empty"><EmptyLine icon={HI.Health} tone="indigo">No checks yet.</EmptyLine></td></tr>}</tbody>
       </table></div></div>
     </>
   );
@@ -278,7 +280,7 @@ function Network({ insurers }) {
           <tr key={r.id}><td><b>{r.providerName || '—'}</b><div className="dx-card-hint">{String(r.ownerKind).toLowerCase()}</div></td><td>{r.providerType}</td><td>{r.insurerName}</td><td style={{ fontFamily: 'monospace' }}>{r.providerCode}</td>
             <td><span className="dx-pill" style={r.status === 'VERIFIED' ? { background: '#dcfce7', color: '#166534' } : { background: '#fee2e2', color: '#991b1b' }}>{r.status}</span>{r.statusReason ? <div className="dx-card-hint">{r.statusReason}</div> : null}</td>
             <td className="dx-card-hint">{when(r.verifiedAt)}</td></tr>
-        ))}</Paged> : <tr><td colSpan={6} className="dx-empty">No provider codes yet.</td></tr>}</tbody>
+        ))}</Paged> : <tr><td colSpan={6} className="dx-empty"><EmptyLine icon={HI.Doctor} tone="blue">No provider codes yet.</EmptyLine></td></tr>}</tbody>
       </table></div></div>
     </>
   );

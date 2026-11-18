@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { api } from '../../services/apiClient';
 import Paged from './Paged';
 
@@ -134,7 +136,7 @@ export default function InsuranceCards({ accent = '#2563eb', compact = false }) 
 
       <div style={{ marginTop: 14, display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
         {loading ? <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading…</p> : cards.length === 0 ? (
-          <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>{insurers.length ? 'No cards yet.' : 'No insurers are connected to NessaHub yet.'}</p>
+          <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}><EmptyLine icon={HI.InsuranceCard} tone="violet">{insurers.length ? 'No cards yet.' : 'No insurers are connected to NessaHub yet.'}</EmptyLine></p>
         ) : <Paged items={cards}>{(cards) => cards.map(c => {
           const st = STATUS[c.status] || STATUS.PENDING;
           return (
@@ -206,7 +208,7 @@ export default function InsuranceCards({ accent = '#2563eb', compact = false }) 
                 <button type="button" onClick={() => setOpen(null)} style={closeBtn}>✕</button>
               </div>
             </div>
-            {places.loading ? <p style={muted}>Searching…</p> : places.list.length === 0 ? <p style={muted}>No pharmacies found{places.city ? ` in ${places.city}` : ''}. Try another town.</p> : (
+            {places.loading ? <p style={muted}>Searching…</p> : places.list.length === 0 ? <p style={muted}><EmptyLine icon={HI.Pharmacy} tone="emerald">No pharmacies found{places.city ? ` in ${places.city}` : ''}. Try another town.</EmptyLine></p> : (
               <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', marginTop: 10 }}>
                 {places.list.map((p, i) => (
                   <div key={p.ownerId || i} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.65rem 0.8rem', background: '#fff', fontSize: '0.82rem' }}>

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
@@ -646,7 +648,7 @@ export default function ClientSchedule() {
               <div className="client-schedule-message client-schedule-message-error">
                 <User size={20} />
                 <div>
-                  <strong>No therapist assigned</strong>
+                  <strong><EmptyLine icon={HI.Doctor} tone="blue">No therapist assigned</EmptyLine></strong>
                   <p>Please contact support to get assigned to a therapist first.</p>
                 </div>
               </div>

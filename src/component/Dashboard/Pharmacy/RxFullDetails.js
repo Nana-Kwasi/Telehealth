@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { patientVisibleNotes } from '../../../utils/pharmacyRxStatus';
 import Paged from '../../Common/Paged';
 
@@ -118,7 +120,7 @@ export default function RxFullDetails({ rx }) {
                     ))}</Paged>
                   </div>
                 ) : (
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>No further prescribing detail recorded.</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}><EmptyLine icon={HI.Medicines} tone="emerald">No further prescribing detail recorded.</EmptyLine></p>
                 )}
                 {m.alternativeSuggested && (
                   <p style={{ margin: '0.45rem 0 0', fontSize: '0.8rem', color: m.drugStatus === 'approved_replacement' ? '#166534' : '#7c3aed', fontWeight: 700 }}>

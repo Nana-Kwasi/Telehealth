@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, X, Save, FlaskConical, Download, Share2 } from 'lucide-react';
+import {
+  Search, X, Save, FlaskConical, Download, Share2,
+} from 'lucide-react';
 import { api } from '../../../services/apiClient';
 import { db, auth } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp } from '../../../services/firestoreShim';
@@ -206,7 +210,7 @@ export default function DoctorDiagnosticResults({ profile }) {
           <p style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>Loading results…</p>
         ) : filtered.length === 0 ? (
           <div className="doctor-empty-state">
-            <FileText size={40} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.MicroscopeWithSpecimen} tone="violet" size={36} /></span>
             <h3>{searchQuery || typeFilter !== 'all' ? 'No results match your search' : 'No diagnostic results yet'}</h3>
             <p>Results appear here after you place an order and the lab or scan center uploads findings.</p>
             <button type="button" className="doctor-btn doctor-btn-outline doctor-btn-sm" style={{ marginTop: '1rem' }} onClick={() => navigate('/dashboard/diagnostic-order')}>

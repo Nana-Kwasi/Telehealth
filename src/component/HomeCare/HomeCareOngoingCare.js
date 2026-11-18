@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../Common/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../../services/firestoreShim';
 import { fetchPatientOngoingBookings, fetchVisitLogs } from '../../services/homeCareService';
@@ -70,7 +72,7 @@ function EngagementCard({ booking, navigate }) {
           </div>
           {logs.length === 0 ? (
             <div className="hc-visit-log-empty">
-              <p>No visit logs yet.</p>
+              <p><EmptyLine icon={HI.Calendar} tone="sky">No visit logs yet.</EmptyLine></p>
               <span className="hc-visit-log-empty-hint">Your nurse will add an entry after each visit.</span>
             </div>
           ) : (

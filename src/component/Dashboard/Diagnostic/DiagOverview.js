@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { api } from '../../../services/apiClient';
@@ -162,7 +164,7 @@ export function OrderRows({ rows, onOpen, extra }) {
 }
 
 export function BranchTable({ branches, onOpen, currency = 'GHS' }) {
-  if (!branches?.length) return <p className="dx-empty">No branches yet. Add one under Branches.</p>;
+  if (!branches?.length) return <p className="dx-empty"><EmptyLine icon={HI.Pharmacy} tone="emerald">No branches yet. Add one under Branches.</EmptyLine></p>;
   const best = [...branches].filter(b => b.avgTatHours != null).sort((a, b) => a.avgTatHours - b.avgTatHours)[0];
   return (
     <div className="dx-table-wrap">
@@ -297,7 +299,7 @@ export default function DiagOverview({ type = 'lab', profile, mode = 'branch' })
                   <div className="dx-card-head"><h2 className="dx-card-title">📅 Upcoming scans</h2><span className="dx-card-hint">Booked appointments</span></div>
                   {data.upcoming?.length ? (
                     <OrderRows rows={data.upcoming} onOpen={openOrder} extra={(r) => <span className="dx-pill" style={{ background: STAGES.SCHEDULED.bg, color: STAGES.SCHEDULED.fg }}>{fmtDateTime(r.scheduledAt)}</span>} />
-                  ) : <p className="dx-empty">No scans booked yet. Book patients from the worklist.</p>}
+                  ) : <p className="dx-empty"><EmptyLine icon={HI.MicroscopeWithSpecimen} tone="violet">No scans booked yet. Book patients from the worklist.</EmptyLine></p>}
                 </>
               ) : (
                 <>

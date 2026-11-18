@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { api } from '../../services/apiClient';
 import Paged from './Paged';
 
@@ -44,7 +46,7 @@ export default function FeedbackResults() {
         <div style={{ color: '#64748b' }}>Loading…</div>
       ) : rows.length === 0 ? (
         <div style={{ ...card, color: '#64748b', textAlign: 'center' }}>
-          No feedback surveys have been run yet.
+          <EmptyLine icon={HI.MoneyBag} tone="amber">No feedback surveys have been run yet.</EmptyLine>
         </div>
       ) : <Paged items={rows}>{(rows) => rows.map((r) => {
         const total = Number(r.responses || 0);

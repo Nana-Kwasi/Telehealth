@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, query, orderBy, limit } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
@@ -193,7 +195,7 @@ export default function AdminAuditLog() {
         ) : filtered.length === 0 ? (
           <div className="admin-empty">
             <p style={{ fontSize: '1.1rem' }}>📋</p>
-            <p>No audit entries found.</p>
+            <p><EmptyLine icon={HI.Heartbeat} tone="rose">No audit entries found.</EmptyLine></p>
             <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Actions taken by users on web and mobile will appear here.</p>
           </div>
         ) : (

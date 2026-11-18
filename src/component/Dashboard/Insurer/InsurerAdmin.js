@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { INS, money, when, Kpi, Modal, Page, Empty, useLoad, get, post, patch, downloadCsv } from './insurerUi';
 import Paged from '../../Common/Paged';
@@ -251,7 +253,7 @@ export function InsSettings({ me, onChanged }) {
               <b>{p.code}</b>{isAdmin ? <input className="dx-input" style={{ width: 120, padding: '0.1rem 0.3rem' }} value={p.name || ''} onChange={e => setData({ ...data, plans: data.plans.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })} /> : p.name}
               {isAdmin && <button type="button" className="dx-btn dx-btn--sm" aria-label={`Remove ${p.code}`} onClick={() => setData({ ...data, plans: data.plans.filter((_, j) => j !== i) })}>✕</button>}
             </span>))}
-          {!(data.plans || []).length && <span className="dx-card-hint">No plans yet. Plans also appear here as members' cards are verified.</span>}
+          {!(data.plans || []).length && <span className="dx-card-hint"><EmptyLine icon={HI.People} tone="teal">No plans yet. Plans also appear here as members' cards are verified.</EmptyLine></span>}
         </div>
         {isAdmin && <div style={{ display: 'flex', gap: 8 }}>
           <input className="dx-input" style={{ maxWidth: 220 }} placeholder="Plan code, e.g. GOLD" value={newPlan} onChange={e => setNewPlan(e.target.value)} />

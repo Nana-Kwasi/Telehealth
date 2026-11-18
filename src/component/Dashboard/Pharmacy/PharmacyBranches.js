@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
 import { collection, getDocs, addDoc, query, where, serverTimestamp } from '../../../services/firestoreShim';
@@ -248,7 +250,7 @@ export default function PharmacyBranches({ profile }) {
       ) : branches.length === 0 ? (
         <div className="pharmacy-branches-empty">
           <div className="pharmacy-branches-empty-icon">🏪</div>
-          <p>No branches yet. Use &quot;+ New Branch&quot; to add one.</p>
+          <p><EmptyLine icon={HI.Pharmacy} tone="emerald">No branches yet. Use &quot;+ New Branch&quot; to add one.</EmptyLine></p>
         </div>
       ) : (
         <div className="pharmacy-card diagnostic-branches-card" style={{ padding: '1rem', borderRadius: 12, border: '1px solid #e2e8f0', background: '#fff' }}>

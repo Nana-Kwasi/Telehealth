@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { api } from '../../../services/apiClient';
 
 /**
@@ -255,7 +257,7 @@ export default function AdminSystemConfig() {
                   );
                 })}
               </div>
-            ) : <div className="admin-empty" style={{ padding: '1.5rem' }}><p>No changes yet.</p></div>}
+            ) : <div className="admin-empty" style={{ padding: '1.5rem' }}><p><EmptyLine icon={HI.Health} tone="indigo">No changes yet.</EmptyLine></p></div>}
           </section>
         </div>
       </div>

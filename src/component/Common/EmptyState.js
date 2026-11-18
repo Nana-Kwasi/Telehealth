@@ -54,3 +54,16 @@ export function IconHeading({ icon, tone = 'indigo', children, as: Tag = 'h3', c
     </Tag>
   );
 }
+
+/**
+ * A short "nothing here" line with a small coloured icon in front. Spans only,
+ * so it is valid inside a <p>, <td>, <li> or <span>.
+ */
+export function EmptyLine({ icon, tone = 'indigo', children }) {
+  return (
+    <span className="es-line">
+      <IconBubble icon={icon} tone={tone} size={20} />
+      <span className="es-line-text">{children}</span>
+    </span>
+  );
+}

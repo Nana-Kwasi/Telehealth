@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { addDoc, collection, query, where, getDocs, serverTimestamp } from '../../../services/firestoreShim';
 import { db } from '../../../services/firestoreShim';
 import Paged from '../../Common/Paged';
@@ -271,7 +273,7 @@ export default function GlobalReportForm({ profile, reporterType = 'user' }) {
 
                 {!selected.adminNote && !(Array.isArray(selected.adminReplies) && selected.adminReplies.length > 0) && (
                   <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0.25rem 0 0' }}>
-                    No admin response yet. You'll be able to see updates here once the Super Admin reviews this report.
+                    <EmptyLine icon={HI.PrescriptionDocument} tone="violet">No admin response yet. You'll be able to see updates here once the Super Admin reviews this report.</EmptyLine>
                   </p>
                 )}
               </div>

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine, IconBubble } from '../../Common/EmptyState';
 import { ProviderClaims, ProviderPreauthList } from '../../Common/ProviderInsurance';
 import InsuranceNetworks from '../../Common/InsuranceNetworks';
 import { TwoStepSignIn } from '../../Common/AccountSecurityCards';
@@ -155,7 +157,7 @@ function BranchPrescriptions({ profile }) {
         <div style={{ color: '#64748b' }}>Loading…</div>
       ) : prescriptions.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8', background: '#fff', borderRadius: 12, border: '1px solid #e0f2fe' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💊</div>
+          <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Medicines} tone="emerald" size={48} /></span>
           <p>No prescriptions assigned to this branch yet.</p>
         </div>
       ) : (
@@ -323,7 +325,7 @@ function BranchOverview({ profile }) {
             <span className="branch-home-badge-count">{recent.length}</span>
           </div>
           {recent.length === 0 ? (
-            <p className="branch-home-empty">No prescriptions yet.</p>
+            <p className="branch-home-empty"><EmptyLine icon={HI.Medicines} tone="emerald">No prescriptions yet.</EmptyLine></p>
           ) : (
             <ul className="branch-home-rx-list">
               <Paged items={recent}>{(recent) => recent.map(r => {
@@ -416,7 +418,7 @@ function BranchOverview({ profile }) {
           <button type="button" className="branch-home-link-all" onClick={() => navigate('/dashboard/activity')}>View all</button>
         </div>
         {events.length === 0 ? (
-          <p className="branch-home-empty">No audit events yet — updates appear when you change drug or Rx status.</p>
+          <p className="branch-home-empty"><EmptyLine icon={HI.Medicines} tone="emerald">No audit events yet — updates appear when you change drug or Rx status.</EmptyLine></p>
         ) : (
           <ul className="branch-home-activity-timeline">
             <Paged items={events}>{(events) => events.map(e => (
@@ -504,7 +506,7 @@ function BranchTransfers({ profile }) {
 
       {loading ? <p>Loading…</p> : visible.length === 0 ? (
         <p style={{ color: '#94a3b8' }}>
-          {filter === 'all' ? 'No drug transfers involve this branch yet.' : 'Nothing matches this filter.'}
+          <EmptyLine icon={HI.Pharmacy} tone="emerald">{filter === 'all' ? 'No drug transfers involve this branch yet.' : 'Nothing matches this filter.'}</EmptyLine>
         </p>
       ) : (
         <div className="pharmacy-table-wrap">
@@ -566,7 +568,7 @@ function BranchActivity({ profile }) {
     <div className="pharmacy-page">
       <h1 className="pharmacy-page-title">Activity</h1>
       <p className="pharmacy-page-sub">Latest branch actions on prescriptions</p>
-      {loading ? <p>Loading…</p> : events.length === 0 ? <p style={{ color: '#94a3b8' }}>No activity yet.</p> : (
+      {loading ? <p>Loading…</p> : events.length === 0 ? <p style={{ color: '#94a3b8' }}><EmptyLine icon={HI.Heartbeat} tone="rose">No activity yet.</EmptyLine></p> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Paged items={events}>{(events) => events.map(e => (
             <div key={e.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.75rem 0.9rem' }}>

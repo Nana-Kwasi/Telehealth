@@ -49,7 +49,7 @@ import { ShareIntakeModal, IntakeStatus } from '../../Common/Intake';
 import { TemplateNoteModal } from '../../Common/Templates';
 import { SharedJournalPanel } from '../../Common/Journal';
 import * as HI from '@healthicons/react';
-import EmptyState, { IconBubble } from '../../Common/EmptyState';
+import EmptyState, { IconBubble, EmptyLine } from '../../Common/EmptyState';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import { AddToWaitlistButton } from '../../Common/PracticePage';
 
@@ -215,7 +215,7 @@ function QuestionnaireResponsesPanel({ client }) {
       </div>
 
       {sections.length === 0 ? (
-        <p className="questionnaire-empty">No questionnaire responses on file.</p>
+        <p className="questionnaire-empty"><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No questionnaire responses on file.</EmptyLine></p>
       ) : (
         <div className="questionnaire-panel__body">
           {sections.map((section) => (
@@ -1218,7 +1218,7 @@ export default function ClientDetails() {
           {pharmacies.length === 0 ? (
             <div className="doctor-card">
               <div className="doctor-empty-state">
-                <span style={{ fontSize: '2rem' }}>💊</span>
+                <IconBubble icon={HI.Pharmacy} tone="emerald" size={40} />
                 <h3>No pharmacies on file</h3>
                 <p>This client has not added any pharmacies yet. You can add one on their behalf.</p>
               </div>
@@ -1311,7 +1311,7 @@ export default function ClientDetails() {
             <div style={{ marginTop: '1rem', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 12, padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
               <AlertTriangle size={16} color="#d97706" />
               <p style={{ margin: 0, fontSize: '0.825rem', color: '#92400e' }}>
-                No prescriptions issued yet. Issue a prescription first before sending to a pharmacy.
+                <EmptyLine icon={HI.Medicines} tone="emerald">No prescriptions issued yet. Issue a prescription first before sending to a pharmacy.</EmptyLine>
               </p>
             </div>
           )}

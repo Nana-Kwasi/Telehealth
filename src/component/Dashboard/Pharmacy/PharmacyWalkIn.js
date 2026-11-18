@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import PrescriptionCodeVerify from './PrescriptionCodeVerify';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from '../../../services/firestoreShim';
@@ -190,7 +192,7 @@ export function PharmacyWalkInVerifyPanel({ profile, embedded = false }) {
 
       {notFound && (
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: '2.5rem', textAlign: 'center', maxWidth: cardMax }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
+          <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.Medicines} tone="emerald" size={48} /></span>
           <p style={{ fontWeight: 700, color: '#374151', marginBottom: '0.5rem' }}>Prescription not found</p>
           <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
             No prescription matching <b style={{ fontFamily: 'monospace', color: '#0c4a6e' }}>{input.trim() || '…'}</b> for this branch scope.

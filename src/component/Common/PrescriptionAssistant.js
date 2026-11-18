@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { Pill, ShieldAlert, Plus, Loader, BookOpen } from 'lucide-react';
 import { api } from '../../services/apiClient';
 
@@ -115,7 +117,7 @@ function Flags({ data, live }) {
         <div style={S.notChecked}>Not checked — not in the formulary: {data.notChecked.join(', ')}</div>
       ) : null}
       {live && !flags.length && !data.notChecked?.length && !data.allergyWarning
-        ? <div style={S.sub}>No interactions, duplicates or allergy conflicts found in the formulary.</div> : null}
+        ? <div style={S.sub}><EmptyLine icon={HI.Medicines} tone="emerald">No interactions, duplicates or allergy conflicts found in the formulary.</EmptyLine></div> : null}
       {(data.reference || []).map((r) => (
         <div key={r.drug} style={S.ref}><BookOpen size={12} /> <b>{r.drug}</b> (pharmacist reference{r.reviewed ? '' : ', unreviewed'}): {r.text}</div>
       ))}

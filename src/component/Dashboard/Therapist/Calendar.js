@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useLocation as useRouterLocation } from 'react-router-dom';
 import {
   Calendar as CalendarIcon,
@@ -2405,7 +2407,7 @@ const TherapistCalendar = () => {
               </div>
             ) : (
               <div className="no-notes">
-                <p>No therapy notes available yet.</p>
+                <p><EmptyLine icon={HI.Calendar} tone="sky">No therapy notes available yet.</EmptyLine></p>
                 <p>Start adding notes from your client sessions to see them here.</p>
               </div>
             )}
@@ -5198,7 +5200,7 @@ export default TherapistCalendar;
 //               </div>
 //             ) : (
 //               <div className="no-notes">
-//                 <p>No therapy notes available yet.</p>
+//                 <p><EmptyLine icon={HI.Calendar} tone="sky">No therapy notes available yet.</EmptyLine></p>
 //                 <p>Start adding notes from your client sessions to see them here.</p>
 //               </div>
 //             )}

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import {
@@ -564,7 +566,7 @@ export default function PharmacyBranchDetail({ profile }) {
               <tbody>
                 {branchRx.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ color: '#64748b' }}>No active or historical operations yet for this branch.</td>
+                    <td colSpan={5} style={{ color: '#64748b' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No active or historical operations yet for this branch.</EmptyLine></td>
                   </tr>
                 ) : branchRx.slice(0, 80).map(rx => {
                   const meds = Array.isArray(rx.medications) ? rx.medications : [];
@@ -613,7 +615,7 @@ export default function PharmacyBranchDetail({ profile }) {
               <tbody>
                 {branchEvents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ color: '#64748b' }}>No branch events recorded yet.</td>
+                    <td colSpan={5} style={{ color: '#64748b' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No branch events recorded yet.</EmptyLine></td>
                   </tr>
                 ) : branchEvents.slice(0, 120).map(evt => (
                   <tr key={evt.id}>

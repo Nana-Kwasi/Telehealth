@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { Link } from 'react-router-dom';
 import { db } from '../../../services/firestoreShim';
 import useEmailVerified from '../../../hooks/useEmailVerified';
@@ -439,7 +441,7 @@ export default function PharmacyOverview({ profile }) {
             <h3 className="pharmacy-overview-panel-title">Branches</h3>
             {branchSnapshots.length === 0 ? (
               <div className="pharmacy-overview-empty">
-                <p>No branches yet.</p>
+                <p><EmptyLine icon={HI.Pharmacy} tone="emerald">No branches yet.</EmptyLine></p>
                 <Link className="pharmacy-overview-inline-link" to="/dashboard/branches">Add a branch</Link>
               </div>
             ) : (
@@ -474,7 +476,7 @@ export default function PharmacyOverview({ profile }) {
             <h3 className="pharmacy-overview-panel-title">Recent activity</h3>
             {activityFeed.length === 0 ? (
               <div className="pharmacy-overview-empty">
-                <p>No prescription activity yet.</p>
+                <p><EmptyLine icon={HI.Medicines} tone="emerald">No prescription activity yet.</EmptyLine></p>
               </div>
             ) : (
               <ul className="pharmacy-overview-feed">

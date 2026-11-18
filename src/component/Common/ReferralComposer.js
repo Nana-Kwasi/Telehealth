@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine, IconBubble } from './EmptyState';
 import { Share2, Sparkles, Loader, Send, Check, CheckCircle2, User, Stethoscope, ClipboardList, FileText, History, Pill, FlaskConical, Save, Mail, X, Inbox } from 'lucide-react';
 import { api, getStoredUserId } from '../../services/apiClient';
 import './ReferralComposer.css';
@@ -261,7 +263,7 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
                         <small>{roleLine(m)}</small>
                       </button>
                     ))}</Paged>
-                    {matches.length === 0 ? <p className="rf-hint">No clinicians match that search.</p> : null}
+                    {matches.length === 0 ? <p className="rf-hint"><EmptyLine icon={HI.Doctor} tone="blue">No clinicians match that search.</EmptyLine></p> : null}
                   </div>
                 </>
               )
@@ -303,7 +305,7 @@ export default function ReferralComposer({ role = 'DOCTOR' }) {
         {(listTab === 'sent' ? history : received) === null ? <div className="rf-skeleton" /> : null}
         {(listTab === 'sent' ? history : received)?.length === 0 ? (
           <div className="rf-empty">
-            <span><Share2 size={24} /></span>
+            <span><span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Hospital} tone="blue" size={26} /></span></span>
             <strong>{listTab === 'sent' ? 'No referrals yet' : 'Nothing referred to you yet'}</strong>
             <p>{listTab === 'sent' ? 'Referrals you save or submit will be listed here.' : 'When a colleague refers a patient to you, it appears here.'}</p>
           </div>

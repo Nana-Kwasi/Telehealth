@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from '../../../services/firestoreShim';
 import { db } from '../../../services/firestoreShim';
@@ -672,7 +674,7 @@ export default function PrescriptionOps({ profile, mode = 'branch' }) {
                   </div>
                 )}
                 {rankedBranches.length === 0 ? (
-                  <p style={{ margin: 0, padding: 10, fontSize: '0.82rem', color: '#94a3b8' }}>No other active branches found.</p>
+                  <p style={{ margin: 0, padding: 10, fontSize: '0.82rem', color: '#94a3b8' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No other active branches found.</EmptyLine></p>
                 ) : <Paged items={rankedBranches}>{(rankedBranches) => rankedBranches.map(b => {
                   const city = b.city || b.location?.city || '';
                   const near = patientCity && city.toLowerCase() === patientCity;

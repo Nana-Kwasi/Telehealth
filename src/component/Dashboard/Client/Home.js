@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { usePlatformFeatures, featureOn } from '../../Common/platformFeatures';
 import * as HI from '@healthicons/react';
-import { IconBubble } from '../../Common/EmptyState';
+import { IconBubble, EmptyLine } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import {
-  MessageSquare, Calendar, User, BookOpen, TrendingUp, Activity, Bell, ChevronLeft, ChevronRight, Cloud, CloudRain, Search, AlertTriangle, Phone, X, Video, Heart, CreditCard, Plus, Pill,
+  MessageSquare, Calendar, User, BookOpen, TrendingUp, Activity, ChevronLeft, ChevronRight, AlertTriangle, Phone, X, Video, Heart, CreditCard, Plus, Pill,
 } from 'lucide-react';
 import './Home.css';
 import { fetchAssignedTherapist } from '../../../utils/clientTherapistAssignment';
@@ -2517,7 +2517,7 @@ export default function ClientHome({ profile }) {
                 <Pie data={prepareMoodPieChartData(moodChartData)} options={pieChartOptions} />
               ) : (
                 <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8', textAlign: 'center' }}>
-                  No mood check-ins yet — log one to see your distribution.
+                  <EmptyLine icon={HI.FaceHappy} tone="amber">No mood check-ins yet — log one to see your distribution.</EmptyLine>
                 </p>
               )}
             </div>

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine, IconBubble } from '../../Common/EmptyState';
 import { db } from '../../../services/firestoreShim';
 import {
   collection, getDocs, doc, updateDoc, serverTimestamp
@@ -226,7 +228,7 @@ export default function AdminReportsCenter() {
       ) : reports.length === 0 ? (
         <div className="admin-table-card">
           <div className="admin-empty" style={{ padding: '3rem' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📭</div>
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}><IconBubble icon={HI.PrescriptionDocument} tone="violet" size={48} /></span>
             <p style={{ fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem' }}>No reports yet</p>
             <p style={{ fontSize: '0.82rem', color: '#94a3b8', maxWidth: 400, textAlign: 'center', margin: 0 }}>
               Reports submitted by medical patients, therapy clients, doctors, and therapists will appear here.
@@ -235,7 +237,7 @@ export default function AdminReportsCenter() {
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="admin-empty"><p>No reports match your filters.</p></div>
+        <div className="admin-empty"><p><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No reports match your filters.</EmptyLine></p></div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 420px' : '1fr', gap: '1.5rem' }}>
           {/* Report list */}

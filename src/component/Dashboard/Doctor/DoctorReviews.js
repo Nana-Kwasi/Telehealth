@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { Star, Search, MessageSquare } from 'lucide-react';
 import { db } from '../../../services/firestoreShim';
 import { collection, query, where, getDocs, doc, updateDoc, orderBy, serverTimestamp } from '../../../services/firestoreShim';
@@ -130,7 +132,7 @@ export default function DoctorReviews({ profile }) {
           <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Loading reviews...</p>
         ) : filtered.length === 0 ? (
           <div className="doctor-empty-state">
-            <Star size={40} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Heart} tone="pink" size={36} /></span>
             <h3>{searchQuery || filter !== 'all' ? 'No matching reviews' : 'No reviews yet'}</h3>
             <p>Patient reviews will appear here after consultations.</p>
           </div>

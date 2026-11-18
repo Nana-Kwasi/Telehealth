@@ -1,5 +1,5 @@
 import * as HI from '@healthicons/react';
-import { IconBubble } from '../../Common/EmptyState';
+import { IconBubble, EmptyLine } from '../../Common/EmptyState';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   DashboardGrid, HeroBanner, StatTile, Panel, ScoreRing, MetricTile,
@@ -714,7 +714,7 @@ export default function DoctorHome({ profile }) {
           </div>
           {todayAppointments.length === 0 ? (
             <div className="doctor-empty-state">
-              <Calendar size={36} color="#cbd5e1" />
+              <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Calendar} tone="sky" size={32} /></span>
               <h3>No appointments today</h3>
               <p>Check pending bookings or update your availability.</p>
             </div>
@@ -1060,7 +1060,7 @@ export default function DoctorHome({ profile }) {
                 {/* Patient list */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', maxHeight: 240, overflowY: 'auto' }}>
                   {allPatientsList.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}>No patients found</p>
+                    <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem', padding: '1rem 0' }}><EmptyLine icon={HI.People} tone="teal">No patients found</EmptyLine></p>
                   ) : <Paged items={ephPatients}>{(ephPatients) => ephPatients.map(p => {
                     const isSel = selectedPatientIds.has(p.id);
                     return (

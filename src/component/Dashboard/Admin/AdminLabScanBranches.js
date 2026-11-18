@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import '../Pharmacy/PharmacyDashboard.css';
 import { db } from '../../../services/firestoreShim';
 import {
@@ -193,7 +195,7 @@ export default function AdminLabScanBranches() {
                 </div>
 
                 {branches.length === 0 ? (
-                  <p style={{ color: '#64748b', fontSize: '0.875rem' }}>No branches yet. Add the first branch above.</p>
+                  <p style={{ color: '#64748b', fontSize: '0.875rem' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No branches yet. Add the first branch above.</EmptyLine></p>
                 ) : (
                   <div className="diagnostic-branches-table-wrap parent-branches-table-wrap">
                     <table className="diagnostic-branches-table parent-branches-table">

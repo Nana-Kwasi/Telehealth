@@ -1,4 +1,6 @@
 import React, { useCallback, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useHomeCareNurse } from './HomeCareNurseContext';
 import { addNurseEarning, fetchNurseEarnings } from '../../../services/homeCareService';
 import { formatGhs } from '../../../utils/homeCareUtils';
@@ -59,7 +61,7 @@ export default function HomeCareNurseEarnings({ embedded = false }) {
         <button type="submit" className="hcn-btn" disabled={saving}>{saving ? 'Adding…' : 'Add entry'}</button>
       </form>
       {loading ? <p className="hcn-empty">Loading…</p> : null}
-      {!loading && list.length === 0 ? <p className="hcn-empty">No earnings logged yet.</p> : null}
+      {!loading && list.length === 0 ? <p className="hcn-empty"><EmptyLine icon={HI.MoneyBag} tone="amber">No earnings logged yet.</EmptyLine></p> : null}
       <Paged items={list}>{(list) => list.map((e) => (
         <div key={e.id} className="hcn-card">
           <strong>{formatGhs(e.amount)}</strong>

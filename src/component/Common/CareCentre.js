@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from './EmptyState';
 import { HeartPulse, Pill, CheckCircle2, MessageSquare, Clock, CalendarDays, Bell, Plus, X, Check } from 'lucide-react';
 import { api } from '../../services/apiClient';
 import './CareCentre.css';
@@ -308,7 +310,7 @@ export default function CareCentre({ userId, variant = 'medical' }) {
 
         {activeReminders.length === 0 && !adding ? (
           <div className="cc-empty">
-            <span><Pill size={26} /></span>
+            <span><span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.Phone} tone="amber" size={26} /></span></span>
             <strong>No reminders yet</strong>
             <p>Set one from your prescriptions and we'll remind you at the times you choose.</p>
           </div>

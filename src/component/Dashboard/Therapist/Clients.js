@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine, IconBubble } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../../services/firestoreShim';
 import {
@@ -6,9 +8,7 @@ import {
   doc, getDoc, getDocs, where, updateDoc, deleteDoc
 } from '../../../services/firestoreShim';
 import {
-  Search, FileText, MessageSquare, Calendar, Clock, Target, TrendingUp,
-  BookOpen, CheckCircle, Plus, Users, Mail, Phone, MoreVertical,
-  Edit, Eye, UserX, UserCheck, Filter, Download, AlertCircle, X, LogOut
+  Search, FileText, MessageSquare, Calendar, Clock, BookOpen, Users, Phone, MoreVertical, Edit, Eye, UserX, UserCheck, AlertCircle, X, LogOut,
 } from 'lucide-react';
 import ChatModal from './ChatModal';
 import './Clients.css';
@@ -499,7 +499,7 @@ export default function TherapistClients({ profile }) {
       <div style={{ flex:1, overflowY:'auto', padding:'1.5rem 2rem' }}>
         {filtered.length === 0 ? (
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'4rem', color:'#94a3b8', gap:'1rem' }}>
-            <Users size={48} style={{ opacity:0.4 }} />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.People} tone="teal" size={43} /></span>
             <p style={{ margin:0, fontWeight:600 }}>{searchQuery ? 'No clients match your search' : 'No clients assigned yet'}</p>
           </div>
         ) : (
@@ -660,7 +660,7 @@ export default function TherapistClients({ profile }) {
             </div>
             <div style={{ padding:'1rem' }}>
               {allTherapists.length === 0 ? (
-                <p style={{ textAlign:'center', color:'#94a3b8', padding:'2rem' }}>No therapists found</p>
+                <p style={{ textAlign:'center', color:'#94a3b8', padding:'2rem' }}><EmptyLine icon={HI.Doctor} tone="blue">No therapists found</EmptyLine></p>
               ) : <Paged items={allTherapists}>{(allTherapists) => allTherapists.map(t => {
                 const isCurrent = reassignClient.therapistId === t.id;
                 return (

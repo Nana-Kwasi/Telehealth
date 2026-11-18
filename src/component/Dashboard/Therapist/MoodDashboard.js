@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as HI from '@healthicons/react';
+import { IconBubble } from '../../Common/EmptyState';
 import { Heart, TrendingUp, TrendingDown, Minus, Search, ChevronLeft } from 'lucide-react';
 import { auth, db } from '../../../services/firestoreShim';
 import {
@@ -292,7 +294,7 @@ export default function TherapistMoodDashboard() {
 
         {visibleRoster.length === 0 ? (
           <div className="mood-empty">
-            <Heart size={48} color="#e2e8f0" />
+            <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.People} tone="teal" size={43} /></span>
             <p>
               {roster.length === 0
                 ? 'No clients assigned yet'
@@ -445,7 +447,7 @@ export default function TherapistMoodDashboard() {
             <h3>All Check-ins ({moodEntries.length})</h3>
             {moodEntries.length === 0 ? (
               <div className="mood-empty">
-                <Heart size={32} color="#e2e8f0" />
+                <span style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.6rem' }}><IconBubble icon={HI.FaceHappy} tone="amber" size={29} /></span>
                 <p>No mood check-ins recorded yet</p>
               </div>
             ) : (

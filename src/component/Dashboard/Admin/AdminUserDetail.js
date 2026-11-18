@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, functions, httpsCallable } from '../../../services/firestoreShim';
 import {
@@ -837,7 +839,7 @@ export default function AdminUserDetail() {
                 {branchesLoading ? (
                   <p style={{ color: '#94a3b8' }}>Loading branches…</p>
                 ) : branches.length === 0 ? (
-                  <p style={{ color: '#94a3b8' }}>No branches linked to this parent yet.</p>
+                  <p style={{ color: '#94a3b8' }}><EmptyLine icon={HI.Pharmacy} tone="emerald">No branches linked to this parent yet.</EmptyLine></p>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
                     <Paged items={branches}>{(branches) => branches.map(b => (
@@ -950,7 +952,7 @@ export default function AdminUserDetail() {
           ) : (
             <>
               <SectionCard title={`Appointments & Sessions (${related.appointments.length})`} icon="📅">
-                {!related.appointments.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>No appointments or sessions found.</p>
+                {!related.appointments.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}><EmptyLine icon={HI.Calendar} tone="sky">No appointments or sessions found.</EmptyLine></p>
                   : related.appointments.map(a => (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: a.status === 'completed' ? '#16a34a' : a.status === 'cancelled' ? '#dc2626' : '#d97706', marginTop: 5, flexShrink: 0 }} />
@@ -973,7 +975,7 @@ export default function AdminUserDetail() {
                   medical side only. They get clinical notes instead. */}
               {col === 'clients' && (
                 <SectionCard title={`Clinical Notes (${related.notes.length})`} icon="📝">
-                  {!related.notes.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>No clinical notes recorded.</p>
+                  {!related.notes.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}><EmptyLine icon={HI.PrescriptionDocument} tone="violet">No clinical notes recorded.</EmptyLine></p>
                     : related.notes.map(n => (
                     <div key={n.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0891b2', marginTop: 5, flexShrink: 0 }} />
@@ -992,7 +994,7 @@ export default function AdminUserDetail() {
 
               {(col === 'auth' || col === 'doctors') && (
                 <SectionCard title={`Prescriptions (${related.prescriptions.length})`} icon="💊">
-                  {!related.prescriptions.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>No prescriptions found.</p>
+                  {!related.prescriptions.length ? <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}><EmptyLine icon={HI.Medicines} tone="emerald">No prescriptions found.</EmptyLine></p>
                     : related.prescriptions.map(rx => (
                     <div key={rx.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', marginTop: 5, flexShrink: 0 }} />

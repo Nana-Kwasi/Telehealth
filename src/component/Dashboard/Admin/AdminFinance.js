@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from '../../Common/EmptyState';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../../services/apiClient';
 import '../../Common/CareTransfers.css';
@@ -171,7 +173,7 @@ function Balances() {
               ) : null}
             </React.Fragment>
           ))}
-          {rows.length === 0 ? <tr><td colSpan={8} className="ct-meta">No provider earnings yet.</td></tr> : null}
+          {rows.length === 0 ? <tr><td colSpan={8} className="ct-meta"><EmptyLine icon={HI.MoneyBag} tone="amber">No provider earnings yet.</EmptyLine></td></tr> : null}
         </tbody>
       </table>
     </div>
@@ -195,7 +197,7 @@ export function Ledger({ rows }) {
               <td><Chip map={STATE} value={e.state} />{e.state === 'PENDING' ? <div className="ct-meta">Available {fmt(e.clearsAt)}</div> : null}</td>
             </tr>
           ))}
-          {rows.length === 0 ? <tr><td colSpan={8} className="ct-meta">No bookings yet.</td></tr> : null}
+          {rows.length === 0 ? <tr><td colSpan={8} className="ct-meta"><EmptyLine icon={HI.Calendar} tone="sky">No bookings yet.</EmptyLine></td></tr> : null}
         </tbody>
       </table>
     </div>
@@ -333,7 +335,7 @@ function Payouts() {
               {openId === b.id ? <BatchDetail id={b.id} onChanged={load} /> : null}
             </div>
           ))}
-          {batches.length === 0 ? <div className="ct-empty">No payouts yet.</div> : null}
+          {batches.length === 0 ? <div className="ct-empty"><EmptyLine icon={HI.MoneyBag} tone="amber">No payouts yet.</EmptyLine></div> : null}
         </div>
       )}
     </>
@@ -413,7 +415,7 @@ function Methods() {
                   : <button type="button" className="ct-btn primary" onClick={async () => { await api(`/api/v1/finance/admin/payout-methods/${m.providerId}/verify`, { method: 'POST' }); load(); }}>Confirm</button>}</td>
               </tr>
             ))}
-            {rows.length === 0 ? <tr><td colSpan={5} className="ct-meta">No provider has added payout details yet.</td></tr> : null}
+            {rows.length === 0 ? <tr><td colSpan={5} className="ct-meta"><EmptyLine icon={HI.MoneyBag} tone="amber">No provider has added payout details yet.</EmptyLine></td></tr> : null}
           </tbody>
         </table>
       </div>

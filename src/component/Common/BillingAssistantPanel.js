@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as HI from '@healthicons/react';
+import { EmptyLine } from './EmptyState';
 import { Receipt, ShieldCheck, FileCheck2, Printer } from 'lucide-react';
 import { api } from '../../services/apiClient';
 import Paged from './Paged';
@@ -107,7 +109,7 @@ export default function BillingAssistantPanel() {
           <div><h2 style={S.title}>Invoices</h2>
             <p style={S.sub}>One for every payment. Insured? Prepare a claim from an invoice.</p></div>
         </header>
-        {invoices.length === 0 ? <p style={S.sub}>No invoices yet.</p> : <Paged items={invoices}>{(invoices) => invoices.map((inv) => (
+        {invoices.length === 0 ? <p style={S.sub}><EmptyLine icon={HI.MoneyBag} tone="amber">No invoices yet.</EmptyLine></p> : <Paged items={invoices}>{(invoices) => invoices.map((inv) => (
           <div key={inv.id} style={S.line}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={S.strong}>{inv.invoice_number} · {money(inv.amount_cents, inv.currency)}</div>
