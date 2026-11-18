@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import AiAssistantFab from '../../Common/AiAssistantFab';
 import ClientWellness from '../../Common/ClientWellness';
+import Journal from '../../Common/Journal';
+import Community from '../../Common/Community';
 import SymptomTriage from '../../Common/SymptomTriage';
 import MyCarePlan from '../../Common/MyCarePlan';
 import CareCentre from '../../Common/CareCentre';
@@ -21,7 +23,7 @@ import {
   CheckCircle, Video, Phone, MessageCircle, Pill,
   Bell, CreditCard, AlertCircle, TrendingUp, User,
   BarChart2, Heart, Star, Shield, Download, Plus, Smile, AlertTriangle, Search,
-  Mic, MicOff, Paperclip, Microscope, Minus, Sparkles, Leaf, ClipboardList,
+  Mic, MicOff, Paperclip, Microscope, Minus, Sparkles, Leaf, ClipboardList, PenLine, Users,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { signOut } from '../../../services/authShim';
@@ -5029,6 +5031,8 @@ export default function MedicalPatientDashboard({ profile }) {
        link here; medical patients — the ones with prescriptions — had no way in. */
     { path: '/dashboard/my-care',       icon: Pill,          label: 'My Care' },
     { path: '/dashboard/my-records',   icon: Search,        label: 'My Records' },
+    { path: '/dashboard/journal',       icon: PenLine,      label: 'My Journal' },
+    { path: '/dashboard/community',     icon: Users,        label: 'Community' },
     { path: '/dashboard/wellness',      icon: Leaf,         label: 'Wellness' },
     { path: '/dashboard/notifications', icon: Bell,         label: 'Notifications' },
     { path: '/dashboard/ai-assistant',  icon: Sparkles,     label: 'NessaHub Assistant' },
@@ -5099,6 +5103,8 @@ export default function MedicalPatientDashboard({ profile }) {
           <Route path="/settings"      element={<MedPatSettings            profile={profile} />} />
           <Route path="/support"       element={<MedPatSupport             profile={profile} />} />
           <Route path="/wellness"      element={<ClientWellness peopleNoun="doctor" />} />
+          <Route path="/journal"       element={<Journal />} />
+          <Route path="/community"     element={<Community />} />
           <Route path="/care-plan"     element={<MyCarePlan />} />
           <Route path="/my-care"       element={<CareCentre userId={profile?.id || profile?.uid} />} />
           <Route path="/my-records" element={<RecordExplorer title="My records" />} />

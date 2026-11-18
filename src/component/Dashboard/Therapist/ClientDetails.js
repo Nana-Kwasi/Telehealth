@@ -47,6 +47,7 @@ import { MeasuresPanel } from '../../Common/Measures';
 import { RecordGapsBanner, TimelinePanel, MsePanel, DiagnosisPlanPanel, PrivateNotesPanel } from '../../Common/PsychRecord';
 import { ShareIntakeModal, IntakeStatus } from '../../Common/Intake';
 import { TemplateNoteModal } from '../../Common/Templates';
+import { SharedJournalPanel } from '../../Common/Journal';
 import { AddToWaitlistButton } from '../../Common/PracticePage';
 
 const noteCardStyle = {
@@ -834,7 +835,7 @@ export default function ClientDetails() {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   };
 
-  const TABS = ['overview', 'timeline', 'sessions', 'notes', 'measures', 'mse', 'diagnosis', 'private', 'mood', 'goals',
+  const TABS = ['overview', 'timeline', 'sessions', 'notes', 'measures', 'mse', 'diagnosis', 'private', 'mood', 'journal', 'goals',
     // Psychiatry: the doctor page's Prescriptions and E-Pharmacy tabs.
     ...(isPsychiatryClient ? ['prescriptions', 'epharmacy'] : [])];
   const TAB_LABELS = { epharmacy: 'E-Pharmacy', mse: 'Mental status', diagnosis: 'Diagnosis & plan', private: 'Private notes' };
@@ -1075,6 +1076,7 @@ export default function ClientDetails() {
       {activeTab === 'mse' && <MsePanel clientId={clientId} onSaved={recordChanged} />}
       {activeTab === 'diagnosis' && <DiagnosisPlanPanel clientId={clientId} onSaved={recordChanged} />}
       {activeTab === 'private' && <PrivateNotesPanel clientId={clientId} />}
+      {activeTab === 'journal' && <SharedJournalPanel clientId={clientId} />}
 
       {activeTab === 'prescriptions' && (
         dataSharing.prescriptions === false

@@ -1,0 +1,22 @@
+.cm-notice { background: #f0f9ff; border: 1px solid #bae6fd; color: #075985; border-radius: 12px; padding: 0.65rem 0.9rem; font-size: 0.88rem; }
+.cm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.6rem; }
+.cm-group { text-align: left; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; padding: 0.8rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; font: inherit; color: inherit; }
+.cm-group:hover, .cm-group:focus-visible { border-color: #a5b4fc; }
+.cm-meta { font-size: 0.75rem; color: #4f46e5; font-weight: 600; }
+.cm-rules { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.cm-post header { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-size: 0.88rem; }
+.cm-body { white-space: pre-wrap; margin: 0.4rem 0; overflow-wrap: anywhere; }
+.cm-held { border-style: dashed; background: #fffbeb; }
+.cm-hold { font-size: 0.82rem; color: #92400e; margin: 0.3rem 0; }
+.cm-badge { margin-left: 0.4rem; font-size: 0.68rem; font-weight: 700; background: #eef2ff; color: #3730a3; border-radius: 999px; padding: 0.1rem 0.45rem; }
+.cm-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.cm-actions button { border: 1px solid #e2e8f0; background: #fff; border-radius: 999px; padding: 0.25rem 0.7rem; cursor: pointer; font-size: 0.82rem; color: #334155; }
+.cm-actions button.on { border-color: #4f46e5; background: #eef2ff; color: #3730a3; font-weight: 600; }
+.cm-actions button:disabled { opacity: 0.55; cursor: default; }
+.cm-comments { margin-top: 0.6rem; border-top: 1px solid #f1f5f9; padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.cm-comment { background: #f8fafc; border-radius: 10px; padding: 0.5rem 0.7rem; font-size: 0.9rem; }
+.cm-report { border: 1px solid #fecaca; background: #fff7f7; border-radius: 10px; padding: 0.6rem 0.8rem; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.cm-queue { border-top: 1px solid #f1f5f9; padding: 0.7rem 0; }
+.cm-urgent { border-left: 4px solid #dc2626; padding-left: 0.7rem; background: #fef2f2; border-radius: 6px; }
+.cm-chip { display: inline-flex; align-items: center; gap: 0.25rem; background: #f1f5f9; border-radius: 999px; padding: 0.1rem 0.5rem; margin: 0 0.3rem 0.3rem 0; color: #334155; }
+.cm-chip button { border: none; background: none; cursor: pointer; color: #b91c1c; font-weight: 700; }

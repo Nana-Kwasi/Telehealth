@@ -5,11 +5,13 @@ import CarePlanComposer from '../../Common/CarePlanComposer';
 import ReferralComposer from '../../Common/ReferralComposer';
 import TransfersPage from '../../Common/TransfersPage';
 import PracticePage from '../../Common/PracticePage';
+import { CommunityModeration } from '../../Common/Community';
 import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, Users, Calendar, MessageSquare, FileText, Settings, LogOut, Activity, Video, Pill, Star, BarChart3, LayoutDashboard, FlaskConical, ClipboardList, Gift, Leaf, Bell, Sparkles, Tag, Share2, FileSignature, ArrowLeftRight, Wallet,
+  ShieldCheck as ModIcon,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -67,6 +69,7 @@ export default function DoctorDashboard({ profile }) {
     { path: '/dashboard/patient-panel', icon: LayoutDashboard, label: 'Patient Panel' },
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments' },
     { path: '/dashboard/practice', icon: Calendar, label: 'My Practice' },
+    { path: '/dashboard/community-moderation', icon: ModIcon, label: 'Community moderation' },
     { path: '/dashboard/video', icon: Video, label: 'Video Calls' },
     { path: '/dashboard/messages', icon: MessageSquare, label: 'Messages' },
     { path: '/dashboard/notes', icon: FileText, label: 'Notes' },
@@ -177,6 +180,7 @@ export default function DoctorDashboard({ profile }) {
           <Route path="/referrals" element={<ReferralComposer role="DOCTOR" />} />
           <Route path="/transfers" element={<TransfersPage role="DOCTOR" />} />
           <Route path="/practice" element={<PracticePage clientsPath="/api/v1/doctors/me/patients" />} />
+          <Route path="/community-moderation" element={<CommunityModeration />} />
           <Route path="/earnings" element={<EarningsPage serviceKey="consultation" />} />
           <Route path="/promotions" element={<ProviderPromotions />} />
           <Route path="/fee-offers" element={<ProviderPricePromotions />} />

@@ -4,11 +4,13 @@ import CarePlanComposer from '../../Common/CarePlanComposer';
 import ReferralComposer from '../../Common/ReferralComposer';
 import TransfersPage from '../../Common/TransfersPage';
 import PracticePage from '../../Common/PracticePage';
+import { CommunityModeration } from '../../Common/Community';
 import EarningsPage from '../../Common/EarningsPage';
 import AdminDocComposer from '../../Common/AdminDocComposer';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, Users, MessageSquare, Video, Calendar, BookOpen, Settings, LogOut, Clock, FileText, Flag, Activity, Heart, Gift, Leaf, Star, Bell, Sparkles, ClipboardList, Tag, Share2, FileSignature, Pill, FlaskConical, ArrowLeftRight, Wallet,
+  ShieldCheck as ModIcon,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth, db, doc, getDoc } from '../../../services/firestoreShim';
@@ -99,6 +101,7 @@ export default function TherapistDashboard({ profile }) {
     { path: '/dashboard/appointments', icon: Calendar, label: 'Appointments', component: TherapistAppointments },
     { path: '/dashboard/calendar', icon: Calendar, label: 'Calendar', component: TherapistCalendar },
     { path: '/dashboard/practice', icon: Clock, label: 'My Practice', component: PracticePage },
+    { path: '/dashboard/community-moderation', icon: ModIcon, label: 'Community moderation', component: CommunityModeration },
     { path: '/dashboard/notes', icon: BookOpen, label: 'Notes', component: TherapistNotes },
     // Psychiatry: prescribing for psychiatry-track clients — the doctor's flow, copied.
     { path: '/dashboard/prescriptions', icon: Pill, label: 'Prescriptions', component: TherapistPrescriptions },
@@ -238,6 +241,7 @@ export default function TherapistDashboard({ profile }) {
           <Route path="/appointments" element={<TherapistAppointments />} />
           <Route path="/calendar" element={<TherapistCalendar />} />
           <Route path="/practice" element={<PracticePage />} />
+          <Route path="/community-moderation" element={<CommunityModeration />} />
           <Route path="/notes" element={<TherapistNotes />} />
           <Route path="/prescriptions" element={<TherapistPrescriptions profile={profile} />} />
           <Route path="/diagnostic-order" element={<TherapistDiagnosticOrder profile={profile} />} />

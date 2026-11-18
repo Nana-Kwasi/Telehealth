@@ -8,7 +8,7 @@ import SidebarSavedLocation from '../../Common/SidebarSavedLocation';
 import {
   LayoutDashboard, Users, BadgeCheck, CalendarDays, Pill, Building2, Stethoscope, Brain, Home, HeartHandshake,
   FlaskConical, BarChart3, FileDown, Inbox, ShieldCheck, BookOpen, Radar, ScrollText, Bell, Mail, Megaphone, Tag,
-  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity, UserCog, SlidersHorizontal, ArrowLeftRight, ListChecks, ClipboardSignature, Wallet } from 'lucide-react';
+  Sparkles, Settings, LogOut, Menu, ChevronRight, Activity, UserCog, SlidersHorizontal, ArrowLeftRight, ListChecks, ClipboardSignature, Wallet, Users as CommunityIcon } from 'lucide-react';
 import { api } from '../../../services/apiClient';
 import AdminGlobalSearch from './AdminGlobalSearch';
 import './AdminDashboard.css';
@@ -42,6 +42,7 @@ import AdminReportsCenter     from './AdminReportsCenter';
 import AdminInsuranceVerification from './AdminInsuranceVerification';
 import FormularyManager from '../../Common/FormularyManager';
 import AdminRiskAlerts from './AdminRiskAlerts';
+import { CommunityModeration } from '../../Common/Community';
 import AdminSystemPdfExport   from './AdminSystemPdfExport';
 import AdminAuditLog          from './AdminAuditLog';
 import AdminActivityMonitor   from './AdminActivityMonitor';
@@ -83,6 +84,7 @@ const NAV = [
   // ENGAGEMENT
   { path: '/dashboard/notifications',     label: 'Notifications',         icon: Bell,            section: 'ENGAGEMENT' },
   { path: '/dashboard/notification-templates', label: 'Message Templates', icon: Mail,           section: 'ENGAGEMENT' },
+  { path: '/dashboard/community-moderation', label: 'Community',          icon: CommunityIcon,   section: 'ENGAGEMENT' },
   { path: '/dashboard/promotions',        label: 'Promo Campaigns',       icon: Megaphone,       section: 'ENGAGEMENT' },
   { path: '/dashboard/price-promotions',  label: 'Price Promotions',      icon: Tag,             section: 'ENGAGEMENT' },
   // SYSTEM
@@ -230,6 +232,7 @@ export default function AdminDashboard({ profile }) {
           <Route path="/insurance-verification" element={<AdminInsuranceVerification />} />
           <Route path="/formulary" element={<FormularyManager />} />
           <Route path="/risk-alerts" element={<AdminRiskAlerts />} />
+          <Route path="/community-moderation" element={<CommunityModeration admin />} />
           <Route path="/notifications"       element={<AdminNotifications />} />
           <Route path="/notification-templates" element={<AdminNotificationTemplates />} />
           <Route path="/promotions" element={<AdminPromotions />} />

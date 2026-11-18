@@ -4,7 +4,7 @@ import AiAssistantFab from '../../Common/AiAssistantFab';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, MessageSquare, Video, Calendar, BookOpen, CreditCard, Settings, HelpCircle, LogOut, User, Bell, Sparkles, Pill, Leaf, ClipboardList, Search, Clock,
-  FlaskConical,
+  FlaskConical, PenLine, Users,
 } from 'lucide-react';
 import { signOut } from '../../../services/authShim';
 import { auth } from '../../../services/firestoreShim';
@@ -37,6 +37,8 @@ import NotificationCentre from '../../Common/NotificationCentre';
 import AiHealthAssistant from '../../Common/AiHealthAssistant';
 import CareCentre from '../../Common/CareCentre';
 import ClientWellness from '../../Common/ClientWellness';
+import Journal from '../../Common/Journal';
+import Community from '../../Common/Community';
 import MyCarePlan from '../../Common/MyCarePlan';
 import RecordExplorer from '../../Common/RecordExplorer';
 
@@ -93,6 +95,8 @@ export default function ClientDashboard({ profile }) {
       /* The receiving end of the therapist's wellness messages. Those went out
          as email only, so there was no way to re-read one — or to see any of
          them at all with wellness email switched off. */
+      { path: '/dashboard/journal', icon: PenLine, label: 'My Journal', component: Journal },
+      { path: '/dashboard/community', icon: Users, label: 'Community', component: Community },
       { path: '/dashboard/wellness', icon: Leaf, label: 'Wellness', component: ClientWellness },
       { path: '/dashboard/care-plan', icon: ClipboardList, label: 'My Care Plan', component: MyCarePlan },
       { path: '/dashboard/my-records', icon: Search, label: 'My Records', component: RecordExplorer },
@@ -231,6 +235,8 @@ export default function ClientDashboard({ profile }) {
           <Route path="/profile" element={<ClientProfile />} />
           <Route path="/resources" element={<ClientResources />} />
           <Route path="/wellness" element={<ClientWellness peopleNoun="therapist" />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/community" element={<Community />} />
           <Route path="/care-plan" element={<MyCarePlan />} />
           <Route path="/my-records" element={<RecordExplorer title="My records" />} />
           <Route path="/billing" element={<><BillingAssistantPanel /><ClientBilling /></>} />

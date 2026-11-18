@@ -20,6 +20,7 @@ import {
 import { hasPatientPharmacy, patientPharmacyKey, removePatientPharmacyByKey } from '../../../utils/patientPharmacyDedupe';
 import { isRxDelivered } from '../../../utils/pharmacyRxStatus';
 import Paged from '../../Common/Paged';
+import { SharedJournalPanel } from '../../Common/Journal';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -629,7 +630,7 @@ export default function DoctorPatientDetail({ profile }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', flexWrap: 'wrap' }}>
-        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['epharmacy','E-Pharmacy'],['info','Patient Info'],['feelings','Daily Feeling'],['timeline','Health Timeline']].map(([key, label]) => (
+        {[['overview','Overview'],['appointments','Appointments'],['notes','Notes'],['prescriptions','Prescriptions'],['epharmacy','E-Pharmacy'],['info','Patient Info'],['feelings','Daily Feeling'],['journal','Journal'],['timeline','Health Timeline']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
@@ -1260,6 +1261,8 @@ export default function DoctorPatientDetail({ profile }) {
       )}
 
       {/* ── DAILY FEELING TAB ── */}
+      {activeTab === 'journal' && <SharedJournalPanel clientId={patientId} />}
+
       {activeTab === 'feelings' && (
         dataSharing.labResults === false
           ? <div className="doctor-card"><RestrictedAccess section="daily health check-ins" /></div>
