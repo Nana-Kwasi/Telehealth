@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/apiClient';
+import { NESSA_HUB_POLICY_LINKS } from '../../utils/nessaHubPolicies';
 import * as HI from '@healthicons/react';
 import EmptyState, { IconBubble } from './EmptyState';
 import './Measures.css';
@@ -62,7 +63,7 @@ export default function Community() {
         </div>
         <NicknameChange me={me} onDone={load} />
       </div>
-      <div className="cm-notice">Groups are for support and shared experience, not medical advice. Your clinician decides your treatment. In an emergency, call 112.</div>
+      <div className="cm-notice">Groups are for support and shared experience, not medical advice. Your clinician decides your treatment. In an emergency, call 112. <a href={NESSA_HUB_POLICY_LINKS.communityGroups} target="_blank" rel="noreferrer">Community Groups Policy</a></div>
       {joined.length > 0 && (
         <div className="ms-card">
           <h3 className="ms-title">My groups</h3>
@@ -180,6 +181,9 @@ function GroupView({ group, me, onBack }) {
         <div className="ms-card">
           <h3 className="ms-title">Group rules</h3>
           <ol className="cm-rules">{me.rules.map((r) => <li key={r}>{r}</li>)}</ol>
+          <p className="ms-muted" style={{ fontSize: '0.85rem' }}>
+            How posts are checked, what moderators can do and what others see: <a href={NESSA_HUB_POLICY_LINKS.communityGroups} target="_blank" rel="noreferrer">Community Groups Policy</a>.
+          </p>
           <label className="pr-check" style={{ display: 'flex', margin: '0.5rem 0' }}>
             <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} /> I have read the rules and I will follow them.
           </label>
